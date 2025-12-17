@@ -291,6 +291,20 @@ async function runTests() {
         assertTrue(select.options.length > 1, '点検種類オプションが追加されていない');
     });
 
+    test('getUrlConfig関数が定義されている', () => {
+        assertTrue(typeof window.getUrlConfig === 'function', 'getUrlConfig関数が定義されていない');
+    });
+
+    // Close first DOM for URL parameter tests
+    dom.window.close();
+
+    // URL parameter tests
+    console.log('');
+    console.log('【8. URLパラメータテスト】');
+    console.log('-'.repeat(30));
+
+    await runUrlParamTests();
+
     // 結果サマリー
     console.log('');
     console.log('='.repeat(50));
@@ -298,8 +312,126 @@ async function runTests() {
     console.log('='.repeat(50));
 
     // 終了コード
-    dom.window.close();
     process.exit(results.failed > 0 ? 1 : 0);
+}
+
+async function createDomWithUrl(urlParams = '') {
+    const htmlPath = path.join(__dirname, '..', 'index.html');
+    const html = fs.readFileSync(htmlPath, 'utf-8');
+    const url = `http://localhost/${urlParams ? '?' + urlParams : ''}`;
+
+    const dom = new JSDOM(html, {
+        runScripts: 'dangerously',
+        resources: 'usable',
+        url: url
+    });
+
+    const { window } = dom;
+    const { document } = window;
+
+    const scriptsToLoad = [
+        path.join(__dirname, '..', 'data', 'templates.js'),
+        path.join(__dirname, '..', 'data', 'master.js'),
+        path.join(__dirname, '..', 'js', 'app.js')
+    ];
+
+    for (const scriptPath of scriptsToLoad) {
+        if (fs.existsSync(scriptPath)) {
+            const scriptContent = fs.readFileSync(scriptPath, 'utf-8');
+            const scriptEl = document.createElement('script');
+            scriptEl.textContent = scriptContent;
+            document.head.appendChild(scriptEl);
+        }
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 300));
+    return { dom, window, document };
+}
+
+async function runUrlParamTests() {
+    // Test: vendor parameter sets default
+    {
+        const { dom, window, document } = await createDomWithUrl('vendor=1');
+        test('vendorパラメータでデフォルト値が設定される', () => {
+            const config = window.getUrlConfig();
+            assertEqual(config.vendor, 1, 'vendor設定値が異なる');
+            const vendorSelect = document.getElementById('vendor');
+            assertEqual(vendorSelect.value, '1', '受注先のデフォルト値が設定されていない');
+        });
+        dom.window.close();
+    }
+
+    // Test: vendors parameter filters options
+    {
+        const { dom, window, document } = await createDomWithUrl('vendors=0,2');
+        test('vendorsパラメータで受注先がフィルタされる', () => {
+            const config = window.getUrlConfig();
+            assertTrue(Array.isArray(config.vendors), 'vendorsが配列でない');
+            assertEqual(config.vendors.length, 2, 'vendors配列の長さが異なる');
+            const vendorSelect = document.getElementById('vendor');
+            // default option + 2 filtered options
+            assertEqual(vendorSelect.options.length, 3, '受注先オプション数が異なる');
+        });
+        dom.window.close();
+    }
+
+    // Test: property parameter sets default
+    {
+        const { dom, window, document } = await createDomWithUrl('property=1001');
+        test('propertyパラメータでデフォルト値が設定される', () => {
+            const config = window.getUrlConfig();
+            assertEqual(config.property, 1001, 'property設定値が異なる');
+        });
+        dom.window.close();
+    }
+
+    // Test: hideRemarks parameter
+    {
+        const { dom, window, document } = await createDomWithUrl('hideRemarks=true');
+        test('hideRemarksパラメータで備考欄が非表示になる', () => {
+            const config = window.getUrlConfig();
+            assertTrue(config.hideRemarks, 'hideRemarksが設定されていない');
+            const remarksGroup = document.getElementById('remarks')?.closest('.form-group');
+            if (remarksGroup) {
+                assertEqual(remarksGroup.style.display, 'none', '備考欄が非表示になっていない');
+            }
+        });
+        dom.window.close();
+    }
+
+    // Test: showAll parameter
+    {
+        const { dom, window, document } = await createDomWithUrl('showAll=true&vendors=0');
+        test('showAllパラメータでフィルタが無効になる', () => {
+            const config = window.getUrlConfig();
+            assertTrue(config.showAll, 'showAllが設定されていない');
+            const vendorSelect = document.getElementById('vendor');
+            // With showAll=true, vendors filter should be ignored
+            assertTrue(vendorSelect.options.length > 2, 'showAllでフィルタが無効になっていない');
+        });
+        dom.window.close();
+    }
+
+    // Test: templates parameter
+    {
+        const { dom, window, document } = await createDomWithUrl('templates=exchange_light_battery_2');
+        test('templatesパラメータで点検種類がフィルタされる', () => {
+            const config = window.getUrlConfig();
+            assertTrue(Array.isArray(config.templates), 'templatesが配列でない');
+            assertEqual(config.templates[0], 'exchange_light_battery_2', 'テンプレート値が異なる');
+        });
+        dom.window.close();
+    }
+
+    // Test: hideRemarks=false should not hide
+    {
+        const { dom, window, document } = await createDomWithUrl('hideRemarks=false');
+        test('hideRemarks=falseで備考欄が表示される', () => {
+            const config = window.getUrlConfig();
+            assertTrue(!config.hideRemarks, 'hideRemarks=falseが正しく処理されていない');
+        });
+        dom.window.close();
+    }
 }
 
 runTests().catch(error => {

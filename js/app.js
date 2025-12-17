@@ -3,14 +3,99 @@
         let currentPosition = 2;
         let currentTemplateNo = '';
 
+        // URL parameter configuration
+        let urlConfig = {
+            vendor: null,           // Default vendor index
+            vendors: null,          // Allowed vendor indices (array)
+            templates: null,        // Allowed template numbers (array)
+            property: null,         // Default property code
+            properties: null,       // Allowed property codes (array)
+            hideRemarks: false,     // Hide remarks field
+            showAll: false          // Admin mode - show all options
+        };
+
+        function parseUrlParams() {
+            const params = new URLSearchParams(window.location.search);
+
+            // vendor - default vendor index
+            if (params.has('vendor')) {
+                const v = parseInt(params.get('vendor'));
+                if (!isNaN(v)) urlConfig.vendor = v;
+            }
+
+            // vendors - comma-separated allowed vendor indices
+            if (params.has('vendors')) {
+                urlConfig.vendors = params.get('vendors').split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+            }
+
+            // templates - comma-separated allowed template numbers
+            if (params.has('templates')) {
+                urlConfig.templates = params.get('templates').split(',').map(s => s.trim()).filter(s => s);
+            }
+
+            // property - default property code
+            if (params.has('property')) {
+                const p = parseInt(params.get('property'));
+                if (!isNaN(p)) urlConfig.property = p;
+            }
+
+            // properties - comma-separated allowed property codes
+            if (params.has('properties')) {
+                urlConfig.properties = params.get('properties').split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+            }
+
+            // hideRemarks - boolean
+            if (params.has('hideRemarks')) {
+                urlConfig.hideRemarks = params.get('hideRemarks') !== 'false' && params.get('hideRemarks') !== '0';
+            }
+
+            // showAll - admin mode
+            if (params.has('showAll')) {
+                urlConfig.showAll = params.get('showAll') !== 'false' && params.get('showAll') !== '0';
+            }
+        }
+
         function init() {
+            parseUrlParams();
             populatePropertySelect();
             populateVendorSelect();
             populateInspectionTypeSelect();
+            applyUrlDefaults();
+            applyUrlVisibility();
             const today = new Date().toISOString().split('T')[0];
             document.getElementById('startDate').value = today;
             document.getElementById('displayStartDate').value = today;
             updatePreview();
+        }
+
+        function applyUrlDefaults() {
+            // Set default property
+            if (urlConfig.property !== null) {
+                const propSelect = document.getElementById('property');
+                if (propSelect.querySelector(`option[value="${urlConfig.property}"]`)) {
+                    propSelect.value = urlConfig.property;
+                    onPropertyChange();
+                }
+            }
+
+            // Set default vendor
+            if (urlConfig.vendor !== null) {
+                const vendorSelect = document.getElementById('vendor');
+                if (vendorSelect.querySelector(`option[value="${urlConfig.vendor}"]`)) {
+                    vendorSelect.value = urlConfig.vendor;
+                    onVendorChange();
+                }
+            }
+        }
+
+        function applyUrlVisibility() {
+            // Hide remarks field if specified
+            if (urlConfig.hideRemarks) {
+                const remarksGroup = document.getElementById('remarks')?.closest('.form-group');
+                if (remarksGroup) {
+                    remarksGroup.style.display = 'none';
+                }
+            }
         }
 
         function populatePropertySelect() {
@@ -19,6 +104,10 @@
             masterData.properties.forEach(p => {
                 if (!seen.has(p.propertyCode)) {
                     seen.add(p.propertyCode);
+                    // Filter by allowed properties (unless showAll)
+                    if (!urlConfig.showAll && urlConfig.properties && !urlConfig.properties.includes(p.propertyCode)) {
+                        return;
+                    }
                     const opt = document.createElement('option');
                     opt.value = p.propertyCode;
                     opt.textContent = `${p.propertyCode} ${p.propertyName}`;
@@ -46,6 +135,10 @@
         function populateVendorSelect() {
             const select = document.getElementById('vendor');
             masterData.vendors.forEach((v, i) => {
+                // Filter by allowed vendors (unless showAll)
+                if (!urlConfig.showAll && urlConfig.vendors && !urlConfig.vendors.includes(i)) {
+                    return;
+                }
                 const opt = document.createElement('option');
                 opt.value = i;
                 opt.textContent = v.vendorName;
@@ -61,6 +154,10 @@
         function populateInspectionTypeSelect() {
             const select = document.getElementById('inspectionType');
             masterData.notices.forEach((n, i) => {
+                // Filter by allowed templates (unless showAll)
+                if (!urlConfig.showAll && urlConfig.templates && !urlConfig.templates.includes(n.templateNo)) {
+                    return;
+                }
                 const opt = document.createElement('option');
                 opt.value = i;
                 opt.textContent = n.inspectionType;
@@ -320,6 +417,11 @@
             toast.textContent = msg;
             document.body.appendChild(toast);
             setTimeout(() => toast.remove(), 2500);
+        }
+
+        // Expose urlConfig getter for testing
+        function getUrlConfig() {
+            return urlConfig;
         }
 
         document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
