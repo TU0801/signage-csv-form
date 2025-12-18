@@ -1,0 +1,56 @@
+ロール名,説明,vendor（デフォルト受注先）,vendors（許可受注先）,property（デフォルト物件）,properties（許可物件）,templates（許可テンプレート）,hideRemarks（備考非表示）,showAll（管理者）,生成URL
+管理者,全ての機能を利用可能,,,,,,FALSE,TRUE,?showAll=true
+日本オーチス専用,エレベーター点検のみ,1,1,,,elevator_inspection,TRUE,FALSE,?vendor=1&vendors=1&templates=elevator_inspection&hideRemarks=true
+えん建物管理専用,建物設備点検のみ,2,2,,,building_inspection,FALSE,FALSE,?vendor=2&vendors=2&templates=building_inspection
+西日本ビルテクノ専用,消防・設備点検,3,3,,,"fire_inspection,building_inspection",FALSE,FALSE,?vendor=3&vendors=3&templates=fire_inspection,building_inspection
+山本クリーンシステム専用,清掃関連のみ,0,0,,,cleaning,TRUE,FALSE,?vendor=0&vendors=0&templates=cleaning&hideRemarks=true
+エンクレストガーデン福岡専用,物件限定,,,2010,2010,,FALSE,FALSE,?property=2010&properties=2010
+複数物件グループ,複数物件許可,,,,,"120406,120408,120410",,FALSE,FALSE,?properties=120406,120408,120410
+（ここに追加）,,,,,,,,
+
+【受注先一覧（vendorインデックス）】
+インデックス,受注先名,緊急連絡先,カテゴリ
+0,山本クリーンシステム　有限会社,092-934-0407,清掃
+1,日本オーチス・エレベータ　株式会社,0120-324-365,点検
+2,株式会社　えん建物管理,092-260-5350,点検
+3,西日本ビルテクノサービス　株式会社,092-504-7741,点検
+
+【テンプレート一覧（templates値）】
+テンプレートNo,点検種類名
+elevator_inspection,エレベーター定期点検 / リモート点検
+building_inspection,建物設備点検
+fire_inspection,消防設備点検
+simple_dedicated_water_supply,貯水槽清掃（断水）
+automatic_doors,自動扉点検
+mechanical_parking,機械式駐車場点検
+cleaning,定期清掃
+planting_management,植栽の手入れ
+drainage_pipe,お部屋の排水管洗浄
+construction_involving_sound_vibration,音・振動を伴う工事
+
+【物件コード一覧（property/properties値）】
+コード,物件名
+2010,エンクレストガーデン福岡
+120406,アソシアグロッツォ天神サウス
+120408,アソシアグロッツォ博多プレイス
+120410,パリス大濠ベイタウン
+120411,ラフィネスシャトードゥ赤坂
+120412,LANDIC S4173
+120413,ラフィネスネオシティ平尾
+120419,アソシアグロッツォ博多サウスガーデン
+120420,ラフィネス薬院イーストタワー
+120428,ラフィネス大濠パークアべニュー
+120109,アソシアグロッツォタイムズスイート博多
+120407,アソシアグロッツオ博多サザンテラス
+120414,ラフィネス大濠パークサイド
+120415,ラフィネス博多リバーステージ
+120416,ラフィネスクロスロード博多ステーション
+120417,LANDIC K2620
+120418,ラフィネス薬院ウェストタワー
+120421,LANDIC N313
+120422,LANDIC H1916
+120423,LANDIC Y138
+120424,LANDIC N110
+120426,LANDIC O2239
+120427,LANDIC O2227
+130425,LANDIC K320
