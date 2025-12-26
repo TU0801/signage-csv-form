@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>一括入力 - 点検CSV作成フォーム</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/bulk.css">
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <h1>📊 一括入力</h1>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <a href="index.html" class="btn btn-outline" style="color: white; border-color: rgba(255,255,255,0.3);">📝 1件入力</a>
+                <span id="userEmail" style="color: rgba(255,255,255,0.8); font-size: 0.875rem;"></span>
+                <button class="btn btn-outline" id="logoutBtn" style="color: white; border-color: rgba(255,255,255,0.3);">ログアウト</button>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="card">
+            <!-- ツールバー -->
+            <div class="bulk-toolbar">
+                <div class="btn-group">
+                    <button class="btn btn-primary btn-sm" id="addRowBtn">➕ 行追加</button>
+                    <button class="btn btn-outline btn-sm" id="deleteSelectedBtn" disabled>🗑️ 選択削除</button>
+                    <button class="btn btn-outline btn-sm" id="pasteBtn">📋 Excelから貼り付け</button>
+                </div>
+                <div class="stats">
+                    <span>登録件数: <span class="count" id="totalCount">0</span>件</span>
+                    <span>選択: <span class="count" id="selectedCount">0</span>件</span>
+                    <span style="color: #22c55e;">有効: <span class="count" id="validCount">0</span>件</span>
+                    <span style="color: #ef4444;">エラー: <span class="count" id="errorCount">0</span>件</span>
+                </div>
+            </div>
+
+            <!-- テーブル -->
+            <div class="bulk-table-container">
+                <table class="bulk-table" id="bulkTable">
+                    <thead>
+                        <tr>
+                            <th class="col-checkbox"><input type="checkbox" id="selectAll"></th>
+                            <th class="col-row-num">#</th>
+                            <th class="col-property required">物件</th>
+                            <th class="col-terminal">端末</th>
+                            <th class="col-vendor required">受注先</th>
+                            <th class="col-inspection required">点検種別</th>
+                            <th class="col-date">点検開始日</th>
+                            <th class="col-date">点検終了日</th>
+                            <th class="col-remarks">備考</th>
+                            <th class="col-time">表示秒数</th>
+                            <th class="col-status">状態</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <!-- 動的に行を追加 -->
+                    </tbody>
+                </table>
+
+                <div class="bulk-empty" id="emptyState">
+                    <div class="bulk-empty-icon">📭</div>
+                    <p>データがありません</p>
+                    <p style="font-size: 0.875rem;">「行追加」ボタンまたは「Excelから貼り付け」で始めましょう</p>
+                </div>
+            </div>
+
+            <!-- フッター -->
+            <div class="bulk-footer">
+                <div class="action-group">
+                    <button class="btn btn-success" id="saveBtn" disabled>💾 一括保存</button>
+                </div>
+                <div class="action-group">
+                    <button class="btn btn-outline btn-sm" id="downloadCsvBtn" disabled>📥 CSVダウンロード</button>
+                    <button class="btn btn-outline btn-sm" id="copyCsvBtn" disabled>📋 CSVコピー</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ペーストモーダル -->
+    <div class="paste-modal" id="pasteModal">
+        <div class="paste-modal-content">
+            <div class="paste-modal-header">
+                <h3>📋 Excelから貼り付け</h3>
+                <button class="modal-close" id="closePasteModal">&times;</button>
+            </div>
+            <textarea class="paste-textarea" id="pasteArea" placeholder="Excelからコピーしたデータをここに貼り付けてください..."></textarea>
+            <div class="paste-hint">
+                <strong>形式:</strong> 物件コード[Tab]受注先名[Tab]点検種別[Tab]開始日[Tab]終了日[Tab]備考<br>
+                <strong>例:</strong> 2010[Tab]山本クリーンシステム[Tab]定期清掃[Tab]2025-01-15[Tab]2025-01-15[Tab]10:00〜12:00
+            </div>
+            <div class="paste-modal-footer">
+                <button class="btn btn-outline" id="cancelPasteBtn">キャンセル</button>
+                <button class="btn btn-primary" id="importPasteBtn">インポート</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- トースト通知用 -->
+    <div id="toast" class="toast"></div>
+
+    <script type="module" src="js/bulk.js"></script>
+</body>
+</html>

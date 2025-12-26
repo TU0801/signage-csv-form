@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>管理者画面 - 点検CSV作成フォーム</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .admin-tabs {
+            display: flex;
+            gap: 0;
+            border-bottom: 1px solid #e2e8f0;
+            margin-bottom: 1.5rem;
+        }
+        .admin-tab {
+            padding: 0.75rem 1.5rem;
+            background: transparent;
+            border: none;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #64748b;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .admin-tab:hover {
+            color: #374151;
+        }
+        .admin-tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .filter-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            padding: 1rem;
+            background: #f8fafc;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+        .filter-bar .form-group {
+            flex: 1;
+            min-width: 150px;
+        }
+        .filter-bar label {
+            display: block;
+            font-size: 0.75rem;
+            color: #64748b;
+            margin-bottom: 0.25rem;
+        }
+        .filter-bar select,
+        .filter-bar input {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 0.875rem;
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+        }
+        .data-table th,
+        .data-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid #e2e8f0;
+            text-align: left;
+        }
+        .data-table th {
+            background: #f8fafc;
+            font-weight: 600;
+            color: #374151;
+        }
+        .data-table tbody tr:hover {
+            background: #f8fafc;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .stat-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 1.25rem;
+        }
+        .stat-card-label {
+            font-size: 0.75rem;
+            color: #64748b;
+            margin-bottom: 0.25rem;
+        }
+        .stat-card-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        .action-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        .master-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .master-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            background: #f8fafc;
+            border-radius: 6px;
+        }
+        .master-item-info {
+            flex: 1;
+        }
+        .master-item-name {
+            font-weight: 500;
+        }
+        .master-item-sub {
+            font-size: 0.75rem;
+            color: #64748b;
+        }
+        .user-role {
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .user-role.admin {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        .user-role.user {
+            background: #e0e7ff;
+            color: #3730a3;
+        }
+        .empty-message {
+            text-align: center;
+            padding: 2rem;
+            color: #64748b;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <h1>⚙️ 管理者画面</h1>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <a href="index.html" class="btn btn-outline" style="color: white; border-color: rgba(255,255,255,0.3);">📝 1件入力</a>
+                <a href="bulk.html" class="btn btn-outline" style="color: white; border-color: rgba(255,255,255,0.3);">📊 一括入力</a>
+                <span id="userEmail" style="color: rgba(255,255,255,0.8); font-size: 0.875rem;"></span>
+                <button class="btn btn-outline" id="logoutBtn" style="color: white; border-color: rgba(255,255,255,0.3);">ログアウト</button>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- 統計 -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-card-label">総登録数</div>
+                <div class="stat-card-value" id="statTotal">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-card-label">今月の登録</div>
+                <div class="stat-card-value" id="statMonth">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-card-label">ユーザー数</div>
+                <div class="stat-card-value" id="statUsers">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-card-label">物件数</div>
+                <div class="stat-card-value" id="statProperties">-</div>
+            </div>
+        </div>
+
+        <!-- タブ -->
+        <div class="card">
+            <div class="admin-tabs">
+                <button class="admin-tab active" data-tab="entries">📊 データ一覧</button>
+                <button class="admin-tab" data-tab="export">📥 CSVエクスポート</button>
+                <button class="admin-tab" data-tab="master">📋 マスター管理</button>
+                <button class="admin-tab" data-tab="users">👥 ユーザー管理</button>
+            </div>
+
+            <!-- データ一覧タブ -->
+            <div class="tab-content active" id="tab-entries">
+                <div class="filter-bar">
+                    <div class="form-group">
+                        <label>物件</label>
+                        <select id="filterProperty">
+                            <option value="">すべて</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>期間（開始）</label>
+                        <input type="date" id="filterStartDate">
+                    </div>
+                    <div class="form-group">
+                        <label>期間（終了）</label>
+                        <input type="date" id="filterEndDate">
+                    </div>
+                    <div class="form-group" style="display: flex; align-items: flex-end;">
+                        <button class="btn btn-primary btn-sm" id="searchBtn">検索</button>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>登録者</th>
+                                <th>物件コード</th>
+                                <th>点検種別</th>
+                                <th>開始日</th>
+                                <th>登録日時</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="entriesBody">
+                        </tbody>
+                    </table>
+                </div>
+                <div class="empty-message" id="entriesEmpty" style="display: none;">
+                    データがありません
+                </div>
+            </div>
+
+            <!-- CSVエクスポートタブ -->
+            <div class="tab-content" id="tab-export">
+                <div class="filter-bar">
+                    <div class="form-group">
+                        <label>物件</label>
+                        <select id="exportProperty">
+                            <option value="">すべて</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>期間（開始）</label>
+                        <input type="date" id="exportStartDate">
+                    </div>
+                    <div class="form-group">
+                        <label>期間（終了）</label>
+                        <input type="date" id="exportEndDate">
+                    </div>
+                </div>
+                <div class="action-bar">
+                    <div>
+                        <span id="exportCount">0</span>件のデータ
+                    </div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-success" id="exportCsvBtn">📥 CSVダウンロード</button>
+                        <button class="btn btn-outline" id="exportCopyBtn">📋 コピー</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- マスター管理タブ -->
+            <div class="tab-content" id="tab-master">
+                <div class="admin-tabs" style="border-bottom: none; margin-bottom: 1rem;">
+                    <button class="admin-tab active" data-master="properties">物件</button>
+                    <button class="admin-tab" data-master="vendors">受注先</button>
+                    <button class="admin-tab" data-master="inspections">点検種別</button>
+                </div>
+
+                <div id="master-properties" class="master-content">
+                    <div class="action-bar">
+                        <span><span id="propertyCount">0</span>件</span>
+                        <button class="btn btn-primary btn-sm" id="addPropertyBtn">➕ 追加</button>
+                    </div>
+                    <div class="master-list" id="propertiesList"></div>
+                </div>
+
+                <div id="master-vendors" class="master-content" style="display: none;">
+                    <div class="action-bar">
+                        <span><span id="vendorCount">0</span>件</span>
+                        <button class="btn btn-primary btn-sm" id="addVendorBtn">➕ 追加</button>
+                    </div>
+                    <div class="master-list" id="vendorsList"></div>
+                </div>
+
+                <div id="master-inspections" class="master-content" style="display: none;">
+                    <div class="action-bar">
+                        <span><span id="inspectionCount">0</span>件</span>
+                        <button class="btn btn-primary btn-sm" id="addInspectionBtn">➕ 追加</button>
+                    </div>
+                    <div class="master-list" id="inspectionsList"></div>
+                </div>
+            </div>
+
+            <!-- ユーザー管理タブ -->
+            <div class="tab-content" id="tab-users">
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>メールアドレス</th>
+                                <th>会社名</th>
+                                <th>権限</th>
+                                <th>登録日</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- トースト通知用 -->
+    <div id="toast" class="toast"></div>
+
+    <script type="module" src="js/admin.js"></script>
+</body>
+</html>

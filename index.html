@@ -13,7 +13,13 @@
 <header class="header">
         <div class="header-content">
             <h1>📋 点検CSV作成</h1>
-            <button class="btn btn-outline" style="color: white; border-color: rgba(255,255,255,0.3);" onclick="clearForm()">🔄 クリア</button>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <a href="bulk.html" class="btn btn-outline" style="color: white; border-color: rgba(255,255,255,0.3);">📊 一括入力</a>
+                <a href="admin.html" class="btn btn-outline" style="color: white; border-color: rgba(255,255,255,0.3);" id="adminLink" style="display: none;">⚙️ 管理</a>
+                <button class="btn btn-outline" style="color: white; border-color: rgba(255,255,255,0.3);" onclick="clearForm()">🔄 クリア</button>
+                <span id="userEmail" style="color: rgba(255,255,255,0.8); font-size: 0.875rem;"></span>
+                <button class="btn btn-outline" id="logoutBtn" style="color: white; border-color: rgba(255,255,255,0.3); display: none;">ログアウト</button>
+            </div>
         </div>
     </header>
 
@@ -182,5 +188,38 @@
         </div>
     </div>
     <script src="js/script.js"></script>
+    <script type="module">
+        // 認証モジュール（オプション - Supabase設定時のみ有効）
+        import { getUser, getProfile, isAdmin, signOut } from './js/supabase-client.js';
+
+        async function initAuth() {
+            try {
+                const user = await getUser();
+                if (user) {
+                    // ログイン済み
+                    const profile = await getProfile();
+                    document.getElementById('userEmail').textContent = profile?.email || user.email;
+                    document.getElementById('logoutBtn').style.display = 'block';
+
+                    // 管理者の場合は管理リンクを表示
+                    const admin = await isAdmin();
+                    if (admin) {
+                        document.getElementById('adminLink').style.display = 'block';
+                    }
+
+                    // ログアウトボタン
+                    document.getElementById('logoutBtn').addEventListener('click', async () => {
+                        await signOut();
+                        window.location.href = '/login.html';
+                    });
+                }
+            } catch (error) {
+                // Supabase未設定の場合は無視（オフラインモードで動作）
+                console.log('Auth not configured, running in offline mode');
+            }
+        }
+
+        initAuth();
+    </script>
 </body>
 </html>
