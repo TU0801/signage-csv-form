@@ -12,7 +12,12 @@ test.describe('Vendor Selection Tests', () => {
     // Skip first empty option
     for (let i = 1; i < options.length; i++) {
       const text = await options[i].textContent();
-      const matchingVendor = expectedVendors.find(v => text.includes(v.vendorName.replace(/\s+/g, ' ').trim()));
+      // Normalize whitespace (handles both full-width and half-width spaces)
+      const normalizedText = text.replace(/[\u3000\s]+/g, ' ').trim();
+      const matchingVendor = expectedVendors.find(v => {
+        const normalizedVendorName = v.vendorName.replace(/[\u3000\s]+/g, ' ').trim();
+        return normalizedText.includes(normalizedVendorName);
+      });
       expect(matchingVendor).toBeDefined();
     }
   });

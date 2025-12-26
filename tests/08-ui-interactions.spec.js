@@ -8,28 +8,30 @@ test.describe('Display Time Adjustment Tests', () => {
 
   test('plus button increases display time', async ({ page }) => {
     const initialValue = await page.locator('#displayTime').inputValue();
-    await page.click('.time-btn:has-text("+")');
+    // Using the spin-btn class and the + character
+    await page.click('.spin-btn:has-text("+")');
     const newValue = await page.locator('#displayTime').inputValue();
     expect(parseInt(newValue)).toBe(parseInt(initialValue) + 1);
   });
 
   test('minus button decreases display time', async ({ page }) => {
     await page.fill('#displayTime', '10');
-    await page.click('.time-btn:has-text("-")');
+    // Using the spin-btn class and the − character (not -)
+    await page.click('.spin-btn:first-of-type');
     const newValue = await page.locator('#displayTime').inputValue();
     expect(newValue).toBe('9');
   });
 
   test('display time cannot go below 1', async ({ page }) => {
     await page.fill('#displayTime', '1');
-    await page.click('.time-btn:has-text("-")');
+    await page.click('.spin-btn:first-of-type');
     const newValue = await page.locator('#displayTime').inputValue();
     expect(parseInt(newValue)).toBeGreaterThanOrEqual(1);
   });
 
   test('display time cannot exceed 30', async ({ page }) => {
     await page.fill('#displayTime', '30');
-    await page.click('.time-btn:has-text("+")');
+    await page.click('.spin-btn:has-text("+")');
     const newValue = await page.locator('#displayTime').inputValue();
     expect(parseInt(newValue)).toBeLessThanOrEqual(30);
   });
@@ -85,13 +87,13 @@ test.describe('Toast Notification Tests', () => {
     await page.selectOption('#property', '2010');
     await page.selectOption('#vendor', '0');
     await page.selectOption('#inspectionType', '0');
-    await page.click('button:has-text("データ追加")');
+    await page.click('button:has-text("データを追加")');
 
     await expect(page.locator('.toast.success')).toBeVisible();
   });
 
   test('error toast appears on validation failure', async ({ page }) => {
-    await page.click('button:has-text("データ追加")');
+    await page.click('button:has-text("データを追加")');
     await expect(page.locator('.toast.error')).toBeVisible();
   });
 
@@ -99,7 +101,7 @@ test.describe('Toast Notification Tests', () => {
     await page.selectOption('#property', '2010');
     await page.selectOption('#vendor', '0');
     await page.selectOption('#inspectionType', '0');
-    await page.click('button:has-text("データ追加")');
+    await page.click('button:has-text("データを追加")');
 
     await expect(page.locator('.toast.success')).toBeVisible();
     // Wait for toast to disappear (2.5 seconds)
@@ -121,7 +123,7 @@ test.describe('Data List Display Tests', () => {
     await page.selectOption('#property', '2010');
     await page.selectOption('#vendor', '0');
     await page.selectOption('#inspectionType', '0');
-    await page.click('button:has-text("データ追加")');
+    await page.click('button:has-text("データを追加")');
 
     await expect(page.locator('.empty-state')).not.toBeVisible();
   });
@@ -130,7 +132,7 @@ test.describe('Data List Display Tests', () => {
     await page.selectOption('#property', '2010');
     await page.selectOption('#vendor', '0');
     await page.selectOption('#inspectionType', '0');
-    await page.click('button:has-text("データ追加")');
+    await page.click('button:has-text("データを追加")');
 
     await expect(page.locator('.data-item-title')).toBeVisible();
   });
@@ -140,7 +142,7 @@ test.describe('Data List Display Tests', () => {
     await page.selectOption('#vendor', '0');
     await page.selectOption('#inspectionType', '0');
     await page.fill('#startDate', '2025-12-15');
-    await page.click('button:has-text("データ追加")');
+    await page.click('button:has-text("データを追加")');
 
     const subText = await page.locator('.data-item-sub').textContent();
     expect(subText).toContain('2010');
@@ -150,9 +152,10 @@ test.describe('Data List Display Tests', () => {
     await page.selectOption('#property', '2010');
     await page.selectOption('#vendor', '0');
     await page.selectOption('#inspectionType', '0');
-    await page.click('button:has-text("データ追加")');
+    await page.click('button:has-text("データを追加")');
 
-    await expect(page.locator('.badge')).toBeVisible();
+    // Use more specific selector for the data item badge
+    await expect(page.locator('.data-item .badge')).toBeVisible();
   });
 
   test('export section hidden when no data', async ({ page }) => {
@@ -165,7 +168,7 @@ test.describe('Data List Display Tests', () => {
     await page.selectOption('#property', '2010');
     await page.selectOption('#vendor', '0');
     await page.selectOption('#inspectionType', '0');
-    await page.click('button:has-text("データ追加")');
+    await page.click('button:has-text("データを追加")');
 
     const exportSection = page.locator('#exportSection');
     await expect(exportSection).toBeVisible();

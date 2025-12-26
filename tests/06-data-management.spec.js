@@ -9,7 +9,7 @@ test.describe('Edit Entry Tests', () => {
     await page.selectOption('#vendor', '0');
     await page.selectOption('#inspectionType', '0');
     await page.fill('#remarks', 'Original remarks');
-    await page.click('button:has-text("データ追加")');
+    await page.click('button:has-text("データを追加")');
     await page.waitForTimeout(100);
   });
 
@@ -27,7 +27,7 @@ test.describe('Edit Entry Tests', () => {
   test('can update entry and save', async ({ page }) => {
     await page.click('.data-item button:has-text("編集")');
     await page.fill('#remarks', 'Updated remarks');
-    await page.click('button:has-text("データ追加")');
+    await page.click('button:has-text("データを追加")');
 
     // Verify update toast
     await expect(page.locator('.toast.success')).toContainText('更新');
@@ -61,7 +61,7 @@ test.describe('Delete Entry Tests', () => {
     await page.selectOption('#property', '2010');
     await page.selectOption('#vendor', '0');
     await page.selectOption('#inspectionType', '0');
-    await page.click('button:has-text("データ追加")');
+    await page.click('button:has-text("データを追加")');
     await page.waitForTimeout(100);
   });
 
@@ -112,7 +112,7 @@ test.describe('Clear Form Tests', () => {
     await page.selectOption('#vendor', '0');
     await page.fill('#remarks', 'Some remarks');
 
-    // Clear
+    // Clear - button text contains emoji
     await page.click('button:has-text("クリア")');
 
     // Verify form is cleared

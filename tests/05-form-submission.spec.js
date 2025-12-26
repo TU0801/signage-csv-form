@@ -7,7 +7,7 @@ test.describe('Form Submission Tests', () => {
   });
 
   test('cannot submit without required fields', async ({ page }) => {
-    await page.click('button:has-text("データ追加")');
+    await page.click('button:has-text("データを追加")');
     await expect(page.locator('.toast.error')).toBeVisible();
   });
 
@@ -18,7 +18,7 @@ test.describe('Form Submission Tests', () => {
     await page.selectOption('#inspectionType', '0');
 
     // Submit
-    await page.click('button:has-text("データ追加")');
+    await page.click('button:has-text("データを追加")');
 
     // Check success toast
     await expect(page.locator('.toast.success')).toBeVisible();
@@ -31,7 +31,7 @@ test.describe('Form Submission Tests', () => {
     await page.selectOption('#property', '2010');
     await page.selectOption('#vendor', '0');
     await page.selectOption('#inspectionType', '0');
-    await page.click('button:has-text("データ追加")');
+    await page.click('button:has-text("データを追加")');
 
     // Check data item is visible
     await expect(page.locator('.data-item')).toBeVisible();
@@ -42,13 +42,13 @@ test.describe('Form Submission Tests', () => {
     await page.selectOption('#property', '2010');
     await page.selectOption('#vendor', '0');
     await page.selectOption('#inspectionType', '0');
-    await page.click('button:has-text("データ追加")');
+    await page.click('button:has-text("データを追加")');
 
     // Add second entry
     await page.selectOption('#property', '120406');
     await page.selectOption('#vendor', '1');
     await page.selectOption('#inspectionType', '1');
-    await page.click('button:has-text("データ追加")');
+    await page.click('button:has-text("データを追加")');
 
     // Check data count
     await expect(page.locator('#dataCount')).toContainText('2');
@@ -59,7 +59,7 @@ test.describe('Form Submission Tests', () => {
     await page.selectOption('#vendor', '0');
     await page.selectOption('#inspectionType', '0');
     await page.fill('#remarks', '10:00〜12:00');
-    await page.click('button:has-text("データ追加")');
+    await page.click('button:has-text("データを追加")');
 
     await expect(page.locator('.toast.success')).toBeVisible();
   });
@@ -71,7 +71,7 @@ test.describe('Form Submission Tests', () => {
 
     const customText = 'カスタム案内文テスト';
     await page.fill('#noticeText', customText);
-    await page.click('button:has-text("データ追加")');
+    await page.click('button:has-text("データを追加")');
 
     // Edit the entry to verify
     await page.click('.data-item button:has-text("編集")');
@@ -84,7 +84,7 @@ test.describe('Form Submission Tests', () => {
     await page.selectOption('#vendor', '0');
     await page.selectOption('#inspectionType', '0');
     await page.fill('#displayTime', '10');
-    await page.click('button:has-text("データ追加")');
+    await page.click('button:has-text("データを追加")');
 
     await page.click('.data-item button:has-text("編集")');
     const displayTime = await page.locator('#displayTime').inputValue();
@@ -110,7 +110,7 @@ test.describe('Position Selection Tests', () => {
     await page.selectOption('#property', '2010');
     await page.selectOption('#vendor', '0');
     await page.selectOption('#inspectionType', '0');
-    await page.click('button:has-text("データ追加")');
+    await page.click('button:has-text("データを追加")');
 
     // Edit to verify position
     await page.click('.data-item button:has-text("編集")');
@@ -142,7 +142,7 @@ test.describe('Poster Type Tests', () => {
     await page.selectOption('#property', '2010');
     await page.selectOption('#vendor', '0');
     await page.selectOption('#inspectionType', '0');
-    await page.click('button:has-text("データ追加")');
+    await page.click('button:has-text("データを追加")');
 
     // Edit to verify
     await page.click('.data-item button:has-text("編集")');
