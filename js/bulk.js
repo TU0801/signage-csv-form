@@ -62,9 +62,9 @@ async function init() {
 // ========================================
 
 function setupEventListeners() {
-    // 行追加
+    // 行追加（前の行をコピー）
     document.getElementById('addRowBtn').addEventListener('click', () => {
-        addRow();
+        addRowWithCopy();
     });
 
     // 選択削除
@@ -107,12 +107,116 @@ function setupEventListeners() {
         if (e.key === 'Escape') {
             closePasteModal();
         }
+        // Ctrl+D: 選択行を複製
+        if (e.ctrlKey && e.key === 'd') {
+            e.preventDefault();
+            duplicateSelectedRows();
+        }
+        // Ctrl+Enter: 行追加（前の行をコピー）
+        if (e.ctrlKey && e.key === 'Enter') {
+            e.preventDefault();
+            addRowWithCopy();
+        }
+        // Delete: 選択行を削除
+        if (e.key === 'Delete' && getSelectedRowIds().length > 0) {
+            e.preventDefault();
+            deleteSelectedRows();
+        }
     });
+
+    // 複製ボタン
+    const duplicateBtn = document.getElementById('duplicateBtn');
+    if (duplicateBtn) {
+        duplicateBtn.addEventListener('click', duplicateSelectedRows);
+    }
 }
 
 // ========================================
 // 行の追加・削除
 // ========================================
+
+// 前の行をコピーして追加
+function addRowWithCopy() {
+    if (rows.length === 0) {
+        // 最初の行は空で追加
+        addRow();
+    } else {
+        // 最後の行をコピー
+        const lastRow = rows[rows.length - 1];
+        addRow({
+            propertyCode: lastRow.propertyCode,
+            terminalId: lastRow.terminalId,
+            vendorName: lastRow.vendorName,
+            inspectionType: lastRow.inspectionType,
+            startDate: lastRow.startDate,
+            endDate: lastRow.endDate,
+            remarks: '', // 備考はコピーしない
+            displayTime: lastRow.displayTime
+        });
+    }
+}
+
+// 選択行を複製
+function duplicateSelectedRows() {
+    const selectedIds = getSelectedRowIds();
+    if (selectedIds.length === 0) {
+        showToast('複製する行を選択してください', 'error');
+        return;
+    }
+
+    selectedIds.forEach(id => {
+        const sourceRow = rows.find(r => r.id === id);
+        if (sourceRow) {
+            addRow({
+                propertyCode: sourceRow.propertyCode,
+                terminalId: sourceRow.terminalId,
+                vendorName: sourceRow.vendorName,
+                inspectionType: sourceRow.inspectionType,
+                startDate: sourceRow.startDate,
+                endDate: sourceRow.endDate,
+                remarks: sourceRow.remarks,
+                displayTime: sourceRow.displayTime
+            });
+        }
+    });
+
+    showToast(`${selectedIds.length}件の行を複製しました`, 'success');
+    document.getElementById('selectAll').checked = false;
+}
+
+// 選択行に一括で値を設定
+function applyToSelected(field, value) {
+    const selectedIds = getSelectedRowIds();
+    if (selectedIds.length === 0) return;
+
+    selectedIds.forEach(id => {
+        const row = rows.find(r => r.id === id);
+        if (row) {
+            row[field] = value;
+            // UI更新
+            const tr = document.querySelector(`tr[data-row-id="${id}"]`);
+            if (tr) {
+                const selector = {
+                    propertyCode: '.property-select',
+                    vendorName: '.vendor-select',
+                    inspectionType: '.inspection-select',
+                    startDate: '.start-date',
+                    endDate: '.end-date'
+                }[field];
+                if (selector) {
+                    const input = tr.querySelector(selector);
+                    if (input) input.value = value;
+                }
+                if (field === 'propertyCode') {
+                    updateTerminals(id, value);
+                }
+            }
+            validateRow(id);
+        }
+    });
+
+    updateStats();
+}
 
 function addRow(data = {}) {
     const rowId = ++rowIdCounter;
