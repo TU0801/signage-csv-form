@@ -293,3 +293,68 @@ export async function updateProfileRole(id, role) {
   if (error) throw error;
   return data;
 }
+
+// ========================================
+// 管理者用: 承認ワークフロー
+// ========================================
+
+export async function getPendingEntries() {
+  const { data, error } = await supabase
+    .from('signage_entries')
+    .select(`
+      *,
+      signage_profiles!inner(email, company_name)
+    `)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+export async function approveEntry(id) {
+  const user = await getUser();
+  const { data, error } = await supabase
+    .from('signage_entries')
+    .update({
+      status: 'approved',
+      approved_by: user.id,
+      approved_at: new Date().toISOString()
+    })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function approveEntries(ids) {
+  const user = await getUser();
+  const { data, error } = await supabase
+    .from('signage_entries')
+    .update({
+      status: 'approved',
+      approved_by: user.id,
+      approved_at: new Date().toISOString()
+    })
+    .in('id', ids)
+    .select();
+  if (error) throw error;
+  return data;
+}
+
+export async function rejectEntry(id, reason = '') {
+  const user = await getUser();
+  const { data, error } = await supabase
+    .from('signage_entries')
+    .update({
+      status: 'rejected',
+      approved_by: user.id,
+      approved_at: new Date().toISOString(),
+      rejection_reason: reason
+    })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}

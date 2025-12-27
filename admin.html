@@ -194,14 +194,47 @@
         <!-- タブ -->
         <div class="card">
             <div class="admin-tabs">
-                <button class="admin-tab active" data-tab="entries">📊 データ一覧</button>
+                <button class="admin-tab active" data-tab="approval">✅ 承認待ち</button>
+                <button class="admin-tab" data-tab="entries">📊 データ一覧</button>
                 <button class="admin-tab" data-tab="export">📥 CSVエクスポート</button>
                 <button class="admin-tab" data-tab="master">📋 マスター管理</button>
                 <button class="admin-tab" data-tab="users">👥 ユーザー管理</button>
             </div>
 
+            <!-- 承認待ちタブ -->
+            <div class="tab-content active" id="tab-approval">
+                <div class="action-bar">
+                    <div>
+                        <span id="pendingCount">0</span>件の申請待ち
+                    </div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-success btn-sm" id="approveAllBtn" disabled>✅ 一括承認</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" id="selectAllPending"></th>
+                                <th>申請者</th>
+                                <th>物件コード</th>
+                                <th>点検種別</th>
+                                <th>開始日</th>
+                                <th>申請日時</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pendingBody">
+                        </tbody>
+                    </table>
+                </div>
+                <div class="empty-message" id="pendingEmpty" style="display: none;">
+                    承認待ちのデータはありません
+                </div>
+            </div>
+
             <!-- データ一覧タブ -->
-            <div class="tab-content active" id="tab-entries">
+            <div class="tab-content" id="tab-entries">
                 <div class="filter-bar">
                     <div class="form-group">
                         <label>物件</label>

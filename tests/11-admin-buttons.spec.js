@@ -22,10 +22,15 @@ test.describe('Admin Page Button Tests', () => {
   });
 
   test.describe('Main Tab Buttons', () => {
-    test('data list tab is visible and active by default', async ({ page }) => {
-      const tab = page.locator('.admin-tab[data-tab="entries"]');
+    test('approval tab is visible and active by default', async ({ page }) => {
+      const tab = page.locator('.admin-tab[data-tab="approval"]');
       await expect(tab).toBeVisible();
       await expect(tab).toHaveClass(/active/);
+    });
+
+    test('data list tab is visible', async ({ page }) => {
+      const tab = page.locator('.admin-tab[data-tab="entries"]');
+      await expect(tab).toBeVisible();
     });
 
     test('csv export tab is visible', async ({ page }) => {
@@ -68,13 +73,25 @@ test.describe('Admin Page Button Tests', () => {
       await page.click('.admin-tab[data-tab="export"]');
 
       await expect(page.locator('#tab-export')).toHaveClass(/active/);
+      await expect(page.locator('#tab-approval')).not.toHaveClass(/active/);
       await expect(page.locator('#tab-entries')).not.toHaveClass(/active/);
       await expect(page.locator('#tab-master')).not.toHaveClass(/active/);
       await expect(page.locator('#tab-users')).not.toHaveClass(/active/);
     });
+
+    test('clicking approval tab shows approval content', async ({ page }) => {
+      await page.click('.admin-tab[data-tab="entries"]');
+      await page.click('.admin-tab[data-tab="approval"]');
+      await expect(page.locator('#tab-approval')).toBeVisible();
+      await expect(page.locator('#tab-approval')).toHaveClass(/active/);
+    });
   });
 
   test.describe('Search Button (Entries Tab)', () => {
+    test.beforeEach(async ({ page }) => {
+      await page.click('.admin-tab[data-tab="entries"]');
+    });
+
     test('search button is visible', async ({ page }) => {
       await expect(page.locator('#searchBtn')).toBeVisible();
     });

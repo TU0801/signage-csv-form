@@ -21,7 +21,11 @@ import {
     deleteVendor,
     addInspectionType,
     updateInspectionType,
-    deleteInspectionType
+    deleteInspectionType,
+    getPendingEntries,
+    approveEntry,
+    approveEntries,
+    rejectEntry
 } from './supabase-client.js';
 
 // ========================================
@@ -31,6 +35,8 @@ import {
 let masterData = { properties: [], vendors: [], inspectionTypes: [] };
 let entries = [];
 let profiles = [];
+let pendingEntries = [];
+let selectedPendingIds = [];
 
 // ========================================
 // 初期化
@@ -71,6 +77,7 @@ async function init() {
     // 初期表示
     updateStats();
     populateFilters();
+    loadPendingEntries();
     loadEntries();
     loadMasterData();
     loadUsers();
@@ -81,6 +88,7 @@ async function loadAllData() {
         masterData = await getAllMasterData();
         entries = await getAllEntries();
         profiles = await getAllProfiles();
+        pendingEntries = await getPendingEntries();
     } catch (error) {
         console.error('Failed to load data:', error);
         showToast('データの取得に失敗しました', 'error');
@@ -131,6 +139,15 @@ function setupEventListeners() {
     document.getElementById('masterModal').addEventListener('click', (e) => {
         if (e.target.id === 'masterModal') closeMasterModal();
     });
+
+    // 承認関連
+    document.getElementById('selectAllPending').addEventListener('change', (e) => {
+        const checkboxes = document.querySelectorAll('#pendingBody input[type="checkbox"]');
+        checkboxes.forEach(cb => cb.checked = e.target.checked);
+        updateSelectedPending();
+    });
+
+    document.getElementById('approveAllBtn').addEventListener('click', approveSelected);
 }
 
 // ========================================
@@ -149,6 +166,120 @@ function updateStats() {
     document.getElementById('statUsers').textContent = profiles.length;
     document.getElementById('statProperties').textContent = masterData.properties.length;
 }
+
+// ========================================
+// 承認待ち
+// ========================================
+
+async function loadPendingEntries() {
+    try {
+        pendingEntries = await getPendingEntries();
+        renderPendingEntries();
+        document.getElementById('pendingCount').textContent = pendingEntries.length;
+    } catch (error) {
+        console.error('Failed to load pending entries:', error);
+    }
+}
+
+function renderPendingEntries() {
+    const tbody = document.getElementById('pendingBody');
+    const emptyMsg = document.getElementById('pendingEmpty');
+
+    tbody.innerHTML = '';
+    selectedPendingIds = [];
+    document.getElementById('selectAllPending').checked = false;
+    document.getElementById('approveAllBtn').disabled = true;
+
+    if (pendingEntries.length === 0) {
+        emptyMsg.style.display = 'block';
+        return;
+    }
+
+    emptyMsg.style.display = 'none';
+
+    pendingEntries.forEach(entry => {
+        const tr = document.createElement('tr');
+        const createdAt = new Date(entry.created_at).toLocaleString('ja-JP');
+        const startDate = entry.start_date
+            ? new Date(entry.start_date).toLocaleDateString('ja-JP')
+            : '-';
+
+        tr.innerHTML = `
+            <td><input type="checkbox" data-id="${entry.id}" onchange="updateSelectedPending()"></td>
+            <td>${entry.signage_profiles?.email || '-'}</td>
+            <td>${entry.property_code}</td>
+            <td>${entry.inspection_type}</td>
+            <td>${startDate}</td>
+            <td>${createdAt}</td>
+            <td>
+                <button class="btn btn-success btn-sm" onclick="approveSingle('${entry.id}')">✅</button>
+                <button class="btn btn-outline btn-sm" onclick="rejectSingle('${entry.id}')">❌</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function updateSelectedPending() {
+    const checkboxes = document.querySelectorAll('#pendingBody input[type="checkbox"]');
+    selectedPendingIds = [];
+    checkboxes.forEach(cb => {
+        if (cb.checked) {
+            selectedPendingIds.push(cb.dataset.id);
+        }
+    });
+    document.getElementById('approveAllBtn').disabled = selectedPendingIds.length === 0;
+}
+
+async function approveSelected() {
+    if (selectedPendingIds.length === 0) return;
+
+    if (!confirm(`選択した${selectedPendingIds.length}件を承認しますか？`)) return;
+
+    try {
+        await approveEntries(selectedPendingIds);
+        showToast(`${selectedPendingIds.length}件を承認しました`, 'success');
+        await loadPendingEntries();
+        await loadAllData();
+        updateStats();
+    } catch (error) {
+        console.error('Failed to approve entries:', error);
+        showToast('承認に失敗しました', 'error');
+    }
+}
+
+window.updateSelectedPending = updateSelectedPending;
+
+window.approveSingle = async function(id) {
+    if (!confirm('この申請を承認しますか？')) return;
+
+    try {
+        await approveEntry(id);
+        showToast('承認しました', 'success');
+        await loadPendingEntries();
+        await loadAllData();
+        updateStats();
+    } catch (error) {
+        console.error('Failed to approve entry:', error);
+        showToast('承認に失敗しました', 'error');
+    }
+};
+
+window.rejectSingle = async function(id) {
+    const reason = prompt('却下理由を入力してください（任意）：', '');
+    if (reason === null) return; // キャンセル
+
+    try {
+        await rejectEntry(id, reason);
+        showToast('却下しました', 'success');
+        await loadPendingEntries();
+        await loadAllData();
+        updateStats();
+    } catch (error) {
+        console.error('Failed to reject entry:', error);
+        showToast('却下に失敗しました', 'error');
+    }
+};
 
 // ========================================
 // フィルター
