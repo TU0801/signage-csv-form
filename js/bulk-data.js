@@ -1,0 +1,338 @@
+// bulk-data.js - データ操作関連
+
+import { createEntries } from './supabase-client.js';
+import {
+    state, getMasterData, getRows, getCurrentUserId,
+    getAutoSaveTimer, setAutoSaveTimer, setRowIdCounter, clearRows
+} from './bulk-state.js';
+import { addRow, validateRow } from './bulk-table.js';
+
+// ========================================
+// 自動保存・復元
+// ========================================
+
+export function getAutoSaveKey() {
+    return `bulk_autosave_${getCurrentUserId()}`;
+}
+
+export function triggerAutoSave() {
+    const timer = getAutoSaveTimer();
+    if (timer) clearTimeout(timer);
+    setAutoSaveTimer(setTimeout(saveAutoSave, 1000));
+}
+
+export function saveAutoSave() {
+    const rows = getRows();
+    if (rows.length === 0) {
+        localStorage.removeItem(getAutoSaveKey());
+        return;
+    }
+
+    const data = {
+        timestamp: Date.now(),
+        rowIdCounter: state.rowIdCounter,
+        rows: rows.map(r => ({
+            propertyCode: r.propertyCode,
+            terminalId: r.terminalId,
+            vendorName: r.vendorName,
+            inspectionType: r.inspectionType,
+            startDate: r.startDate,
+            endDate: r.endDate,
+            remarks: r.remarks,
+            displayTime: r.displayTime,
+            noticeText: r.noticeText,
+            displayStartDate: r.displayStartDate,
+            displayStartTime: r.displayStartTime,
+            displayEndDate: r.displayEndDate,
+            displayEndTime: r.displayEndTime,
+            showOnBoard: r.showOnBoard
+        }))
+    };
+
+    localStorage.setItem(getAutoSaveKey(), JSON.stringify(data));
+    console.log('Auto-saved', rows.length, 'rows');
+}
+
+export function restoreAutoSave(callbacks) {
+    try {
+        const data = localStorage.getItem(getAutoSaveKey());
+        if (!data) return;
+
+        const saved = JSON.parse(data);
+        if (!saved.rows || saved.rows.length === 0) return;
+
+        if (Date.now() - saved.timestamp > 24 * 60 * 60 * 1000) {
+            localStorage.removeItem(getAutoSaveKey());
+            return;
+        }
+
+        if (confirm(`${saved.rows.length}件の未保存データがあります。復元しますか？`)) {
+            setRowIdCounter(saved.rowIdCounter || 0);
+            saved.rows.forEach(rowData => {
+                addRow(rowData, callbacks);
+            });
+            callbacks.showToast(`${saved.rows.length}件のデータを復元しました`, 'success');
+        } else {
+            localStorage.removeItem(getAutoSaveKey());
+        }
+    } catch (e) {
+        console.error('Auto-save restore failed:', e);
+    }
+}
+
+// ========================================
+// サーバー保存
+// ========================================
+
+export async function saveAll(callbacks) {
+    const rows = getRows();
+    const validRows = rows.filter(r => r.isValid);
+    if (validRows.length === 0) {
+        callbacks.showToast('保存できる有効なデータがありません', 'error');
+        return;
+    }
+
+    const saveBtn = document.getElementById('saveBtn');
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<span class="btn-icon">⏳</span> 保存中...';
+
+    try {
+        const masterData = getMasterData();
+        const entries = validRows.map(row => {
+            const property = masterData.properties.find(p => p.property_code === row.propertyCode);
+            const vendor = masterData.vendors.find(v => v.vendor_name === row.vendorName);
+            const inspection = masterData.inspectionTypes.find(i => i.inspection_name === row.inspectionType);
+
+            const displayStartDate = row.displayStartDate || row.startDate;
+            const displayEndDate = row.displayEndDate || row.endDate;
+
+            return {
+                property_code: row.propertyCode,
+                terminal_id: row.terminalId || property?.terminal_id || '',
+                vendor_name: row.vendorName,
+                emergency_contact: vendor?.emergency_contact || '',
+                inspection_type: row.inspectionType,
+                template_no: inspection?.template_no || '',
+                start_date: row.startDate,
+                end_date: row.endDate,
+                remarks: row.remarks,
+                notice_text: row.noticeText || inspection?.default_text || '',
+                display_start_date: displayStartDate,
+                display_start_time: row.displayStartTime || '',
+                display_end_date: displayEndDate,
+                display_end_time: row.displayEndTime || '',
+                display_time: row.displayTime,
+                show_on_board: row.showOnBoard !== false,
+                poster_type: 'テンプレート',
+                position: 2,
+                status: 'pending'
+            };
+        });
+
+        await createEntries(entries);
+
+        localStorage.removeItem(getAutoSaveKey());
+        callbacks.showToast(`${validRows.length}件のデータを申請しました`, 'success');
+
+        document.getElementById('tableBody').innerHTML = '';
+        clearRows();
+        callbacks.updateStats();
+        callbacks.updateEmptyState();
+
+    } catch (error) {
+        console.error('Save failed:', error);
+        callbacks.showToast('保存に失敗しました: ' + error.message, 'error');
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<span class="btn-icon">↑</span> 申請する';
+        callbacks.updateButtons();
+    }
+}
+
+// ========================================
+// CSV機能
+// ========================================
+
+export function generateCSV() {
+    const rows = getRows();
+    const masterData = getMasterData();
+    const validRows = rows.filter(r => r.isValid);
+    if (validRows.length === 0) return '';
+
+    const headers = [
+        '点検CO', '端末ID', '物件コード', '受注先名', '緊急連絡先番号',
+        '点検工事案内', '掲示板に表示する', '点検案内TPLNo', '点検開始日',
+        '点検完了日', '掲示備考', '掲示板用案内文', 'frame_No', '表示開始日',
+        '表示開始時刻', '表示終了日', '表示終了時刻', '貼紙区分', '表示時間',
+        'カテゴリー', 'カテゴリー２', 'カテゴリー３', 'カテゴリー４',
+        'カテゴリー５', 'カテゴリー６', '画像パス', 'お知らせ開始事前', 'ステータス'
+    ];
+
+    const csvRows = [headers.join(',')];
+
+    validRows.forEach(row => {
+        const property = masterData.properties.find(p => p.property_code === row.propertyCode);
+        const vendor = masterData.vendors.find(v => v.vendor_name === row.vendorName);
+        const inspection = masterData.inspectionTypes.find(i => i.inspection_name === row.inspectionType);
+
+        const formatDate = (d) => d ? d.replace(/-/g, '/') : '';
+        const displayTimeFormatted = `0:00:${String(row.displayTime).padStart(2, '0')}`;
+
+        const displayStartDate = row.displayStartDate || row.startDate;
+        const displayEndDate = row.displayEndDate || row.endDate;
+        const displayStartTime = row.displayStartTime || '';
+        const displayEndTime = row.displayEndTime || '';
+
+        const noticeText = row.noticeText || inspection?.default_text || '';
+        const showOnBoard = row.showOnBoard !== false ? 'True' : 'False';
+
+        const values = [
+            '',
+            row.terminalId || property?.terminal_id || '',
+            row.propertyCode,
+            row.vendorName,
+            vendor?.emergency_contact || '',
+            row.inspectionType,
+            showOnBoard,
+            inspection?.template_no || '',
+            formatDate(row.startDate),
+            formatDate(row.endDate),
+            row.remarks,
+            noticeText,
+            '2',
+            formatDate(displayStartDate),
+            displayStartTime,
+            formatDate(displayEndDate),
+            displayEndTime,
+            'テンプレート',
+            displayTimeFormatted,
+            '', '', '', '', '', '', '', '30', ''
+        ];
+
+        csvRows.push(values.map(v => `"${v}"`).join(','));
+    });
+
+    return csvRows.join('\n');
+}
+
+export function downloadCSV(callbacks) {
+    const csv = generateCSV();
+    if (!csv) {
+        callbacks.showToast('ダウンロードするデータがありません', 'error');
+        return;
+    }
+
+    const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+    const blob = new Blob([bom, csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const timestamp = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15);
+
+    a.href = url;
+    a.download = `bulk-${timestamp}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    callbacks.showToast('CSVをダウンロードしました', 'success');
+}
+
+export function copyCSV(callbacks) {
+    const csv = generateCSV();
+    if (!csv) {
+        callbacks.showToast('コピーするデータがありません', 'error');
+        return;
+    }
+
+    navigator.clipboard.writeText(csv).then(() => {
+        callbacks.showToast('CSVをクリップボードにコピーしました', 'success');
+    }).catch(() => {
+        callbacks.showToast('コピーに失敗しました', 'error');
+    });
+}
+
+// ========================================
+// ユーティリティ
+// ========================================
+
+export function showToast(message, type = 'info') {
+    const toast = document.getElementById('toast');
+    toast.textContent = message;
+    toast.className = `toast ${type} show`;
+    setTimeout(() => {
+        toast.classList.remove('show');
+    }, 2500);
+}
+
+// ========================================
+// UI更新
+// ========================================
+
+export function updateStats() {
+    const rows = getRows();
+    const total = rows.length;
+    const valid = rows.filter(r => r.isValid).length;
+    const error = total - valid;
+
+    document.getElementById('totalCount').textContent = total;
+    document.getElementById('validCount').textContent = valid;
+    document.getElementById('errorCount').textContent = error;
+}
+
+export function updateEmptyState() {
+    const rows = getRows();
+    const emptyState = document.getElementById('emptyState');
+    const table = document.getElementById('bulkTable');
+
+    if (rows.length === 0) {
+        emptyState.style.display = 'flex';
+        table.style.display = 'none';
+    } else {
+        emptyState.style.display = 'none';
+        table.style.display = 'table';
+    }
+}
+
+export function updateButtons() {
+    const rows = getRows();
+    const validCount = rows.filter(r => r.isValid).length;
+
+    const saveBtn = document.getElementById('saveBtn');
+    const downloadBtn = document.getElementById('downloadCsvBtn');
+    const copyBtn = document.getElementById('copyCsvBtn');
+
+    if (saveBtn) saveBtn.disabled = validCount === 0;
+    if (downloadBtn) downloadBtn.disabled = validCount === 0;
+    if (copyBtn) copyBtn.disabled = validCount === 0;
+}
+
+export function applyFilter() {
+    const rows = getRows();
+    const currentFilter = state.currentFilter;
+    const tbody = document.getElementById('tableBody');
+    const trs = tbody.querySelectorAll('tr');
+
+    trs.forEach(tr => {
+        const rowId = parseInt(tr.dataset.rowId);
+        const row = rows.find(r => r.id === rowId);
+        if (!row) return;
+
+        let visible = true;
+        if (currentFilter === 'valid' && !row.isValid) {
+            visible = false;
+        } else if (currentFilter === 'error' && row.isValid) {
+            visible = false;
+        }
+
+        tr.style.display = visible ? '' : 'none';
+    });
+
+    const visibleCount = Array.from(trs).filter(tr => tr.style.display !== 'none').length;
+    const filterInfo = document.getElementById('filterInfo');
+    if (filterInfo) {
+        if (currentFilter === 'all') {
+            filterInfo.textContent = '';
+        } else {
+            filterInfo.textContent = `(${visibleCount}件表示中)`;
+        }
+    }
+}
