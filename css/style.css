@@ -40,6 +40,16 @@
 
         .header h1 { font-size: 0.95rem; font-weight: 600; }
 
+.version-badge {
+    font-size: 0.65rem;
+    font-weight: 400;
+    background: rgba(255,255,255,0.2);
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    margin-left: 0.5rem;
+    vertical-align: middle;
+}
+
         .container {
             max-width: 1800px;
             margin: 0 auto;

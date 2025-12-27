@@ -13,7 +13,7 @@
 <body>
     <header class="header">
         <div class="header-content">
-            <h1>一括入力</h1>
+            <h1>一括入力 <span id="appVersion" class="version-badge"></span></h1>
             <div style="display: flex; gap: 0.75rem; align-items: center;">
                 <a href="index.html" class="btn-header">1件入力</a>
                 <span id="userEmail" style="color: rgba(255,255,255,0.8); font-size: 0.875rem;"></span>
@@ -185,7 +185,15 @@
     <!-- トースト通知用 -->
     <div id="toast" class="toast"></div>
 
+    <script src="js/version.js"></script>
     <script src="js/config.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            if (window.APP_VERSION) {
+                document.getElementById('appVersion').textContent = window.APP_VERSION;
+            }
+        });
+    </script>
     <script type="module" src="js/bulk.js"></script>
 </body>
 </html>

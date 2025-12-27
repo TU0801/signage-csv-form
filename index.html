@@ -12,7 +12,7 @@
 <body>
 <header class="header">
         <div class="header-content">
-            <h1>📋 点検CSV作成</h1>
+            <h1>📋 点検CSV作成 <span id="appVersion" class="version-badge"></span></h1>
             <div style="display: flex; gap: 0.75rem; align-items: center;">
                 <a href="bulk.html" class="btn-header">一括入力</a>
                 <a href="admin.html" class="btn-header" id="adminLink" style="display: none;">管理</a>
@@ -187,8 +187,16 @@
             </div>
         </div>
     </div>
+    <script src="js/version.js"></script>
     <script src="js/script.js"></script>
     <script src="js/config.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            if (window.APP_VERSION) {
+                document.getElementById('appVersion').textContent = window.APP_VERSION;
+            }
+        });
+    </script>
     <script type="module">
         // 認証モジュール（オプション - Supabase設定時のみ有効）
         import { getUser, getProfile, isAdmin, signOut } from './js/supabase-client.js';
