@@ -361,6 +361,13 @@ function addRow(data = {}) {
         endDate: data.endDate || '',
         remarks: data.remarks || '',
         displayTime: data.displayTime || 6,
+        // 新規フィールド
+        noticeText: data.noticeText || '',
+        displayStartDate: data.displayStartDate || '',
+        displayStartTime: data.displayStartTime || '',
+        displayEndDate: data.displayEndDate || '',
+        displayEndTime: data.displayEndTime || '',
+        showOnBoard: data.showOnBoard !== undefined ? data.showOnBoard : true,
         isValid: false,
         errors: []
     };
@@ -442,6 +449,11 @@ function renderRow(row) {
         </td>
         <td class="col-time">
             <input type="number" class="display-time" data-row-id="${row.id}" value="${row.displayTime}" min="1" max="30" title="表示秒数">
+        </td>
+        <td class="col-detail">
+            <button class="btn-detail" data-row-id="${row.id}" title="案内文・表示期間を設定">
+                ${row.noticeText || row.displayStartDate ? '✓' : '⋯'}
+            </button>
         </td>
         <td class="col-status">
             <span class="status-badge ok" data-row-id="${row.id}">OK</span>
@@ -571,6 +583,12 @@ function setupRowEventListeners(tr, rowId) {
             row.displayTime = parseInt(e.target.value) || 6;
             triggerAutoSave();
         }
+    });
+
+    // 詳細設定ボタン
+    tr.querySelector('.btn-detail').addEventListener('click', (e) => {
+        e.preventDefault();
+        openRowDetailModal(rowId);
     });
 
     // セルナビゲーション
@@ -913,7 +931,7 @@ function createBulkEditModal() {
     ).values()];
 
     modal.innerHTML = `
-        <div class="modal-content modal-sm">
+        <div class="modal-content">
             <div class="modal-header">
                 <h3>選択行を一括編集</h3>
                 <button class="modal-close" id="closeBulkEditModal">&times;</button>
@@ -922,40 +940,70 @@ function createBulkEditModal() {
                 <p class="modal-description">
                     選択した行のフィールドを一括で変更できます。変更しない項目は空のままにしてください。
                 </p>
-                <div class="form-group">
-                    <label>物件</label>
-                    <select id="bulkEditProperty" class="form-control">
-                        <option value="">変更しない</option>
-                        ${uniqueProperties.map(p =>
-                            `<option value="${p.property_code}">${p.property_code} ${p.property_name}</option>`
-                        ).join('')}
-                    </select>
+
+                <div class="bulk-edit-grid">
+                    <div class="form-group">
+                        <label>物件</label>
+                        <select id="bulkEditProperty" class="form-control">
+                            <option value="">変更しない</option>
+                            ${uniqueProperties.map(p =>
+                                `<option value="${p.property_code}">${p.property_code} ${p.property_name}</option>`
+                            ).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>受注先</label>
+                        <select id="bulkEditVendor" class="form-control">
+                            <option value="">変更しない</option>
+                            ${masterData.vendors.map(v =>
+                                `<option value="${v.vendor_name}">${v.vendor_name}</option>`
+                            ).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>点検種別</label>
+                        <select id="bulkEditInspection" class="form-control">
+                            <option value="">変更しない</option>
+                            ${masterData.inspectionTypes.map(i =>
+                                `<option value="${i.inspection_name}">${i.inspection_name}</option>`
+                            ).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>点検開始日</label>
+                        <input type="date" id="bulkEditStartDate" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label>点検終了日</label>
+                        <input type="date" id="bulkEditEndDate" class="form-control">
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label>受注先</label>
-                    <select id="bulkEditVendor" class="form-control">
-                        <option value="">変更しない</option>
-                        ${masterData.vendors.map(v =>
-                            `<option value="${v.vendor_name}">${v.vendor_name}</option>`
-                        ).join('')}
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>点検種別</label>
-                    <select id="bulkEditInspection" class="form-control">
-                        <option value="">変更しない</option>
-                        ${masterData.inspectionTypes.map(i =>
-                            `<option value="${i.inspection_name}">${i.inspection_name}</option>`
-                        ).join('')}
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>点検開始日</label>
-                    <input type="date" id="bulkEditStartDate" class="form-control">
-                </div>
-                <div class="form-group">
-                    <label>点検終了日</label>
-                    <input type="date" id="bulkEditEndDate" class="form-control">
+
+                <div class="bulk-edit-section">
+                    <h4>案内文・表示期間</h4>
+                    <div class="form-group">
+                        <label>掲示板用案内文</label>
+                        <textarea id="bulkEditNoticeText" class="form-control" rows="2"
+                            placeholder="変更しない場合は空のまま"></textarea>
+                    </div>
+                    <div class="bulk-edit-grid">
+                        <div class="form-group">
+                            <label>表示開始日</label>
+                            <input type="date" id="bulkEditDisplayStartDate" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label>表示開始時間</label>
+                            <input type="time" id="bulkEditDisplayStartTime" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label>表示終了日</label>
+                            <input type="date" id="bulkEditDisplayEndDate" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label>表示終了時間</label>
+                            <input type="time" id="bulkEditDisplayEndTime" class="form-control">
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -989,6 +1037,11 @@ function openBulkEditModal() {
     document.getElementById('bulkEditInspection').value = '';
     document.getElementById('bulkEditStartDate').value = '';
     document.getElementById('bulkEditEndDate').value = '';
+    document.getElementById('bulkEditNoticeText').value = '';
+    document.getElementById('bulkEditDisplayStartDate').value = '';
+    document.getElementById('bulkEditDisplayStartTime').value = '';
+    document.getElementById('bulkEditDisplayEndDate').value = '';
+    document.getElementById('bulkEditDisplayEndTime').value = '';
 
     document.getElementById('bulkEditModal').classList.add('active');
 }
@@ -1004,6 +1057,11 @@ function applyBulkEdit() {
     const inspection = document.getElementById('bulkEditInspection').value;
     const startDate = document.getElementById('bulkEditStartDate').value;
     const endDate = document.getElementById('bulkEditEndDate').value;
+    const noticeText = document.getElementById('bulkEditNoticeText').value;
+    const displayStartDate = document.getElementById('bulkEditDisplayStartDate').value;
+    const displayStartTime = document.getElementById('bulkEditDisplayStartTime').value;
+    const displayEndDate = document.getElementById('bulkEditDisplayEndDate').value;
+    const displayEndTime = document.getElementById('bulkEditDisplayEndTime').value;
 
     let changedCount = 0;
 
@@ -1033,6 +1091,28 @@ function applyBulkEdit() {
             row.endDate = endDate;
             tr.querySelector('.end-date').value = endDate;
         }
+        if (noticeText) {
+            row.noticeText = noticeText;
+        }
+        if (displayStartDate) {
+            row.displayStartDate = displayStartDate;
+        }
+        if (displayStartTime) {
+            row.displayStartTime = displayStartTime;
+        }
+        if (displayEndDate) {
+            row.displayEndDate = displayEndDate;
+        }
+        if (displayEndTime) {
+            row.displayEndTime = displayEndTime;
+        }
+
+        // 詳細ボタンの表示を更新
+        const detailBtn = tr.querySelector('.btn-detail');
+        if (detailBtn) {
+            detailBtn.textContent = row.noticeText || row.displayStartDate ? '✓' : '⋯';
+            detailBtn.classList.toggle('has-data', !!(row.noticeText || row.displayStartDate));
+        }
 
         validateRow(id);
         changedCount++;
@@ -1042,6 +1122,136 @@ function applyBulkEdit() {
     updateStats();
     triggerAutoSave();
     showToast(`${changedCount}件の行を更新しました`, 'success');
+}
+
+// ========================================
+// 行詳細設定モーダル
+// ========================================
+
+let currentDetailRowId = null;
+
+function createRowDetailModal() {
+    const modal = document.createElement('div');
+    modal.id = 'rowDetailModal';
+    modal.className = 'modal-overlay';
+
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>詳細設定 <span id="detailRowNum"></span></h3>
+                <button class="modal-close" id="closeRowDetailModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="detail-section">
+                    <h4>掲示板用案内文</h4>
+                    <textarea id="detailNoticeText" class="form-control" rows="3"
+                        placeholder="例：エレベーター点検のため、一時的に停止いたします。"></textarea>
+                </div>
+
+                <div class="detail-section">
+                    <h4>表示期間</h4>
+                    <p class="modal-description">サイネージへの表示開始・終了日時を設定します（任意）</p>
+                    <div class="form-row-inline">
+                        <div class="form-group">
+                            <label>表示開始</label>
+                            <div class="datetime-inputs">
+                                <input type="date" id="detailDisplayStartDate" class="form-control">
+                                <input type="time" id="detailDisplayStartTime" class="form-control">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>表示終了</label>
+                            <div class="datetime-inputs">
+                                <input type="date" id="detailDisplayEndDate" class="form-control">
+                                <input type="time" id="detailDisplayEndTime" class="form-control">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="detail-section">
+                    <h4>その他の設定</h4>
+                    <label class="checkbox-item">
+                        <input type="checkbox" id="detailShowOnBoard" checked>
+                        掲示板に表示する
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" id="cancelRowDetail">キャンセル</button>
+                <button class="btn btn-primary" id="applyRowDetail">保存</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    document.getElementById('closeRowDetailModal').addEventListener('click', closeRowDetailModal);
+    document.getElementById('cancelRowDetail').addEventListener('click', closeRowDetailModal);
+    document.getElementById('applyRowDetail').addEventListener('click', applyRowDetail);
+
+    modal.addEventListener('click', (e) => {
+        if (e.target.id === 'rowDetailModal') closeRowDetailModal();
+    });
+}
+
+function openRowDetailModal(rowId) {
+    currentDetailRowId = rowId;
+    const row = rows.find(r => r.id === rowId);
+    if (!row) return;
+
+    // モーダルがなければ作成
+    if (!document.getElementById('rowDetailModal')) {
+        createRowDetailModal();
+    }
+
+    // 行番号を表示
+    const rowIndex = rows.indexOf(row) + 1;
+    document.getElementById('detailRowNum').textContent = `(行 ${rowIndex})`;
+
+    // 現在の値をフォームに設定
+    document.getElementById('detailNoticeText').value = row.noticeText || '';
+    document.getElementById('detailDisplayStartDate').value = row.displayStartDate || '';
+    document.getElementById('detailDisplayStartTime').value = row.displayStartTime || '';
+    document.getElementById('detailDisplayEndDate').value = row.displayEndDate || '';
+    document.getElementById('detailDisplayEndTime').value = row.displayEndTime || '';
+    document.getElementById('detailShowOnBoard').checked = row.showOnBoard !== false;
+
+    document.getElementById('rowDetailModal').classList.add('active');
+}
+
+function closeRowDetailModal() {
+    document.getElementById('rowDetailModal').classList.remove('active');
+    currentDetailRowId = null;
+}
+
+function applyRowDetail() {
+    if (!currentDetailRowId) return;
+
+    const row = rows.find(r => r.id === currentDetailRowId);
+    if (!row) return;
+
+    // 値を保存
+    row.noticeText = document.getElementById('detailNoticeText').value;
+    row.displayStartDate = document.getElementById('detailDisplayStartDate').value;
+    row.displayStartTime = document.getElementById('detailDisplayStartTime').value;
+    row.displayEndDate = document.getElementById('detailDisplayEndDate').value;
+    row.displayEndTime = document.getElementById('detailDisplayEndTime').value;
+    row.showOnBoard = document.getElementById('detailShowOnBoard').checked;
+
+    // 詳細ボタンの表示を更新
+    const tr = document.querySelector(`tr[data-row-id="${currentDetailRowId}"]`);
+    if (tr) {
+        const detailBtn = tr.querySelector('.btn-detail');
+        if (detailBtn) {
+            detailBtn.textContent = row.noticeText || row.displayStartDate ? '✓' : '⋯';
+            detailBtn.classList.toggle('has-data', !!(row.noticeText || row.displayStartDate));
+        }
+    }
+
+    closeRowDetailModal();
+    triggerAutoSave();
+    showToast('詳細設定を保存しました', 'success');
 }
 
 // ========================================
@@ -1074,7 +1284,13 @@ function saveAutoSave() {
             startDate: r.startDate,
             endDate: r.endDate,
             remarks: r.remarks,
-            displayTime: r.displayTime
+            displayTime: r.displayTime,
+            noticeText: r.noticeText,
+            displayStartDate: r.displayStartDate,
+            displayStartTime: r.displayStartTime,
+            displayEndDate: r.displayEndDate,
+            displayEndTime: r.displayEndTime,
+            showOnBoard: r.showOnBoard
         }))
     };
 
@@ -1444,6 +1660,18 @@ function generateCSV() {
         const formatDate = (d) => d ? d.replace(/-/g, '/') : '';
         const displayTimeFormatted = `0:00:${String(row.displayTime).padStart(2, '0')}`;
 
+        // 表示期間：設定されていれば使用、なければ点検期間をデフォルト
+        const displayStartDate = row.displayStartDate || row.startDate;
+        const displayEndDate = row.displayEndDate || row.endDate;
+        const displayStartTime = row.displayStartTime || '';
+        const displayEndTime = row.displayEndTime || '';
+
+        // 案内文：設定されていれば使用、なければデフォルト
+        const noticeText = row.noticeText || inspection?.default_text || '';
+
+        // 掲示板表示
+        const showOnBoard = row.showOnBoard !== false ? 'True' : 'False';
+
         const values = [
             '', // 点検CO
             row.terminalId || property?.terminal_id || '',
@@ -1451,17 +1679,17 @@ function generateCSV() {
             row.vendorName,
             vendor?.emergency_contact || '',
             row.inspectionType,
-            'True',
+            showOnBoard,
             inspection?.template_no || '',
             formatDate(row.startDate),
             formatDate(row.endDate),
             row.remarks,
-            inspection?.default_text || '',
+            noticeText,
             '2',
-            formatDate(row.startDate),
-            '',
-            formatDate(row.endDate),
-            '',
+            formatDate(displayStartDate),
+            displayStartTime,
+            formatDate(displayEndDate),
+            displayEndTime,
             'テンプレート',
             displayTimeFormatted,
             '', '', '', '', '', '', '', '30', ''

@@ -733,3 +733,124 @@
 /* 旧クラスとの互換性 */
 .paste-modal { /* 別名で使用 */ }
 .paste-modal.active { opacity: 1; visibility: visible; }
+
+/* ========================================
+   詳細設定ボタン
+======================================== */
+.col-detail {
+    width: 48px;
+    text-align: center;
+}
+
+.btn-detail {
+    width: 32px;
+    height: 28px;
+    border: 1px solid #d1d5db;
+    background: #f8fafc;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.btn-detail:hover {
+    background: #e2e8f0;
+    color: #374151;
+}
+
+.btn-detail.has-data {
+    background: #ecfdf5;
+    border-color: #10b981;
+    color: #059669;
+}
+
+.btn-detail.has-data:hover {
+    background: #d1fae5;
+}
+
+/* ========================================
+   詳細設定モーダル
+======================================== */
+.detail-section {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.detail-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.detail-section h4 {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #374151;
+    margin: 0 0 0.75rem 0;
+}
+
+.form-row-inline {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.datetime-inputs {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.datetime-inputs input {
+    flex: 1;
+    min-width: 0;
+}
+
+.checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+    color: #374151;
+}
+
+.checkbox-item input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+/* ========================================
+   一括編集モーダル拡張
+======================================== */
+.bulk-edit-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.bulk-edit-section {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #e2e8f0;
+}
+
+.bulk-edit-section h4 {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #374151;
+    margin: 0 0 1rem 0;
+}
+
+.bulk-edit-section .form-group {
+    margin-bottom: 0.75rem;
+}
+
+@media (max-width: 640px) {
+    .bulk-edit-grid,
+    .form-row-inline {
+        grid-template-columns: 1fr;
+    }
+}
