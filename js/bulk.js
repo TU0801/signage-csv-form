@@ -16,49 +16,37 @@ import {
 let masterData = { properties: [], vendors: [], inspectionTypes: [] };
 let rows = [];
 let rowIdCounter = 0;
-let isOnlineMode = false;
 
 // ========================================
 // 初期化
 // ========================================
 
 async function init() {
-    // 認証チェック（オプション - 失敗してもローカルモードで続行）
+    // 認証チェック
+    const user = await getUser();
+    if (!user) {
+        window.location.href = 'login.html';
+        return;
+    }
+
+    // ユーザー情報表示
+    const profile = await getProfile();
+    document.getElementById('userEmail').textContent = profile?.email || user.email;
+
+    // ログアウトボタン
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+        await signOut();
+        window.location.href = 'login.html';
+    });
+
+    // マスターデータ取得
     try {
-        const user = await getUser();
-        if (user) {
-            isOnlineMode = true;
-            // ユーザー情報表示
-            const profile = await getProfile();
-            document.getElementById('userEmail').textContent = profile?.email || user.email;
-
-            // ログアウトボタン
-            document.getElementById('logoutBtn').addEventListener('click', async () => {
-                await signOut();
-                window.location.href = 'login.html';
-            });
-
-            // Supabaseからマスターデータ取得
-            masterData = await getAllMasterData();
-            console.log('Master data loaded from Supabase:', masterData);
-        } else {
-            throw new Error('Not authenticated');
-        }
+        masterData = await getAllMasterData();
+        console.log('Master data loaded:', masterData);
     } catch (error) {
-        // ローカルモードで動作
-        console.log('Running in local mode');
-        isOnlineMode = false;
-        document.getElementById('userEmail').textContent = 'ローカルモード';
-        document.getElementById('logoutBtn').style.display = 'none';
-
-        // ローカルマスターデータを使用
-        if (window.localMasterData) {
-            masterData = convertLocalMasterData(window.localMasterData);
-            console.log('Master data loaded from local:', masterData);
-        } else {
-            showToast('マスターデータの取得に失敗しました', 'error');
-            return;
-        }
+        console.error('Failed to load master data:', error);
+        showToast('マスターデータの取得に失敗しました', 'error');
+        return;
     }
 
     // イベントリスナー設定
@@ -67,39 +55,6 @@ async function init() {
     // 初期表示更新
     updateStats();
     updateEmptyState();
-}
-
-// ローカルデータ形式をSupabase形式に変換
-function convertLocalMasterData(localData) {
-    // 物件データを変換（端末情報を含める）
-    const propertiesMap = new Map();
-    localData.properties.forEach(p => {
-        const code = String(p.propertyCode);
-        if (!propertiesMap.has(code)) {
-            propertiesMap.set(code, {
-                property_code: code,
-                property_name: p.propertyName,
-                terminals: []
-            });
-        }
-        propertiesMap.get(code).terminals.push({
-            terminalId: p.terminalId,
-            supplement: p.supplement || ''
-        });
-    });
-
-    return {
-        properties: Array.from(propertiesMap.values()),
-        vendors: localData.vendors.map(v => ({
-            vendor_name: v.vendorName,
-            emergency_contact: v.emergencyContact
-        })),
-        inspectionTypes: localData.notices.map(n => ({
-            template_no: n.templateNo,
-            inspection_name: n.inspectionType,
-            default_text: n.noticeText
-        }))
-    };
 }
 
 // ========================================
@@ -574,12 +529,6 @@ async function saveAll() {
     const validRows = rows.filter(r => r.isValid);
     if (validRows.length === 0) {
         showToast('保存するデータがありません', 'error');
-        return;
-    }
-
-    // ローカルモードではSupabaseに保存できない
-    if (!isOnlineMode) {
-        showToast('ローカルモードではサーバー保存できません。CSVダウンロードをご利用ください。', 'error');
         return;
     }
 
