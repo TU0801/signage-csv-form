@@ -584,11 +584,8 @@ function setupRowEventListeners(tr, rowId) {
 // ========================================
 
 function setupSearchableSelect(searchInput, select) {
-    let isOpen = false;
-
     // セレクトにフォーカスしたら検索ボックスを表示
     select.addEventListener('focus', () => {
-        isOpen = true;
         searchInput.classList.add('active');
         select.classList.add('expanded');
         select.size = Math.min(select.options.length, 8);
@@ -613,7 +610,17 @@ function setupSearchableSelect(searchInput, select) {
             if (!select.matches(':focus')) {
                 closeSearchableSelect(searchInput, select);
             }
-        }, 150);
+        }, 200);
+    });
+
+    // セレクトで選択した時（クリックでも確実に発火）
+    select.addEventListener('click', (e) => {
+        // オプションがクリックされた場合、changeイベントを手動で発火
+        if (select.size > 1 && select.value) {
+            setTimeout(() => {
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+            }, 10);
+        }
     });
 
     // セレクトで選択した時
@@ -621,7 +628,7 @@ function setupSearchableSelect(searchInput, select) {
         searchInput.value = '';
         closeSearchableSelect(searchInput, select);
         // 選択後は次のフィールドにフォーカスを移動
-        const nextInput = select.closest('td').nextElementSibling?.querySelector('input, select');
+        const nextInput = select.closest('td')?.nextElementSibling?.querySelector('input, select');
         if (nextInput) nextInput.focus();
     });
 
@@ -631,21 +638,22 @@ function setupSearchableSelect(searchInput, select) {
             if (!searchInput.matches(':focus')) {
                 closeSearchableSelect(searchInput, select);
             }
-        }, 150);
+        }, 200);
     });
 
-    // Escapeで閉じる
+    // Escapeで閉じる / Enterで選択
     searchInput.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             closeSearchableSelect(searchInput, select);
             select.focus();
         }
         if (e.key === 'Enter') {
+            e.preventDefault();
             // 最初の表示されているオプションを選択
             const visibleOptions = Array.from(select.options).filter(opt => opt.style.display !== 'none' && opt.value);
             if (visibleOptions.length > 0) {
                 select.value = visibleOptions[0].value;
-                select.dispatchEvent(new Event('change'));
+                select.dispatchEvent(new Event('change', { bubbles: true }));
             }
         }
     });
