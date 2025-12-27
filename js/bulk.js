@@ -84,6 +84,14 @@ function setupEventListeners() {
         addRowWithCopy();
     });
 
+    // 空状態の行追加ボタン
+    const emptyAddBtn = document.getElementById('emptyAddBtn');
+    if (emptyAddBtn) {
+        emptyAddBtn.addEventListener('click', () => {
+            addRowWithCopy();
+        });
+    }
+
     // 選択削除
     document.getElementById('deleteSelectedBtn').addEventListener('click', deleteSelectedRows);
 
@@ -194,7 +202,7 @@ function setupEventListeners() {
 
 function handleGlobalKeyDown(e) {
     // モーダルが開いている場合はEscapeのみ処理
-    if (document.querySelector('.paste-modal.active')) {
+    if (document.querySelector('.modal-overlay.active')) {
         if (e.key === 'Escape') {
             closePasteModal();
             closeTemplateModalFn();
@@ -387,9 +395,9 @@ function renderRow(row) {
         <td class="col-row-num">${rows.indexOf(row) + 1}</td>
         <td class="col-property">
             <div class="searchable-select-container">
-                <input type="text" class="searchable-input property-search" placeholder="検索..." data-row-id="${row.id}">
+                <input type="text" class="searchable-input property-search" placeholder="物件名で検索..." data-row-id="${row.id}">
                 <select class="property-select" data-row-id="${row.id}">
-                    <option value="">選択</option>
+                    <option value="">-- 物件を選択 --</option>
                     ${uniqueProperties.map(p =>
                         `<option value="${p.property_code}" ${row.propertyCode === p.property_code ? 'selected' : ''}>${p.property_code} ${p.property_name}</option>`
                     ).join('')}
@@ -398,14 +406,14 @@ function renderRow(row) {
         </td>
         <td class="col-terminal">
             <select class="terminal-select" data-row-id="${row.id}">
-                <option value="">選択</option>
+                <option value="">-- 端末 --</option>
             </select>
         </td>
         <td class="col-vendor">
             <div class="searchable-select-container">
-                <input type="text" class="searchable-input vendor-search" placeholder="検索..." data-row-id="${row.id}">
+                <input type="text" class="searchable-input vendor-search" placeholder="受注先名で検索..." data-row-id="${row.id}">
                 <select class="vendor-select" data-row-id="${row.id}">
-                    <option value="">選択</option>
+                    <option value="">-- 受注先を選択 --</option>
                     ${masterData.vendors.map(v =>
                         `<option value="${v.vendor_name}" ${row.vendorName === v.vendor_name ? 'selected' : ''}>${v.vendor_name}</option>`
                     ).join('')}
@@ -414,9 +422,9 @@ function renderRow(row) {
         </td>
         <td class="col-inspection">
             <div class="searchable-select-container">
-                <input type="text" class="searchable-input inspection-search" placeholder="検索..." data-row-id="${row.id}">
+                <input type="text" class="searchable-input inspection-search" placeholder="点検種別で検索..." data-row-id="${row.id}">
                 <select class="inspection-select" data-row-id="${row.id}">
-                    <option value="">選択</option>
+                    <option value="">-- 点検種別を選択 --</option>
                     ${masterData.inspectionTypes.map(i =>
                         `<option value="${i.inspection_name}" ${row.inspectionType === i.inspection_name ? 'selected' : ''}>${i.inspection_name}</option>`
                     ).join('')}
@@ -424,19 +432,19 @@ function renderRow(row) {
             </div>
         </td>
         <td class="col-date">
-            <input type="date" class="start-date" data-row-id="${row.id}" value="${row.startDate}">
+            <input type="date" class="start-date" data-row-id="${row.id}" value="${row.startDate}" title="点検開始日">
         </td>
         <td class="col-date">
-            <input type="date" class="end-date" data-row-id="${row.id}" value="${row.endDate}">
+            <input type="date" class="end-date" data-row-id="${row.id}" value="${row.endDate}" title="点検終了日">
         </td>
         <td class="col-remarks">
-            <input type="text" class="remarks-input" data-row-id="${row.id}" value="${row.remarks}" placeholder="備考">
+            <input type="text" class="remarks-input" data-row-id="${row.id}" value="${row.remarks}" placeholder="任意入力">
         </td>
         <td class="col-time">
-            <input type="number" class="display-time" data-row-id="${row.id}" value="${row.displayTime}" min="1" max="30">
+            <input type="number" class="display-time" data-row-id="${row.id}" value="${row.displayTime}" min="1" max="30" title="表示秒数">
         </td>
         <td class="col-status">
-            <span class="status-badge ok" data-row-id="${row.id}">✓ OK</span>
+            <span class="status-badge ok" data-row-id="${row.id}">OK</span>
         </td>
     `;
 
@@ -890,59 +898,59 @@ function insertRowAt(index) {
 function createBulkEditModal() {
     const modal = document.createElement('div');
     modal.id = 'bulkEditModal';
-    modal.className = 'paste-modal';
+    modal.className = 'modal-overlay';
 
     const uniqueProperties = [...new Map(
         masterData.properties.map(p => [p.property_code, p])
     ).values()];
 
     modal.innerHTML = `
-        <div class="paste-modal-content" style="max-width: 500px;">
-            <div class="paste-modal-header">
-                <h3>✏️ 選択行を一括編集</h3>
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h3>選択行を一括編集</h3>
                 <button class="modal-close" id="closeBulkEditModal">&times;</button>
             </div>
-            <div style="padding: 1rem;">
-                <p style="margin-bottom: 1rem; color: #6b7280; font-size: 0.875rem;">
+            <div class="modal-body">
+                <p class="modal-description">
                     選択した行のフィールドを一括で変更できます。変更しない項目は空のままにしてください。
                 </p>
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">物件</label>
-                    <select id="bulkEditProperty" class="form-select" style="width: 100%;">
+                <div class="form-group">
+                    <label>物件</label>
+                    <select id="bulkEditProperty" class="form-control">
                         <option value="">変更しない</option>
                         ${uniqueProperties.map(p =>
                             `<option value="${p.property_code}">${p.property_code} ${p.property_name}</option>`
                         ).join('')}
                     </select>
                 </div>
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">受注先</label>
-                    <select id="bulkEditVendor" class="form-select" style="width: 100%;">
+                <div class="form-group">
+                    <label>受注先</label>
+                    <select id="bulkEditVendor" class="form-control">
                         <option value="">変更しない</option>
                         ${masterData.vendors.map(v =>
                             `<option value="${v.vendor_name}">${v.vendor_name}</option>`
                         ).join('')}
                     </select>
                 </div>
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">点検種別</label>
-                    <select id="bulkEditInspection" class="form-select" style="width: 100%;">
+                <div class="form-group">
+                    <label>点検種別</label>
+                    <select id="bulkEditInspection" class="form-control">
                         <option value="">変更しない</option>
                         ${masterData.inspectionTypes.map(i =>
                             `<option value="${i.inspection_name}">${i.inspection_name}</option>`
                         ).join('')}
                     </select>
                 </div>
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">点検開始日</label>
-                    <input type="date" id="bulkEditStartDate" class="form-control" style="width: 100%;">
+                <div class="form-group">
+                    <label>点検開始日</label>
+                    <input type="date" id="bulkEditStartDate" class="form-control">
                 </div>
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">点検終了日</label>
-                    <input type="date" id="bulkEditEndDate" class="form-control" style="width: 100%;">
+                <div class="form-group">
+                    <label>点検終了日</label>
+                    <input type="date" id="bulkEditEndDate" class="form-control">
                 </div>
             </div>
-            <div class="paste-modal-footer">
+            <div class="modal-footer">
                 <button class="btn btn-outline" id="cancelBulkEdit">キャンセル</button>
                 <button class="btn btn-primary" id="applyBulkEdit">適用</button>
             </div>
@@ -1109,7 +1117,7 @@ function updateTerminals(rowId, propertyCode) {
     const terminalSelect = tr.querySelector('.terminal-select');
     const property = masterData.properties.find(p => p.property_code === propertyCode);
 
-    terminalSelect.innerHTML = '<option value="">選択</option>';
+    terminalSelect.innerHTML = '<option value="">-- 端末 --</option>';
 
     if (property && property.terminals) {
         const terminals = typeof property.terminals === 'string'
@@ -1211,10 +1219,10 @@ function updateRowStatus(rowId) {
 
     if (row.isValid) {
         badge.className = 'status-badge ok';
-        badge.textContent = '✓ OK';
+        badge.textContent = 'OK';
     } else {
         badge.className = 'status-badge error';
-        badge.textContent = '⚠ エラー';
+        badge.textContent = 'エラー';
         badge.title = row.errors.join('\n');
 
         // エラーのあるセルをハイライト
@@ -1356,7 +1364,7 @@ async function saveAll() {
 
     const saveBtn = document.getElementById('saveBtn');
     saveBtn.disabled = true;
-    saveBtn.textContent = '保存中...';
+    saveBtn.innerHTML = '申請中...';
 
     try {
         const entries = validRows.map(row => {
@@ -1400,7 +1408,7 @@ async function saveAll() {
         showToast('保存に失敗しました: ' + error.message, 'error');
     } finally {
         saveBtn.disabled = false;
-        saveBtn.textContent = '💾 一括保存';
+        saveBtn.innerHTML = '<span class="btn-icon">↑</span> 申請する';
         updateButtons();
     }
 }

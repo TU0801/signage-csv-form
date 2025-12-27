@@ -13,9 +13,9 @@
 <body>
     <header class="header">
         <div class="header-content">
-            <h1>📊 一括入力</h1>
+            <h1>一括入力</h1>
             <div style="display: flex; gap: 0.5rem; align-items: center;">
-                <a href="index.html" class="btn btn-outline" style="color: white; border-color: rgba(255,255,255,0.3);">📝 1件入力</a>
+                <a href="index.html" class="btn btn-outline" style="color: white; border-color: rgba(255,255,255,0.3);">1件入力</a>
                 <span id="userEmail" style="color: rgba(255,255,255,0.8); font-size: 0.875rem;"></span>
                 <button class="btn btn-outline" id="logoutBtn" style="color: white; border-color: rgba(255,255,255,0.3);">ログアウト</button>
             </div>
@@ -24,35 +24,63 @@
 
     <div class="container">
         <div class="card">
-            <!-- ツールバー -->
+            <!-- メインツールバー -->
             <div class="bulk-toolbar">
-                <div class="btn-group">
-                    <button class="btn btn-primary btn-sm" id="addRowBtn" title="Ctrl+Enter">➕ 行追加</button>
-                    <button class="btn btn-outline btn-sm" id="duplicateBtn" title="Ctrl+D">📑 複製</button>
-                    <button class="btn btn-outline btn-sm" id="bulkEditBtn" disabled title="Ctrl+E">✏️ 一括編集</button>
-                    <button class="btn btn-outline btn-sm" id="deleteSelectedBtn" disabled title="Delete">🗑️ 選択削除</button>
-                    <button class="btn btn-outline btn-sm" id="pasteBtn">📋 Excelから貼り付け</button>
+                <!-- 左: 行操作 -->
+                <div class="toolbar-section">
+                    <span class="toolbar-label">行操作</span>
+                    <div class="btn-group">
+                        <button class="btn btn-primary btn-sm" id="addRowBtn" title="新しい行を追加 (Ctrl+Enter)">
+                            <span class="btn-icon">+</span> 行を追加
+                        </button>
+                        <button class="btn btn-outline btn-sm" id="duplicateBtn" title="選択した行を複製 (Ctrl+D)">複製</button>
+                        <button class="btn btn-outline btn-sm" id="bulkEditBtn" disabled title="選択した行を一括編集 (Ctrl+E)">一括編集</button>
+                        <button class="btn btn-outline btn-sm btn-danger-outline" id="deleteSelectedBtn" disabled title="選択した行を削除 (Delete)">削除</button>
+                    </div>
                 </div>
-                <div class="btn-group" style="margin-left: 1rem;">
-                    <select id="templateSelect" class="form-select form-select-sm" style="min-width: 150px;">
-                        <option value="">テンプレートを選択...</option>
-                    </select>
-                    <button class="btn btn-outline btn-sm" id="saveTemplateBtn" title="現在の行をテンプレートとして保存" style="white-space: nowrap;">💾 テンプレ保存</button>
+
+                <!-- 中央: データ入出力 -->
+                <div class="toolbar-section">
+                    <span class="toolbar-label">データ入出力</span>
+                    <div class="btn-group">
+                        <button class="btn btn-outline btn-sm" id="pasteBtn" title="Excelからデータを貼り付け">Excelから取込</button>
+                        <div class="toolbar-divider"></div>
+                        <select id="templateSelect" class="form-select form-select-sm">
+                            <option value="">テンプレート</option>
+                        </select>
+                        <button class="btn btn-outline btn-sm" id="saveTemplateBtn" title="現在の設定をテンプレートとして保存">テンプレ保存</button>
+                    </div>
                 </div>
-                <div class="stats">
-                    <span>登録件数: <span class="count" id="totalCount">0</span>件</span>
-                    <span>選択: <span class="count" id="selectedCount">0</span>件</span>
-                    <span style="color: #22c55e;">有効: <span class="count" id="validCount">0</span>件</span>
-                    <span style="color: #ef4444;">エラー: <span class="count" id="errorCount">0</span>件</span>
-                    <span id="filterInfo" style="color: #6b7280;"></span>
+
+                <!-- 右: 統計 -->
+                <div class="toolbar-stats">
+                    <div class="stat-item">
+                        <span class="stat-value" id="totalCount">0</span>
+                        <span class="stat-label">件</span>
+                    </div>
+                    <div class="stat-divider"></div>
+                    <div class="stat-item stat-success">
+                        <span class="stat-value" id="validCount">0</span>
+                        <span class="stat-label">有効</span>
+                    </div>
+                    <div class="stat-item stat-error">
+                        <span class="stat-value" id="errorCount">0</span>
+                        <span class="stat-label">エラー</span>
+                    </div>
+                    <div class="stat-item stat-selected">
+                        <span class="stat-value" id="selectedCount">0</span>
+                        <span class="stat-label">選択中</span>
+                    </div>
                 </div>
             </div>
 
             <!-- フィルター -->
-            <div class="filter-bar" style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem; padding: 0 0.5rem;">
+            <div class="filter-bar">
+                <span class="filter-label">表示:</span>
                 <button class="filter-btn active" data-filter="all">すべて</button>
-                <button class="filter-btn" data-filter="valid">有効のみ</button>
-                <button class="filter-btn" data-filter="error">エラーのみ</button>
+                <button class="filter-btn filter-valid" data-filter="valid">有効のみ</button>
+                <button class="filter-btn filter-error" data-filter="error">エラーのみ</button>
+                <span id="filterInfo" class="filter-info"></span>
             </div>
 
             <!-- テーブル -->
@@ -61,16 +89,16 @@
                     <thead>
                         <tr>
                             <th class="col-drag-handle"></th>
-                            <th class="col-checkbox"><input type="checkbox" id="selectAll"></th>
-                            <th class="col-row-num">#</th>
+                            <th class="col-checkbox"><input type="checkbox" id="selectAll" title="すべて選択"></th>
+                            <th class="col-row-num">No</th>
                             <th class="col-property required">物件</th>
                             <th class="col-terminal">端末</th>
                             <th class="col-vendor required">受注先</th>
                             <th class="col-inspection required">点検種別</th>
-                            <th class="col-date">点検開始日</th>
-                            <th class="col-date">点検終了日</th>
+                            <th class="col-date">開始日</th>
+                            <th class="col-date">終了日</th>
                             <th class="col-remarks">備考</th>
-                            <th class="col-time">表示秒数</th>
+                            <th class="col-time">秒数</th>
                             <th class="col-status">状態</th>
                         </tr>
                     </thead>
@@ -80,61 +108,73 @@
                 </table>
 
                 <div class="bulk-empty" id="emptyState">
-                    <div class="bulk-empty-icon">📭</div>
-                    <p>データがありません</p>
-                    <p style="font-size: 0.875rem;">「行追加」ボタンまたは「Excelから貼り付け」で始めましょう</p>
+                    <div class="bulk-empty-icon">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                            <path d="M12 11v6M9 14h6"/>
+                        </svg>
+                    </div>
+                    <h3>データがありません</h3>
+                    <p>「行を追加」または「Excelから取込」で入力を開始してください</p>
+                    <button class="btn btn-primary" id="emptyAddBtn">行を追加して始める</button>
                 </div>
             </div>
 
             <!-- フッター -->
             <div class="bulk-footer">
-                <div class="action-group">
-                    <button class="btn btn-success" id="saveBtn" disabled>📤 申請</button>
+                <div class="footer-left">
+                    <button class="btn btn-success btn-lg" id="saveBtn" disabled>
+                        <span class="btn-icon">↑</span> 申請する
+                    </button>
+                    <span class="footer-hint">管理者の承認後に反映されます</span>
                 </div>
-                <div class="action-group">
-                    <button class="btn btn-outline btn-sm" id="downloadCsvBtn" disabled>📥 CSVダウンロード</button>
-                    <button class="btn btn-outline btn-sm" id="copyCsvBtn" disabled>📋 CSVコピー</button>
+                <div class="footer-right">
+                    <button class="btn btn-outline btn-sm" id="downloadCsvBtn" disabled title="CSVファイルとしてダウンロード">CSVダウンロード</button>
+                    <button class="btn btn-outline btn-sm" id="copyCsvBtn" disabled title="CSV形式でクリップボードにコピー">CSVコピー</button>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- ペーストモーダル -->
-    <div class="paste-modal" id="pasteModal">
-        <div class="paste-modal-content">
-            <div class="paste-modal-header">
-                <h3>📋 Excelから貼り付け</h3>
+    <div class="modal-overlay" id="pasteModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Excelからデータを取り込む</h3>
                 <button class="modal-close" id="closePasteModal">&times;</button>
             </div>
-            <textarea class="paste-textarea" id="pasteArea" placeholder="Excelからコピーしたデータをここに貼り付けてください..."></textarea>
-            <div class="paste-hint">
-                <strong>形式:</strong> 物件コード[Tab]受注先名[Tab]点検種別[Tab]開始日[Tab]終了日[Tab]備考<br>
-                <strong>例:</strong> 2010[Tab]山本クリーンシステム[Tab]定期清掃[Tab]2025-01-15[Tab]2025-01-15[Tab]10:00〜12:00
+            <div class="modal-body">
+                <p class="modal-description">Excelでコピーしたデータをそのまま貼り付けてください。</p>
+                <textarea class="paste-textarea" id="pasteArea" placeholder="ここにExcelからコピーしたデータを貼り付け..."></textarea>
+                <div class="paste-format">
+                    <strong>対応形式:</strong>
+                    <code>物件コード → 受注先名 → 点検種別 → 開始日 → 終了日 → 備考</code>
+                </div>
             </div>
-            <div class="paste-modal-footer">
+            <div class="modal-footer">
                 <button class="btn btn-outline" id="cancelPasteBtn">キャンセル</button>
-                <button class="btn btn-primary" id="importPasteBtn">インポート</button>
+                <button class="btn btn-primary" id="importPasteBtn">取り込む</button>
             </div>
         </div>
     </div>
 
     <!-- テンプレート保存モーダル -->
-    <div class="paste-modal" id="templateModal">
-        <div class="paste-modal-content" style="max-width: 400px;">
-            <div class="paste-modal-header">
-                <h3>💾 テンプレートを保存</h3>
+    <div class="modal-overlay" id="templateModal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h3>テンプレートを保存</h3>
                 <button class="modal-close" id="closeTemplateModal">&times;</button>
             </div>
-            <div style="padding: 1rem;">
-                <div class="form-group" style="margin-bottom: 1rem;">
-                    <label for="templateName" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">テンプレート名</label>
-                    <input type="text" id="templateName" class="form-control" placeholder="例: A社定期清掃" style="width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 0.375rem;">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="templateName">テンプレート名</label>
+                    <input type="text" id="templateName" class="form-control" placeholder="例: A社定期清掃">
                 </div>
-                <div id="templatePreview" style="background: #f3f4f6; padding: 0.75rem; border-radius: 0.375rem; font-size: 0.875rem;">
+                <div id="templatePreview" class="template-preview">
                     <!-- テンプレート内容のプレビュー -->
                 </div>
             </div>
-            <div class="paste-modal-footer">
+            <div class="modal-footer">
                 <button class="btn btn-outline" id="cancelSaveTemplate">キャンセル</button>
                 <button class="btn btn-primary" id="confirmSaveTemplate">保存</button>
             </div>

@@ -1,25 +1,188 @@
-/* bulk.css - 一括入力画面用スタイル */
+/* bulk.css - 一括入力画面用スタイル（リデザイン版） */
 
-/* テーブルコンテナ */
+/* ========================================
+   ツールバー
+======================================== */
+.bulk-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    align-items: flex-end;
+    padding: 1rem 1.25rem;
+    background: linear-gradient(to bottom, #f8fafc, #f1f5f9);
+    border-bottom: 1px solid #e2e8f0;
+    border-radius: 8px 8px 0 0;
+}
+
+.toolbar-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.toolbar-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.toolbar-section .btn-group {
+    display: flex;
+    gap: 0.375rem;
+    align-items: center;
+}
+
+.toolbar-divider {
+    width: 1px;
+    height: 24px;
+    background: #d1d5db;
+    margin: 0 0.25rem;
+}
+
+/* 統計エリア */
+.toolbar-stats {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-left: auto;
+    padding: 0.5rem 1rem;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.stat-item {
+    display: flex;
+    align-items: baseline;
+    gap: 0.25rem;
+}
+
+.stat-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #1e293b;
+    line-height: 1;
+}
+
+.stat-label {
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+.stat-divider {
+    width: 1px;
+    height: 24px;
+    background: #e2e8f0;
+}
+
+.stat-success .stat-value { color: #16a34a; }
+.stat-error .stat-value { color: #dc2626; }
+.stat-selected .stat-value { color: #2563eb; }
+
+/* ボタンスタイル */
+.btn-icon {
+    font-weight: 700;
+    margin-right: 0.25rem;
+}
+
+.btn-danger-outline {
+    color: #dc2626;
+    border-color: #fecaca;
+}
+
+.btn-danger-outline:hover:not(:disabled) {
+    background: #fef2f2;
+    border-color: #f87171;
+}
+
+.btn-lg {
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+/* ========================================
+   フィルターバー
+======================================== */
+.filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    background: #fafafa;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.filter-label {
+    font-size: 0.8rem;
+    color: #64748b;
+    font-weight: 500;
+}
+
+.filter-btn {
+    padding: 0.375rem 0.875rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    background: white;
+    color: #475569;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.filter-btn:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+}
+
+.filter-btn.active {
+    background: #1e293b;
+    border-color: #1e293b;
+    color: white;
+}
+
+.filter-btn.filter-valid.active {
+    background: #16a34a;
+    border-color: #16a34a;
+}
+
+.filter-btn.filter-error.active {
+    background: #dc2626;
+    border-color: #dc2626;
+}
+
+.filter-info {
+    margin-left: auto;
+    font-size: 0.8rem;
+    color: #64748b;
+}
+
+/* ========================================
+   テーブルコンテナ
+======================================== */
 .bulk-table-container {
     overflow-x: auto;
     background: white;
-    border-radius: 8px;
-    border: 1px solid #e2e8f0;
+    min-height: 300px;
 }
 
-/* 一括入力テーブル */
+/* ========================================
+   テーブル
+======================================== */
 .bulk-table {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.875rem;
-    min-width: 1200px;
+    min-width: 1100px;
 }
 
 .bulk-table th,
 .bulk-table td {
-    padding: 0.5rem;
-    border: 1px solid #e2e8f0;
+    padding: 0.625rem 0.5rem;
+    border-bottom: 1px solid #e2e8f0;
     text-align: left;
     vertical-align: middle;
 }
@@ -27,72 +190,80 @@
 .bulk-table th {
     background: #f8fafc;
     font-weight: 600;
-    color: #374151;
+    font-size: 0.75rem;
+    color: #475569;
     position: sticky;
     top: 0;
     z-index: 10;
     white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    border-bottom: 2px solid #e2e8f0;
 }
 
 .bulk-table th.required::after {
-    content: ' *';
+    content: '*';
     color: #ef4444;
+    margin-left: 2px;
 }
 
-/* チェックボックス列 */
-.bulk-table .col-checkbox {
-    width: 40px;
-    text-align: center;
-}
+/* 列幅 */
+.bulk-table .col-drag-handle { width: 28px; }
+.bulk-table .col-checkbox { width: 40px; text-align: center; }
+.bulk-table .col-row-num { width: 40px; text-align: center; }
+.bulk-table .col-property { min-width: 200px; }
+.bulk-table .col-terminal { min-width: 120px; }
+.bulk-table .col-vendor { min-width: 180px; }
+.bulk-table .col-inspection { min-width: 180px; }
+.bulk-table .col-date { min-width: 140px; }
+.bulk-table .col-remarks { min-width: 120px; }
+.bulk-table .col-time { width: 60px; }
+.bulk-table .col-status { width: 80px; text-align: center; }
 
+/* チェックボックス */
 .bulk-table .col-checkbox input[type="checkbox"] {
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
     cursor: pointer;
+    accent-color: #2563eb;
 }
 
-/* 状態列 */
-.bulk-table .col-status {
-    width: 80px;
-    text-align: center;
-}
-
-/* 行番号列 */
+/* 行番号 */
 .bulk-table .col-row-num {
-    width: 40px;
-    text-align: center;
-    background: #f8fafc;
-    color: #64748b;
+    color: #94a3b8;
     font-size: 0.75rem;
+    font-weight: 500;
 }
 
-/* セル内のセレクト・インプット */
+/* セル内フォーム要素 */
 .bulk-table select,
 .bulk-table input[type="text"],
 .bulk-table input[type="date"],
-.bulk-table input[type="number"],
-.bulk-table textarea {
+.bulk-table input[type="number"] {
     width: 100%;
-    padding: 0.375rem 0.5rem;
-    border: 1px solid transparent;
-    border-radius: 4px;
+    padding: 0.5rem 0.625rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
     font-size: 0.875rem;
-    background: transparent;
-    transition: border-color 0.2s, background-color 0.2s;
+    background: white;
+    transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .bulk-table select:hover,
-.bulk-table input:hover,
-.bulk-table textarea:hover {
-    background: #f8fafc;
+.bulk-table input:hover {
+    border-color: #cbd5e1;
 }
 
 .bulk-table select:focus,
-.bulk-table input:focus,
-.bulk-table textarea:focus {
+.bulk-table input:focus {
     outline: none;
-    border-color: #667eea;
-    background: white;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+/* 日付入力 - 日本語形式に見えるようスタイル調整 */
+.bulk-table input[type="date"] {
+    font-family: inherit;
 }
 
 /* エラー状態 */
@@ -101,107 +272,12 @@
 }
 
 .bulk-table td.has-error select,
-.bulk-table td.has-error input,
-.bulk-table td.has-error textarea {
-    border-color: #fca5a5;
+.bulk-table td.has-error input {
+    border-color: #f87171;
+    background: #fff5f5;
 }
 
-/* 状態バッジ */
-.status-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 0.25rem 0.5rem;
-    border-radius: 9999px;
-    font-size: 0.75rem;
-    font-weight: 500;
-}
-
-.status-badge.ok {
-    background: #dcfce7;
-    color: #166534;
-}
-
-.status-badge.error {
-    background: #fef2f2;
-    color: #dc2626;
-}
-
-.status-badge.warning {
-    background: #fef3c7;
-    color: #92400e;
-}
-
-/* ツールバー */
-.bulk-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-    align-items: center;
-    padding: 1rem;
-    background: #f8fafc;
-    border-bottom: 1px solid #e2e8f0;
-    border-radius: 8px 8px 0 0;
-}
-
-.bulk-toolbar .btn-group {
-    display: flex;
-    gap: 0.5rem;
-}
-
-.bulk-toolbar .stats {
-    margin-left: auto;
-    display: flex;
-    gap: 1rem;
-    font-size: 0.875rem;
-    color: #64748b;
-}
-
-.bulk-toolbar .stats .count {
-    font-weight: 600;
-    color: #1e293b;
-}
-
-/* 空状態 */
-.bulk-empty {
-    text-align: center;
-    padding: 3rem;
-    color: #64748b;
-}
-
-.bulk-empty-icon {
-    font-size: 3rem;
-    margin-bottom: 1rem;
-}
-
-/* フッターアクション */
-.bulk-footer {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-    justify-content: space-between;
-    align-items: center;
-    padding: 1rem;
-    background: #f8fafc;
-    border-top: 1px solid #e2e8f0;
-    border-radius: 0 0 8px 8px;
-}
-
-.bulk-footer .action-group {
-    display: flex;
-    gap: 0.5rem;
-}
-
-/* 列幅調整 */
-.bulk-table .col-property { min-width: 180px; }
-.bulk-table .col-terminal { min-width: 140px; }
-.bulk-table .col-vendor { min-width: 180px; }
-.bulk-table .col-inspection { min-width: 200px; }
-.bulk-table .col-date { min-width: 130px; }
-.bulk-table .col-remarks { min-width: 150px; }
-.bulk-table .col-time { min-width: 80px; }
-
-/* 行のホバー */
+/* 行ホバー */
 .bulk-table tbody tr:hover {
     background: #f8fafc;
 }
@@ -210,83 +286,18 @@
     background: #eff6ff;
 }
 
-/* ペーストモーダル */
-.paste-modal {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.2s, visibility 0.2s;
-}
-
-.paste-modal.active {
-    opacity: 1;
-    visibility: visible;
-}
-
-.paste-modal-content {
-    background: white;
-    border-radius: 12px;
-    padding: 1.5rem;
-    width: 90%;
-    max-width: 600px;
-    max-height: 80vh;
-    overflow-y: auto;
-}
-
-.paste-modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-}
-
-.paste-modal-header h3 {
-    font-size: 1.125rem;
-    font-weight: 600;
-}
-
-.paste-textarea {
-    width: 100%;
-    height: 200px;
-    padding: 0.75rem;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    font-family: monospace;
-    font-size: 0.875rem;
-    resize: vertical;
-}
-
-.paste-hint {
-    margin-top: 0.75rem;
-    font-size: 0.75rem;
-    color: #64748b;
-}
-
-.paste-modal-footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 0.5rem;
-    margin-top: 1rem;
-}
-
 /* ドラッグハンドル */
 .col-drag-handle {
-    width: 24px;
-    text-align: center;
     cursor: grab;
-    color: #9ca3af;
+    color: #cbd5e1;
+    text-align: center;
+    font-size: 0.875rem;
     user-select: none;
-    font-size: 0.75rem;
+    transition: color 0.15s;
 }
 
 .col-drag-handle:hover {
-    color: #6b7280;
+    color: #64748b;
 }
 
 .bulk-table tbody tr.dragging {
@@ -295,30 +306,52 @@
 }
 
 .bulk-table tbody tr.drag-over {
-    border-top: 2px solid #667eea;
+    box-shadow: inset 0 2px 0 #3b82f6;
 }
 
-/* 検索付きセレクト */
+/* 状態バッジ */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.625rem;
+    border-radius: 9999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.status-badge.ok {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.status-badge.error {
+    background: #fef2f2;
+    color: #dc2626;
+}
+
+/* ========================================
+   検索付きセレクト
+======================================== */
 .searchable-select-container {
     position: relative;
-}
-
-.searchable-select-container select {
-    width: 100%;
 }
 
 .searchable-input {
     display: none;
     position: absolute;
-    top: -28px;
+    bottom: 100%;
     left: 0;
     right: 0;
-    padding: 0.25rem 0.5rem;
-    border: 1px solid #667eea;
-    border-radius: 4px;
-    font-size: 0.75rem;
+    margin-bottom: 4px;
+    padding: 0.375rem 0.5rem;
+    border: 2px solid #3b82f6;
+    border-radius: 6px;
+    font-size: 0.8rem;
     background: white;
-    box-shadow: 0 -2px 8px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     z-index: 101;
 }
 
@@ -330,60 +363,267 @@
     outline: none;
 }
 
-.searchable-select-container select.expanded {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 100;
-    background: white;
-    border: 1px solid #667eea;
-    border-radius: 4px;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+.searchable-input::placeholder {
+    color: #94a3b8;
 }
 
-/* 右クリックメニュー */
+.searchable-select-container select.expanded {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+/* ========================================
+   空状態
+======================================== */
+.bulk-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem 2rem;
+    text-align: center;
+    color: #64748b;
+}
+
+.bulk-empty-icon {
+    color: #cbd5e1;
+    margin-bottom: 1.5rem;
+}
+
+.bulk-empty h3 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #475569;
+    margin-bottom: 0.5rem;
+}
+
+.bulk-empty p {
+    font-size: 0.875rem;
+    margin-bottom: 1.5rem;
+}
+
+/* ========================================
+   フッター
+======================================== */
+.bulk-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+    border-radius: 0 0 8px 8px;
+}
+
+.footer-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.footer-hint {
+    font-size: 0.8rem;
+    color: #64748b;
+}
+
+.footer-right {
+    display: flex;
+    gap: 0.5rem;
+}
+
+/* ========================================
+   モーダル
+======================================== */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s, visibility 0.2s;
+}
+
+.modal-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 560px;
+    max-height: 85vh;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    transform: scale(0.95);
+    transition: transform 0.2s;
+}
+
+.modal-overlay.active .modal-content {
+    transform: scale(1);
+}
+
+.modal-sm {
+    max-width: 400px;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.modal-header h3 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #1e293b;
+    margin: 0;
+}
+
+.modal-close {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: #f1f5f9;
+    border-radius: 6px;
+    font-size: 1.25rem;
+    color: #64748b;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.modal-close:hover {
+    background: #e2e8f0;
+    color: #1e293b;
+}
+
+.modal-body {
+    padding: 1.5rem;
+    overflow-y: auto;
+    max-height: calc(85vh - 140px);
+}
+
+.modal-description {
+    color: #64748b;
+    font-size: 0.875rem;
+    margin-bottom: 1rem;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem;
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+}
+
+/* ペースト用テキストエリア */
+.paste-textarea {
+    width: 100%;
+    height: 180px;
+    padding: 1rem;
+    border: 2px dashed #d1d5db;
+    border-radius: 8px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.8rem;
+    resize: vertical;
+    transition: border-color 0.15s;
+}
+
+.paste-textarea:focus {
+    outline: none;
+    border-color: #3b82f6;
+    border-style: solid;
+}
+
+.paste-format {
+    margin-top: 1rem;
+    padding: 0.75rem;
+    background: #f1f5f9;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    color: #475569;
+}
+
+.paste-format code {
+    display: block;
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    background: white;
+    border-radius: 4px;
+    font-family: inherit;
+    color: #64748b;
+}
+
+/* テンプレートプレビュー */
+.template-preview {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: #f8fafc;
+    border-radius: 8px;
+    font-size: 0.875rem;
+}
+
+.template-preview div {
+    padding: 0.25rem 0;
+    color: #475569;
+}
+
+.template-preview strong {
+    color: #1e293b;
+}
+
+/* ========================================
+   右クリックメニュー
+======================================== */
 .context-menu {
     position: fixed;
     background: white;
     border: 1px solid #e2e8f0;
     border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.12);
     min-width: 180px;
     z-index: 1000;
     opacity: 0;
     visibility: hidden;
-    transition: opacity 0.15s, visibility 0.15s;
+    transform: scale(0.95);
+    transition: opacity 0.1s, visibility 0.1s, transform 0.1s;
+    padding: 0.375rem;
 }
 
 .context-menu.active {
     opacity: 1;
     visibility: visible;
+    transform: scale(1);
 }
 
 .context-menu-item {
-    padding: 0.5rem 1rem;
+    padding: 0.5rem 0.75rem;
     cursor: pointer;
-    font-size: 0.875rem;
+    font-size: 0.8rem;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.625rem;
+    border-radius: 4px;
+    color: #374151;
+    transition: background 0.1s;
 }
 
 .context-menu-item:hover {
-    background: #f3f4f6;
-}
-
-.context-menu-item:first-child {
-    border-radius: 8px 8px 0 0;
-}
-
-.context-menu-item:last-child {
-    border-radius: 0 0 8px 8px;
+    background: #f1f5f9;
 }
 
 .context-menu-item.danger {
-    color: #ef4444;
+    color: #dc2626;
 }
 
 .context-menu-item.danger:hover {
@@ -393,68 +633,99 @@
 .context-menu-divider {
     height: 1px;
     background: #e2e8f0;
-    margin: 0.25rem 0;
+    margin: 0.375rem 0;
 }
 
-/* フィルターバー */
-.filter-bar {
-    display: flex;
-    gap: 0.5rem;
-    padding: 0 0.5rem;
+/* ========================================
+   フォーム要素
+======================================== */
+.form-group {
+    margin-bottom: 1rem;
+}
+
+.form-group label {
+    display: block;
     margin-bottom: 0.5rem;
-}
-
-.filter-btn {
-    padding: 0.375rem 0.75rem;
-    border: 1px solid #d1d5db;
-    border-radius: 9999px;
-    background: white;
-    color: #6b7280;
-    font-size: 0.75rem;
     font-weight: 500;
+    font-size: 0.875rem;
+    color: #374151;
+}
+
+.form-control {
+    width: 100%;
+    padding: 0.625rem 0.875rem;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.form-select {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    background: white;
     cursor: pointer;
-    transition: all 0.2s;
 }
 
-.filter-btn:hover {
-    background: #f3f4f6;
-    border-color: #9ca3af;
+.form-select:focus {
+    outline: none;
+    border-color: #3b82f6;
 }
 
-.filter-btn.active {
-    background: #667eea;
-    border-color: #667eea;
-    color: white;
+.form-select-sm {
+    padding: 0.375rem 0.625rem;
+    font-size: 0.8rem;
 }
 
-.filter-btn[data-filter="valid"].active {
-    background: #22c55e;
-    border-color: #22c55e;
-}
-
-.filter-btn[data-filter="error"].active {
-    background: #ef4444;
-    border-color: #ef4444;
-}
-
-/* レスポンシブ */
-@media (max-width: 768px) {
+/* ========================================
+   レスポンシブ
+======================================== */
+@media (max-width: 1024px) {
     .bulk-toolbar {
         flex-direction: column;
         align-items: stretch;
+        gap: 1rem;
     }
 
-    .bulk-toolbar .stats {
+    .toolbar-stats {
         margin-left: 0;
         justify-content: center;
+    }
+}
+
+@media (max-width: 768px) {
+    .bulk-toolbar {
+        padding: 1rem;
+    }
+
+    .toolbar-section .btn-group {
+        flex-wrap: wrap;
     }
 
     .bulk-footer {
         flex-direction: column;
+        gap: 1rem;
     }
 
-    .bulk-footer .action-group {
+    .footer-left,
+    .footer-right {
         width: 100%;
         justify-content: center;
     }
+
+    .footer-hint {
+        display: none;
+    }
 }
+
+/* 旧クラスとの互換性 */
+.paste-modal { /* 別名で使用 */ }
+.paste-modal.active { opacity: 1; visibility: visible; }

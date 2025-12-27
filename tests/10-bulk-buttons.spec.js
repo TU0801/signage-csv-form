@@ -26,7 +26,7 @@ test.describe('Bulk Page Button Tests', () => {
     });
 
     test('add row button has correct text', async ({ page }) => {
-      await expect(page.locator('#addRowBtn')).toContainText('行追加');
+      await expect(page.locator('#addRowBtn')).toContainText('行を追加');
     });
 
     test('clicking add row button adds a new row', async ({ page }) => {
@@ -138,7 +138,7 @@ test.describe('Bulk Page Button Tests', () => {
     });
 
     test('paste button has correct text', async ({ page }) => {
-      await expect(page.locator('#pasteBtn')).toContainText('Excelから貼り付け');
+      await expect(page.locator('#pasteBtn')).toContainText('Excelから取込');
     });
 
     test('clicking paste button opens paste modal', async ({ page }) => {
@@ -175,7 +175,7 @@ test.describe('Bulk Page Button Tests', () => {
     });
 
     test('import button has correct text', async ({ page }) => {
-      await expect(page.locator('#importPasteBtn')).toHaveText('インポート');
+      await expect(page.locator('#importPasteBtn')).toHaveText('取り込む');
     });
 
     test('paste textarea is visible', async ({ page }) => {
