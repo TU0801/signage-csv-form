@@ -29,6 +29,7 @@
                 <div class="btn-group">
                     <button class="btn btn-primary btn-sm" id="addRowBtn" title="Ctrl+Enter">➕ 行追加</button>
                     <button class="btn btn-outline btn-sm" id="duplicateBtn" title="Ctrl+D">📑 複製</button>
+                    <button class="btn btn-outline btn-sm" id="bulkEditBtn" disabled title="Ctrl+E">✏️ 一括編集</button>
                     <button class="btn btn-outline btn-sm" id="deleteSelectedBtn" disabled title="Delete">🗑️ 選択削除</button>
                     <button class="btn btn-outline btn-sm" id="pasteBtn">📋 Excelから貼り付け</button>
                 </div>
@@ -59,6 +60,7 @@
                 <table class="bulk-table" id="bulkTable">
                     <thead>
                         <tr>
+                            <th class="col-drag-handle"></th>
                             <th class="col-checkbox"><input type="checkbox" id="selectAll"></th>
                             <th class="col-row-num">#</th>
                             <th class="col-property required">物件</th>

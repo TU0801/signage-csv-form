@@ -18,6 +18,8 @@ let rows = [];
 let rowIdCounter = 0;
 let currentFilter = 'all'; // 'all', 'valid', 'error'
 let currentUserId = null;
+let draggedRow = null;
+let autoSaveTimer = null;
 
 // ========================================
 // 初期化
@@ -58,9 +60,18 @@ async function init() {
     // テンプレートをロード
     loadTemplates();
 
+    // 一時保存データを復元
+    restoreAutoSave();
+
     // 初期表示更新
     updateStats();
     updateEmptyState();
+
+    // 右クリックメニューを作成
+    createContextMenu();
+
+    // 一括編集モーダルを作成
+    createBulkEditModal();
 }
 
 // ========================================
@@ -109,31 +120,18 @@ function setupEventListeners() {
     document.getElementById('copyCsvBtn').addEventListener('click', copyCSV);
 
     // キーボードショートカット
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-            closePasteModal();
-        }
-        // Ctrl+D: 選択行を複製
-        if (e.ctrlKey && e.key === 'd') {
-            e.preventDefault();
-            duplicateSelectedRows();
-        }
-        // Ctrl+Enter: 行追加（前の行をコピー）
-        if (e.ctrlKey && e.key === 'Enter') {
-            e.preventDefault();
-            addRowWithCopy();
-        }
-        // Delete: 選択行を削除
-        if (e.key === 'Delete' && getSelectedRowIds().length > 0) {
-            e.preventDefault();
-            deleteSelectedRows();
-        }
-    });
+    document.addEventListener('keydown', handleGlobalKeyDown);
 
     // 複製ボタン
     const duplicateBtn = document.getElementById('duplicateBtn');
     if (duplicateBtn) {
         duplicateBtn.addEventListener('click', duplicateSelectedRows);
+    }
+
+    // 一括編集ボタン
+    const bulkEditBtn = document.getElementById('bulkEditBtn');
+    if (bulkEditBtn) {
+        bulkEditBtn.addEventListener('click', openBulkEditModal);
     }
 
     // フィルターボタン
@@ -169,11 +167,124 @@ function setupEventListeners() {
     }
     const cancelSaveTemplate = document.getElementById('cancelSaveTemplate');
     if (cancelSaveTemplate) {
-        cancelSaveTemplate.addEventListener('click', closeTemplateModal);
+        cancelSaveTemplate.addEventListener('click', closeTemplateModalFn);
     }
-    const closeTemplateModal = document.getElementById('closeTemplateModal');
-    if (closeTemplateModal) {
-        closeTemplateModal.addEventListener('click', closeTemplateModalFn);
+    const closeTemplateModalBtn = document.getElementById('closeTemplateModal');
+    if (closeTemplateModalBtn) {
+        closeTemplateModalBtn.addEventListener('click', closeTemplateModalFn);
+    }
+
+    // 右クリックメニューを閉じる
+    document.addEventListener('click', () => {
+        hideContextMenu();
+    });
+
+    // ページを離れる前の警告
+    window.addEventListener('beforeunload', (e) => {
+        if (rows.length > 0) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+    });
+}
+
+// ========================================
+// キーボードナビゲーション
+// ========================================
+
+function handleGlobalKeyDown(e) {
+    // モーダルが開いている場合はEscapeのみ処理
+    if (document.querySelector('.paste-modal.active')) {
+        if (e.key === 'Escape') {
+            closePasteModal();
+            closeTemplateModalFn();
+            closeBulkEditModal();
+        }
+        return;
+    }
+
+    // Ctrl+D: 選択行を複製
+    if (e.ctrlKey && e.key === 'd') {
+        e.preventDefault();
+        duplicateSelectedRows();
+    }
+    // Ctrl+Enter: 行追加（前の行をコピー）
+    if (e.ctrlKey && e.key === 'Enter') {
+        e.preventDefault();
+        addRowWithCopy();
+    }
+    // Delete: 選択行を削除（入力フィールドにフォーカスがない場合）
+    if (e.key === 'Delete' && !isInputFocused() && getSelectedRowIds().length > 0) {
+        e.preventDefault();
+        deleteSelectedRows();
+    }
+    // Ctrl+E: 一括編集
+    if (e.ctrlKey && e.key === 'e') {
+        e.preventDefault();
+        openBulkEditModal();
+    }
+}
+
+function isInputFocused() {
+    const active = document.activeElement;
+    return active && (active.tagName === 'INPUT' || active.tagName === 'SELECT' || active.tagName === 'TEXTAREA');
+}
+
+function handleCellKeyDown(e, rowId) {
+    const target = e.target;
+    const tr = target.closest('tr');
+    if (!tr) return;
+
+    const cells = Array.from(tr.querySelectorAll('input, select, textarea'));
+    const currentIndex = cells.indexOf(target);
+
+    if (e.key === 'Tab') {
+        // Tabキー: 次のセルへ移動
+        if (!e.shiftKey && currentIndex === cells.length - 1) {
+            // 最後のセルで次の行へ
+            e.preventDefault();
+            const nextTr = tr.nextElementSibling;
+            if (nextTr) {
+                const nextCells = nextTr.querySelectorAll('input, select, textarea');
+                if (nextCells.length > 0) nextCells[0].focus();
+            }
+        } else if (e.shiftKey && currentIndex === 0) {
+            // 最初のセルで前の行へ
+            e.preventDefault();
+            const prevTr = tr.previousElementSibling;
+            if (prevTr) {
+                const prevCells = prevTr.querySelectorAll('input, select, textarea');
+                if (prevCells.length > 0) prevCells[prevCells.length - 1].focus();
+            }
+        }
+    } else if (e.key === 'Enter' && !e.ctrlKey) {
+        // Enter: 下のセルへ移動
+        e.preventDefault();
+        const allRows = Array.from(document.querySelectorAll('#tableBody tr'));
+        const rowIndex = allRows.indexOf(tr);
+        if (rowIndex < allRows.length - 1) {
+            const nextTr = allRows[rowIndex + 1];
+            const nextCells = nextTr.querySelectorAll('input, select, textarea');
+            if (nextCells[currentIndex]) {
+                nextCells[currentIndex].focus();
+            }
+        }
+    } else if (e.key === 'ArrowUp' && e.altKey) {
+        // Alt+上: 上のセルへ移動
+        e.preventDefault();
+        const prevTr = tr.previousElementSibling;
+        if (prevTr) {
+            const prevCells = prevTr.querySelectorAll('input, select, textarea');
+            if (prevCells[currentIndex]) prevCells[currentIndex].focus();
+        }
+    } else if (e.key === 'ArrowDown' && e.altKey) {
+        // Alt+下: 下のセルへ移動
+        e.preventDefault();
+        const nextTr = tr.nextElementSibling;
+        if (nextTr) {
+            const nextCells = nextTr.querySelectorAll('input, select, textarea');
+            if (nextCells[currentIndex]) nextCells[currentIndex].focus();
+        }
     }
 }
 
@@ -230,40 +341,6 @@ function duplicateSelectedRows() {
     document.getElementById('selectAll').checked = false;
 }
 
-// 選択行に一括で値を設定
-function applyToSelected(field, value) {
-    const selectedIds = getSelectedRowIds();
-    if (selectedIds.length === 0) return;
-
-    selectedIds.forEach(id => {
-        const row = rows.find(r => r.id === id);
-        if (row) {
-            row[field] = value;
-            // UI更新
-            const tr = document.querySelector(`tr[data-row-id="${id}"]`);
-            if (tr) {
-                const selector = {
-                    propertyCode: '.property-select',
-                    vendorName: '.vendor-select',
-                    inspectionType: '.inspection-select',
-                    startDate: '.start-date',
-                    endDate: '.end-date'
-                }[field];
-                if (selector) {
-                    const input = tr.querySelector(selector);
-                    if (input) input.value = value;
-                }
-                if (field === 'propertyCode') {
-                    updateTerminals(id, value);
-                }
-            }
-            validateRow(id);
-        }
-    });
-
-    updateStats();
-}
-
 function addRow(data = {}) {
     const rowId = ++rowIdCounter;
     const row = {
@@ -286,6 +363,7 @@ function addRow(data = {}) {
     updateStats();
     updateEmptyState();
     updateButtons();
+    triggerAutoSave();
 
     return rowId;
 }
@@ -294,6 +372,7 @@ function renderRow(row) {
     const tbody = document.getElementById('tableBody');
     const tr = document.createElement('tr');
     tr.dataset.rowId = row.id;
+    tr.draggable = true;
 
     // ユニークな物件コードリストを作成
     const uniqueProperties = [...new Map(
@@ -301,17 +380,21 @@ function renderRow(row) {
     ).values()];
 
     tr.innerHTML = `
+        <td class="col-drag-handle" title="ドラッグで順序変更">⋮⋮</td>
         <td class="col-checkbox">
             <input type="checkbox" class="row-checkbox" data-row-id="${row.id}">
         </td>
         <td class="col-row-num">${rows.indexOf(row) + 1}</td>
         <td class="col-property">
-            <select class="property-select" data-row-id="${row.id}">
-                <option value="">選択</option>
-                ${uniqueProperties.map(p =>
-                    `<option value="${p.property_code}" ${row.propertyCode === p.property_code ? 'selected' : ''}>${p.property_code} ${p.property_name}</option>`
-                ).join('')}
-            </select>
+            <div class="searchable-select-container">
+                <input type="text" class="searchable-input property-search" placeholder="検索..." data-row-id="${row.id}">
+                <select class="property-select" data-row-id="${row.id}">
+                    <option value="">選択</option>
+                    ${uniqueProperties.map(p =>
+                        `<option value="${p.property_code}" ${row.propertyCode === p.property_code ? 'selected' : ''}>${p.property_code} ${p.property_name}</option>`
+                    ).join('')}
+                </select>
+            </div>
         </td>
         <td class="col-terminal">
             <select class="terminal-select" data-row-id="${row.id}">
@@ -319,20 +402,26 @@ function renderRow(row) {
             </select>
         </td>
         <td class="col-vendor">
-            <select class="vendor-select" data-row-id="${row.id}">
-                <option value="">選択</option>
-                ${masterData.vendors.map(v =>
-                    `<option value="${v.vendor_name}" ${row.vendorName === v.vendor_name ? 'selected' : ''}>${v.vendor_name}</option>`
-                ).join('')}
-            </select>
+            <div class="searchable-select-container">
+                <input type="text" class="searchable-input vendor-search" placeholder="検索..." data-row-id="${row.id}">
+                <select class="vendor-select" data-row-id="${row.id}">
+                    <option value="">選択</option>
+                    ${masterData.vendors.map(v =>
+                        `<option value="${v.vendor_name}" ${row.vendorName === v.vendor_name ? 'selected' : ''}>${v.vendor_name}</option>`
+                    ).join('')}
+                </select>
+            </div>
         </td>
         <td class="col-inspection">
-            <select class="inspection-select" data-row-id="${row.id}">
-                <option value="">選択</option>
-                ${masterData.inspectionTypes.map(i =>
-                    `<option value="${i.inspection_name}" ${row.inspectionType === i.inspection_name ? 'selected' : ''}>${i.inspection_name}</option>`
-                ).join('')}
-            </select>
+            <div class="searchable-select-container">
+                <input type="text" class="searchable-input inspection-search" placeholder="検索..." data-row-id="${row.id}">
+                <select class="inspection-select" data-row-id="${row.id}">
+                    <option value="">選択</option>
+                    ${masterData.inspectionTypes.map(i =>
+                        `<option value="${i.inspection_name}" ${row.inspectionType === i.inspection_name ? 'selected' : ''}>${i.inspection_name}</option>`
+                    ).join('')}
+                </select>
+            </div>
         </td>
         <td class="col-date">
             <input type="date" class="start-date" data-row-id="${row.id}" value="${row.startDate}">
@@ -366,13 +455,41 @@ function setupRowEventListeners(tr, rowId) {
     // チェックボックス
     tr.querySelector('.row-checkbox').addEventListener('change', updateSelectedCount);
 
+    // ドラッグ&ドロップ
+    tr.addEventListener('dragstart', handleDragStart);
+    tr.addEventListener('dragend', handleDragEnd);
+    tr.addEventListener('dragover', handleDragOver);
+    tr.addEventListener('drop', handleDrop);
+
+    // 右クリック
+    tr.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        showContextMenu(e, rowId);
+    });
+
+    // 検索付きドロップダウン - 物件
+    const propertySearch = tr.querySelector('.property-search');
+    const propertySelect = tr.querySelector('.property-select');
+    setupSearchableSelect(propertySearch, propertySelect);
+
+    // 検索付きドロップダウン - 受注先
+    const vendorSearch = tr.querySelector('.vendor-search');
+    const vendorSelect = tr.querySelector('.vendor-select');
+    setupSearchableSelect(vendorSearch, vendorSelect);
+
+    // 検索付きドロップダウン - 点検種別
+    const inspectionSearch = tr.querySelector('.inspection-search');
+    const inspectionSelect = tr.querySelector('.inspection-select');
+    setupSearchableSelect(inspectionSearch, inspectionSelect);
+
     // 物件選択
-    tr.querySelector('.property-select').addEventListener('change', (e) => {
+    propertySelect.addEventListener('change', (e) => {
         const row = rows.find(r => r.id === rowId);
         if (row) {
             row.propertyCode = e.target.value;
             updateTerminals(rowId, e.target.value);
             validateRow(rowId);
+            triggerAutoSave();
         }
     });
 
@@ -382,33 +499,42 @@ function setupRowEventListeners(tr, rowId) {
         if (row) {
             row.terminalId = e.target.value;
             validateRow(rowId);
+            triggerAutoSave();
         }
     });
 
     // 受注先選択
-    tr.querySelector('.vendor-select').addEventListener('change', (e) => {
+    vendorSelect.addEventListener('change', (e) => {
         const row = rows.find(r => r.id === rowId);
         if (row) {
             row.vendorName = e.target.value;
             validateRow(rowId);
+            triggerAutoSave();
         }
     });
 
     // 点検種別選択
-    tr.querySelector('.inspection-select').addEventListener('change', (e) => {
+    inspectionSelect.addEventListener('change', (e) => {
         const row = rows.find(r => r.id === rowId);
         if (row) {
             row.inspectionType = e.target.value;
             validateRow(rowId);
+            triggerAutoSave();
         }
     });
 
-    // 日付
+    // 開始日 - 終了日自動設定
     tr.querySelector('.start-date').addEventListener('change', (e) => {
         const row = rows.find(r => r.id === rowId);
         if (row) {
             row.startDate = e.target.value;
+            // 終了日が未設定の場合、開始日と同じに設定
+            if (!row.endDate && e.target.value) {
+                row.endDate = e.target.value;
+                tr.querySelector('.end-date').value = e.target.value;
+            }
             validateRow(rowId);
+            triggerAutoSave();
         }
     });
 
@@ -417,6 +543,7 @@ function setupRowEventListeners(tr, rowId) {
         if (row) {
             row.endDate = e.target.value;
             validateRow(rowId);
+            triggerAutoSave();
         }
     });
 
@@ -425,6 +552,7 @@ function setupRowEventListeners(tr, rowId) {
         const row = rows.find(r => r.id === rowId);
         if (row) {
             row.remarks = e.target.value;
+            triggerAutoSave();
         }
     });
 
@@ -433,9 +561,513 @@ function setupRowEventListeners(tr, rowId) {
         const row = rows.find(r => r.id === rowId);
         if (row) {
             row.displayTime = parseInt(e.target.value) || 6;
+            triggerAutoSave();
         }
     });
+
+    // セルナビゲーション
+    tr.querySelectorAll('input, select, textarea').forEach(el => {
+        el.addEventListener('keydown', (e) => handleCellKeyDown(e, rowId));
+    });
 }
+
+// ========================================
+// 検索付きドロップダウン
+// ========================================
+
+function setupSearchableSelect(searchInput, select) {
+    let isOpen = false;
+
+    searchInput.addEventListener('focus', () => {
+        isOpen = true;
+        select.style.display = 'block';
+        select.size = Math.min(select.options.length, 8);
+    });
+
+    searchInput.addEventListener('blur', (e) => {
+        // selectへのクリックの場合は閉じない
+        setTimeout(() => {
+            if (!select.matches(':focus')) {
+                isOpen = false;
+                select.style.display = '';
+                select.size = 1;
+            }
+        }, 150);
+    });
+
+    searchInput.addEventListener('input', (e) => {
+        const searchText = e.target.value.toLowerCase();
+        const options = select.options;
+
+        for (let i = 0; i < options.length; i++) {
+            const optionText = options[i].text.toLowerCase();
+            options[i].style.display = optionText.includes(searchText) ? '' : 'none';
+        }
+    });
+
+    select.addEventListener('change', () => {
+        const selectedOption = select.options[select.selectedIndex];
+        searchInput.value = '';
+        select.style.display = '';
+        select.size = 1;
+        // 選択後は次のフィールドにフォーカスを移動
+        const nextInput = select.closest('td').nextElementSibling?.querySelector('input, select');
+        if (nextInput) nextInput.focus();
+    });
+
+    select.addEventListener('blur', () => {
+        select.style.display = '';
+        select.size = 1;
+    });
+}
+
+// ========================================
+// ドラッグ&ドロップ
+// ========================================
+
+function handleDragStart(e) {
+    draggedRow = e.target.closest('tr');
+    draggedRow.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+}
+
+function handleDragEnd(e) {
+    if (draggedRow) {
+        draggedRow.classList.remove('dragging');
+        draggedRow = null;
+    }
+    document.querySelectorAll('#tableBody tr').forEach(tr => {
+        tr.classList.remove('drag-over');
+    });
+}
+
+function handleDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+
+    const tr = e.target.closest('tr');
+    if (tr && tr !== draggedRow) {
+        document.querySelectorAll('#tableBody tr').forEach(row => {
+            row.classList.remove('drag-over');
+        });
+        tr.classList.add('drag-over');
+    }
+}
+
+function handleDrop(e) {
+    e.preventDefault();
+    const targetTr = e.target.closest('tr');
+    if (!targetTr || targetTr === draggedRow) return;
+
+    const tbody = document.getElementById('tableBody');
+    const allRows = Array.from(tbody.querySelectorAll('tr'));
+    const draggedIndex = allRows.indexOf(draggedRow);
+    const targetIndex = allRows.indexOf(targetTr);
+
+    // DOM上の位置を変更
+    if (draggedIndex < targetIndex) {
+        targetTr.after(draggedRow);
+    } else {
+        targetTr.before(draggedRow);
+    }
+
+    // データ配列の順序も変更
+    const draggedRowId = parseInt(draggedRow.dataset.rowId);
+    const rowData = rows.find(r => r.id === draggedRowId);
+    rows = rows.filter(r => r.id !== draggedRowId);
+
+    const targetRowId = parseInt(targetTr.dataset.rowId);
+    const targetDataIndex = rows.findIndex(r => r.id === targetRowId);
+
+    if (draggedIndex < targetIndex) {
+        rows.splice(targetDataIndex + 1, 0, rowData);
+    } else {
+        rows.splice(targetDataIndex, 0, rowData);
+    }
+
+    updateRowNumbers();
+    triggerAutoSave();
+    showToast('行の順序を変更しました', 'success');
+}
+
+// ========================================
+// 右クリックメニュー
+// ========================================
+
+function createContextMenu() {
+    const menu = document.createElement('div');
+    menu.id = 'contextMenu';
+    menu.className = 'context-menu';
+    menu.innerHTML = `
+        <div class="context-menu-item" data-action="duplicate">📑 この行を複製</div>
+        <div class="context-menu-item" data-action="insertAbove">⬆️ 上に行を挿入</div>
+        <div class="context-menu-item" data-action="insertBelow">⬇️ 下に行を挿入</div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item" data-action="copyRow">📋 この行をコピー</div>
+        <div class="context-menu-item" data-action="pasteRow">📥 ペースト</div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item" data-action="selectAll">☑️ 全て選択</div>
+        <div class="context-menu-item" data-action="deselectAll">☐ 選択解除</div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item danger" data-action="delete">🗑️ この行を削除</div>
+    `;
+    document.body.appendChild(menu);
+
+    menu.addEventListener('click', (e) => {
+        const item = e.target.closest('.context-menu-item');
+        if (!item) return;
+
+        const action = item.dataset.action;
+        const rowId = parseInt(menu.dataset.rowId);
+        handleContextMenuAction(action, rowId);
+        hideContextMenu();
+    });
+}
+
+let copiedRowData = null;
+
+function showContextMenu(e, rowId) {
+    const menu = document.getElementById('contextMenu');
+    menu.dataset.rowId = rowId;
+    menu.style.left = e.pageX + 'px';
+    menu.style.top = e.pageY + 'px';
+    menu.classList.add('active');
+}
+
+function hideContextMenu() {
+    const menu = document.getElementById('contextMenu');
+    if (menu) menu.classList.remove('active');
+}
+
+function handleContextMenuAction(action, rowId) {
+    const row = rows.find(r => r.id === rowId);
+    const rowIndex = rows.findIndex(r => r.id === rowId);
+
+    switch (action) {
+        case 'duplicate':
+            if (row) {
+                addRow({
+                    propertyCode: row.propertyCode,
+                    terminalId: row.terminalId,
+                    vendorName: row.vendorName,
+                    inspectionType: row.inspectionType,
+                    startDate: row.startDate,
+                    endDate: row.endDate,
+                    remarks: row.remarks,
+                    displayTime: row.displayTime
+                });
+                showToast('行を複製しました', 'success');
+            }
+            break;
+
+        case 'insertAbove':
+            insertRowAt(rowIndex);
+            break;
+
+        case 'insertBelow':
+            insertRowAt(rowIndex + 1);
+            break;
+
+        case 'copyRow':
+            if (row) {
+                copiedRowData = { ...row };
+                showToast('行をコピーしました', 'success');
+            }
+            break;
+
+        case 'pasteRow':
+            if (copiedRowData) {
+                addRow({
+                    propertyCode: copiedRowData.propertyCode,
+                    terminalId: copiedRowData.terminalId,
+                    vendorName: copiedRowData.vendorName,
+                    inspectionType: copiedRowData.inspectionType,
+                    startDate: copiedRowData.startDate,
+                    endDate: copiedRowData.endDate,
+                    remarks: copiedRowData.remarks,
+                    displayTime: copiedRowData.displayTime
+                });
+                showToast('行をペーストしました', 'success');
+            } else {
+                showToast('コピーされた行がありません', 'error');
+            }
+            break;
+
+        case 'selectAll':
+            document.querySelectorAll('#tableBody input[type="checkbox"]').forEach(cb => cb.checked = true);
+            document.getElementById('selectAll').checked = true;
+            updateSelectedCount();
+            break;
+
+        case 'deselectAll':
+            document.querySelectorAll('#tableBody input[type="checkbox"]').forEach(cb => cb.checked = false);
+            document.getElementById('selectAll').checked = false;
+            updateSelectedCount();
+            break;
+
+        case 'delete':
+            if (confirm('この行を削除しますか？')) {
+                const tr = document.querySelector(`tr[data-row-id="${rowId}"]`);
+                if (tr) tr.remove();
+                rows = rows.filter(r => r.id !== rowId);
+                updateRowNumbers();
+                updateStats();
+                updateEmptyState();
+                updateButtons();
+                triggerAutoSave();
+                showToast('行を削除しました', 'success');
+            }
+            break;
+    }
+}
+
+function insertRowAt(index) {
+    const newRowId = ++rowIdCounter;
+    const newRow = {
+        id: newRowId,
+        propertyCode: '',
+        terminalId: '',
+        vendorName: '',
+        inspectionType: '',
+        startDate: '',
+        endDate: '',
+        remarks: '',
+        displayTime: 6,
+        isValid: false,
+        errors: []
+    };
+
+    rows.splice(index, 0, newRow);
+
+    // 既存のDOMを再構築
+    const tbody = document.getElementById('tableBody');
+    tbody.innerHTML = '';
+    rows.forEach(row => renderRow(row));
+    rows.forEach(row => validateRow(row.id));
+
+    updateStats();
+    triggerAutoSave();
+    showToast('行を挿入しました', 'success');
+}
+
+// ========================================
+// 一括編集モーダル
+// ========================================
+
+function createBulkEditModal() {
+    const modal = document.createElement('div');
+    modal.id = 'bulkEditModal';
+    modal.className = 'paste-modal';
+
+    const uniqueProperties = [...new Map(
+        masterData.properties.map(p => [p.property_code, p])
+    ).values()];
+
+    modal.innerHTML = `
+        <div class="paste-modal-content" style="max-width: 500px;">
+            <div class="paste-modal-header">
+                <h3>✏️ 選択行を一括編集</h3>
+                <button class="modal-close" id="closeBulkEditModal">&times;</button>
+            </div>
+            <div style="padding: 1rem;">
+                <p style="margin-bottom: 1rem; color: #6b7280; font-size: 0.875rem;">
+                    選択した行のフィールドを一括で変更できます。変更しない項目は空のままにしてください。
+                </p>
+                <div class="form-group" style="margin-bottom: 1rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">物件</label>
+                    <select id="bulkEditProperty" class="form-select" style="width: 100%;">
+                        <option value="">変更しない</option>
+                        ${uniqueProperties.map(p =>
+                            `<option value="${p.property_code}">${p.property_code} ${p.property_name}</option>`
+                        ).join('')}
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 1rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">受注先</label>
+                    <select id="bulkEditVendor" class="form-select" style="width: 100%;">
+                        <option value="">変更しない</option>
+                        ${masterData.vendors.map(v =>
+                            `<option value="${v.vendor_name}">${v.vendor_name}</option>`
+                        ).join('')}
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 1rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">点検種別</label>
+                    <select id="bulkEditInspection" class="form-select" style="width: 100%;">
+                        <option value="">変更しない</option>
+                        ${masterData.inspectionTypes.map(i =>
+                            `<option value="${i.inspection_name}">${i.inspection_name}</option>`
+                        ).join('')}
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 1rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">点検開始日</label>
+                    <input type="date" id="bulkEditStartDate" class="form-control" style="width: 100%;">
+                </div>
+                <div class="form-group" style="margin-bottom: 1rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">点検終了日</label>
+                    <input type="date" id="bulkEditEndDate" class="form-control" style="width: 100%;">
+                </div>
+            </div>
+            <div class="paste-modal-footer">
+                <button class="btn btn-outline" id="cancelBulkEdit">キャンセル</button>
+                <button class="btn btn-primary" id="applyBulkEdit">適用</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    document.getElementById('closeBulkEditModal').addEventListener('click', closeBulkEditModal);
+    document.getElementById('cancelBulkEdit').addEventListener('click', closeBulkEditModal);
+    document.getElementById('applyBulkEdit').addEventListener('click', applyBulkEdit);
+
+    modal.addEventListener('click', (e) => {
+        if (e.target.id === 'bulkEditModal') closeBulkEditModal();
+    });
+}
+
+function openBulkEditModal() {
+    const selectedIds = getSelectedRowIds();
+    if (selectedIds.length === 0) {
+        showToast('編集する行を選択してください', 'error');
+        return;
+    }
+
+    // フォームをリセット
+    document.getElementById('bulkEditProperty').value = '';
+    document.getElementById('bulkEditVendor').value = '';
+    document.getElementById('bulkEditInspection').value = '';
+    document.getElementById('bulkEditStartDate').value = '';
+    document.getElementById('bulkEditEndDate').value = '';
+
+    document.getElementById('bulkEditModal').classList.add('active');
+}
+
+function closeBulkEditModal() {
+    document.getElementById('bulkEditModal').classList.remove('active');
+}
+
+function applyBulkEdit() {
+    const selectedIds = getSelectedRowIds();
+    const property = document.getElementById('bulkEditProperty').value;
+    const vendor = document.getElementById('bulkEditVendor').value;
+    const inspection = document.getElementById('bulkEditInspection').value;
+    const startDate = document.getElementById('bulkEditStartDate').value;
+    const endDate = document.getElementById('bulkEditEndDate').value;
+
+    let changedCount = 0;
+
+    selectedIds.forEach(id => {
+        const row = rows.find(r => r.id === id);
+        const tr = document.querySelector(`tr[data-row-id="${id}"]`);
+        if (!row || !tr) return;
+
+        if (property) {
+            row.propertyCode = property;
+            tr.querySelector('.property-select').value = property;
+            updateTerminals(id, property);
+        }
+        if (vendor) {
+            row.vendorName = vendor;
+            tr.querySelector('.vendor-select').value = vendor;
+        }
+        if (inspection) {
+            row.inspectionType = inspection;
+            tr.querySelector('.inspection-select').value = inspection;
+        }
+        if (startDate) {
+            row.startDate = startDate;
+            tr.querySelector('.start-date').value = startDate;
+        }
+        if (endDate) {
+            row.endDate = endDate;
+            tr.querySelector('.end-date').value = endDate;
+        }
+
+        validateRow(id);
+        changedCount++;
+    });
+
+    closeBulkEditModal();
+    updateStats();
+    triggerAutoSave();
+    showToast(`${changedCount}件の行を更新しました`, 'success');
+}
+
+// ========================================
+// 自動保存・復元
+// ========================================
+
+function getAutoSaveKey() {
+    return `bulk_autosave_${currentUserId}`;
+}
+
+function triggerAutoSave() {
+    if (autoSaveTimer) clearTimeout(autoSaveTimer);
+    autoSaveTimer = setTimeout(saveAutoSave, 1000);
+}
+
+function saveAutoSave() {
+    if (rows.length === 0) {
+        localStorage.removeItem(getAutoSaveKey());
+        return;
+    }
+
+    const data = {
+        timestamp: Date.now(),
+        rowIdCounter: rowIdCounter,
+        rows: rows.map(r => ({
+            propertyCode: r.propertyCode,
+            terminalId: r.terminalId,
+            vendorName: r.vendorName,
+            inspectionType: r.inspectionType,
+            startDate: r.startDate,
+            endDate: r.endDate,
+            remarks: r.remarks,
+            displayTime: r.displayTime
+        }))
+    };
+
+    localStorage.setItem(getAutoSaveKey(), JSON.stringify(data));
+    console.log('Auto-saved', rows.length, 'rows');
+}
+
+function restoreAutoSave() {
+    try {
+        const data = localStorage.getItem(getAutoSaveKey());
+        if (!data) return;
+
+        const saved = JSON.parse(data);
+        if (!saved.rows || saved.rows.length === 0) return;
+
+        // 24時間以上前のデータは無視
+        if (Date.now() - saved.timestamp > 24 * 60 * 60 * 1000) {
+            localStorage.removeItem(getAutoSaveKey());
+            return;
+        }
+
+        if (confirm(`${saved.rows.length}件の未保存データがあります。復元しますか？`)) {
+            rowIdCounter = saved.rowIdCounter || 0;
+            saved.rows.forEach(rowData => {
+                addRow(rowData);
+            });
+            showToast(`${saved.rows.length}件のデータを復元しました`, 'success');
+        } else {
+            localStorage.removeItem(getAutoSaveKey());
+        }
+    } catch (error) {
+        console.error('Auto-save restore error:', error);
+    }
+}
+
+function clearAutoSave() {
+    localStorage.removeItem(getAutoSaveKey());
+}
+
+// ========================================
+// 端末更新
+// ========================================
 
 function updateTerminals(rowId, propertyCode) {
     const tr = document.querySelector(`tr[data-row-id="${rowId}"]`);
@@ -467,6 +1099,10 @@ function updateTerminals(rowId, propertyCode) {
     }
 }
 
+// ========================================
+// 行の削除
+// ========================================
+
 function deleteSelectedRows() {
     const selectedIds = getSelectedRowIds();
     if (selectedIds.length === 0) return;
@@ -479,18 +1115,19 @@ function deleteSelectedRows() {
         rows = rows.filter(r => r.id !== id);
     });
 
-    // 行番号を更新
     updateRowNumbers();
     updateStats();
     updateEmptyState();
     updateButtons();
+    triggerAutoSave();
     document.getElementById('selectAll').checked = false;
 }
 
 function updateRowNumbers() {
     const trs = document.querySelectorAll('#tableBody tr');
     trs.forEach((tr, index) => {
-        tr.querySelector('.col-row-num').textContent = index + 1;
+        const numCell = tr.querySelector('.col-row-num');
+        if (numCell) numCell.textContent = index + 1;
     });
 }
 
@@ -575,6 +1212,12 @@ function updateSelectedCount() {
     const count = getSelectedRowIds().length;
     document.getElementById('selectedCount').textContent = count;
     document.getElementById('deleteSelectedBtn').disabled = count === 0;
+
+    // 一括編集ボタンも更新
+    const bulkEditBtn = document.getElementById('bulkEditBtn');
+    if (bulkEditBtn) {
+        bulkEditBtn.disabled = count === 0;
+    }
 }
 
 function updateEmptyState() {
@@ -620,7 +1263,6 @@ function importFromPaste() {
     lines.forEach(line => {
         const parts = line.split('\t');
         if (parts.length >= 3) {
-            // 物件コード、受注先、点検種別は必須
             const propertyCode = parts[0]?.trim();
             const vendorName = parts[1]?.trim();
             const inspectionType = parts[2]?.trim();
@@ -628,7 +1270,6 @@ function importFromPaste() {
             const endDate = parts[4]?.trim() || '';
             const remarks = parts[5]?.trim() || '';
 
-            // マスターデータとのマッチング
             const matchedProperty = masterData.properties.find(p =>
                 p.property_code === propertyCode || p.property_name.includes(propertyCode)
             );
@@ -658,12 +1299,10 @@ function importFromPaste() {
 function formatDateForInput(dateStr) {
     if (!dateStr) return '';
 
-    // YYYY-MM-DD形式
     if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
         return dateStr;
     }
 
-    // YYYY/MM/DD形式
     if (/^\d{4}\/\d{2}\/\d{2}$/.test(dateStr)) {
         return dateStr.replace(/\//g, '-');
     }
@@ -703,12 +1342,12 @@ async function saveAll() {
                 inspection_end: row.endDate || null,
                 remarks: row.remarks,
                 display_duration: row.displayTime,
-                status: 'submitted'
+                status: 'pending' // 管理者承認待ち
             };
         });
 
         await createEntries(entries);
-        showToast(`${entries.length}件のデータを保存しました`, 'success');
+        showToast(`${entries.length}件のデータを保存しました（管理者の承認待ち）`, 'success');
 
         // 保存した行を削除
         validRows.forEach(row => {
@@ -721,6 +1360,7 @@ async function saveAll() {
         updateStats();
         updateEmptyState();
         updateButtons();
+        clearAutoSave(); // 自動保存データをクリア
 
     } catch (error) {
         console.error('Save error:', error);
@@ -859,7 +1499,6 @@ function applyFilter() {
         tr.style.display = visible ? '' : 'none';
     });
 
-    // フィルター後の件数を表示
     const visibleCount = Array.from(trs).filter(tr => tr.style.display !== 'none').length;
     const filterInfo = document.getElementById('filterInfo');
     if (filterInfo) {
@@ -908,7 +1547,6 @@ function saveTemplates(templates) {
 }
 
 function openSaveTemplateModal() {
-    // 最後の行からテンプレートデータを取得
     const lastRow = rows[rows.length - 1];
     if (!lastRow || !lastRow.propertyCode) {
         showToast('テンプレートに保存する行を先に入力してください', 'error');
@@ -919,7 +1557,6 @@ function openSaveTemplateModal() {
     document.getElementById('templateName').value = '';
     document.getElementById('templateName').focus();
 
-    // プレビュー表示
     const preview = document.getElementById('templatePreview');
     if (preview) {
         const property = masterData.properties.find(p => p.property_code === lastRow.propertyCode);
@@ -969,11 +1606,9 @@ function applyTemplate(index) {
     const template = templates[index];
     if (!template) return;
 
-    // 行がない場合は新規追加
     if (rows.length === 0) {
         addRow(template);
     } else {
-        // 最後の行にテンプレートを適用
         const lastRow = rows[rows.length - 1];
         lastRow.propertyCode = template.propertyCode;
         lastRow.terminalId = template.terminalId;
@@ -981,7 +1616,6 @@ function applyTemplate(index) {
         lastRow.inspectionType = template.inspectionType;
         lastRow.displayTime = template.displayTime;
 
-        // UI更新
         const tr = document.querySelector(`tr[data-row-id="${lastRow.id}"]`);
         if (tr) {
             tr.querySelector('.property-select').value = template.propertyCode;
@@ -998,17 +1632,6 @@ function applyTemplate(index) {
 
     document.getElementById('templateSelect').value = '';
     showToast(`テンプレート「${template.name}」を適用しました`, 'success');
-}
-
-function deleteTemplate(index) {
-    const templates = getTemplates();
-    const template = templates[index];
-    if (!confirm(`テンプレート「${template.name}」を削除しますか？`)) return;
-
-    templates.splice(index, 1);
-    saveTemplates(templates);
-    loadTemplates();
-    showToast('テンプレートを削除しました', 'success');
 }
 
 // ========================================

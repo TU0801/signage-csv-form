@@ -275,6 +275,114 @@
     margin-top: 1rem;
 }
 
+/* ドラッグハンドル */
+.col-drag-handle {
+    width: 24px;
+    text-align: center;
+    cursor: grab;
+    color: #9ca3af;
+    user-select: none;
+    font-size: 0.75rem;
+}
+
+.col-drag-handle:hover {
+    color: #6b7280;
+}
+
+.bulk-table tbody tr.dragging {
+    opacity: 0.5;
+    background: #e0e7ff;
+}
+
+.bulk-table tbody tr.drag-over {
+    border-top: 2px solid #667eea;
+}
+
+/* 検索付きセレクト */
+.searchable-select-container {
+    position: relative;
+}
+
+.searchable-input {
+    width: 100%;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    margin-bottom: 2px;
+}
+
+.searchable-input:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.searchable-select-container select {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: white;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+/* 右クリックメニュー */
+.context-menu {
+    position: fixed;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    min-width: 180px;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s, visibility 0.15s;
+}
+
+.context-menu.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.context-menu-item {
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.context-menu-item:hover {
+    background: #f3f4f6;
+}
+
+.context-menu-item:first-child {
+    border-radius: 8px 8px 0 0;
+}
+
+.context-menu-item:last-child {
+    border-radius: 0 0 8px 8px;
+}
+
+.context-menu-item.danger {
+    color: #ef4444;
+}
+
+.context-menu-item.danger:hover {
+    background: #fef2f2;
+}
+
+.context-menu-divider {
+    height: 1px;
+    background: #e2e8f0;
+    margin: 0.25rem 0;
+}
+
 /* フィルターバー */
 .filter-bar {
     display: flex;
