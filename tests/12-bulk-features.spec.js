@@ -119,26 +119,47 @@ test.describe('Bulk Page New Features', () => {
   });
 
   test.describe('Searchable Dropdown Feature', () => {
-    test('search inputs exist for property, vendor, and inspection', async ({ page }) => {
+    test('search inputs exist but hidden by default', async ({ page }) => {
       await page.click('#addRowBtn');
       await page.waitForTimeout(100);
 
-      await expect(page.locator('#tableBody tr:first-child .property-search')).toBeVisible();
-      await expect(page.locator('#tableBody tr:first-child .vendor-search')).toBeVisible();
-      await expect(page.locator('#tableBody tr:first-child .inspection-search')).toBeVisible();
+      // Search inputs exist but are hidden
+      await expect(page.locator('#tableBody tr:first-child .property-search')).toBeAttached();
+      await expect(page.locator('#tableBody tr:first-child .vendor-search')).toBeAttached();
+      await expect(page.locator('#tableBody tr:first-child .inspection-search')).toBeAttached();
+
+      // They should not be visible by default
+      await expect(page.locator('#tableBody tr:first-child .property-search')).not.toBeVisible();
+    });
+
+    test('search input appears when select is focused', async ({ page }) => {
+      await page.click('#addRowBtn');
+      await page.waitForTimeout(100);
+
+      // Focus on the select
+      const select = page.locator('#tableBody tr:first-child .property-select');
+      await select.focus();
+      await page.waitForTimeout(100);
+
+      // Search input should now be visible
+      const searchInput = page.locator('#tableBody tr:first-child .property-search');
+      await expect(searchInput).toBeVisible();
     });
 
     test('search input filters dropdown options', async ({ page }) => {
       await page.click('#addRowBtn');
       await page.waitForTimeout(100);
 
-      // Focus on search and type
+      // Focus on the select to show search
+      const select = page.locator('#tableBody tr:first-child .property-select');
+      await select.focus();
+      await page.waitForTimeout(100);
+
+      // Type in search
       const searchInput = page.locator('#tableBody tr:first-child .property-search');
-      await searchInput.focus();
       await searchInput.fill('test');
 
-      // Select dropdown should be visible with filtered results
-      const select = page.locator('#tableBody tr:first-child .property-select');
+      // Select should still be visible
       await expect(select).toBeVisible();
     });
   });

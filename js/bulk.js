@@ -578,23 +578,17 @@ function setupRowEventListeners(tr, rowId) {
 function setupSearchableSelect(searchInput, select) {
     let isOpen = false;
 
-    searchInput.addEventListener('focus', () => {
+    // セレクトにフォーカスしたら検索ボックスを表示
+    select.addEventListener('focus', () => {
         isOpen = true;
-        select.style.display = 'block';
+        searchInput.classList.add('active');
+        select.classList.add('expanded');
         select.size = Math.min(select.options.length, 8);
+        // 検索ボックスにフォーカスを移動
+        setTimeout(() => searchInput.focus(), 50);
     });
 
-    searchInput.addEventListener('blur', (e) => {
-        // selectへのクリックの場合は閉じない
-        setTimeout(() => {
-            if (!select.matches(':focus')) {
-                isOpen = false;
-                select.style.display = '';
-                select.size = 1;
-            }
-        }, 150);
-    });
-
+    // 検索ボックスの入力処理
     searchInput.addEventListener('input', (e) => {
         const searchText = e.target.value.toLowerCase();
         const options = select.options;
@@ -605,20 +599,59 @@ function setupSearchableSelect(searchInput, select) {
         }
     });
 
+    // 検索ボックスからフォーカスが外れた時
+    searchInput.addEventListener('blur', () => {
+        setTimeout(() => {
+            if (!select.matches(':focus')) {
+                closeSearchableSelect(searchInput, select);
+            }
+        }, 150);
+    });
+
+    // セレクトで選択した時
     select.addEventListener('change', () => {
-        const selectedOption = select.options[select.selectedIndex];
         searchInput.value = '';
-        select.style.display = '';
-        select.size = 1;
+        closeSearchableSelect(searchInput, select);
         // 選択後は次のフィールドにフォーカスを移動
         const nextInput = select.closest('td').nextElementSibling?.querySelector('input, select');
         if (nextInput) nextInput.focus();
     });
 
+    // セレクトからフォーカスが外れた時
     select.addEventListener('blur', () => {
-        select.style.display = '';
-        select.size = 1;
+        setTimeout(() => {
+            if (!searchInput.matches(':focus')) {
+                closeSearchableSelect(searchInput, select);
+            }
+        }, 150);
     });
+
+    // Escapeで閉じる
+    searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeSearchableSelect(searchInput, select);
+            select.focus();
+        }
+        if (e.key === 'Enter') {
+            // 最初の表示されているオプションを選択
+            const visibleOptions = Array.from(select.options).filter(opt => opt.style.display !== 'none' && opt.value);
+            if (visibleOptions.length > 0) {
+                select.value = visibleOptions[0].value;
+                select.dispatchEvent(new Event('change'));
+            }
+        }
+    });
+}
+
+function closeSearchableSelect(searchInput, select) {
+    searchInput.classList.remove('active');
+    searchInput.value = '';
+    select.classList.remove('expanded');
+    select.size = 1;
+    // オプションの表示をリセット
+    for (let i = 0; i < select.options.length; i++) {
+        select.options[i].style.display = '';
+    }
 }
 
 // ========================================
