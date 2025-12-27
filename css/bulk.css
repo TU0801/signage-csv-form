@@ -34,6 +34,10 @@
     align-items: center;
 }
 
+.toolbar-section .btn-group .btn {
+    white-space: nowrap;
+}
+
 .toolbar-divider {
     width: 1px;
     height: 24px;

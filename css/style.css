@@ -221,6 +221,24 @@
         .btn-outline { background: white; color: var(--text); border: 1px solid var(--border); }
         .btn-sm { padding: 0.2rem 0.4rem; font-size: 0.7rem; }
 
+        /* ヘッダー用ボタン */
+        .header .btn-header {
+            background: transparent;
+            color: white;
+            border: 1px solid rgba(255,255,255,0.4);
+            padding: 0.375rem 0.75rem;
+            font-size: 0.8rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+        .header .btn-header:hover {
+            background: rgba(255,255,255,0.1);
+            border-color: rgba(255,255,255,0.6);
+        }
+
         .action-row {
             grid-column: 1 / -1;
             padding-top: 0.5rem;
