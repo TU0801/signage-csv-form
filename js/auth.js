@@ -10,7 +10,7 @@ import { supabase, getUser, signIn, signOut, getProfile, isAdmin } from './supab
 export async function requireAuth() {
   const user = await getUser();
   if (!user) {
-    window.location.href = '/login.html';
+    window.location.href = 'login.html';
     return null;
   }
   return user;
@@ -24,7 +24,7 @@ export async function requireAdmin() {
   const admin = await isAdmin();
   if (!admin) {
     alert('管理者権限が必要です');
-    window.location.href = '/index.html';
+    window.location.href = 'index.html';
     return null;
   }
   return user;
@@ -37,7 +37,7 @@ export async function requireAdmin() {
 export async function handleLogin(email, password) {
   try {
     await signIn(email, password);
-    window.location.href = '/index.html';
+    window.location.href = 'index.html';
   } catch (error) {
     throw new Error('ログインに失敗しました: ' + error.message);
   }
@@ -49,7 +49,7 @@ export async function handleLogin(email, password) {
 
 export async function handleLogout() {
   await signOut();
-  window.location.href = '/login.html';
+  window.location.href = 'login.html';
 }
 
 // ========================================
@@ -58,7 +58,7 @@ export async function handleLogout() {
 
 supabase.auth.onAuthStateChange((event, session) => {
   if (event === 'SIGNED_OUT') {
-    window.location.href = '/login.html';
+    window.location.href = 'login.html';
   }
 });
 

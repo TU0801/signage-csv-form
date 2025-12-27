@@ -25,7 +25,7 @@ async function init() {
     // 認証チェック
     const user = await getUser();
     if (!user) {
-        window.location.href = '/login.html';
+        window.location.href = 'login.html';
         return;
     }
 
@@ -36,7 +36,7 @@ async function init() {
     // ログアウトボタン
     document.getElementById('logoutBtn').addEventListener('click', async () => {
         await signOut();
-        window.location.href = '/login.html';
+        window.location.href = 'login.html';
     });
 
     // マスターデータ取得

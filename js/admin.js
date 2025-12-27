@@ -31,7 +31,7 @@ async function init() {
     // 認証チェック
     const user = await getUser();
     if (!user) {
-        window.location.href = '/login.html';
+        window.location.href = 'login.html';
         return;
     }
 
@@ -39,7 +39,7 @@ async function init() {
     const admin = await isAdmin();
     if (!admin) {
         alert('管理者権限が必要です');
-        window.location.href = '/index.html';
+        window.location.href = 'index.html';
         return;
     }
 
@@ -50,7 +50,7 @@ async function init() {
     // ログアウトボタン
     document.getElementById('logoutBtn').addEventListener('click', async () => {
         await signOut();
-        window.location.href = '/login.html';
+        window.location.href = 'login.html';
     });
 
     // データ読み込み
