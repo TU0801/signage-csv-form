@@ -1115,28 +1115,24 @@ function updateTerminals(rowId, propertyCode) {
     if (!tr) return;
 
     const terminalSelect = tr.querySelector('.terminal-select');
-    const property = masterData.properties.find(p => p.property_code === propertyCode);
 
     terminalSelect.innerHTML = '<option value="">-- 端末 --</option>';
 
-    if (property && property.terminals) {
-        const terminals = typeof property.terminals === 'string'
-            ? JSON.parse(property.terminals)
-            : property.terminals;
+    // property_codeでフィルターして端末を取得（script.jsと同じ方式）
+    const terminals = masterData.properties.filter(p => p.property_code === propertyCode);
 
+    if (terminals.length > 0) {
         terminals.forEach(t => {
             const opt = document.createElement('option');
-            opt.value = t.terminalId;
-            opt.textContent = t.supplement ? `${t.terminalId} (${t.supplement})` : t.terminalId;
+            opt.value = t.terminal_id;
+            opt.textContent = t.supplement ? `${t.terminal_id} (${t.supplement})` : t.terminal_id;
             terminalSelect.appendChild(opt);
         });
 
         // 最初の端末を自動選択
-        if (terminals.length > 0) {
-            terminalSelect.value = terminals[0].terminalId;
-            const row = rows.find(r => r.id === rowId);
-            if (row) row.terminalId = terminals[0].terminalId;
-        }
+        terminalSelect.value = terminals[0].terminal_id;
+        const row = rows.find(r => r.id === rowId);
+        if (row) row.terminalId = terminals[0].terminal_id;
     }
 }
 
@@ -1374,7 +1370,7 @@ async function saveAll() {
 
             return {
                 property_code: row.propertyCode,
-                terminal_id: row.terminalId || property?.terminals?.[0]?.terminalId || '',
+                terminal_id: row.terminalId || property?.terminal_id || '',
                 vendor_name: row.vendorName,
                 emergency_contact: vendor?.emergency_contact || '',
                 inspection_type: row.inspectionType,
@@ -1442,7 +1438,7 @@ function generateCSV() {
 
         const values = [
             '', // 点検CO
-            row.terminalId || property?.terminals?.[0]?.terminalId || '',
+            row.terminalId || property?.terminal_id || '',
             row.propertyCode,
             row.vendorName,
             vendor?.emergency_contact || '',
