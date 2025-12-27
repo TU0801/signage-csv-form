@@ -1,10 +1,11 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
+const { setupAuthMock } = require('./test-helpers');
 const { expectedVendors } = require('./test-data');
 
 test.describe('Vendor Selection Tests', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await setupAuthMock(page, '/', { isAuthenticated: true });
   });
 
   test('all vendors from Excel are present', async ({ page }) => {

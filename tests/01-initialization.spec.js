@@ -1,10 +1,11 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
+const { setupAuthMock } = require('./test-helpers');
 const { expectedProperties, expectedVendors, expectedNotices, getUniquePropertyCodes } = require('./test-data');
 
 test.describe('Initialization Tests', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await setupAuthMock(page, '/', { isAuthenticated: true });
   });
 
   test('page loads successfully', async ({ page }) => {

@@ -1,10 +1,11 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
+const { setupAuthMock } = require('./test-helpers');
 const { expectedProperties, getUniquePropertyCodes } = require('./test-data');
 
 test.describe('Property Selection Tests', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await setupAuthMock(page, '/', { isAuthenticated: true });
   });
 
   test('selecting property code 2010 shows 7 terminal options', async ({ page }) => {

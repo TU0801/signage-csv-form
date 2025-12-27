@@ -198,33 +198,38 @@
         });
     </script>
     <script type="module">
-        // 認証モジュール（オプション - Supabase設定時のみ有効）
+        // 認証モジュール（ログイン必須）
         import { getUser, getProfile, isAdmin, signOut } from './js/supabase-client.js';
 
         async function initAuth() {
             try {
                 const user = await getUser();
-                if (user) {
-                    // ログイン済み
-                    const profile = await getProfile();
-                    document.getElementById('userEmail').textContent = profile?.email || user.email;
-                    document.getElementById('logoutBtn').style.display = 'block';
-
-                    // 管理者の場合は管理リンクを表示
-                    const admin = await isAdmin();
-                    if (admin) {
-                        document.getElementById('adminLink').style.display = 'block';
-                    }
-
-                    // ログアウトボタン
-                    document.getElementById('logoutBtn').addEventListener('click', async () => {
-                        await signOut();
-                        window.location.href = 'login.html';
-                    });
+                if (!user) {
+                    // 未ログインの場合はログインページへリダイレクト
+                    window.location.href = 'login.html';
+                    return;
                 }
+
+                // ログイン済み
+                const profile = await getProfile();
+                document.getElementById('userEmail').textContent = profile?.email || user.email;
+                document.getElementById('logoutBtn').style.display = 'block';
+
+                // 管理者の場合は管理リンクを表示
+                const admin = await isAdmin();
+                if (admin) {
+                    document.getElementById('adminLink').style.display = 'block';
+                }
+
+                // ログアウトボタン
+                document.getElementById('logoutBtn').addEventListener('click', async () => {
+                    await signOut();
+                    window.location.href = 'login.html';
+                });
             } catch (error) {
-                // Supabase未設定の場合は無視（オフラインモードで動作）
-                console.log('Auth not configured, running in offline mode');
+                // Supabase未設定の場合もログインページへリダイレクト
+                console.error('Auth error:', error);
+                window.location.href = 'login.html';
             }
         }
 

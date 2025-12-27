@@ -1,10 +1,11 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
+const { setupAuthMock } = require('./test-helpers');
 const { expectedNotices } = require('./test-data');
 
 test.describe('Inspection Type Selection Tests', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await setupAuthMock(page, '/', { isAuthenticated: true });
   });
 
   test('inspection type options are populated', async ({ page }) => {
@@ -67,7 +68,7 @@ test.describe('Inspection Type Selection Tests', () => {
 
 test.describe('Inspection Type Data Comparison (Excel vs Web)', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await setupAuthMock(page, '/', { isAuthenticated: true });
   });
 
   test('web app has inspection types from Excel', async ({ page }) => {

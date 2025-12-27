@@ -1,9 +1,10 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
+const { setupAuthMock } = require('./test-helpers');
 
 test.describe('Edit Entry Tests', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await setupAuthMock(page, '/', { isAuthenticated: true });
     // Add an entry first
     await page.selectOption('#property', '2010');
     await page.selectOption('#vendor', '0');
@@ -56,7 +57,7 @@ test.describe('Edit Entry Tests', () => {
 
 test.describe('Delete Entry Tests', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await setupAuthMock(page, '/', { isAuthenticated: true });
     // Add an entry
     await page.selectOption('#property', '2010');
     await page.selectOption('#vendor', '0');
@@ -103,7 +104,7 @@ test.describe('Delete Entry Tests', () => {
 
 test.describe('Clear Form Tests', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await setupAuthMock(page, '/', { isAuthenticated: true });
   });
 
   test('clear button resets form', async ({ page }) => {

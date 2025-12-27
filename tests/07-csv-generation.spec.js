@@ -1,9 +1,10 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
+const { setupAuthMock } = require('./test-helpers');
 
 test.describe('CSV Generation Tests', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await setupAuthMock(page, '/', { isAuthenticated: true });
     // Add an entry
     await page.selectOption('#property', '2010');
     await page.selectOption('#vendor', '0');
@@ -96,7 +97,7 @@ test.describe('CSV Generation Tests', () => {
 
 test.describe('CSV Format Validation', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await setupAuthMock(page, '/', { isAuthenticated: true });
   });
 
   test('CSV has exactly 28 columns', async ({ page }) => {
@@ -166,7 +167,7 @@ test.describe('CSV Format Validation', () => {
 
 test.describe('CSV Download Tests', () => {
   test('download button triggers file download', async ({ page }) => {
-    await page.goto('/');
+    await setupAuthMock(page, '/', { isAuthenticated: true });
     await page.selectOption('#property', '2010');
     await page.selectOption('#vendor', '0');
     await page.selectOption('#inspectionType', '0');
