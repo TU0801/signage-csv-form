@@ -38,7 +38,8 @@ const expectedVendors = [
   { vendorName: "山本クリーンシステム　有限会社", emergencyContact: "092-934-0407", category: "清掃" },
   { vendorName: "日本オーチス・エレベータ　株式会社", emergencyContact: "0120-324-365", category: "点検" },
   { vendorName: "株式会社　えん建物管理", emergencyContact: "092-260-5350", category: "点検" },
-  { vendorName: "西日本ビルテクノサービス　株式会社", emergencyContact: "092-504-7741", category: "点検" }
+  { vendorName: "西日本ビルテクノサービス　株式会社", emergencyContact: "092-504-7741", category: "点検" },
+  { vendorName: "山本クリーンシステム　有限会社", emergencyContact: "092-934-0407", category: "点検" }
 ];
 
 const expectedNotices = [
