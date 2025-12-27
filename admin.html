@@ -329,6 +329,92 @@
     <!-- トースト通知用 -->
     <div id="toast" class="toast"></div>
 
+    <!-- マスター追加/編集モーダル -->
+    <div id="masterModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3 id="masterModalTitle">追加</h3>
+                <button class="modal-close" onclick="closeMasterModal()">×</button>
+            </div>
+            <form id="masterForm">
+                <input type="hidden" id="masterType">
+                <input type="hidden" id="masterId">
+
+                <!-- 物件用フィールド -->
+                <div id="propertyFields" style="display:none;">
+                    <div class="form-group">
+                        <label>物件コード *</label>
+                        <input type="number" id="propertyCode" required>
+                    </div>
+                    <div class="form-group">
+                        <label>物件名 *</label>
+                        <input type="text" id="propertyName" required>
+                    </div>
+                    <div class="form-group">
+                        <label>端末ID *</label>
+                        <input type="text" id="terminalId" required>
+                    </div>
+                    <div class="form-group">
+                        <label>補足</label>
+                        <input type="text" id="supplement">
+                    </div>
+                    <div class="form-group">
+                        <label>住所</label>
+                        <input type="text" id="address">
+                    </div>
+                </div>
+
+                <!-- 受注先用フィールド -->
+                <div id="vendorFields" style="display:none;">
+                    <div class="form-group">
+                        <label>受注先名 *</label>
+                        <input type="text" id="vendorName" required>
+                    </div>
+                    <div class="form-group">
+                        <label>緊急連絡先</label>
+                        <input type="tel" id="emergencyContact">
+                    </div>
+                    <div class="form-group">
+                        <label>カテゴリ</label>
+                        <select id="vendorCategory">
+                            <option value="点検">点検</option>
+                            <option value="工事">工事</option>
+                            <option value="清掃">清掃</option>
+                            <option value="その他">その他</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 点検種別用フィールド -->
+                <div id="inspectionFields" style="display:none;">
+                    <div class="form-group">
+                        <label>点検種別名 *</label>
+                        <input type="text" id="inspectionName" required>
+                    </div>
+                    <div class="form-group">
+                        <label>テンプレートNo</label>
+                        <input type="text" id="templateNo">
+                    </div>
+                    <div class="form-group">
+                        <label>案内文</label>
+                        <textarea id="noticeText" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="showOnBoard" checked>
+                            掲示板に表示
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-actions" style="display:flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
+                    <button type="button" class="btn btn-outline" onclick="closeMasterModal()">キャンセル</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script src="js/version.js"></script>
     <script src="js/config.js"></script>
     <script>

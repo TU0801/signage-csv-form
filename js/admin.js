@@ -12,7 +12,16 @@ import {
     getMasterProperties,
     getMasterVendors,
     getMasterInspectionTypes,
-    deleteEntry
+    deleteEntry,
+    addProperty,
+    updateProperty,
+    deleteProperty,
+    addVendor,
+    updateVendor,
+    deleteVendor,
+    addInspectionType,
+    updateInspectionType,
+    deleteInspectionType
 } from './supabase-client.js';
 
 // ========================================
@@ -109,6 +118,19 @@ function setupEventListeners() {
     // CSVエクスポート
     document.getElementById('exportCsvBtn').addEventListener('click', exportCSV);
     document.getElementById('exportCopyBtn').addEventListener('click', copyCSV);
+
+    // マスター追加ボタン
+    document.getElementById('addPropertyBtn').addEventListener('click', () => openMasterModal('property'));
+    document.getElementById('addVendorBtn').addEventListener('click', () => openMasterModal('vendor'));
+    document.getElementById('addInspectionBtn').addEventListener('click', () => openMasterModal('inspection'));
+
+    // マスターフォーム送信
+    document.getElementById('masterForm').addEventListener('submit', handleMasterFormSubmit);
+
+    // モーダル外クリックで閉じる
+    document.getElementById('masterModal').addEventListener('click', (e) => {
+        if (e.target.id === 'masterModal') closeMasterModal();
+    });
 }
 
 // ========================================
@@ -325,6 +347,10 @@ function loadMasterData() {
                 <div class="master-item-name">${p.property_code} ${p.property_name}</div>
                 <div class="master-item-sub">端末: ${terminals?.length || 0}台</div>
             </div>
+            <div style="display: flex; gap: 0.25rem;">
+                <button class="btn btn-outline btn-sm" onclick="editProperty('${p.id}')">✏️</button>
+                <button class="btn btn-outline btn-sm" onclick="deleteMasterProperty('${p.id}')">🗑️</button>
+            </div>
         `;
         propertiesList.appendChild(div);
     });
@@ -342,6 +368,10 @@ function loadMasterData() {
                 <div class="master-item-name">${v.vendor_name}</div>
                 <div class="master-item-sub">📞 ${v.emergency_contact || '-'}</div>
             </div>
+            <div style="display: flex; gap: 0.25rem;">
+                <button class="btn btn-outline btn-sm" onclick="editVendor('${v.id}')">✏️</button>
+                <button class="btn btn-outline btn-sm" onclick="deleteMasterVendor('${v.id}')">🗑️</button>
+            </div>
         `;
         vendorsList.appendChild(div);
     });
@@ -357,12 +387,203 @@ function loadMasterData() {
         div.innerHTML = `
             <div class="master-item-info">
                 <div class="master-item-name">${i.inspection_name}</div>
-                <div class="master-item-sub">テンプレート: ${i.template_no}</div>
+                <div class="master-item-sub">テンプレート: ${i.template_no || '-'}</div>
+            </div>
+            <div style="display: flex; gap: 0.25rem;">
+                <button class="btn btn-outline btn-sm" onclick="editInspection('${i.id}')">✏️</button>
+                <button class="btn btn-outline btn-sm" onclick="deleteMasterInspection('${i.id}')">🗑️</button>
             </div>
         `;
         inspectionsList.appendChild(div);
     });
 }
+
+// ========================================
+// マスターモーダル
+// ========================================
+
+function openMasterModal(type, data = null) {
+    const modal = document.getElementById('masterModal');
+    const title = document.getElementById('masterModalTitle');
+
+    // 全フィールドを非表示
+    document.getElementById('propertyFields').style.display = 'none';
+    document.getElementById('vendorFields').style.display = 'none';
+    document.getElementById('inspectionFields').style.display = 'none';
+
+    // タイプを設定
+    document.getElementById('masterType').value = type;
+    document.getElementById('masterId').value = data?.id || '';
+
+    // タイプに応じてフィールドを表示
+    if (type === 'property') {
+        document.getElementById('propertyFields').style.display = 'block';
+        title.textContent = data ? '物件を編集' : '物件を追加';
+        if (data) {
+            document.getElementById('propertyCode').value = data.property_code || '';
+            document.getElementById('propertyName').value = data.property_name || '';
+            document.getElementById('terminalId').value = data.terminal_id || '';
+            document.getElementById('supplement').value = data.supplement || '';
+            document.getElementById('address').value = data.address || '';
+        } else {
+            document.getElementById('propertyCode').value = '';
+            document.getElementById('propertyName').value = '';
+            document.getElementById('terminalId').value = '';
+            document.getElementById('supplement').value = '';
+            document.getElementById('address').value = '';
+        }
+    } else if (type === 'vendor') {
+        document.getElementById('vendorFields').style.display = 'block';
+        title.textContent = data ? '受注先を編集' : '受注先を追加';
+        if (data) {
+            document.getElementById('vendorName').value = data.vendor_name || '';
+            document.getElementById('emergencyContact').value = data.emergency_contact || '';
+            document.getElementById('vendorCategory').value = data.category || '点検';
+        } else {
+            document.getElementById('vendorName').value = '';
+            document.getElementById('emergencyContact').value = '';
+            document.getElementById('vendorCategory').value = '点検';
+        }
+    } else if (type === 'inspection') {
+        document.getElementById('inspectionFields').style.display = 'block';
+        title.textContent = data ? '点検種別を編集' : '点検種別を追加';
+        if (data) {
+            document.getElementById('inspectionName').value = data.inspection_name || '';
+            document.getElementById('templateNo').value = data.template_no || '';
+            document.getElementById('noticeText').value = data.notice_text || '';
+            document.getElementById('showOnBoard').checked = data.show_on_board !== false;
+        } else {
+            document.getElementById('inspectionName').value = '';
+            document.getElementById('templateNo').value = '';
+            document.getElementById('noticeText').value = '';
+            document.getElementById('showOnBoard').checked = true;
+        }
+    }
+
+    modal.classList.add('active');
+}
+
+function closeMasterModal() {
+    document.getElementById('masterModal').classList.remove('active');
+    document.getElementById('masterForm').reset();
+}
+
+async function handleMasterFormSubmit(e) {
+    e.preventDefault();
+
+    const type = document.getElementById('masterType').value;
+    const id = document.getElementById('masterId').value;
+
+    try {
+        if (type === 'property') {
+            const data = {
+                property_code: parseInt(document.getElementById('propertyCode').value),
+                property_name: document.getElementById('propertyName').value,
+                terminal_id: document.getElementById('terminalId').value,
+                supplement: document.getElementById('supplement').value,
+                address: document.getElementById('address').value,
+            };
+            if (id) {
+                await updateProperty(id, data);
+                showToast('物件を更新しました', 'success');
+            } else {
+                await addProperty(data);
+                showToast('物件を追加しました', 'success');
+            }
+        } else if (type === 'vendor') {
+            const data = {
+                vendor_name: document.getElementById('vendorName').value,
+                emergency_contact: document.getElementById('emergencyContact').value,
+                category: document.getElementById('vendorCategory').value,
+            };
+            if (id) {
+                await updateVendor(id, data);
+                showToast('受注先を更新しました', 'success');
+            } else {
+                await addVendor(data);
+                showToast('受注先を追加しました', 'success');
+            }
+        } else if (type === 'inspection') {
+            const data = {
+                inspection_name: document.getElementById('inspectionName').value,
+                template_no: document.getElementById('templateNo').value,
+                notice_text: document.getElementById('noticeText').value,
+                show_on_board: document.getElementById('showOnBoard').checked,
+            };
+            if (id) {
+                await updateInspectionType(id, data);
+                showToast('点検種別を更新しました', 'success');
+            } else {
+                await addInspectionType(data);
+                showToast('点検種別を追加しました', 'success');
+            }
+        }
+
+        closeMasterModal();
+        // マスターデータを再読み込み
+        masterData = await getAllMasterData();
+        loadMasterData();
+        updateStats();
+    } catch (error) {
+        console.error('Failed to save master data:', error);
+        showToast('保存に失敗しました', 'error');
+    }
+}
+
+// グローバルスコープに公開（編集・削除）
+window.editProperty = function(id) {
+    const property = masterData.properties.find(p => p.id === id);
+    if (property) openMasterModal('property', property);
+};
+
+window.editVendor = function(id) {
+    const vendor = masterData.vendors.find(v => v.id === id);
+    if (vendor) openMasterModal('vendor', vendor);
+};
+
+window.editInspection = function(id) {
+    const inspection = masterData.inspectionTypes.find(i => i.id === id);
+    if (inspection) openMasterModal('inspection', inspection);
+};
+
+window.deleteMasterProperty = async function(id) {
+    if (!confirm('この物件を削除しますか？')) return;
+    try {
+        await deleteProperty(id);
+        showToast('物件を削除しました', 'success');
+        masterData = await getAllMasterData();
+        loadMasterData();
+        updateStats();
+    } catch (error) {
+        showToast('削除に失敗しました', 'error');
+    }
+};
+
+window.deleteMasterVendor = async function(id) {
+    if (!confirm('この受注先を削除しますか？')) return;
+    try {
+        await deleteVendor(id);
+        showToast('受注先を削除しました', 'success');
+        masterData = await getAllMasterData();
+        loadMasterData();
+    } catch (error) {
+        showToast('削除に失敗しました', 'error');
+    }
+};
+
+window.deleteMasterInspection = async function(id) {
+    if (!confirm('この点検種別を削除しますか？')) return;
+    try {
+        await deleteInspectionType(id);
+        showToast('点検種別を削除しました', 'success');
+        masterData = await getAllMasterData();
+        loadMasterData();
+    } catch (error) {
+        showToast('削除に失敗しました', 'error');
+    }
+};
+
+window.closeMasterModal = closeMasterModal;
 
 // ========================================
 // ユーザー管理
