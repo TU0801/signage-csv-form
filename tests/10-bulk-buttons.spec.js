@@ -193,7 +193,7 @@ test.describe('Bulk Page Button Tests', () => {
     });
 
     test('save button has correct text', async ({ page }) => {
-      await expect(page.locator('#saveBtn')).toContainText('一括保存');
+      await expect(page.locator('#saveBtn')).toContainText('申請');
     });
   });
 
