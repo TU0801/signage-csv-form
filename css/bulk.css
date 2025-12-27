@@ -275,6 +275,47 @@
     margin-top: 1rem;
 }
 
+/* フィルターバー */
+.filter-bar {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.filter-btn {
+    padding: 0.375rem 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 9999px;
+    background: white;
+    color: #6b7280;
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.filter-btn:hover {
+    background: #f3f4f6;
+    border-color: #9ca3af;
+}
+
+.filter-btn.active {
+    background: #667eea;
+    border-color: #667eea;
+    color: white;
+}
+
+.filter-btn[data-filter="valid"].active {
+    background: #22c55e;
+    border-color: #22c55e;
+}
+
+.filter-btn[data-filter="error"].active {
+    background: #ef4444;
+    border-color: #ef4444;
+}
+
 /* レスポンシブ */
 @media (max-width: 768px) {
     .bulk-toolbar {

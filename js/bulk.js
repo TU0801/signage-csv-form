@@ -16,6 +16,8 @@ import {
 let masterData = { properties: [], vendors: [], inspectionTypes: [] };
 let rows = [];
 let rowIdCounter = 0;
+let currentFilter = 'all'; // 'all', 'valid', 'error'
+let currentUserId = null;
 
 // ========================================
 // 初期化
@@ -28,6 +30,7 @@ async function init() {
         window.location.href = 'login.html';
         return;
     }
+    currentUserId = user.id;
 
     // ユーザー情報表示
     const profile = await getProfile();
@@ -51,6 +54,9 @@ async function init() {
 
     // イベントリスナー設定
     setupEventListeners();
+
+    // テンプレートをロード
+    loadTemplates();
 
     // 初期表示更新
     updateStats();
@@ -128,6 +134,46 @@ function setupEventListeners() {
     const duplicateBtn = document.getElementById('duplicateBtn');
     if (duplicateBtn) {
         duplicateBtn.addEventListener('click', duplicateSelectedRows);
+    }
+
+    // フィルターボタン
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentFilter = btn.dataset.filter;
+            applyFilter();
+        });
+    });
+
+    // テンプレート選択
+    const templateSelect = document.getElementById('templateSelect');
+    if (templateSelect) {
+        templateSelect.addEventListener('change', (e) => {
+            if (e.target.value) {
+                applyTemplate(e.target.value);
+            }
+        });
+    }
+
+    // テンプレート保存ボタン
+    const saveTemplateBtn = document.getElementById('saveTemplateBtn');
+    if (saveTemplateBtn) {
+        saveTemplateBtn.addEventListener('click', openSaveTemplateModal);
+    }
+
+    // テンプレート保存モーダル
+    const confirmSaveTemplate = document.getElementById('confirmSaveTemplate');
+    if (confirmSaveTemplate) {
+        confirmSaveTemplate.addEventListener('click', saveTemplate);
+    }
+    const cancelSaveTemplate = document.getElementById('cancelSaveTemplate');
+    if (cancelSaveTemplate) {
+        cancelSaveTemplate.addEventListener('click', closeTemplateModal);
+    }
+    const closeTemplateModal = document.getElementById('closeTemplateModal');
+    if (closeTemplateModal) {
+        closeTemplateModal.addEventListener('click', closeTemplateModalFn);
     }
 }
 
@@ -788,6 +834,181 @@ function showToast(message, type = 'info') {
     setTimeout(() => {
         toast.classList.remove('show');
     }, 2500);
+}
+
+// ========================================
+// フィルター機能
+// ========================================
+
+function applyFilter() {
+    const tbody = document.getElementById('tableBody');
+    const trs = tbody.querySelectorAll('tr');
+
+    trs.forEach(tr => {
+        const rowId = parseInt(tr.dataset.rowId);
+        const row = rows.find(r => r.id === rowId);
+        if (!row) return;
+
+        let visible = true;
+        if (currentFilter === 'valid' && !row.isValid) {
+            visible = false;
+        } else if (currentFilter === 'error' && row.isValid) {
+            visible = false;
+        }
+
+        tr.style.display = visible ? '' : 'none';
+    });
+
+    // フィルター後の件数を表示
+    const visibleCount = Array.from(trs).filter(tr => tr.style.display !== 'none').length;
+    const filterInfo = document.getElementById('filterInfo');
+    if (filterInfo) {
+        if (currentFilter === 'all') {
+            filterInfo.textContent = '';
+        } else {
+            filterInfo.textContent = `（${visibleCount}件表示中）`;
+        }
+    }
+}
+
+// ========================================
+// テンプレート機能
+// ========================================
+
+function getTemplateKey() {
+    return `bulk_templates_${currentUserId}`;
+}
+
+function loadTemplates() {
+    const select = document.getElementById('templateSelect');
+    if (!select) return;
+
+    const templates = getTemplates();
+    select.innerHTML = '<option value="">テンプレートを選択...</option>';
+
+    templates.forEach((template, index) => {
+        const option = document.createElement('option');
+        option.value = index;
+        option.textContent = template.name;
+        select.appendChild(option);
+    });
+}
+
+function getTemplates() {
+    try {
+        const data = localStorage.getItem(getTemplateKey());
+        return data ? JSON.parse(data) : [];
+    } catch {
+        return [];
+    }
+}
+
+function saveTemplates(templates) {
+    localStorage.setItem(getTemplateKey(), JSON.stringify(templates));
+}
+
+function openSaveTemplateModal() {
+    // 最後の行からテンプレートデータを取得
+    const lastRow = rows[rows.length - 1];
+    if (!lastRow || !lastRow.propertyCode) {
+        showToast('テンプレートに保存する行を先に入力してください', 'error');
+        return;
+    }
+
+    document.getElementById('templateModal').classList.add('active');
+    document.getElementById('templateName').value = '';
+    document.getElementById('templateName').focus();
+
+    // プレビュー表示
+    const preview = document.getElementById('templatePreview');
+    if (preview) {
+        const property = masterData.properties.find(p => p.property_code === lastRow.propertyCode);
+        preview.innerHTML = `
+            <div><strong>物件:</strong> ${property?.property_name || lastRow.propertyCode}</div>
+            <div><strong>受注先:</strong> ${lastRow.vendorName || '未設定'}</div>
+            <div><strong>点検種別:</strong> ${lastRow.inspectionType || '未設定'}</div>
+            <div><strong>表示秒数:</strong> ${lastRow.displayTime}秒</div>
+        `;
+    }
+}
+
+function closeTemplateModalFn() {
+    document.getElementById('templateModal').classList.remove('active');
+}
+
+function saveTemplate() {
+    const name = document.getElementById('templateName').value.trim();
+    if (!name) {
+        showToast('テンプレート名を入力してください', 'error');
+        return;
+    }
+
+    const lastRow = rows[rows.length - 1];
+    if (!lastRow) return;
+
+    const template = {
+        name: name,
+        propertyCode: lastRow.propertyCode,
+        terminalId: lastRow.terminalId,
+        vendorName: lastRow.vendorName,
+        inspectionType: lastRow.inspectionType,
+        displayTime: lastRow.displayTime
+    };
+
+    const templates = getTemplates();
+    templates.push(template);
+    saveTemplates(templates);
+
+    loadTemplates();
+    closeTemplateModalFn();
+    showToast(`テンプレート「${name}」を保存しました`, 'success');
+}
+
+function applyTemplate(index) {
+    const templates = getTemplates();
+    const template = templates[index];
+    if (!template) return;
+
+    // 行がない場合は新規追加
+    if (rows.length === 0) {
+        addRow(template);
+    } else {
+        // 最後の行にテンプレートを適用
+        const lastRow = rows[rows.length - 1];
+        lastRow.propertyCode = template.propertyCode;
+        lastRow.terminalId = template.terminalId;
+        lastRow.vendorName = template.vendorName;
+        lastRow.inspectionType = template.inspectionType;
+        lastRow.displayTime = template.displayTime;
+
+        // UI更新
+        const tr = document.querySelector(`tr[data-row-id="${lastRow.id}"]`);
+        if (tr) {
+            tr.querySelector('.property-select').value = template.propertyCode;
+            updateTerminals(lastRow.id, template.propertyCode);
+            setTimeout(() => {
+                tr.querySelector('.terminal-select').value = template.terminalId;
+            }, 100);
+            tr.querySelector('.vendor-select').value = template.vendorName;
+            tr.querySelector('.inspection-select').value = template.inspectionType;
+            tr.querySelector('.display-time').value = template.displayTime;
+        }
+        validateRow(lastRow.id);
+    }
+
+    document.getElementById('templateSelect').value = '';
+    showToast(`テンプレート「${template.name}」を適用しました`, 'success');
+}
+
+function deleteTemplate(index) {
+    const templates = getTemplates();
+    const template = templates[index];
+    if (!confirm(`テンプレート「${template.name}」を削除しますか？`)) return;
+
+    templates.splice(index, 1);
+    saveTemplates(templates);
+    loadTemplates();
+    showToast('テンプレートを削除しました', 'success');
 }
 
 // ========================================
