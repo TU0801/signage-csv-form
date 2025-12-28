@@ -304,6 +304,41 @@ export async function updateProfileRole(id, role) {
   return data;
 }
 
+// ユーザー作成（管理者用）
+export async function createUser(email, password, companyName, role) {
+  // 1. Supabase Authでユーザー作成
+  const { data: authData, error: authError } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        company_name: companyName,
+        role: role
+      }
+    }
+  });
+
+  if (authError) throw authError;
+  if (!authData.user) throw new Error('ユーザー作成に失敗しました');
+
+  // 2. プロファイルテーブルにも追加（トリガーがない場合の保険）
+  const { error: profileError } = await supabase
+    .from('signage_profiles')
+    .upsert({
+      id: authData.user.id,
+      email: email,
+      company_name: companyName,
+      role: role
+    }, { onConflict: 'id' });
+
+  if (profileError) {
+    console.warn('Profile creation warning:', profileError);
+    // プロファイル作成失敗しても認証ユーザーは作成済み
+  }
+
+  return authData.user;
+}
+
 // ========================================
 // 管理者用: 承認ワークフロー
 // ========================================

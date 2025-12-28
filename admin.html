@@ -856,6 +856,11 @@
 
             <!-- ユーザー管理タブ -->
             <div class="tab-content" id="tab-users">
+                <div class="action-bar">
+                    <button class="btn btn-primary" id="addUserBtn">
+                        <span class="btn-icon">➕</span> ユーザー追加
+                    </button>
+                </div>
                 <div class="table-container">
                     <table class="data-table">
                         <thead>
@@ -1001,6 +1006,43 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-outline" onclick="closeEntryDetailModal()">閉じる</button>
             </div>
+        </div>
+    </div>
+
+    <!-- ユーザー追加モーダル -->
+    <div id="userModal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3>ユーザー追加</h3>
+                <button type="button" class="modal-close" onclick="closeUserModal()">×</button>
+            </div>
+            <form id="userForm">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>メールアドレス *</label>
+                        <input type="email" id="userEmail" required placeholder="example@company.com">
+                    </div>
+                    <div class="form-group">
+                        <label>パスワード *</label>
+                        <input type="password" id="userPassword" required minlength="6" placeholder="6文字以上">
+                    </div>
+                    <div class="form-group">
+                        <label>会社名</label>
+                        <input type="text" id="userCompany" placeholder="株式会社〇〇">
+                    </div>
+                    <div class="form-group">
+                        <label>権限 *</label>
+                        <select id="userRole" required>
+                            <option value="user">ユーザー</option>
+                            <option value="admin">管理者</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" onclick="closeUserModal()">キャンセル</button>
+                    <button type="submit" class="btn btn-primary" id="userSubmitBtn">追加</button>
+                </div>
+            </form>
         </div>
     </div>
 
