@@ -100,7 +100,8 @@ export async function saveAll(callbacks) {
     try {
         const masterData = getMasterData();
         const entries = validRows.map(row => {
-            const property = masterData.properties.find(p => p.property_code === row.propertyCode);
+            // 型を揃えて比較
+            const property = masterData.properties.find(p => String(p.property_code) === String(row.propertyCode));
             const vendor = masterData.vendors.find(v => v.vendor_name === row.vendorName);
             const inspection = masterData.inspectionTypes.find(i => i.inspection_name === row.inspectionType);
 
@@ -172,7 +173,8 @@ export function generateCSV() {
     const csvRows = [headers.join(',')];
 
     validRows.forEach(row => {
-        const property = masterData.properties.find(p => p.property_code === row.propertyCode);
+        // 型を揃えて比較
+        const property = masterData.properties.find(p => String(p.property_code) === String(row.propertyCode));
         const vendor = masterData.vendors.find(v => v.vendor_name === row.vendorName);
         const inspection = masterData.inspectionTypes.find(i => i.inspection_name === row.inspectionType);
 

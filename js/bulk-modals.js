@@ -598,38 +598,68 @@ export function importFromPaste(callbacks) {
     let importCount = 0;
     let errorCount = 0;
 
-    lines.forEach(line => {
+    // ヘッダー行をスキップするかどうか判定（最初の行に「物件コード」等が含まれている場合）
+    let startIndex = 0;
+    const firstLine = lines[0]?.toLowerCase() || '';
+    if (firstLine.includes('物件コード') || firstLine.includes('端末id') || firstLine.includes('property')) {
+        startIndex = 1;
+    }
+
+    for (let i = startIndex; i < lines.length; i++) {
+        const line = lines[i];
         const cols = line.split('\t');
         if (cols.length < 3) {
             errorCount++;
-            return;
+            continue;
         }
 
-        const propertyCode = cols[0]?.trim() || '';
-        const vendorName = cols[1]?.trim() || '';
-        const inspectionType = cols[2]?.trim() || '';
-        const startDate = cols[3]?.trim() || '';
-        const endDate = cols[4]?.trim() || '';
-        const remarks = cols[5]?.trim() || '';
+        let rowData = {};
 
-        const propertyExists = masterData.properties.some(p => p.property_code === propertyCode);
-        const vendorExists = masterData.vendors.some(v => v.vendor_name === vendorName);
-        const inspectionExists = masterData.inspectionTypes.some(i => i.inspection_name === inspectionType);
+        // CSV出力と同じ列順（10列以上ある場合）
+        // 0: 点検CO(空), 1: 端末ID, 2: 物件コード, 3: 受注先名, 4: 緊急連絡先,
+        // 5: 点検種別, 6: 掲示板表示, 7: TPLNo, 8: 開始日, 9: 終了日,
+        // 10: 備考, 11: 案内文, 12: frame_No(position), 13: 表示開始日,
+        // 14: 表示開始時刻, 15: 表示終了日, 16: 表示終了時刻, 17: 貼紙区分, 18: 表示時間
+        if (cols.length >= 10) {
+            rowData = {
+                terminalId: cols[1]?.trim() || '',
+                propertyCode: cols[2]?.trim() || '',
+                vendorName: cols[3]?.trim() || '',
+                inspectionType: cols[5]?.trim() || '',
+                startDate: formatDateForInput(cols[8]?.trim() || ''),
+                endDate: formatDateForInput(cols[9]?.trim() || ''),
+                remarks: cols[10]?.trim() || '',
+                noticeText: cols[11]?.trim() || '',
+                position: cols[12] ? parseInt(cols[12]) : 2,
+                displayStartDate: formatDateForInput(cols[13]?.trim() || ''),
+                displayStartTime: cols[14]?.trim() || '',
+                displayEndDate: formatDateForInput(cols[15]?.trim() || ''),
+                displayEndTime: cols[16]?.trim() || '',
+                displayTime: cols[18] ? parseDisplayTime(cols[18].trim()) : 6,
+                showOnBoard: cols[6]?.trim().toLowerCase() !== 'false'
+            };
+        } else {
+            // シンプルな形式（6列以下）: 物件コード, 受注先, 点検種別, 開始日, 終了日, 備考
+            rowData = {
+                propertyCode: cols[0]?.trim() || '',
+                vendorName: cols[1]?.trim() || '',
+                inspectionType: cols[2]?.trim() || '',
+                startDate: formatDateForInput(cols[3]?.trim() || ''),
+                endDate: formatDateForInput(cols[4]?.trim() || ''),
+                remarks: cols[5]?.trim() || ''
+            };
+        }
 
-        if (propertyExists || vendorExists || inspectionExists || propertyCode) {
-            addRow({
-                propertyCode,
-                vendorName,
-                inspectionType,
-                startDate: formatDateForInput(startDate),
-                endDate: formatDateForInput(endDate),
-                remarks
-            }, callbacks);
+        // 物件コードまたは何かしらのデータがあれば取り込む
+        const hasData = rowData.propertyCode || rowData.vendorName || rowData.inspectionType;
+
+        if (hasData) {
+            addRow(rowData, callbacks);
             importCount++;
         } else {
             errorCount++;
         }
-    });
+    }
 
     closePasteModal();
     if (importCount > 0) {
@@ -638,6 +668,17 @@ export function importFromPaste(callbacks) {
     if (errorCount > 0) {
         callbacks.showToast(`${errorCount}件のデータをスキップしました`, 'error');
     }
+}
+
+// 表示時間を解析（0:00:06形式→6秒）
+function parseDisplayTime(timeStr) {
+    if (!timeStr) return 6;
+    const match = timeStr.match(/(\d+):(\d+):(\d+)/);
+    if (match) {
+        return parseInt(match[3]) || 6;
+    }
+    const num = parseInt(timeStr);
+    return isNaN(num) ? 6 : num;
 }
 
 function formatDateForInput(dateStr) {

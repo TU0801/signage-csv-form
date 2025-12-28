@@ -160,7 +160,7 @@ export async function getAllEntries(filters = {}) {
     .from('signage_entries')
     .select(`
       *,
-      signage_profiles!inner(email, company_name)
+      signage_profiles(email, company_name)
     `)
     .order('created_at', { ascending: false });
 
@@ -303,7 +303,7 @@ export async function getPendingEntries() {
     .from('signage_entries')
     .select(`
       *,
-      signage_profiles!inner(email, company_name)
+      signage_profiles(email, company_name)
     `)
     .eq('status', 'pending')
     .order('created_at', { ascending: false });

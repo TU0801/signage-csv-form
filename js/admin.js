@@ -92,14 +92,43 @@ async function init() {
 }
 
 async function loadAllData() {
+    const errors = [];
+
+    // マスターデータを取得
     try {
         masterData = await getAllMasterData();
+    } catch (error) {
+        console.error('Failed to load master data:', error);
+        errors.push('マスターデータ');
+    }
+
+    // エントリを取得
+    try {
         entries = await getAllEntries();
+    } catch (error) {
+        console.error('Failed to load entries:', error);
+        errors.push('エントリ');
+    }
+
+    // プロファイルを取得
+    try {
         profiles = await getAllProfiles();
+    } catch (error) {
+        console.error('Failed to load profiles:', error);
+        errors.push('ユーザー');
+    }
+
+    // 承認待ちを取得
+    try {
         pendingEntries = await getPendingEntries();
     } catch (error) {
-        console.error('Failed to load data:', error);
-        showToast('データの取得に失敗しました', 'error');
+        console.error('Failed to load pending entries:', error);
+        errors.push('承認待ち');
+    }
+
+    // エラーがあった場合のみトーストを表示
+    if (errors.length > 0) {
+        showToast(`一部データの取得に失敗しました: ${errors.join(', ')}`, 'error');
     }
 }
 
