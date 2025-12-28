@@ -902,12 +902,23 @@
                             <input type="text" id="inspectionName" required>
                         </div>
                         <div class="form-group">
-                            <label>テンプレートNo</label>
-                            <input type="text" id="templateNo">
+                            <label>カテゴリ *</label>
+                            <select id="inspectionCategory" required>
+                                <option value="">カテゴリを選択</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>テンプレート画像</label>
+                            <select id="templateNo">
+                                <option value="">画像なし</option>
+                            </select>
+                            <div id="templatePreview" style="margin-top: 0.5rem; text-align: center; min-height: 80px; background: #f8fafc; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                <span style="color: #94a3b8; font-size: 0.875rem;">プレビュー</span>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label>案内文</label>
-                            <textarea id="noticeText" rows="3"></textarea>
+                            <textarea id="noticeText" rows="3" placeholder="掲示板に表示する案内文を入力"></textarea>
                         </div>
                         <div class="form-group">
                             <label>

@@ -49,6 +49,52 @@ function escapeHtml(str) {
 }
 
 // ========================================
+// テンプレート画像マッピング
+// ========================================
+
+const templateImages = {
+    "exchange_light_battery_2": "照明・電池交換2",
+    "painting_water_pipe": "水道管塗装",
+    "disinfection_tree": "消毒・植栽",
+    "exchange_light_battery": "照明・電池交換",
+    "waterproof_construction": "防水工事",
+    "high_pressure_cleaning_2": "高圧洗浄2",
+    "bicycle_removal": "自転車撤去",
+    "construction_building_large_scale": "大規模修繕",
+    "construction_coin_parking": "コインパーキング工事",
+    "fire_extinguisher_explain": "消火器説明",
+    "construction_light": "照明工事",
+    "construction_toolbox": "工具箱工事",
+    "cleaning": "清掃",
+    "Investigation": "調査",
+    "construction_television_equipment": "テレビ設備工事",
+    "water_activator_construction": "水質活性化工事",
+    "high_pressure_cleaning": "高圧洗浄",
+    "automtic_doors": "自動ドア",
+    "glass_clean": "ガラス清掃",
+    "mechanical_parking": "機械式駐車場",
+    "planting_management": "植栽管理",
+    "construction_outer_wall": "外壁工事",
+    "construction_jcom_cable": "JCOM配線工事",
+    "simple_dedicated_water_supply": "専用水道設備",
+    "surveillance_camera_installation_work": "防犯カメラ設置",
+    "tower_mechanical_parking": "タワー式駐車場",
+    "construction_involving_sound_vibration": "騒音・振動工事",
+    "elevator_inspection": "エレベーター点検",
+    "shared_electrical_equipment": "共用部電気設備",
+    "mechanical_parking_turntable": "ターンテーブル駐車場",
+    "delivery_box": "宅配ボックス",
+    "disinfection": "消毒",
+    "Questionnaire_conducted01": "アンケート",
+    "protect_balcony_from_birds": "鳥害対策",
+    "elevator_mat_replacement": "エレベーターマット交換",
+    "construction_roller_paint": "ローラー塗装",
+    "merchari_installation": "メルカリ設置",
+    "iron_part_coating": "鉄部塗装",
+    "construction_Intercom": "インターホン工事"
+};
+
+// ========================================
 // グローバル変数
 // ========================================
 
@@ -662,10 +708,12 @@ function renderInspections(filter = '') {
         const div = document.createElement('div');
         div.className = 'master-item';
         div.dataset.id = i.id;
+        const categoryBadge = i.category ? `<span style="background: #e0e7ff; color: #3730a3; padding: 0.125rem 0.5rem; border-radius: 4px; font-size: 0.75rem; margin-left: 0.5rem;">${escapeHtml(i.category)}</span>` : '';
+        const templateLabel = i.template_no ? (templateImages[i.template_no] || i.template_no) : '未設定';
         div.innerHTML = `
             <div class="master-item-info">
-                <div class="master-item-name">${escapeHtml(i.inspection_name)}</div>
-                <div class="master-item-sub">テンプレート: ${escapeHtml(i.template_no) || '未設定'}</div>
+                <div class="master-item-name">${escapeHtml(i.inspection_name)}${categoryBadge}</div>
+                <div class="master-item-sub">画像: ${escapeHtml(templateLabel)}</div>
             </div>
             <div class="master-item-actions">
                 <button class="btn btn-outline btn-sm" data-action="edit">編集</button>
@@ -728,16 +776,44 @@ function openMasterModal(type, data = null) {
     } else if (type === 'inspection') {
         document.getElementById('inspectionFields').style.display = 'block';
         title.textContent = data ? '点検種別を編集' : '点検種別を追加';
+
+        // カテゴリドロップダウンを構築
+        const categorySelect = document.getElementById('inspectionCategory');
+        categorySelect.innerHTML = '<option value="">カテゴリを選択</option>';
+        (masterData.categories || []).forEach(cat => {
+            const option = document.createElement('option');
+            option.value = cat.category_name;
+            option.textContent = cat.category_name;
+            categorySelect.appendChild(option);
+        });
+
+        // テンプレート画像ドロップダウンを構築
+        const templateSelect = document.getElementById('templateNo');
+        templateSelect.innerHTML = '<option value="">画像なし</option>';
+        Object.entries(templateImages).forEach(([key, label]) => {
+            const option = document.createElement('option');
+            option.value = key;
+            option.textContent = label;
+            templateSelect.appendChild(option);
+        });
+
+        // プレビュー更新イベント
+        templateSelect.onchange = () => updateTemplatePreview(templateSelect.value);
+
         if (data) {
             document.getElementById('inspectionName').value = data.inspection_name || '';
-            document.getElementById('templateNo').value = data.template_no || '';
+            categorySelect.value = data.category || '';
+            templateSelect.value = data.template_no || '';
             document.getElementById('noticeText').value = data.notice_text || '';
             document.getElementById('showOnBoard').checked = data.show_on_board !== false;
+            updateTemplatePreview(data.template_no);
         } else {
             document.getElementById('inspectionName').value = '';
-            document.getElementById('templateNo').value = '';
+            categorySelect.value = '';
+            templateSelect.value = '';
             document.getElementById('noticeText').value = '';
             document.getElementById('showOnBoard').checked = true;
+            updateTemplatePreview('');
         }
     } else if (type === 'category') {
         document.getElementById('categoryFields').style.display = 'block';
@@ -757,6 +833,18 @@ function openMasterModal(type, data = null) {
 function closeMasterModal() {
     document.getElementById('masterModal').classList.remove('active');
     document.getElementById('masterForm').reset();
+    updateTemplatePreview('');
+}
+
+function updateTemplatePreview(templateKey) {
+    const preview = document.getElementById('templatePreview');
+    if (!preview) return;
+
+    if (templateKey && templateImages[templateKey]) {
+        preview.innerHTML = `<img src="images/${templateKey}.png" alt="${templateImages[templateKey]}" style="max-height: 120px; max-width: 100%; border-radius: 4px;" onerror="this.parentElement.innerHTML='<span style=\\'color: #ef4444; font-size: 0.875rem;\\'>画像が見つかりません</span>'">`;
+    } else {
+        preview.innerHTML = '<span style="color: #94a3b8; font-size: 0.875rem;">プレビュー</span>';
+    }
 }
 
 async function handleMasterFormSubmit(e) {
@@ -797,6 +885,7 @@ async function handleMasterFormSubmit(e) {
         } else if (type === 'inspection') {
             const data = {
                 inspection_name: document.getElementById('inspectionName').value,
+                category: document.getElementById('inspectionCategory').value,
                 template_no: document.getElementById('templateNo').value,
                 notice_text: document.getElementById('noticeText').value,
                 show_on_board: document.getElementById('showOnBoard').checked,
