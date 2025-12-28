@@ -468,6 +468,12 @@ function showEntryDetail(entry) {
 
                 <div class="detail-label">貼紙区分</div>
                 <div class="detail-value">${entry.poster_type === 'custom' ? '追加' : 'テンプレート'}</div>
+                ${entry.poster_type === 'custom' && entry.poster_image ? `
+                <div class="detail-label">貼紙画像</div>
+                <div class="detail-value">
+                    <img src="${entry.poster_image}" alt="貼紙画像" style="max-width: 200px; max-height: 200px; border: 1px solid #e2e8f0; border-radius: 4px;">
+                </div>
+                ` : ''}
             </div>
         </div>
 

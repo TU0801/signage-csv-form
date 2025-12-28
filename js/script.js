@@ -444,6 +444,12 @@ const templateImages = {
             document.getElementById('startDateGroup').style.display = isCustom ? 'none' : 'block';
             document.getElementById('endDateGroup').style.display = isCustom ? 'none' : 'block';
 
+            // 追加モードの場合: 掲示板内の表示開始日/終了日を非活性化
+            document.getElementById('displayStartDate').disabled = isCustom;
+            document.getElementById('displayStartTime').disabled = isCustom;
+            document.getElementById('displayEndDate').disabled = isCustom;
+            document.getElementById('displayEndTime').disabled = isCustom;
+
             // プレビューを更新
             if (isCustom && window.customImageData) {
                 updateCustomImagePreview();
@@ -623,6 +629,7 @@ const templateImages = {
                         display_end_time: e.displayEndTime || null,
                         display_duration: e.displayTime || 6,
                         poster_type: e.posterType === 'template' ? 'template' : 'custom',
+                        poster_image: e.customImageData || null,
                         poster_position: e.frameNo !== undefined ? String(e.frameNo) : '2',
                         status: 'draft'
                     };
