@@ -439,6 +439,106 @@
             font-weight: 600;
         }
 
+        /* マスターモーダル（ポップアップ） */
+        #masterModal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        #masterModal.active {
+            display: flex;
+        }
+        #masterModal .modal-content {
+            background: white;
+            border-radius: 16px;
+            width: 100%;
+            max-width: 480px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            animation: modalSlideIn 0.2s ease-out;
+        }
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+        #masterModal .modal-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        #masterModal .modal-header h3 {
+            margin: 0;
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: #1e293b;
+        }
+        #masterModal .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #94a3b8;
+            padding: 0;
+            line-height: 1;
+            transition: color 0.2s;
+        }
+        #masterModal .modal-close:hover {
+            color: #64748b;
+        }
+        #masterModal .modal-body {
+            padding: 1.5rem;
+        }
+        #masterModal .form-group {
+            margin-bottom: 1.25rem;
+        }
+        #masterModal .form-group label {
+            display: block;
+            font-weight: 500;
+            color: #374151;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+        }
+        #masterModal .form-group input,
+        #masterModal .form-group select,
+        #masterModal .form-group textarea {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 0.9375rem;
+            transition: all 0.2s;
+        }
+        #masterModal .form-group input:focus,
+        #masterModal .form-group select:focus,
+        #masterModal .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        #masterModal .modal-footer {
+            padding: 1rem 1.5rem;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+            background: #f8fafc;
+            border-radius: 0 0 16px 16px;
+        }
+
         /* 検索ボタン */
         #searchBtn {
             min-width: 80px;
@@ -739,96 +839,97 @@
     <div id="toast" class="toast"></div>
 
     <!-- マスター追加/編集モーダル -->
-    <div id="masterModal" class="modal">
-        <div class="modal-content" style="max-width: 500px;">
+    <div id="masterModal">
+        <div class="modal-content">
             <div class="modal-header">
                 <h3 id="masterModalTitle">追加</h3>
-                <button class="modal-close" onclick="closeMasterModal()">×</button>
+                <button type="button" class="modal-close" onclick="closeMasterModal()">×</button>
             </div>
             <form id="masterForm">
-                <input type="hidden" id="masterType">
-                <input type="hidden" id="masterId">
+                <div class="modal-body">
+                    <input type="hidden" id="masterType">
+                    <input type="hidden" id="masterId">
 
-                <!-- 物件用フィールド -->
-                <div id="propertyFields" style="display:none;">
-                    <div class="form-group">
-                        <label>物件コード *</label>
-                        <input type="number" id="propertyCode" required>
+                    <!-- 物件用フィールド -->
+                    <div id="propertyFields" style="display:none;">
+                        <div class="form-group">
+                            <label>物件コード *</label>
+                            <input type="number" id="propertyCode" required>
+                        </div>
+                        <div class="form-group">
+                            <label>物件名 *</label>
+                            <input type="text" id="propertyName" required>
+                        </div>
+                        <div class="form-group">
+                            <label>端末ID *</label>
+                            <input type="text" id="terminalId" required>
+                        </div>
+                        <div class="form-group">
+                            <label>補足</label>
+                            <input type="text" id="supplement">
+                        </div>
+                        <div class="form-group">
+                            <label>住所</label>
+                            <input type="text" id="address">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>物件名 *</label>
-                        <input type="text" id="propertyName" required>
+
+                    <!-- 受注先用フィールド -->
+                    <div id="vendorFields" style="display:none;">
+                        <div class="form-group">
+                            <label>受注先名 *</label>
+                            <input type="text" id="vendorName" required>
+                        </div>
+                        <div class="form-group">
+                            <label>緊急連絡先</label>
+                            <input type="tel" id="emergencyContact">
+                        </div>
+                        <div class="form-group">
+                            <label>カテゴリ</label>
+                            <select id="vendorCategory">
+                                <option value="点検">点検</option>
+                                <option value="工事">工事</option>
+                                <option value="清掃">清掃</option>
+                                <option value="その他">その他</option>
+                            </select>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>端末ID *</label>
-                        <input type="text" id="terminalId" required>
+
+                    <!-- 点検種別用フィールド -->
+                    <div id="inspectionFields" style="display:none;">
+                        <div class="form-group">
+                            <label>点検種別名 *</label>
+                            <input type="text" id="inspectionName" required>
+                        </div>
+                        <div class="form-group">
+                            <label>テンプレートNo</label>
+                            <input type="text" id="templateNo">
+                        </div>
+                        <div class="form-group">
+                            <label>案内文</label>
+                            <textarea id="noticeText" rows="3"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="showOnBoard" checked>
+                                掲示板に表示
+                            </label>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>補足</label>
-                        <input type="text" id="supplement">
-                    </div>
-                    <div class="form-group">
-                        <label>住所</label>
-                        <input type="text" id="address">
+
+                    <!-- カテゴリ用フィールド -->
+                    <div id="categoryFields" style="display:none;">
+                        <div class="form-group">
+                            <label>カテゴリ名 *</label>
+                            <input type="text" id="categoryName" required>
+                        </div>
+                        <div class="form-group">
+                            <label>表示順序</label>
+                            <input type="number" id="categorySortOrder" min="0" value="0">
+                        </div>
                     </div>
                 </div>
-
-                <!-- 受注先用フィールド -->
-                <div id="vendorFields" style="display:none;">
-                    <div class="form-group">
-                        <label>受注先名 *</label>
-                        <input type="text" id="vendorName" required>
-                    </div>
-                    <div class="form-group">
-                        <label>緊急連絡先</label>
-                        <input type="tel" id="emergencyContact">
-                    </div>
-                    <div class="form-group">
-                        <label>カテゴリ</label>
-                        <select id="vendorCategory">
-                            <option value="点検">点検</option>
-                            <option value="工事">工事</option>
-                            <option value="清掃">清掃</option>
-                            <option value="その他">その他</option>
-                        </select>
-                    </div>
-                </div>
-
-                <!-- 点検種別用フィールド -->
-                <div id="inspectionFields" style="display:none;">
-                    <div class="form-group">
-                        <label>点検種別名 *</label>
-                        <input type="text" id="inspectionName" required>
-                    </div>
-                    <div class="form-group">
-                        <label>テンプレートNo</label>
-                        <input type="text" id="templateNo">
-                    </div>
-                    <div class="form-group">
-                        <label>案内文</label>
-                        <textarea id="noticeText" rows="3"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label>
-                            <input type="checkbox" id="showOnBoard" checked>
-                            掲示板に表示
-                        </label>
-                    </div>
-                </div>
-
-                <!-- カテゴリ用フィールド -->
-                <div id="categoryFields" style="display:none;">
-                    <div class="form-group">
-                        <label>カテゴリ名 *</label>
-                        <input type="text" id="categoryName" required>
-                    </div>
-                    <div class="form-group">
-                        <label>表示順序</label>
-                        <input type="number" id="categorySortOrder" min="0" value="0">
-                    </div>
-                </div>
-
-                <div class="form-actions" style="display:flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
+                <div class="modal-footer">
                     <button type="button" class="btn btn-outline" onclick="closeMasterModal()">キャンセル</button>
                     <button type="submit" class="btn btn-primary">保存</button>
                 </div>
