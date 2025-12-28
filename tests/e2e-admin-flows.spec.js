@@ -2,25 +2,28 @@
 const { test, expect } = require('@playwright/test');
 
 /**
- * E2E Admin Flow Tests
+ * 管理者のE2Eテスト
  *
- * Covers complete admin journeys:
- * 1. Login → View Pending → View Detail → Approve/Reject → CSV Export
- * 2. Login → Edit Master Data → Verify User Screen Reflects Changes
+ * 実際の管理者行動に基づいたテストケース:
+ * - ログイン・権限確認
+ * - 承認待ち申請の確認・承認・却下
+ * - データ一覧の検索・フィルタリング
+ * - CSVエクスポート
+ * - マスターデータ管理
  */
 
-// Mock entries for admin tests
+// テスト用モックデータ
 const mockPendingEntries = [
   {
     id: 1,
     property_code: '2010',
     terminal_id: 'h0001A00',
-    vendor_name: 'テスト業者',
+    vendor_name: '山本クリーンシステム',
     inspection_type: 'エレベーター点検',
     inspection_start: '2025-02-01',
     inspection_end: '2025-02-01',
     remarks: 'テスト備考',
-    announcement: 'テスト案内',
+    announcement: '点検のお知らせ',
     display_duration: 6,
     poster_type: 'template',
     poster_position: '2',
@@ -55,7 +58,7 @@ const mockProperties = [
 ];
 
 const mockVendors = [
-  { id: 1, vendor_name: 'テスト業者', emergency_contact: '092-000-0001' },
+  { id: 1, vendor_name: '山本クリーンシステム', emergency_contact: '092-000-0001' },
   { id: 2, vendor_name: '別の業者', emergency_contact: '092-000-0002' }
 ];
 
@@ -64,12 +67,9 @@ const mockInspectionTypes = [
   { id: 2, template_no: 'fire', inspection_name: '消防点検', category: 'inspection', default_text: '' }
 ];
 
+// 管理者用モックセットアップ
 async function setupAdminMock(page, options = {}) {
-  const {
-    email = 'admin@example.com',
-    entries = mockPendingEntries,
-    approvedEntries = []
-  } = options;
+  const { email = 'admin@example.com', entries = mockPendingEntries } = options;
 
   await page.route('https://cdn.jsdelivr.net/**', async route => {
     if (route.request().url().includes('@supabase/supabase-js')) {
@@ -78,16 +78,11 @@ async function setupAdminMock(page, options = {}) {
         contentType: 'application/javascript',
         body: `
           let currentEntries = ${JSON.stringify(entries)};
-          const approvedEntries = ${JSON.stringify(approvedEntries)};
           const mockProperties = ${JSON.stringify(mockProperties)};
           const mockVendors = ${JSON.stringify(mockVendors)};
           const mockInspectionTypes = ${JSON.stringify(mockInspectionTypes)};
-          const mockUsers = [
-            { id: 'admin-id', email: '${email}', role: 'admin', company_name: '管理会社' }
-          ];
-          const mockCategories = [
-            { id: 1, category_key: 'inspection', category_name: '点検', sort_order: 1 }
-          ];
+          const mockUsers = [{ id: 'admin-id', email: '${email}', role: 'admin', company_name: '管理会社' }];
+          const mockCategories = [{ id: 1, category_key: 'inspection', category_name: '点検', sort_order: 1 }];
 
           export function createClient() {
             return {
@@ -138,16 +133,9 @@ async function setupAdminMock(page, options = {}) {
                 }),
                 update: (data) => ({
                   eq: (col, val) => {
-                    // Simulate approval - update status
                     const entry = currentEntries.find(e => e.id === val);
-                    if (entry) {
-                      Object.assign(entry, data);
-                    }
-                    return {
-                      select: () => ({
-                        single: async () => ({ data: entry || data, error: null })
-                      })
-                    };
+                    if (entry) Object.assign(entry, data);
+                    return { select: () => ({ single: async () => ({ data: entry || data, error: null }) }) };
                   },
                   in: (col, vals) => ({
                     select: async () => {
@@ -159,9 +147,7 @@ async function setupAdminMock(page, options = {}) {
                     }
                   })
                 }),
-                upsert: (data) => ({
-                  select: async () => ({ data: Array.isArray(data) ? data : [data], error: null })
-                }),
+                upsert: (data) => ({ select: async () => ({ data: Array.isArray(data) ? data : [data], error: null }) }),
                 delete: () => ({
                   eq: async (col, val) => {
                     currentEntries = currentEntries.filter(e => e.id !== val);
@@ -182,266 +168,11 @@ async function setupAdminMock(page, options = {}) {
   await page.waitForLoadState('networkidle');
 }
 
-test.describe('E2E: Admin Approval Flow', () => {
-  test('admin can view pending entries and approve them', async ({ page }) => {
-    await setupAdminMock(page);
-    await page.waitForTimeout(300);
-
-    // === Step 1: Verify admin is on approval tab ===
-    await expect(page.locator('.admin-tab.active').first()).toContainText('承認待ち');
-    await expect(page.locator('#pendingCount')).toBeVisible();
-
-    // === Step 2: Verify pending entries are displayed ===
-    const pendingBody = page.locator('#pendingBody');
-    await expect(pendingBody).toBeVisible();
-
-    // Wait for entries to load
-    await page.waitForTimeout(500);
-    const rows = pendingBody.locator('tr');
-    const rowCount = await rows.count();
-    expect(rowCount).toBeGreaterThanOrEqual(0);
-
-    // === Step 3: View entry detail (if detail button exists) ===
-    const detailBtn = pendingBody.locator('tr:first-child button').filter({ hasText: '📋' }).first();
-    if (await detailBtn.isVisible()) {
-      await detailBtn.click();
-      await expect(page.locator('#entryDetailModal, .entry-detail-modal')).toBeVisible();
-
-      // Close modal
-      const closeBtn = page.locator('#closeEntryDetailModal, .entry-detail-modal .close-btn').first();
-      if (await closeBtn.isVisible()) {
-        await closeBtn.click();
-      }
-    }
-
-    // === Step 4: Approve entry ===
-    const approveBtn = pendingBody.locator('tr:first-child button').filter({ hasText: '承認' }).first();
-    if (await approveBtn.isVisible()) {
-      page.on('dialog', dialog => dialog.accept());
-      await approveBtn.click();
-      await page.waitForTimeout(300);
-
-      // Verify success toast
-      await expect(page.locator('.toast')).toBeVisible();
-    }
-  });
-
-  test('admin can reject (delete) pending entry', async ({ page }) => {
-    await setupAdminMock(page);
-    await page.waitForTimeout(300);
-
-    const pendingBody = page.locator('#pendingBody');
-    await page.waitForTimeout(500);
-
-    const initialCount = await pendingBody.locator('tr').count();
-
-    // Find and click reject button
-    const rejectBtn = pendingBody.locator('tr:first-child button').filter({ hasText: '却下' }).first();
-    if (await rejectBtn.isVisible()) {
-      page.on('dialog', dialog => dialog.accept());
-      await rejectBtn.click();
-      await page.waitForTimeout(300);
-
-      // Verify entry was removed
-      const newCount = await pendingBody.locator('tr').count();
-      expect(newCount).toBeLessThan(initialCount);
-    }
-  });
-
-  test('admin can bulk approve multiple entries', async ({ page }) => {
-    await setupAdminMock(page);
-    await page.waitForTimeout(500);
-
-    // Select all pending entries
-    const selectAll = page.locator('#pendingSelectAll');
-    if (await selectAll.isVisible()) {
-      await selectAll.check();
-
-      // Click bulk approve
-      const bulkApproveBtn = page.locator('#bulkApproveBtn');
-      if (await bulkApproveBtn.isVisible() && await bulkApproveBtn.isEnabled()) {
-        page.on('dialog', dialog => dialog.accept());
-        await bulkApproveBtn.click();
-        await page.waitForTimeout(300);
-
-        // Verify success
-        await expect(page.locator('.toast')).toBeVisible();
-      }
-    }
-  });
-});
-
-test.describe('E2E: Admin CSV Export Flow', () => {
-  test('admin can export approved entries to CSV', async ({ page, context }) => {
-    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-
-    await setupAdminMock(page);
-    await page.waitForTimeout(300);
-
-    // Navigate to export tab
-    await page.click('.admin-tab[data-tab="export"]');
-    await expect(page.locator('#tab-export')).toBeVisible();
-
-    // Verify export controls are present
-    await expect(page.locator('#exportProperty')).toBeVisible();
-    await expect(page.locator('#exportStartDate')).toBeVisible();
-    await expect(page.locator('#exportEndDate')).toBeVisible();
-    await expect(page.locator('#exportCsvBtn')).toBeVisible();
-    await expect(page.locator('#exportCopyBtn')).toBeVisible();
-
-    // Verify export count is shown
-    await expect(page.locator('#exportCount')).toBeVisible();
-
-    // Click copy button
-    await page.click('#exportCopyBtn');
-
-    // Verify success toast
-    await expect(page.locator('.toast')).toBeVisible();
-  });
-
-  test('admin CSV export has correct 28-column format', async ({ page, context }) => {
-    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-
-    await setupAdminMock(page);
-    await page.waitForTimeout(300);
-
-    // Navigate to export tab
-    await page.click('.admin-tab[data-tab="export"]');
-    await expect(page.locator('#tab-export')).toBeVisible();
-
-    // The export should produce CSV in the same format as single/bulk entry
-    const copyBtn = page.locator('#exportCopyBtn');
-    await expect(copyBtn).toBeVisible();
-  });
-});
-
-test.describe('E2E: Admin Data List', () => {
-  test('admin can view all entries in data list tab', async ({ page }) => {
-    await setupAdminMock(page);
-    await page.waitForTimeout(300);
-
-    // Navigate to entries tab
-    await page.click('.admin-tab[data-tab="entries"]');
-    await expect(page.locator('#tab-entries')).toBeVisible();
-
-    // Verify filter controls
-    await expect(page.locator('#filterProperty')).toBeVisible();
-    await expect(page.locator('#filterStartDate')).toBeVisible();
-    await expect(page.locator('#filterEndDate')).toBeVisible();
-    await expect(page.locator('#searchBtn')).toBeVisible();
-
-    // Verify table is displayed
-    await expect(page.locator('#entriesBody')).toBeVisible();
-  });
-
-  test('admin can filter entries by property and date', async ({ page }) => {
-    await setupAdminMock(page);
-    await page.waitForTimeout(300);
-
-    await page.click('.admin-tab[data-tab="entries"]');
-    await expect(page.locator('#tab-entries')).toBeVisible();
-
-    // Set date filter
-    await page.fill('#filterStartDate', '2025-01-01');
-    await page.fill('#filterEndDate', '2025-12-31');
-
-    // Click search
-    await page.click('#searchBtn');
-    await page.waitForTimeout(300);
-
-    // Table should still be visible
-    await expect(page.locator('#entriesBody')).toBeVisible();
-  });
-});
-
-test.describe('E2E: Admin Master Data Management', () => {
-  test('admin can view and edit master properties', async ({ page }) => {
-    await setupAdminMock(page);
-    await page.waitForTimeout(300);
-
-    // Navigate to master tab
-    await page.click('.admin-tab[data-tab="master"]');
-    await expect(page.locator('#tab-master')).toBeVisible();
-
-    // Properties sub-tab should be active by default (uses data-master attribute)
-    await expect(page.locator('#tab-master .admin-tab.active')).toContainText('物件');
-
-    // Verify properties content is visible
-    await expect(page.locator('#master-properties')).toBeVisible();
-  });
-
-  test('admin can view vendors list', async ({ page }) => {
-    await setupAdminMock(page);
-    await page.waitForTimeout(300);
-
-    await page.click('.admin-tab[data-tab="master"]');
-    await expect(page.locator('#tab-master')).toBeVisible();
-
-    // Click vendors sub-tab (uses data-master attribute)
-    await page.click('#tab-master .admin-tab[data-master="vendors"]');
-    await expect(page.locator('#master-vendors')).toBeVisible();
-  });
-
-  test('admin can view inspection types list', async ({ page }) => {
-    await setupAdminMock(page);
-    await page.waitForTimeout(300);
-
-    await page.click('.admin-tab[data-tab="master"]');
-    await expect(page.locator('#tab-master')).toBeVisible();
-
-    // Click inspections sub-tab (uses data-master attribute)
-    await page.click('#tab-master .admin-tab[data-master="inspections"]');
-    await expect(page.locator('#master-inspections')).toBeVisible();
-  });
-});
-
-test.describe('E2E: Master Data Reflects in User Screen', () => {
-  test('master data from database appears in user entry form', async ({ page }) => {
-    // This test verifies that master data is loaded and displayed correctly
-    // Using the standard mock which provides properties, vendors, and inspection types
-
-    const { setupAuthMockWithMasterData } = require('./test-helpers');
-
-    await setupAuthMockWithMasterData(page, '/', {
-      isAuthenticated: true,
-      email: 'user@example.com'
-    });
-
-    await page.waitForLoadState('networkidle');
-
-    // Verify property dropdown is populated
-    const propertySelect = page.locator('#property');
-    await expect(propertySelect).toBeVisible();
-
-    const propertyOptions = await propertySelect.locator('option').count();
-    expect(propertyOptions).toBeGreaterThan(1); // More than just the default option
-
-    // Verify vendor dropdown is populated
-    const vendorSelect = page.locator('#vendor');
-    await expect(vendorSelect).toBeVisible();
-
-    const vendorOptions = await vendorSelect.locator('option').count();
-    expect(vendorOptions).toBeGreaterThan(1);
-
-    // Verify inspection type dropdown is populated
-    const inspectionSelect = page.locator('#inspectionType');
-    await expect(inspectionSelect).toBeVisible();
-
-    const inspectionOptions = await inspectionSelect.locator('option').count();
-    expect(inspectionOptions).toBeGreaterThan(1);
-
-    // Verify selecting a property populates terminals
-    await propertySelect.selectOption('2010');
-    await page.waitForTimeout(200);
-
-    const terminalSelect = page.locator('#terminal');
-    const terminalOptions = await terminalSelect.locator('option').count();
-    expect(terminalOptions).toBeGreaterThan(0);
-  });
-});
-
-test.describe('E2E: Admin Authentication', () => {
-  test('non-admin user cannot access admin page', async ({ page }) => {
+// ============================================
+// ログイン・権限テスト
+// ============================================
+test.describe('管理者ログイン・権限', () => {
+  test('一般ユーザーは管理画面にアクセスできない', async ({ page }) => {
     await page.route('https://cdn.jsdelivr.net/**', async route => {
       if (route.request().url().includes('@supabase/supabase-js')) {
         await route.fulfill({
@@ -452,7 +183,6 @@ test.describe('E2E: Admin Authentication', () => {
               return {
                 auth: {
                   getUser: async () => ({ data: { user: { id: 'user-id', email: 'user@example.com' } } }),
-                  signInWithPassword: async () => ({ data: { user: { id: 'user-id', email: 'user@example.com' } } }),
                   signOut: async () => ({}),
                   onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } })
                 },
@@ -463,10 +193,7 @@ test.describe('E2E: Admin Authentication', () => {
                       order: () => ({ data: [], error: null })
                     }),
                     order: () => ({ data: [], error: null })
-                  }),
-                  insert: () => ({ select: () => ({ single: async () => ({ data: {}, error: null }) }) }),
-                  update: () => ({ eq: () => ({ select: () => ({ single: async () => ({ data: {}, error: null }) }) }) }),
-                  delete: () => ({ eq: async () => ({ error: null }) })
+                  })
                 })
               };
             }
@@ -480,8 +207,249 @@ test.describe('E2E: Admin Authentication', () => {
     await page.goto('/admin.html');
     await page.waitForTimeout(500);
 
-    // Non-admin should be redirected
-    const url = page.url();
-    expect(url).not.toContain('admin.html');
+    // 一般ユーザーはリダイレクトされる
+    expect(page.url()).not.toContain('admin.html');
+  });
+
+  test('管理者は管理画面にアクセスできる', async ({ page }) => {
+    await setupAdminMock(page);
+    await page.waitForTimeout(300);
+
+    // 管理画面が表示される
+    await expect(page.locator('.admin-tab.active').first()).toBeVisible();
+  });
+});
+
+// ============================================
+// 承認待ちテスト
+// ============================================
+test.describe('承認待ち', () => {
+  test.beforeEach(async ({ page }) => {
+    await setupAdminMock(page);
+    await page.waitForTimeout(300);
+  });
+
+  test('承認待ちタブがデフォルトで選択されている', async ({ page }) => {
+    await expect(page.locator('.admin-tab.active').first()).toContainText('承認待ち');
+  });
+
+  test('承認待ちの申請件数が表示される', async ({ page }) => {
+    await expect(page.locator('#pendingCount')).toBeVisible();
+  });
+
+  test('承認待ちの申請一覧が表示される', async ({ page }) => {
+    const pendingBody = page.locator('#pendingBody');
+    await expect(pendingBody).toBeVisible();
+  });
+
+  test('申請の詳細ボタンをクリックすると詳細モーダルが表示される', async ({ page }) => {
+    await page.waitForTimeout(500);
+
+    const detailBtn = page.locator('#pendingBody tr:first-child button').filter({ hasText: '📋' }).first();
+    if (await detailBtn.isVisible()) {
+      await detailBtn.click();
+      await expect(page.locator('#entryDetailModal, .entry-detail-modal')).toBeVisible();
+    }
+  });
+
+  test('承認ボタンをクリックすると申請が承認される', async ({ page }) => {
+    await page.waitForTimeout(500);
+
+    const approveBtn = page.locator('#pendingBody tr:first-child button').filter({ hasText: '承認' }).first();
+    if (await approveBtn.isVisible()) {
+      page.on('dialog', dialog => dialog.accept());
+      await approveBtn.click();
+      await page.waitForTimeout(300);
+
+      // 成功メッセージが表示される
+      await expect(page.locator('.toast')).toBeVisible();
+    }
+  });
+
+  test('却下ボタンをクリックすると申請が削除される', async ({ page }) => {
+    await page.waitForTimeout(500);
+
+    const pendingBody = page.locator('#pendingBody');
+    const initialCount = await pendingBody.locator('tr').count();
+
+    const rejectBtn = pendingBody.locator('tr:first-child button').filter({ hasText: '却下' }).first();
+    if (await rejectBtn.isVisible()) {
+      page.on('dialog', dialog => dialog.accept());
+      await rejectBtn.click();
+      await page.waitForTimeout(300);
+
+      // 行が減っていることを確認
+      const newCount = await pendingBody.locator('tr').count();
+      expect(newCount).toBeLessThan(initialCount);
+    }
+  });
+
+  test('全選択して一括承認できる', async ({ page }) => {
+    await page.waitForTimeout(500);
+
+    const selectAll = page.locator('#pendingSelectAll');
+    if (await selectAll.isVisible()) {
+      await selectAll.check();
+
+      const bulkApproveBtn = page.locator('#bulkApproveBtn');
+      if (await bulkApproveBtn.isVisible() && await bulkApproveBtn.isEnabled()) {
+        page.on('dialog', dialog => dialog.accept());
+        await bulkApproveBtn.click();
+        await page.waitForTimeout(300);
+
+        await expect(page.locator('.toast')).toBeVisible();
+      }
+    }
+  });
+});
+
+// ============================================
+// データ一覧テスト
+// ============================================
+test.describe('データ一覧', () => {
+  test.beforeEach(async ({ page }) => {
+    await setupAdminMock(page);
+    await page.waitForTimeout(300);
+    await page.click('.admin-tab[data-tab="entries"]');
+    await expect(page.locator('#tab-entries')).toBeVisible();
+  });
+
+  test('データ一覧タブで全てのデータが表示される', async ({ page }) => {
+    await expect(page.locator('#entriesBody')).toBeVisible();
+  });
+
+  test('物件でフィルタリングできる', async ({ page }) => {
+    await expect(page.locator('#filterProperty')).toBeVisible();
+  });
+
+  test('日付でフィルタリングできる', async ({ page }) => {
+    await page.fill('#filterStartDate', '2025-01-01');
+    await page.fill('#filterEndDate', '2025-12-31');
+
+    await page.click('#searchBtn');
+    await page.waitForTimeout(300);
+
+    await expect(page.locator('#entriesBody')).toBeVisible();
+  });
+
+  test('検索ボタンで条件に合うデータを絞り込める', async ({ page }) => {
+    await expect(page.locator('#searchBtn')).toBeVisible();
+    await page.click('#searchBtn');
+    await page.waitForTimeout(300);
+
+    // テーブルが表示されていることを確認
+    await expect(page.locator('#entriesBody')).toBeVisible();
+  });
+});
+
+// ============================================
+// CSVエクスポートテスト
+// ============================================
+test.describe('CSVエクスポート', () => {
+  test.beforeEach(async ({ page }) => {
+    await setupAdminMock(page);
+    await page.waitForTimeout(300);
+    await page.click('.admin-tab[data-tab="export"]');
+    await expect(page.locator('#tab-export')).toBeVisible();
+  });
+
+  test('CSVエクスポートタブでエクスポート件数が表示される', async ({ page }) => {
+    await expect(page.locator('#exportCount')).toBeVisible();
+  });
+
+  test('物件でフィルタリングしてエクスポートできる', async ({ page }) => {
+    await expect(page.locator('#exportProperty')).toBeVisible();
+  });
+
+  test('日付でフィルタリングしてエクスポートできる', async ({ page }) => {
+    await expect(page.locator('#exportStartDate')).toBeVisible();
+    await expect(page.locator('#exportEndDate')).toBeVisible();
+  });
+
+  test('CSVダウンロードボタンが表示される', async ({ page }) => {
+    await expect(page.locator('#exportCsvBtn')).toBeVisible();
+  });
+
+  test('CSVコピーボタンでクリップボードにコピーできる', async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+
+    await page.click('#exportCopyBtn');
+
+    await expect(page.locator('.toast')).toBeVisible();
+  });
+});
+
+// ============================================
+// マスター管理テスト
+// ============================================
+test.describe('マスター管理', () => {
+  test.beforeEach(async ({ page }) => {
+    await setupAdminMock(page);
+    await page.waitForTimeout(300);
+    await page.click('.admin-tab[data-tab="master"]');
+    await expect(page.locator('#tab-master')).toBeVisible();
+  });
+
+  test('物件マスターが表示される', async ({ page }) => {
+    // 物件タブがデフォルトで選択されている
+    await expect(page.locator('#tab-master .admin-tab.active')).toContainText('物件');
+    await expect(page.locator('#master-properties')).toBeVisible();
+  });
+
+  test('受注先マスタータブをクリックすると受注先一覧が表示される', async ({ page }) => {
+    await page.click('#tab-master .admin-tab[data-master="vendors"]');
+    await expect(page.locator('#master-vendors')).toBeVisible();
+  });
+
+  test('点検種別マスタータブをクリックすると点検種別一覧が表示される', async ({ page }) => {
+    await page.click('#tab-master .admin-tab[data-master="inspections"]');
+    await expect(page.locator('#master-inspections')).toBeVisible();
+  });
+});
+
+// ============================================
+// マスターデータがユーザー画面に反映されるテスト
+// ============================================
+test.describe('マスターデータ連携', () => {
+  test('マスターデータがユーザーの入力画面に反映される', async ({ page }) => {
+    const { setupAuthMockWithMasterData } = require('./test-helpers');
+
+    await setupAuthMockWithMasterData(page, '/', {
+      isAuthenticated: true,
+      email: 'user@example.com'
+    });
+
+    await page.waitForLoadState('networkidle');
+
+    // 物件プルダウンにデータが入っていることを確認
+    const propertyOptions = await page.locator('#property option').count();
+    expect(propertyOptions).toBeGreaterThan(1);
+
+    // 業者プルダウンにデータが入っていることを確認
+    const vendorOptions = await page.locator('#vendor option').count();
+    expect(vendorOptions).toBeGreaterThan(1);
+
+    // 点検種別プルダウンにデータが入っていることを確認
+    const inspectionOptions = await page.locator('#inspectionType option').count();
+    expect(inspectionOptions).toBeGreaterThan(1);
+  });
+
+  test('物件を選択すると対応する端末がプルダウンに表示される', async ({ page }) => {
+    const { setupAuthMockWithMasterData } = require('./test-helpers');
+
+    await setupAuthMockWithMasterData(page, '/', {
+      isAuthenticated: true,
+      email: 'user@example.com'
+    });
+
+    await page.waitForLoadState('networkidle');
+
+    // 物件を選択
+    await page.selectOption('#property', '2010');
+    await page.waitForTimeout(200);
+
+    // 端末プルダウンにオプションが追加されていることを確認
+    const terminalOptions = await page.locator('#terminal option').count();
+    expect(terminalOptions).toBeGreaterThan(0);
   });
 });
