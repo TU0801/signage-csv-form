@@ -185,8 +185,22 @@ export async function getAllEntries(filters = {}) {
   if (filters.endDate) {
     query = query.lte('inspection_start', filters.endDate);
   }
+  if (filters.status) {
+    query = query.eq('status', filters.status);
+  }
 
   const { data, error } = await query;
+  if (error) throw error;
+  return data;
+}
+
+// ステータス一括更新
+export async function updateEntriesStatusBulk(ids, status) {
+  const { data, error } = await supabase
+    .from('signage_entries')
+    .update({ status })
+    .in('id', ids)
+    .select();
   if (error) throw error;
   return data;
 }

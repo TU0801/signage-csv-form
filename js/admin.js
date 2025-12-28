@@ -14,7 +14,8 @@ import {
     getPendingEntries,
     approveEntry,
     approveEntries,
-    rejectEntry
+    rejectEntry,
+    updateEntriesStatusBulk
 } from './supabase-client.js';
 
 import {
@@ -186,6 +187,11 @@ function setupEventListeners() {
     // CSVエクスポート
     document.getElementById('exportCsvBtn').addEventListener('click', exportCSV);
     document.getElementById('exportCopyBtn').addEventListener('click', copyCSV);
+
+    // データ一覧: 全選択・ステータス変更
+    document.getElementById('selectAllEntries')?.addEventListener('change', toggleSelectAllEntries);
+    document.getElementById('markExportedBtn')?.addEventListener('click', () => updateEntriesStatus('exported'));
+    document.getElementById('markSubmittedBtn')?.addEventListener('click', () => updateEntriesStatus('submitted'));
 
     // マスター追加ボタン
     document.getElementById('addPropertyBtn').addEventListener('click', () => openMasterModal('property', masterData));
@@ -539,14 +545,17 @@ async function loadEntries() {
     const propertyCode = document.getElementById('filterProperty').value;
     const startDate = document.getElementById('filterStartDate').value;
     const endDate = document.getElementById('filterEndDate').value;
+    const status = document.getElementById('filterStatus')?.value;
 
     try {
         entries = await getAllEntries({
             propertyCode: propertyCode || undefined,
             startDate: startDate || undefined,
-            endDate: endDate || undefined
+            endDate: endDate || undefined,
+            status: status || undefined
         });
         renderEntries();
+        updateSelectedEntries();
     } catch (error) {
         console.error('Failed to load entries:', error);
         showToast('データの取得に失敗しました', 'error');
@@ -561,6 +570,7 @@ function renderEntries() {
 
     if (entries.length === 0) {
         emptyMsg.style.display = 'block';
+        document.getElementById('entriesCount').textContent = '0';
         return;
     }
 
@@ -573,11 +583,18 @@ function renderEntries() {
             ? new Date(entry.inspection_start).toLocaleDateString('ja-JP')
             : '-';
 
+        // ステータス表示
+        const statusLabel = entry.status === 'exported'
+            ? '<span class="status-badge status-exported">✓ 取込済</span>'
+            : '<span class="status-badge status-submitted">未取込</span>';
+
         tr.innerHTML = `
+            <td><input type="checkbox" class="entry-checkbox" data-id="${entry.id}"></td>
             <td>${escapeHtml(getUserEmail(entry.user_id))}</td>
             <td>${escapeHtml(entry.property_code)}</td>
             <td>${escapeHtml(entry.inspection_type)}</td>
             <td>${escapeHtml(inspectionStart)}</td>
+            <td>${statusLabel}</td>
             <td>${escapeHtml(createdAt)}</td>
             <td>
                 <button class="btn btn-outline btn-sm" data-action="detail" data-id="${escapeHtml(entry.id)}">📋</button>
@@ -586,10 +603,15 @@ function renderEntries() {
         `;
         tr.querySelector('[data-action="detail"]').addEventListener('click', () => showEntryDetail(entry));
         tr.querySelector('[data-action="delete"]').addEventListener('click', () => deleteEntryById(entry.id));
+        tr.querySelector('.entry-checkbox').addEventListener('change', updateSelectedEntries);
         tbody.appendChild(tr);
     });
 
-    document.getElementById('exportCount').textContent = entries.length;
+    document.getElementById('entriesCount').textContent = entries.length;
+
+    // 全選択チェックボックスをリセット
+    const selectAll = document.getElementById('selectAllEntries');
+    if (selectAll) selectAll.checked = false;
 }
 
 window.deleteEntryById = async function(id) {
@@ -603,6 +625,57 @@ window.deleteEntryById = async function(id) {
         showToast('削除に失敗しました', 'error');
     }
 };
+
+// 選択状態の更新
+function updateSelectedEntries() {
+    const checkboxes = document.querySelectorAll('#entriesBody .entry-checkbox:checked');
+    const selectedCount = checkboxes.length;
+    const selectedInfo = document.getElementById('selectedEntriesInfo');
+    const markExportedBtn = document.getElementById('markExportedBtn');
+    const markSubmittedBtn = document.getElementById('markSubmittedBtn');
+
+    if (selectedCount > 0) {
+        selectedInfo.textContent = `(${selectedCount}件選択中)`;
+        markExportedBtn.disabled = false;
+        markSubmittedBtn.disabled = false;
+    } else {
+        selectedInfo.textContent = '';
+        markExportedBtn.disabled = true;
+        markSubmittedBtn.disabled = true;
+    }
+}
+
+// 全選択トグル
+function toggleSelectAllEntries() {
+    const selectAll = document.getElementById('selectAllEntries');
+    const checkboxes = document.querySelectorAll('#entriesBody .entry-checkbox');
+    checkboxes.forEach(cb => cb.checked = selectAll.checked);
+    updateSelectedEntries();
+}
+
+// 選択したエントリのIDを取得
+function getSelectedEntryIds() {
+    const checkboxes = document.querySelectorAll('#entriesBody .entry-checkbox:checked');
+    return Array.from(checkboxes).map(cb => cb.dataset.id);
+}
+
+// ステータスを一括更新
+async function updateEntriesStatus(status) {
+    const ids = getSelectedEntryIds();
+    if (ids.length === 0) return;
+
+    const statusLabel = status === 'exported' ? '取込済み' : '未取込';
+    if (!confirm(`選択した${ids.length}件を「${statusLabel}」に変更しますか？`)) return;
+
+    try {
+        await updateEntriesStatusBulk(ids, status);
+        showToast(`${ids.length}件を「${statusLabel}」に変更しました`, 'success');
+        loadEntries();
+    } catch (error) {
+        console.error('Status update failed:', error);
+        showToast('ステータスの更新に失敗しました', 'error');
+    }
+}
 
 // ========================================
 // CSVエクスポート

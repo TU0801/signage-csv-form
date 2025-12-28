@@ -720,6 +720,23 @@
             border-radius: 0 0 16px 16px;
         }
 
+        /* ステータスバッジ */
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .status-submitted {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .status-exported {
+            background: #d4edda;
+            color: #155724;
+        }
+
         /* レスポンシブ対応 */
         @media (max-width: 768px) {
             .admin-tabs {
@@ -777,7 +794,6 @@
             <div class="admin-tabs">
                 <button class="admin-tab active" data-tab="approval">✅ 承認待ち</button>
                 <button class="admin-tab" data-tab="entries">📊 データ一覧</button>
-                <button class="admin-tab" data-tab="export">📥 CSVエクスポート</button>
                 <button class="admin-tab" data-tab="master">📋 マスター管理</button>
                 <button class="admin-tab" data-tab="users">👥 ユーザー管理</button>
             </div>
@@ -831,8 +847,29 @@
                         <label>期間（終了）</label>
                         <input type="date" id="filterEndDate">
                     </div>
+                    <div class="form-group">
+                        <label>状態</label>
+                        <select id="filterStatus">
+                            <option value="">すべて</option>
+                            <option value="submitted">未取込</option>
+                            <option value="exported">取込済</option>
+                        </select>
+                    </div>
                     <div class="form-group" style="display: flex; align-items: flex-end;">
                         <button class="btn btn-primary btn-sm" id="searchBtn">検索</button>
+                    </div>
+                </div>
+
+                <div class="action-bar">
+                    <div style="display: flex; align-items: center; gap: 1rem;">
+                        <span id="entriesCount">0</span>件
+                        <span id="selectedEntriesInfo" style="color: #667; font-size: 0.875rem;"></span>
+                    </div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-outline btn-sm" id="markExportedBtn" disabled>✓ 取込済みにする</button>
+                        <button class="btn btn-outline btn-sm" id="markSubmittedBtn" disabled>↩ 未取込に戻す</button>
+                        <button class="btn btn-success btn-sm" id="exportCsvBtn">📥 CSV</button>
+                        <button class="btn btn-outline btn-sm" id="exportCopyBtn">📋 コピー</button>
                     </div>
                 </div>
 
@@ -840,10 +877,12 @@
                     <table class="data-table">
                         <thead>
                             <tr>
+                                <th style="width: 40px;"><input type="checkbox" id="selectAllEntries"></th>
                                 <th>登録者</th>
                                 <th>物件コード</th>
                                 <th>点検種別</th>
                                 <th>開始日</th>
+                                <th>状態</th>
                                 <th>登録日時</th>
                                 <th>操作</th>
                             </tr>
@@ -854,35 +893,6 @@
                 </div>
                 <div class="empty-message" id="entriesEmpty" style="display: none;">
                     データがありません
-                </div>
-            </div>
-
-            <!-- CSVエクスポートタブ -->
-            <div class="tab-content" id="tab-export">
-                <div class="filter-bar">
-                    <div class="form-group">
-                        <label>物件</label>
-                        <select id="exportProperty">
-                            <option value="">すべて</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>期間（開始）</label>
-                        <input type="date" id="exportStartDate">
-                    </div>
-                    <div class="form-group">
-                        <label>期間（終了）</label>
-                        <input type="date" id="exportEndDate">
-                    </div>
-                </div>
-                <div class="action-bar">
-                    <div>
-                        <span id="exportCount">0</span>件のデータ
-                    </div>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <button class="btn btn-success" id="exportCsvBtn">📥 CSVダウンロード</button>
-                        <button class="btn btn-outline" id="exportCopyBtn">📋 コピー</button>
-                    </div>
                 </div>
             </div>
 
