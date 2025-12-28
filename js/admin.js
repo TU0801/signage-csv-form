@@ -291,10 +291,12 @@ function renderPendingEntries() {
             <td>${escapeHtml(startDate)}</td>
             <td>${escapeHtml(createdAt)}</td>
             <td>
+                <button class="btn btn-outline btn-sm" data-action="detail" data-id="${escapeHtml(entry.id)}">📋</button>
                 <button class="btn btn-success btn-sm" data-action="approve" data-id="${escapeHtml(entry.id)}">✅</button>
                 <button class="btn btn-outline btn-sm" data-action="reject" data-id="${escapeHtml(entry.id)}">❌</button>
             </td>
         `;
+        tr.querySelector('[data-action="detail"]').addEventListener('click', () => showEntryDetail(entry));
         tr.querySelector('[data-action="approve"]').addEventListener('click', () => approveSingle(entry.id));
         tr.querySelector('[data-action="reject"]').addEventListener('click', () => rejectSingle(entry.id));
         tbody.appendChild(tr);
@@ -361,6 +363,100 @@ window.rejectSingle = async function(id) {
         showToast('却下に失敗しました', 'error');
     }
 };
+
+// ========================================
+// エントリ詳細表示
+// ========================================
+
+function showEntryDetail(entry) {
+    const formatDate = (d) => d ? new Date(d).toLocaleDateString('ja-JP') : '-';
+    const formatDateTime = (d) => d ? new Date(d).toLocaleString('ja-JP') : '-';
+
+    const html = `
+        <div class="detail-grid">
+            <div class="detail-label">物件コード</div>
+            <div class="detail-value">${escapeHtml(entry.property_code)}</div>
+
+            <div class="detail-label">端末ID</div>
+            <div class="detail-value">${escapeHtml(entry.terminal_id || '-')}</div>
+
+            <div class="detail-label">受注先</div>
+            <div class="detail-value">${escapeHtml(entry.vendor_name)}</div>
+
+            <div class="detail-label">緊急連絡先</div>
+            <div class="detail-value">${escapeHtml(entry.emergency_contact || '-')}</div>
+
+            <div class="detail-label">点検工事案内</div>
+            <div class="detail-value">${escapeHtml(entry.inspection_type)}</div>
+
+            <div class="detail-label">テンプレートNo</div>
+            <div class="detail-value">${escapeHtml(entry.template_no || '-')}</div>
+        </div>
+
+        <div class="detail-section">
+            <div class="detail-section-title">点検期間</div>
+            <div class="detail-grid">
+                <div class="detail-label">開始日</div>
+                <div class="detail-value">${formatDate(entry.inspection_start)}</div>
+
+                <div class="detail-label">終了日</div>
+                <div class="detail-value">${formatDate(entry.inspection_end)}</div>
+            </div>
+        </div>
+
+        <div class="detail-section">
+            <div class="detail-section-title">表示設定</div>
+            <div class="detail-grid">
+                <div class="detail-label">表示開始</div>
+                <div class="detail-value">${formatDate(entry.display_start_date)} ${entry.display_start_time || ''}</div>
+
+                <div class="detail-label">表示終了</div>
+                <div class="detail-value">${formatDate(entry.display_end_date)} ${entry.display_end_time || ''}</div>
+
+                <div class="detail-label">表示時間</div>
+                <div class="detail-value">${entry.display_duration || 6}秒</div>
+
+                <div class="detail-label">表示位置</div>
+                <div class="detail-value">${entry.poster_position || '-'}</div>
+
+                <div class="detail-label">貼紙区分</div>
+                <div class="detail-value">${entry.poster_type === 'custom' ? '追加' : 'テンプレート'}</div>
+            </div>
+        </div>
+
+        <div class="detail-section">
+            <div class="detail-section-title">案内文・備考</div>
+            <div class="detail-grid">
+                <div class="detail-label">案内文</div>
+                <div class="detail-value" style="white-space: pre-wrap;">${escapeHtml(entry.announcement || '-')}</div>
+
+                <div class="detail-label">備考</div>
+                <div class="detail-value" style="white-space: pre-wrap;">${escapeHtml(entry.remarks || '-')}</div>
+            </div>
+        </div>
+
+        <div class="detail-section">
+            <div class="detail-section-title">登録情報</div>
+            <div class="detail-grid">
+                <div class="detail-label">登録者</div>
+                <div class="detail-value">${escapeHtml(getUserEmail(entry.user_id))}</div>
+
+                <div class="detail-label">登録日時</div>
+                <div class="detail-value">${formatDateTime(entry.created_at)}</div>
+
+                <div class="detail-label">ステータス</div>
+                <div class="detail-value">${entry.status === 'submitted' ? '承認済み' : '承認待ち'}</div>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('entryDetailBody').innerHTML = html;
+    document.getElementById('entryDetailModal').classList.add('active');
+}
+
+function closeEntryDetailModal() {
+    document.getElementById('entryDetailModal').classList.remove('active');
+}
 
 // ========================================
 // フィルター
@@ -431,9 +527,11 @@ function renderEntries() {
             <td>${escapeHtml(inspectionStart)}</td>
             <td>${escapeHtml(createdAt)}</td>
             <td>
+                <button class="btn btn-outline btn-sm" data-action="detail" data-id="${escapeHtml(entry.id)}">📋</button>
                 <button class="btn btn-outline btn-sm" data-action="delete" data-id="${escapeHtml(entry.id)}">🗑️</button>
             </td>
         `;
+        tr.querySelector('[data-action="detail"]').addEventListener('click', () => showEntryDetail(entry));
         tr.querySelector('[data-action="delete"]').addEventListener('click', () => deleteEntryById(entry.id));
         tbody.appendChild(tr);
     });
@@ -460,14 +558,20 @@ window.deleteEntryById = async function(id) {
 function generateCSV(data) {
     if (data.length === 0) return '';
 
+    // script.js と bulk-data.js と同じ28列のヘッダー
     const headers = [
         '点検CO', '端末ID', '物件コード', '受注先名', '緊急連絡先番号',
         '点検工事案内', '掲示板に表示する', '点検案内TPLNo', '点検開始日',
         '点検完了日', '掲示備考', '掲示板用案内文', 'frame_No', '表示開始日',
-        '表示開始時刻', '表示終了日', '表示終了時刻', '貼紙区分', '表示時間',
-        'カテゴリー', 'カテゴリー２', 'カテゴリー３', 'カテゴリー４',
-        'カテゴリー５', 'カテゴリー６', '画像パス', 'お知らせ開始事前', 'ステータス'
+        '表示終了日', '表示開始時刻', '表示終了時刻', '表示時間', '統合ポリシー',
+        '制御', '変更日', '変更時刻', '最終エクスポート日時', 'ID', '変更日時',
+        '点検日時', '表示日時', '貼紙区分'
     ];
+
+    // 現在日時
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0].replace(/-/g, '/');
+    const timeStr = now.toTimeString().substring(0, 8);
 
     const csvRows = [headers.join(',')];
 
@@ -476,30 +580,63 @@ function generateCSV(data) {
         const displayTime = entry.display_duration || 6;
         const displayTimeFormatted = `0:00:${String(displayTime).padStart(2, '0')}`;
 
+        const sd = formatDate(entry.inspection_start);
+        const ed = formatDate(entry.inspection_end) || sd;
+        const dsd = formatDate(entry.display_start_date || entry.inspection_start);
+        const ded = formatDate(entry.display_end_date || entry.inspection_end) || ed;
+        const displayStartTime = entry.display_start_time || '';
+        const displayEndTime = entry.display_end_time || '';
+
+        // 改行を\r\nに変換
+        const remarksText = (entry.remarks || '').replace(/\n/g, '\r\n');
+        const noticeText = (entry.announcement || '').replace(/\n/g, '\r\n');
+
+        // TRUE/False（poster_type が template の場合は TRUE）
+        const showOnBoard = entry.poster_type === 'template' ? 'TRUE' : 'False';
+
+        // 貼紙区分
+        const posterTypeText = entry.poster_type === 'template' ? 'テンプレート' : '追加';
+
+        // frame_No (poster_position)
+        const frameNo = entry.poster_position || '2';
+
         const values = [
-            '',
-            entry.terminal_id || '',
-            entry.property_code || '',
-            entry.vendor_name || '',
-            entry.emergency_contact || '',
-            entry.inspection_type || '',
-            'True',
-            entry.template_no || '',
-            formatDate(entry.inspection_start),
-            formatDate(entry.inspection_end),
-            entry.remarks || '',
-            entry.announcement || '',
-            entry.frame_no || '2',
-            formatDate(entry.display_start_date || entry.inspection_start),
-            entry.display_start_time || '',
-            formatDate(entry.display_end_date || entry.inspection_end),
-            entry.display_end_time || '',
-            entry.poster_type === 'custom' ? '追加' : 'テンプレート',
-            displayTimeFormatted,
-            '', '', '', '', '', '', '', '30', ''
+            '',                                          // 点検CO
+            entry.terminal_id || '',                     // 端末ID
+            entry.property_code || '',                   // 物件コード
+            entry.vendor_name || '',                     // 受注先名
+            entry.emergency_contact || '',               // 緊急連絡先番号
+            entry.inspection_type || '',                 // 点検工事案内
+            showOnBoard,                                 // 掲示板に表示する
+            entry.template_no || '',                     // 点検案内TPLNo
+            sd,                                          // 点検開始日
+            ed,                                          // 点検完了日
+            remarksText,                                 // 掲示備考
+            noticeText,                                  // 掲示板用案内文
+            frameNo,                                     // frame_No
+            dsd,                                         // 表示開始日
+            ded,                                         // 表示終了日
+            displayStartTime,                            // 表示開始時刻
+            displayEndTime,                              // 表示終了時刻
+            displayTimeFormatted,                        // 表示時間
+            '',                                          // 統合ポリシー
+            '',                                          // 制御
+            dateStr,                                     // 変更日
+            '',                                          // 変更時刻
+            '',                                          // 最終エクスポート日時
+            '',                                          // ID
+            `${dateStr} [${timeStr}]`,                   // 変更日時
+            `${sd} [00:00:00]`,                          // 点検日時
+            `${dsd} [00:00:00]`,                         // 表示日時
+            posterTypeText                               // 貼紙区分
         ];
 
-        csvRows.push(values.map(v => `"${v}"`).join(','));
+        // CSVエスケープ処理
+        csvRows.push(values.map(v => {
+            if (v == null) return '';
+            const s = String(v);
+            return (s.includes(',') || s.includes('"') || s.includes('\n')) ? '"' + s.replace(/"/g, '""') + '"' : s;
+        }).join(','));
     });
 
     return csvRows.join('\n');
@@ -643,6 +780,7 @@ window.deleteMasterCategory = async function(id) {
 };
 
 window.closeMasterModal = closeMasterModal;
+window.closeEntryDetailModal = closeEntryDetailModal;
 
 // ========================================
 // 起動
