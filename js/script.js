@@ -180,7 +180,8 @@ const templateImages = {
         function adjustTime(delta) {
             const input = document.getElementById('displayTime');
             let val = parseInt(input.value) || 6;
-            input.value = Math.max(1, Math.min(30, val + delta));
+            const maxTime = (window.appSettings && window.appSettings.display_time_max) || 30;
+            input.value = Math.max(1, Math.min(maxTime, val + delta));
         }
 
         function setPosition(pos) {
@@ -234,6 +235,42 @@ const templateImages = {
                 return;
             }
 
+            // 設定値によるバリデーション
+            const settings = window.appSettings || {
+                display_time_max: 30,
+                remarks_chars_per_line: 25,
+                remarks_max_lines: 5,
+                notice_text_max_chars: 200
+            };
+            const errors = [];
+
+            const displayTime = parseInt(document.getElementById('displayTime').value) || 6;
+            if (displayTime > settings.display_time_max) {
+                errors.push(`表示時間は${settings.display_time_max}秒以下にしてください`);
+            }
+
+            const remarks = document.getElementById('remarks').value;
+            if (remarks) {
+                const lines = remarks.split('\n');
+                if (lines.length > settings.remarks_max_lines) {
+                    errors.push(`掲示備考は${settings.remarks_max_lines}行以下にしてください`);
+                }
+                const longLines = lines.filter(line => line.length > settings.remarks_chars_per_line);
+                if (longLines.length > 0) {
+                    errors.push(`掲示備考は1行${settings.remarks_chars_per_line}文字以下にしてください`);
+                }
+            }
+
+            const noticeText = document.getElementById('noticeText').value;
+            if (noticeText && noticeText.length > settings.notice_text_max_chars) {
+                errors.push(`案内文は${settings.notice_text_max_chars}文字以下にしてください`);
+            }
+
+            if (errors.length > 0) {
+                showToast(errors.join('\n'), 'error');
+                return;
+            }
+
             const vendor = masterData.vendors[vendorIdx];
             const notice = masterData.notices[inspectionIdx];
             const property = masterData.properties.find(p => p.propertyCode === parseInt(propertyCode));
@@ -250,14 +287,14 @@ const templateImages = {
                 templateNo: notice.templateNo,
                 startDate: document.getElementById('startDate').value,
                 endDate: document.getElementById('endDate').value,
-                remarks: document.getElementById('remarks').value,
-                noticeText: document.getElementById('noticeText').value,
+                remarks: remarks,
+                noticeText: noticeText,
                 frameNo: currentPosition,
                 displayStartDate: document.getElementById('displayStartDate').value,
                 displayEndDate: document.getElementById('displayEndDate').value,
                 displayStartTime: document.getElementById('displayStartTime').value,
                 displayEndTime: document.getElementById('displayEndTime').value,
-                displayTime: parseInt(document.getElementById('displayTime').value) || 6,
+                displayTime: displayTime,
                 posterType: posterType
             };
 

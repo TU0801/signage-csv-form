@@ -12,7 +12,13 @@ export const state = {
     currentUserId: null,
     draggedRow: null,
     autoSaveTimer: null,
-    currentDetailRowId: null
+    currentDetailRowId: null,
+    appSettings: {
+        display_time_max: 30,
+        remarks_chars_per_line: 25,
+        remarks_max_lines: 5,
+        notice_text_max_chars: 200
+    }
 };
 
 // ========================================
@@ -96,4 +102,17 @@ export function getCurrentDetailRowId() {
 
 export function setCurrentDetailRowId(id) {
     state.currentDetailRowId = id;
+}
+
+export function getAppSettings() {
+    return state.appSettings;
+}
+
+export function setAppSettings(settings) {
+    if (!settings) return;
+    settings.forEach(s => {
+        if (s.setting_key && s.setting_value !== undefined) {
+            state.appSettings[s.setting_key] = parseInt(s.setting_value) || s.setting_value;
+        }
+    });
 }

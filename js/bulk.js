@@ -1,7 +1,7 @@
 // bulk.js - 一括入力画面のメインエントリーポイント
 
-import { getUser, getProfile, signOut, getAllMasterData } from './supabase-client.js';
-import { setMasterData, setCurrentUserId, setCurrentFilter, clearRows, getRows } from './bulk-state.js';
+import { getUser, getProfile, signOut, getAllMasterData, getSettings } from './supabase-client.js';
+import { setMasterData, setCurrentUserId, setCurrentFilter, clearRows, getRows, setAppSettings } from './bulk-state.js';
 import {
     addRowWithCopy, duplicateSelectedRows, deleteSelectedRows,
     updateSelectedCount, updateRowNumbers, renderRow, addRow
@@ -59,9 +59,14 @@ async function init() {
     });
 
     try {
-        const masterData = await getAllMasterData();
+        const [masterData, settings] = await Promise.all([
+            getAllMasterData(),
+            getSettings()
+        ]);
         setMasterData(masterData);
+        setAppSettings(settings);
         console.log('Master data loaded:', masterData);
+        console.log('App settings loaded:', settings);
     } catch (error) {
         console.error('Failed to load master data:', error);
         showToast('マスターデータの取得に失敗しました', 'error');

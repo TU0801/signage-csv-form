@@ -2,7 +2,8 @@
 
 import {
     state, getMasterData, getRows, getRowById, addRowToState,
-    removeRowFromState, getNextRowId, getDraggedRow, setDraggedRow
+    removeRowFromState, getNextRowId, getDraggedRow, setDraggedRow,
+    getAppSettings
 } from './bulk-state.js';
 
 // ========================================
@@ -457,11 +458,43 @@ export function validateRow(rowId, callbacks) {
     const row = getRowById(rowId);
     if (!row) return;
 
+    const settings = getAppSettings();
     row.errors = [];
 
+    // 必須フィールドのチェック
     if (!row.propertyCode) row.errors.push('物件');
     if (!row.vendorName) row.errors.push('受注先');
     if (!row.inspectionType) row.errors.push('点検種別');
+
+    // 表示時間のチェック
+    const displayTimeMax = settings.display_time_max || 30;
+    if (row.displayTime && row.displayTime > displayTimeMax) {
+        row.errors.push(`表示時間(${displayTimeMax}秒以下)`);
+    }
+
+    // 掲示備考のチェック
+    if (row.remarks) {
+        const remarksMaxLines = settings.remarks_max_lines || 5;
+        const remarksCharsPerLine = settings.remarks_chars_per_line || 25;
+        const lines = row.remarks.split('\n');
+
+        if (lines.length > remarksMaxLines) {
+            row.errors.push(`備考行数(${remarksMaxLines}行以下)`);
+        }
+
+        const longLines = lines.filter(line => line.length > remarksCharsPerLine);
+        if (longLines.length > 0) {
+            row.errors.push(`備考文字数(1行${remarksCharsPerLine}文字以下)`);
+        }
+    }
+
+    // 案内文のチェック
+    if (row.noticeText) {
+        const noticeTextMaxChars = settings.notice_text_max_chars || 200;
+        if (row.noticeText.length > noticeTextMaxChars) {
+            row.errors.push(`案内文(${noticeTextMaxChars}文字以下)`);
+        }
+    }
 
     row.isValid = row.errors.length === 0;
 
@@ -471,10 +504,11 @@ export function validateRow(rowId, callbacks) {
         if (row.isValid) {
             badge.textContent = 'OK';
             badge.className = 'status-badge ok';
+            badge.title = '';
         } else {
             badge.textContent = 'エラー';
             badge.className = 'status-badge error';
-            badge.title = `未入力: ${row.errors.join(', ')}`;
+            badge.title = `エラー: ${row.errors.join(', ')}`;
         }
     }
 
@@ -550,22 +584,37 @@ export function updateTerminals(rowId, propertyCode, preserveSelection = false) 
 
     // 型を揃えて比較（文字列同士で比較）
     const propCodeStr = String(propertyCode);
-    const terminals = masterData.properties.filter(p => String(p.property_code) === propCodeStr);
+    const property = masterData.properties.find(p => String(p.property_code) === propCodeStr);
 
-    if (terminals.length > 0) {
-        terminals.forEach(t => {
-            const opt = document.createElement('option');
-            opt.value = t.terminal_id;
-            opt.textContent = t.supplement ? `${t.terminal_id} (${t.supplement})` : t.terminal_id;
-            terminalSelect.appendChild(opt);
-        });
+    if (property) {
+        // terminalsはJSON配列形式（文字列または配列）
+        let terminals = property.terminals;
+        if (typeof terminals === 'string') {
+            try {
+                terminals = JSON.parse(terminals);
+            } catch (e) {
+                terminals = [];
+            }
+        }
+        if (!Array.isArray(terminals)) {
+            terminals = [];
+        }
 
-        // 既存の選択を保持するか、最初の端末を自動選択
-        if (preserveSelection && currentTerminalId && terminals.some(t => t.terminal_id === currentTerminalId)) {
-            terminalSelect.value = currentTerminalId;
-        } else {
-            terminalSelect.value = terminals[0].terminal_id;
-            if (row) row.terminalId = terminals[0].terminal_id;
+        if (terminals.length > 0) {
+            terminals.forEach(terminalId => {
+                const opt = document.createElement('option');
+                opt.value = terminalId;
+                opt.textContent = terminalId;
+                terminalSelect.appendChild(opt);
+            });
+
+            // 既存の選択を保持するか、最初の端末を自動選択
+            if (preserveSelection && currentTerminalId && terminals.includes(currentTerminalId)) {
+                terminalSelect.value = currentTerminalId;
+            } else {
+                terminalSelect.value = terminals[0];
+                if (row) row.terminalId = terminals[0];
+            }
         }
     }
 }

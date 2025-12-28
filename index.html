@@ -209,7 +209,7 @@
     </script>
     <script type="module">
         // 認証モジュール（ログイン必須）
-        import { getUser, getProfile, isAdmin, signOut } from './js/supabase-client.js';
+        import { getUser, getProfile, isAdmin, signOut, getSettings } from './js/supabase-client.js';
 
         async function initAuth() {
             try {
@@ -224,6 +224,27 @@
                 const profile = await getProfile();
                 document.getElementById('userEmail').textContent = profile?.email || user.email;
                 document.getElementById('logoutBtn').style.display = 'block';
+
+                // 設定を読み込み
+                try {
+                    const settings = await getSettings();
+                    window.appSettings = {
+                        display_time_max: 30,
+                        remarks_chars_per_line: 25,
+                        remarks_max_lines: 5,
+                        notice_text_max_chars: 200
+                    };
+                    if (settings) {
+                        settings.forEach(s => {
+                            if (s.setting_key && s.setting_value !== undefined) {
+                                window.appSettings[s.setting_key] = parseInt(s.setting_value) || s.setting_value;
+                            }
+                        });
+                    }
+                    console.log('App settings loaded:', window.appSettings);
+                } catch (e) {
+                    console.error('Failed to load settings:', e);
+                }
 
                 // 管理者の場合は管理リンクを表示
                 const admin = await isAdmin();
