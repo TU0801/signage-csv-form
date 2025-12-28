@@ -15,8 +15,17 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // 認証状態の取得
 export async function getUser() {
-  const { data: { user } } = await supabase.auth.getUser();
-  return user;
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error) {
+      console.error('Failed to get user:', error);
+      return null;
+    }
+    return user;
+  } catch (error) {
+    console.error('Unexpected error getting user:', error);
+    return null;
+  }
 }
 
 // ログイン
@@ -46,7 +55,11 @@ export async function getProfile() {
     .eq('id', user.id)
     .single();
 
-  if (error) throw error;
+  // PGRST116: プロファイルが存在しない場合はnullを返す
+  if (error && error.code !== 'PGRST116') {
+    console.error('Failed to get profile:', error);
+    return null;
+  }
   return data;
 }
 
