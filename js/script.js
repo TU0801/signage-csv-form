@@ -249,6 +249,11 @@ const templateImages = {
                     showToast('点検工事案内を選択してください', 'error');
                     return;
                 }
+                // テンプレート画像の存在確認
+                if (!templateImages[currentTemplateNo]) {
+                    showToast('選択された点検種別のテンプレート画像が見つかりません', 'error');
+                    return;
+                }
             }
 
             // 設定値によるバリデーション
