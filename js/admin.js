@@ -12,6 +12,7 @@ import {
     getMasterProperties,
     getMasterVendors,
     getMasterInspectionTypes,
+    getMasterCategories,
     deleteEntry,
     addProperty,
     updateProperty,
@@ -22,6 +23,11 @@ import {
     addInspectionType,
     updateInspectionType,
     deleteInspectionType,
+    addCategory,
+    updateCategory,
+    deleteCategory,
+    getSettings,
+    updateSettings,
     getPendingEntries,
     approveEntry,
     approveEntries,
@@ -32,7 +38,8 @@ import {
 // グローバル変数
 // ========================================
 
-let masterData = { properties: [], vendors: [], inspectionTypes: [] };
+let masterData = { properties: [], vendors: [], inspectionTypes: [], categories: [] };
+let appSettings = {};
 let entries = [];
 let profiles = [];
 let pendingEntries = [];
@@ -81,6 +88,7 @@ async function init() {
     loadEntries();
     loadMasterData();
     loadUsers();
+    loadAppSettings();
 }
 
 async function loadAllData() {
@@ -131,6 +139,10 @@ function setupEventListeners() {
     document.getElementById('addPropertyBtn').addEventListener('click', () => openMasterModal('property'));
     document.getElementById('addVendorBtn').addEventListener('click', () => openMasterModal('vendor'));
     document.getElementById('addInspectionBtn').addEventListener('click', () => openMasterModal('inspection'));
+    document.getElementById('addCategoryBtn')?.addEventListener('click', () => openMasterModal('category'));
+
+    // 設定保存ボタン
+    document.getElementById('saveSettingsBtn')?.addEventListener('click', saveSettings);
 
     // マスターフォーム送信
     document.getElementById('masterForm').addEventListener('submit', handleMasterFormSubmit);
@@ -527,6 +539,9 @@ function loadMasterData() {
         `;
         inspectionsList.appendChild(div);
     });
+
+    // カテゴリを読み込み
+    loadCategories();
 }
 
 // ========================================
@@ -541,6 +556,7 @@ function openMasterModal(type, data = null) {
     document.getElementById('propertyFields').style.display = 'none';
     document.getElementById('vendorFields').style.display = 'none';
     document.getElementById('inspectionFields').style.display = 'none';
+    document.getElementById('categoryFields')?.style && (document.getElementById('categoryFields').style.display = 'none');
 
     // タイプを設定
     document.getElementById('masterType').value = type;
@@ -588,6 +604,16 @@ function openMasterModal(type, data = null) {
             document.getElementById('templateNo').value = '';
             document.getElementById('noticeText').value = '';
             document.getElementById('showOnBoard').checked = true;
+        }
+    } else if (type === 'category') {
+        document.getElementById('categoryFields').style.display = 'block';
+        title.textContent = data ? 'カテゴリを編集' : 'カテゴリを追加';
+        if (data) {
+            document.getElementById('categoryName').value = data.category_name || '';
+            document.getElementById('categorySortOrder').value = data.sort_order || 0;
+        } else {
+            document.getElementById('categoryName').value = '';
+            document.getElementById('categorySortOrder').value = 0;
         }
     }
 
@@ -647,6 +673,18 @@ async function handleMasterFormSubmit(e) {
             } else {
                 await addInspectionType(data);
                 showToast('点検種別を追加しました', 'success');
+            }
+        } else if (type === 'category') {
+            const data = {
+                category_name: document.getElementById('categoryName').value,
+                sort_order: parseInt(document.getElementById('categorySortOrder').value) || 0,
+            };
+            if (id) {
+                await updateCategory(id, data);
+                showToast('カテゴリを更新しました', 'success');
+            } else {
+                await addCategory(data);
+                showToast('カテゴリを追加しました', 'success');
             }
         }
 
@@ -779,6 +817,105 @@ function showToast(message, type = 'info') {
         toast.classList.remove('show');
     }, 2500);
 }
+
+// ========================================
+// 設定管理
+// ========================================
+
+async function loadAppSettings() {
+    try {
+        const settings = await getSettings();
+        appSettings = {};
+        settings?.forEach(s => {
+            appSettings[s.setting_key] = s.setting_value;
+        });
+
+        // フォームに反映
+        const displayTimeMax = document.getElementById('settingDisplayTimeMax');
+        const remarksCharsPerLine = document.getElementById('settingRemarksCharsPerLine');
+        const remarksMaxLines = document.getElementById('settingRemarksMaxLines');
+        const noticeTextMaxChars = document.getElementById('settingNoticeTextMaxChars');
+
+        if (displayTimeMax) displayTimeMax.value = appSettings.display_time_max || 30;
+        if (remarksCharsPerLine) remarksCharsPerLine.value = appSettings.remarks_chars_per_line || 25;
+        if (remarksMaxLines) remarksMaxLines.value = appSettings.remarks_max_lines || 5;
+        if (noticeTextMaxChars) noticeTextMaxChars.value = appSettings.notice_text_max_chars || 200;
+    } catch (error) {
+        console.error('Failed to load settings:', error);
+    }
+}
+
+async function saveSettings() {
+    try {
+        const settings = {
+            display_time_max: document.getElementById('settingDisplayTimeMax').value,
+            remarks_chars_per_line: document.getElementById('settingRemarksCharsPerLine').value,
+            remarks_max_lines: document.getElementById('settingRemarksMaxLines').value,
+            notice_text_max_chars: document.getElementById('settingNoticeTextMaxChars').value
+        };
+
+        await updateSettings(settings);
+        showToast('設定を保存しました', 'success');
+    } catch (error) {
+        console.error('Failed to save settings:', error);
+        showToast('設定の保存に失敗しました', 'error');
+    }
+}
+
+// ========================================
+// カテゴリ管理
+// ========================================
+
+async function loadCategories() {
+    try {
+        masterData.categories = await getMasterCategories();
+        renderCategories();
+    } catch (error) {
+        console.error('Failed to load categories:', error);
+    }
+}
+
+function renderCategories() {
+    const list = document.getElementById('categoriesList');
+    if (!list) return;
+    list.innerHTML = '';
+
+    const count = document.getElementById('categoryCount');
+    if (count) count.textContent = masterData.categories?.length || 0;
+
+    masterData.categories?.forEach(cat => {
+        const div = document.createElement('div');
+        div.className = 'master-item';
+        div.innerHTML = `
+            <div class="master-item-content">
+                <strong>${cat.category_name}</strong>
+                <span class="text-muted">順序: ${cat.sort_order || 0}</span>
+            </div>
+            <div class="master-item-actions">
+                <button class="btn btn-sm btn-outline" onclick="editMasterCategory('${cat.id}')">編集</button>
+                <button class="btn btn-sm btn-danger" onclick="deleteMasterCategory('${cat.id}')">削除</button>
+            </div>
+        `;
+        list.appendChild(div);
+    });
+}
+
+window.editMasterCategory = function(id) {
+    const cat = masterData.categories.find(c => c.id === id);
+    if (!cat) return;
+    openMasterModal('category', cat);
+};
+
+window.deleteMasterCategory = async function(id) {
+    if (!confirm('このカテゴリを削除しますか？')) return;
+    try {
+        await deleteCategory(id);
+        showToast('カテゴリを削除しました', 'success');
+        loadCategories();
+    } catch (error) {
+        showToast('削除に失敗しました', 'error');
+    }
+};
 
 // ========================================
 // 起動

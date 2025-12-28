@@ -861,3 +861,48 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* ========================================
+   貼紙表示位置選択
+======================================== */
+.position-select-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+}
+
+.position-option {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    background: #f8fafc;
+    cursor: pointer;
+    font-size: 0.875rem;
+    color: #374151;
+    transition: all 0.15s;
+}
+
+.position-option:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+}
+
+.position-option:has(input:checked) {
+    background: #eff6ff;
+    border-color: #3b82f6;
+    color: #1e40af;
+}
+
+.position-option input[type="radio"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: #3b82f6;
+}
+
+.position-option.full-width {
+    grid-column: 1 / -1;
+}

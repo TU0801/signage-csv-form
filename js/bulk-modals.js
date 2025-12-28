@@ -77,7 +77,8 @@ function handleContextMenuAction(action, rowId, callbacks) {
                     displayStartTime: row.displayStartTime,
                     displayEndDate: row.displayEndDate,
                     displayEndTime: row.displayEndTime,
-                    showOnBoard: row.showOnBoard
+                    showOnBoard: row.showOnBoard,
+                    position: row.position
                 }, callbacks);
                 callbacks.showToast('行を複製しました', 'success');
             }
@@ -114,7 +115,8 @@ function handleContextMenuAction(action, rowId, callbacks) {
                     displayStartTime: copiedRowData.displayStartTime,
                     displayEndDate: copiedRowData.displayEndDate,
                     displayEndTime: copiedRowData.displayEndTime,
-                    showOnBoard: copiedRowData.showOnBoard
+                    showOnBoard: copiedRowData.showOnBoard,
+                    position: copiedRowData.position
                 }, callbacks);
                 callbacks.showToast('行をペーストしました', 'success');
             } else {
@@ -195,6 +197,16 @@ export function createBulkEditModal(callbacks) {
                         </select>
                     </div>
                     <div class="form-group">
+                        <label>案内カテゴリ</label>
+                        <select id="bulkEditCategory" class="form-control">
+                            <option value="">全て</option>
+                            <option value="点検">点検</option>
+                            <option value="工事">工事</option>
+                            <option value="清掃">清掃</option>
+                            <option value="アンケート">アンケート</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
                         <label>点検種別</label>
                         <select id="bulkEditInspection" class="form-control">
                             <option value="">変更しない</option>
@@ -253,6 +265,11 @@ export function createBulkEditModal(callbacks) {
     document.getElementById('cancelBulkEdit').addEventListener('click', closeBulkEditModal);
     document.getElementById('applyBulkEdit').addEventListener('click', () => applyBulkEdit(callbacks));
 
+    // カテゴリ変更時に点検種別をフィルター
+    document.getElementById('bulkEditCategory').addEventListener('change', () => {
+        filterBulkEditInspectionTypes();
+    });
+
     modal.addEventListener('click', (e) => {
         if (e.target.id === 'bulkEditModal') closeBulkEditModal();
     });
@@ -267,6 +284,7 @@ export function openBulkEditModal(callbacks) {
 
     document.getElementById('bulkEditProperty').value = '';
     document.getElementById('bulkEditVendor').value = '';
+    document.getElementById('bulkEditCategory').value = '';
     document.getElementById('bulkEditInspection').value = '';
     document.getElementById('bulkEditStartDate').value = '';
     document.getElementById('bulkEditEndDate').value = '';
@@ -276,7 +294,26 @@ export function openBulkEditModal(callbacks) {
     document.getElementById('bulkEditDisplayEndDate').value = '';
     document.getElementById('bulkEditDisplayEndTime').value = '';
 
+    // 点検種別を全て表示にリセット
+    filterBulkEditInspectionTypes();
+
     document.getElementById('bulkEditModal').classList.add('active');
+}
+
+function filterBulkEditInspectionTypes() {
+    const category = document.getElementById('bulkEditCategory').value;
+    const select = document.getElementById('bulkEditInspection');
+    const masterData = getMasterData();
+
+    select.innerHTML = '<option value="">変更しない</option>';
+    masterData.inspectionTypes.forEach(i => {
+        if (!category || i.inspection_name.includes(category)) {
+            const opt = document.createElement('option');
+            opt.value = i.inspection_name;
+            opt.textContent = i.inspection_name;
+            select.appendChild(opt);
+        }
+    });
 }
 
 export function closeBulkEditModal() {
@@ -407,6 +444,27 @@ export function createRowDetailModal(callbacks) {
                         掲示板に表示する
                     </label>
                 </div>
+
+                <div class="detail-section">
+                    <h4>貼紙表示位置</h4>
+                    <div class="position-select-grid">
+                        <label class="position-option">
+                            <input type="radio" name="detailPosition" value="1"> ①上左
+                        </label>
+                        <label class="position-option">
+                            <input type="radio" name="detailPosition" value="2" checked> ②上中
+                        </label>
+                        <label class="position-option">
+                            <input type="radio" name="detailPosition" value="3"> ③上右
+                        </label>
+                        <label class="position-option">
+                            <input type="radio" name="detailPosition" value="4"> ④中央
+                        </label>
+                        <label class="position-option full-width">
+                            <input type="radio" name="detailPosition" value="0"> ⓪全体
+                        </label>
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-outline" id="cancelRowDetail">キャンセル</button>
@@ -468,6 +526,11 @@ export function openRowDetailModal(rowId, callbacks) {
 
     document.getElementById('detailShowOnBoard').checked = row.showOnBoard !== false;
 
+    // 貼紙表示位置を設定（デフォルトは②上中=2）
+    const positionValue = row.position !== undefined ? String(row.position) : '2';
+    const positionRadio = document.querySelector(`input[name="detailPosition"][value="${positionValue}"]`);
+    if (positionRadio) positionRadio.checked = true;
+
     document.getElementById('rowDetailModal').classList.add('active');
 }
 
@@ -490,6 +553,10 @@ function applyRowDetail(callbacks) {
     row.displayEndDate = document.getElementById('detailDisplayEndDate').value;
     row.displayEndTime = document.getElementById('detailDisplayEndTime').value;
     row.showOnBoard = document.getElementById('detailShowOnBoard').checked;
+
+    // 貼紙表示位置
+    const positionRadio = document.querySelector('input[name="detailPosition"]:checked');
+    row.position = positionRadio ? parseInt(positionRadio.value) : 2;
 
     const tr = document.querySelector(`tr[data-row-id="${currentDetailRowId}"]`);
     if (tr) {
@@ -622,7 +689,8 @@ export function saveTemplate(callbacks) {
             displayStartTime: r.displayStartTime,
             displayEndDate: r.displayEndDate,
             displayEndTime: r.displayEndTime,
-            showOnBoard: r.showOnBoard
+            showOnBoard: r.showOnBoard,
+            position: r.position
         }))
     };
 

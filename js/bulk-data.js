@@ -45,7 +45,8 @@ export function saveAutoSave() {
             displayStartTime: r.displayStartTime,
             displayEndDate: r.displayEndDate,
             displayEndTime: r.displayEndTime,
-            showOnBoard: r.showOnBoard
+            showOnBoard: r.showOnBoard,
+            position: r.position
         }))
     };
 
@@ -124,7 +125,7 @@ export async function saveAll(callbacks) {
                 display_time: row.displayTime,
                 show_on_board: row.showOnBoard !== false,
                 poster_type: 'テンプレート',
-                position: 2,
+                position: row.position !== undefined ? row.position : 2,
                 status: 'pending'
             };
         });
@@ -186,6 +187,8 @@ export function generateCSV() {
         const noticeText = row.noticeText || inspection?.default_text || '';
         const showOnBoard = row.showOnBoard !== false ? 'True' : 'False';
 
+        const positionValue = row.position !== undefined ? String(row.position) : '2';
+
         const values = [
             '',
             row.terminalId || property?.terminal_id || '',
@@ -199,7 +202,7 @@ export function generateCSV() {
             formatDate(row.endDate),
             row.remarks,
             noticeText,
-            '2',
+            positionValue,
             formatDate(displayStartDate),
             displayStartTime,
             formatDate(displayEndDate),

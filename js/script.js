@@ -123,14 +123,34 @@ const templateImages = {
             document.getElementById('emergencyContact').value = idx !== '' ? masterData.vendors[idx].emergencyContact : '';
         }
 
-        function populateInspectionTypeSelect() {
+        function populateInspectionTypeSelect(category = '') {
             const select = document.getElementById('inspectionType');
+            // 現在の選択値を保持
+            const currentValue = select.value;
+            select.innerHTML = '<option value="">選択してください</option>';
+
             masterData.notices.forEach((n, i) => {
-                const opt = document.createElement('option');
-                opt.value = i;
-                opt.textContent = n.inspectionType;
-                select.appendChild(opt);
+                // カテゴリフィルター: カテゴリが空（全て）か、点検種別名にカテゴリが含まれる場合のみ表示
+                if (!category || n.inspectionType.includes(category)) {
+                    const opt = document.createElement('option');
+                    opt.value = i;
+                    opt.textContent = n.inspectionType;
+                    select.appendChild(opt);
+                }
             });
+
+            // 以前の選択が有効なら復元
+            if (currentValue && select.querySelector(`option[value="${currentValue}"]`)) {
+                select.value = currentValue;
+            }
+        }
+
+        function onCategoryChange() {
+            const category = document.getElementById('inspectionCategory').value;
+            populateInspectionTypeSelect(category);
+            // カテゴリ変更時に点検種別をリセット
+            document.getElementById('inspectionType').value = '';
+            onInspectionTypeChange();
         }
 
         function onInspectionTypeChange() {

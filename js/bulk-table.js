@@ -23,7 +23,8 @@ export function addRowWithCopy(callbacks) {
             startDate: lastRow.startDate,
             endDate: lastRow.endDate,
             remarks: '',
-            displayTime: lastRow.displayTime
+            displayTime: lastRow.displayTime,
+            position: lastRow.position
         }, callbacks);
     }
 }
@@ -53,7 +54,8 @@ export function duplicateSelectedRows(callbacks) {
                 displayStartTime: sourceRow.displayStartTime,
                 displayEndDate: sourceRow.displayEndDate,
                 displayEndTime: sourceRow.displayEndTime,
-                showOnBoard: sourceRow.showOnBoard
+                showOnBoard: sourceRow.showOnBoard,
+                position: sourceRow.position
             }, callbacks);
         }
     });
@@ -82,6 +84,7 @@ export function addRow(data = {}, callbacks) {
         displayEndDate: data.displayEndDate || '',
         displayEndTime: data.displayEndTime || '',
         showOnBoard: data.showOnBoard !== undefined ? data.showOnBoard : true,
+        position: data.position !== undefined ? data.position : 2,
         isValid: false,
         errors: []
     };
@@ -604,6 +607,7 @@ export function insertRowAt(index, callbacks) {
         displayEndDate: '',
         displayEndTime: '',
         showOnBoard: true,
+        position: 2,
         isValid: false,
         errors: []
     };

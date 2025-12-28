@@ -311,6 +311,8 @@
                     <button class="admin-tab active" data-master="properties">物件</button>
                     <button class="admin-tab" data-master="vendors">受注先</button>
                     <button class="admin-tab" data-master="inspections">点検種別</button>
+                    <button class="admin-tab" data-master="categories">カテゴリ</button>
+                    <button class="admin-tab" data-master="settings">設定</button>
                 </div>
 
                 <div id="master-properties" class="master-content">
@@ -335,6 +337,39 @@
                         <button class="btn btn-primary btn-sm" id="addInspectionBtn">➕ 追加</button>
                     </div>
                     <div class="master-list" id="inspectionsList"></div>
+                </div>
+
+                <div id="master-categories" class="master-content" style="display: none;">
+                    <div class="action-bar">
+                        <span><span id="categoryCount">0</span>件</span>
+                        <button class="btn btn-primary btn-sm" id="addCategoryBtn">➕ 追加</button>
+                    </div>
+                    <div class="master-list" id="categoriesList"></div>
+                </div>
+
+                <div id="master-settings" class="master-content" style="display: none;">
+                    <div class="settings-form">
+                        <div class="form-group">
+                            <label>表示時間の上限（秒）</label>
+                            <input type="number" id="settingDisplayTimeMax" min="1" max="60" value="30">
+                            <small>掲示板の表示秒数の最大値</small>
+                        </div>
+                        <div class="form-group">
+                            <label>掲示備考の1行あたり文字数</label>
+                            <input type="number" id="settingRemarksCharsPerLine" min="10" max="50" value="25">
+                        </div>
+                        <div class="form-group">
+                            <label>掲示備考の最大行数</label>
+                            <input type="number" id="settingRemarksMaxLines" min="1" max="10" value="5">
+                        </div>
+                        <div class="form-group">
+                            <label>案内文の最大文字数</label>
+                            <input type="number" id="settingNoticeTextMaxChars" min="50" max="500" value="200">
+                        </div>
+                        <div class="action-bar" style="margin-top: 1rem;">
+                            <button type="button" class="btn btn-primary" id="saveSettingsBtn">💾 設定を保存</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -437,6 +472,18 @@
                             <input type="checkbox" id="showOnBoard" checked>
                             掲示板に表示
                         </label>
+                    </div>
+                </div>
+
+                <!-- カテゴリ用フィールド -->
+                <div id="categoryFields" style="display:none;">
+                    <div class="form-group">
+                        <label>カテゴリ名 *</label>
+                        <input type="text" id="categoryName" required>
+                    </div>
+                    <div class="form-group">
+                        <label>表示順序</label>
+                        <input type="number" id="categorySortOrder" min="0" value="0">
                     </div>
                 </div>
 
