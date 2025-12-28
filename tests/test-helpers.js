@@ -108,8 +108,18 @@ async function setupAuthMockWithMasterData(page, url, options = {}) {
   ];
 
   const mockInspectionTypes = [
-    { id: 1, template_no: 0, inspection_name: '定期清掃' },
-    { id: 2, template_no: 1, inspection_name: 'エレベーター点検' }
+    { id: 1, template_no: 0, inspection_name: '定期清掃', category: '清掃' },
+    { id: 2, template_no: 1, inspection_name: 'エレベーター点検', category: '点検' },
+    { id: 3, template_no: 2, inspection_name: '消防設備点検', category: '点検' },
+    { id: 4, template_no: 3, inspection_name: '防犯カメラ取付工事', category: '工事' },
+    { id: 5, template_no: 4, inspection_name: '消防設備点検アンケート', category: 'アンケート' }
+  ];
+
+  const mockCategories = [
+    { id: 1, category_name: '点検', sort_order: 1 },
+    { id: 2, category_name: '工事', sort_order: 2 },
+    { id: 3, category_name: '清掃', sort_order: 3 },
+    { id: 4, category_name: 'アンケート', sort_order: 4 }
   ];
 
   const mockEntries = [
@@ -138,6 +148,7 @@ async function setupAuthMockWithMasterData(page, url, options = {}) {
             properties: ${JSON.stringify(mockProperties)},
             vendors: ${JSON.stringify(mockVendors)},
             inspectionTypes: ${JSON.stringify(mockInspectionTypes)},
+            categories: ${JSON.stringify(mockCategories)},
             entries: ${JSON.stringify(mockEntries)},
             users: ${JSON.stringify(mockUsers)}
           };
@@ -167,6 +178,7 @@ async function setupAuthMockWithMasterData(page, url, options = {}) {
                     case 'signage_master_properties': return mockData.properties;
                     case 'signage_master_vendors': return mockData.vendors;
                     case 'signage_master_inspection_types': return mockData.inspectionTypes;
+                    case 'signage_master_categories': return mockData.categories;
                     case 'signage_entries': return mockData.entries;
                     case 'signage_profiles': return mockData.users;
                     default: return [];
@@ -223,7 +235,10 @@ async function setupAuthMockWithMasterData(page, url, options = {}) {
   await page.goto(url);
 }
 
+const baseUrl = 'http://localhost:8080';
+
 module.exports = {
+  baseUrl,
   setupAuthMock,
   setupAuthMockWithMasterData
 };

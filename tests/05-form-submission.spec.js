@@ -1,10 +1,10 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
-const { setupAuthMock } = require('./test-helpers');
+const { setupAuthMockWithMasterData } = require('./test-helpers');
 
 test.describe('Form Submission Tests', () => {
   test.beforeEach(async ({ page }) => {
-    await setupAuthMock(page, '/', { isAuthenticated: true });
+    await setupAuthMockWithMasterData(page, '/index.html', { isAuthenticated: true });
   });
 
   test('cannot submit without required fields', async ({ page }) => {
@@ -95,7 +95,7 @@ test.describe('Form Submission Tests', () => {
 
 test.describe('Position Selection Tests', () => {
   test.beforeEach(async ({ page }) => {
-    await setupAuthMock(page, '/', { isAuthenticated: true });
+    await setupAuthMockWithMasterData(page, '/index.html', { isAuthenticated: true });
   });
 
   test('clicking position cell changes active state', async ({ page }) => {
@@ -128,7 +128,7 @@ test.describe('Position Selection Tests', () => {
 
 test.describe('Poster Type Tests', () => {
   test.beforeEach(async ({ page }) => {
-    await setupAuthMock(page, '/', { isAuthenticated: true });
+    await setupAuthMockWithMasterData(page, '/index.html', { isAuthenticated: true });
   });
 
   test('can select custom poster type', async ({ page }) => {

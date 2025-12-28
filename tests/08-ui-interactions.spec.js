@@ -1,10 +1,10 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
-const { setupAuthMock } = require('./test-helpers');
+const { setupAuthMockWithMasterData } = require('./test-helpers');
 
 test.describe('Display Time Adjustment Tests', () => {
   test.beforeEach(async ({ page }) => {
-    await setupAuthMock(page, '/', { isAuthenticated: true });
+    await setupAuthMockWithMasterData(page, '/index.html', { isAuthenticated: true });
   });
 
   test('plus button increases display time', async ({ page }) => {
@@ -40,7 +40,7 @@ test.describe('Display Time Adjustment Tests', () => {
 
 test.describe('Preview Update Tests', () => {
   test.beforeEach(async ({ page }) => {
-    await setupAuthMock(page, '/', { isAuthenticated: true });
+    await setupAuthMockWithMasterData(page, '/index.html', { isAuthenticated: true });
   });
 
   test('preview updates when notice text changes', async ({ page }) => {
@@ -81,7 +81,7 @@ test.describe('Preview Update Tests', () => {
 
 test.describe('Toast Notification Tests', () => {
   test.beforeEach(async ({ page }) => {
-    await setupAuthMock(page, '/', { isAuthenticated: true });
+    await setupAuthMockWithMasterData(page, '/index.html', { isAuthenticated: true });
   });
 
   test('success toast appears on successful add', async ({ page }) => {
@@ -113,7 +113,7 @@ test.describe('Toast Notification Tests', () => {
 
 test.describe('Data List Display Tests', () => {
   test.beforeEach(async ({ page }) => {
-    await setupAuthMock(page, '/', { isAuthenticated: true });
+    await setupAuthMockWithMasterData(page, '/index.html', { isAuthenticated: true });
   });
 
   test('empty state shows message when no data', async ({ page }) => {

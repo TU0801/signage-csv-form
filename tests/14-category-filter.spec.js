@@ -2,27 +2,17 @@
 // Based on VBA macro: ○入力_20_案内文カテゴリ選択.bas
 
 const { test, expect } = require('@playwright/test');
-const { baseUrl } = require('./test-helpers');
+const { setupAuthMockWithMasterData } = require('./test-helpers');
 
 // Category test data
 const categories = ['点検', '工事', '清掃', 'アンケート'];
 
-// Sample inspection types by category
-const inspectionTypesByCategory = {
-  '点検': ['エレベーター定期点検', '建物設備点検', '消防設備点検', '自動扉点検', '機械式駐車場点検'],
-  '工事': ['防犯カメラ取付工事', '音、振動を伴う工事', '屋上防水工事', '駐車場工事', 'インターネット機器工事'],
-  '清掃': ['定期清掃', '特別清掃', 'エントランス定期清掃', '照明器具清掃', '貯水槽清掃'],
-  'アンケート': ['消防設備点検アンケート', '排水管洗浄アンケート', '入居者様アンケート', '1年点検アンケート', '2年点検アンケート']
-};
-
 test.describe('Category Filter - index.html', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto(`${baseUrl}/index.html`, { waitUntil: 'networkidle' });
-    // Handle login redirect if needed
-    if (page.url().includes('login.html')) {
-      // Skip auth for static tests
-      await page.goto(`${baseUrl}/index.html?local=true`, { waitUntil: 'networkidle' });
-    }
+    await setupAuthMockWithMasterData(page, '/index.html', {
+      isAuthenticated: true,
+      email: 'test@example.com'
+    });
   });
 
   test('should have category select element', async ({ page }) => {
@@ -37,9 +27,10 @@ test.describe('Category Filter - index.html', () => {
     // First option should be "全て"
     await expect(options.nth(0)).toHaveText('全て');
 
-    // Check for all categories
+    // Check for all categories (use count check since options are hidden when select is closed)
     for (const category of categories) {
-      await expect(categorySelect.locator(`option[value="${category}"]`)).toBeVisible();
+      const opt = categorySelect.locator(`option[value="${category}"]`);
+      await expect(opt).toHaveCount(1);
     }
   });
 
@@ -98,10 +89,10 @@ test.describe('Category Filter - index.html', () => {
 
 test.describe('Category Filter - bulk.html bulk edit modal', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto(`${baseUrl}/bulk.html`, { waitUntil: 'networkidle' });
-    if (page.url().includes('login.html')) {
-      await page.goto(`${baseUrl}/bulk.html?local=true`, { waitUntil: 'networkidle' });
-    }
+    await setupAuthMockWithMasterData(page, '/bulk.html', {
+      isAuthenticated: true,
+      email: 'test@example.com'
+    });
   });
 
   test('should have category select in bulk edit modal', async ({ page }) => {

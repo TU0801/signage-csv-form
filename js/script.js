@@ -401,7 +401,7 @@ const templateImages = {
         function showToast(msg, type = '') {
             document.querySelectorAll('.toast').forEach(t => t.remove());
             const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
+            toast.className = `toast ${type} show`;
             toast.textContent = msg;
             document.body.appendChild(toast);
             setTimeout(() => toast.remove(), 2500);
