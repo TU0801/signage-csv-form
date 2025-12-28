@@ -456,6 +456,14 @@
             border-radius: 5px;
             font-size: 0.75rem;
             z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s, visibility 0.3s;
+        }
+
+        .toast.show {
+            opacity: 1;
+            visibility: visible;
         }
 
         .toast.success { background: var(--success); }

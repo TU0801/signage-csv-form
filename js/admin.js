@@ -45,6 +45,13 @@ let profiles = [];
 let pendingEntries = [];
 let selectedPendingIds = [];
 
+// ユーザーIDからメールアドレスを取得
+function getUserEmail(userId) {
+    if (!userId) return '-';
+    const profile = profiles.find(p => p.id === userId);
+    return profile?.email || '-';
+}
+
 // ========================================
 // 初期化
 // ========================================
@@ -247,7 +254,7 @@ function renderPendingEntries() {
 
         tr.innerHTML = `
             <td><input type="checkbox" data-id="${entry.id}" onchange="updateSelectedPending()"></td>
-            <td>${entry.signage_profiles?.email || '-'}</td>
+            <td>${getUserEmail(entry.user_id)}</td>
             <td>${entry.property_code}</td>
             <td>${entry.inspection_type}</td>
             <td>${startDate}</td>
@@ -385,7 +392,7 @@ function renderEntries() {
             : '-';
 
         tr.innerHTML = `
-            <td>${entry.signage_profiles?.email || '-'}</td>
+            <td>${getUserEmail(entry.user_id)}</td>
             <td>${entry.property_code}</td>
             <td>${entry.inspection_type}</td>
             <td>${inspectionStart}</td>

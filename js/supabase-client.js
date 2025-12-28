@@ -171,10 +171,7 @@ export async function deleteEntry(id) {
 export async function getAllEntries(filters = {}) {
   let query = supabase
     .from('signage_entries')
-    .select(`
-      *,
-      signage_profiles(email, company_name)
-    `)
+    .select('*')
     .order('created_at', { ascending: false });
 
   if (filters.propertyCode) {
@@ -314,10 +311,7 @@ export async function updateProfileRole(id, role) {
 export async function getPendingEntries() {
   const { data, error } = await supabase
     .from('signage_entries')
-    .select(`
-      *,
-      signage_profiles(email, company_name)
-    `)
+    .select('*')
     .eq('status', 'pending')
     .order('created_at', { ascending: false });
   if (error) throw error;
