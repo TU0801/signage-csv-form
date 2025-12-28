@@ -173,13 +173,14 @@ export function generateCSV() {
     const validRows = rows.filter(r => r.isValid);
     if (validRows.length === 0) return '';
 
+    // サンプルCSVに合わせた列順
     const headers = [
         '点検CO', '端末ID', '物件コード', '受注先名', '緊急連絡先番号',
         '点検工事案内', '掲示板に表示する', '点検案内TPLNo', '点検開始日',
         '点検完了日', '掲示備考', '掲示板用案内文', 'frame_No', '表示開始日',
-        '表示開始時刻', '表示終了日', '表示終了時刻', '貼紙区分', '表示時間',
-        'カテゴリー', 'カテゴリー２', 'カテゴリー３', 'カテゴリー４',
-        'カテゴリー５', 'カテゴリー６', '画像パス', 'お知らせ開始事前', 'ステータス'
+        '表示終了日', '表示開始時刻', '表示終了時刻', '表示時間', '統合ポリシー',
+        '制御', '変更日', '変更時刻', '最終エクスポート日時', 'ID', '変更日時',
+        '点検日時', '表示日時', '貼紙区分'
     ];
 
     const csvRows = [headers.join(',')];
@@ -191,39 +192,54 @@ export function generateCSV() {
         const inspection = masterData.inspectionTypes.find(i => i.inspection_name === row.inspectionType);
 
         const formatDate = (d) => d ? d.replace(/-/g, '/') : '';
-        const displayTimeFormatted = `0:00:${String(row.displayTime).padStart(2, '0')}`;
+        const displayTimeFormatted = `0:00:${String(row.displayTime || 6).padStart(2, '0')}`;
 
         const displayStartDate = row.displayStartDate || row.startDate;
         const displayEndDate = row.displayEndDate || row.endDate;
         const displayStartTime = row.displayStartTime || '';
         const displayEndTime = row.displayEndTime || '';
 
-        const noticeText = row.noticeText || inspection?.default_text || '';
-        const showOnBoard = row.showOnBoard !== false ? 'True' : 'False';
+        const noticeText = row.noticeText || inspection?.notice_text || '';
+        const showOnBoard = row.showOnBoard !== false ? 'TRUE' : 'False';
 
-        const positionValue = row.position !== undefined ? String(row.position) : '2';
+        const positionValue = row.position !== undefined ? String(row.position) : '1';
+
+        // 日時フォーマット（サンプルに合わせる）
+        const now = new Date();
+        const formatDateTime = (dateStr) => {
+            if (!dateStr) return '';
+            return `${formatDate(dateStr)} [00:00:00]`;
+        };
 
         const values = [
-            '',
-            row.terminalId || property?.terminal_id || '',
-            row.propertyCode,
-            row.vendorName,
-            vendor?.emergency_contact || '',
-            row.inspectionType,
-            showOnBoard,
-            inspection?.template_no || '',
-            formatDate(row.startDate),
-            formatDate(row.endDate),
-            row.remarks,
-            noticeText,
-            positionValue,
-            formatDate(displayStartDate),
-            displayStartTime,
-            formatDate(displayEndDate),
-            displayEndTime,
-            'テンプレート',
-            displayTimeFormatted,
-            '', '', '', '', '', '', '', '30', ''
+            '',                                          // 点検CO
+            row.terminalId || property?.terminal_id || '', // 端末ID
+            row.propertyCode,                            // 物件コード
+            row.vendorName,                              // 受注先名
+            vendor?.emergency_contact || '',             // 緊急連絡先番号
+            row.inspectionType,                          // 点検工事案内
+            showOnBoard,                                 // 掲示板に表示する
+            inspection?.template_no || '',               // 点検案内TPLNo
+            formatDate(row.startDate),                   // 点検開始日
+            formatDate(row.endDate),                     // 点検完了日
+            row.remarks || '',                           // 掲示備考
+            noticeText,                                  // 掲示板用案内文
+            positionValue,                               // frame_No
+            formatDate(displayStartDate),                // 表示開始日
+            formatDate(displayEndDate),                  // 表示終了日
+            displayStartTime,                            // 表示開始時刻
+            displayEndTime,                              // 表示終了時刻
+            displayTimeFormatted,                        // 表示時間
+            '',                                          // 統合ポリシー
+            '',                                          // 制御
+            '',                                          // 変更日
+            '',                                          // 変更時刻
+            '',                                          // 最終エクスポート日時
+            '',                                          // ID
+            '',                                          // 変更日時
+            formatDateTime(row.startDate),               // 点検日時
+            formatDateTime(displayStartDate),            // 表示日時
+            'テンプレート'                                // 貼紙区分
         ];
 
         csvRows.push(values.map(v => `"${v}"`).join(','));
