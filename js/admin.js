@@ -235,6 +235,31 @@ function setupEventListeners() {
     document.getElementById('userModal')?.addEventListener('click', (e) => {
         if (e.target.id === 'userModal') closeUserModal();
     });
+
+    // ESCキーでモーダルを閉じる
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            if (document.getElementById('masterModal')?.classList.contains('active')) {
+                closeMasterModal();
+            }
+            if (document.getElementById('userModal')?.classList.contains('active')) {
+                closeUserModal();
+            }
+            if (document.getElementById('entryDetailModal')?.classList.contains('active')) {
+                closeEntryDetailModal();
+            }
+        }
+    });
+
+    // Enterキーでフィルター検索
+    document.querySelectorAll('#filterProperty, #filterStartDate, #filterEndDate').forEach(el => {
+        el.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                document.getElementById('searchBtn')?.click();
+            }
+        });
+    });
 }
 
 // ========================================
@@ -287,8 +312,8 @@ function renderPendingEntries() {
     pendingEntries.forEach(entry => {
         const tr = document.createElement('tr');
         const createdAt = new Date(entry.created_at).toLocaleString('ja-JP');
-        const startDate = entry.start_date
-            ? new Date(entry.start_date).toLocaleDateString('ja-JP')
+        const startDate = entry.inspection_start
+            ? new Date(entry.inspection_start).toLocaleDateString('ja-JP')
             : '-';
 
         tr.innerHTML = `
@@ -678,8 +703,22 @@ function generateCSV(data) {
     return csvRows.join('\n');
 }
 
+function getFilteredExportEntries() {
+    const exportProperty = document.getElementById('exportProperty').value;
+    const exportStartDate = document.getElementById('exportStartDate').value;
+    const exportEndDate = document.getElementById('exportEndDate').value;
+
+    return entries.filter(entry => {
+        if (exportProperty && String(entry.property_code) !== exportProperty) return false;
+        if (exportStartDate && entry.inspection_start < exportStartDate) return false;
+        if (exportEndDate && entry.inspection_start > exportEndDate) return false;
+        return true;
+    });
+}
+
 function exportCSV() {
-    const csv = generateCSV(entries);
+    const filteredEntries = getFilteredExportEntries();
+    const csv = generateCSV(filteredEntries);
     if (!csv) {
         showToast('エクスポートするデータがありません', 'error');
         return;
@@ -700,7 +739,8 @@ function exportCSV() {
 }
 
 function copyCSV() {
-    const csv = generateCSV(entries);
+    const filteredEntries = getFilteredExportEntries();
+    const csv = generateCSV(filteredEntries);
     if (!csv) {
         showToast('コピーするデータがありません', 'error');
         return;
@@ -717,23 +757,28 @@ function copyCSV() {
 // ユーザー管理
 // ========================================
 
-function loadUsers() {
+async function loadUsers() {
     const tbody = document.getElementById('usersBody');
     tbody.innerHTML = '';
+
+    // 現在のユーザーIDを取得
+    const currentUser = await getUser();
+    const currentUserId = currentUser?.id;
 
     profiles.forEach(profile => {
         const tr = document.createElement('tr');
         const createdAt = new Date(profile.created_at).toLocaleDateString('ja-JP');
         const roleClass = profile.role === 'admin' ? 'admin' : 'user';
         const roleText = profile.role === 'admin' ? '管理者' : 'ユーザー';
+        const isSelf = profile.id === currentUserId;
 
         tr.innerHTML = `
-            <td>${profile.email}</td>
-            <td>${profile.company_name || '-'}</td>
+            <td>${escapeHtml(profile.email)}${isSelf ? ' (自分)' : ''}</td>
+            <td>${escapeHtml(profile.company_name || '-')}</td>
             <td><span class="user-role ${roleClass}">${roleText}</span></td>
             <td>${createdAt}</td>
             <td>
-                <select class="role-select" data-user-id="${profile.id}" style="padding: 0.25rem; border-radius: 4px; border: 1px solid #e2e8f0;">
+                <select class="role-select" data-user-id="${escapeHtml(profile.id)}" ${isSelf ? 'disabled title="自分の権限は変更できません"' : ''} style="padding: 0.25rem; border-radius: 4px; border: 1px solid #e2e8f0;">
                     <option value="user" ${profile.role === 'user' ? 'selected' : ''}>ユーザー</option>
                     <option value="admin" ${profile.role === 'admin' ? 'selected' : ''}>管理者</option>
                 </select>
@@ -747,6 +792,14 @@ function loadUsers() {
         select.addEventListener('change', async (e) => {
             const userId = e.target.dataset.userId;
             const newRole = e.target.value;
+
+            // 自分自身の権限は変更不可（念のため二重チェック）
+            if (userId === currentUserId) {
+                showToast('自分の権限は変更できません', 'error');
+                const profile = profiles.find(p => p.id === userId);
+                if (profile) e.target.value = profile.role;
+                return;
+            }
 
             try {
                 await updateProfileRole(userId, newRole);

@@ -212,11 +212,11 @@ const templateImages = {
             
             if (imgData) {
                 container.innerHTML = `
-                    <img src="${imgData}" alt="${currentTemplateNo}">
+                    <img src="${imgData}" alt="${escapeHtml(currentTemplateNo)}">
                     <div class="poster-overlay">
-                        <div class="poster-notice-text">${noticeText}</div>
-                        <div class="poster-date-text">${dateText}</div>
-                        <div class="poster-remarks-text">${remarks}</div>
+                        <div class="poster-notice-text">${escapeHtml(noticeText)}</div>
+                        <div class="poster-date-text">${escapeHtml(dateText)}</div>
+                        <div class="poster-remarks-text">${escapeHtml(remarks)}</div>
                     </div>
                 `;
             } else {
@@ -285,6 +285,18 @@ const templateImages = {
             const noticeText = document.getElementById('noticeText').value;
             if (noticeText && noticeText.length > settings.notice_text_max_chars) {
                 errors.push(`案内文は${settings.notice_text_max_chars}文字以下にしてください`);
+            }
+
+            // 日付の論理チェック
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            if (startDate && endDate && startDate > endDate) {
+                errors.push('点検終了日は開始日以降にしてください');
+            }
+            const displayStartDate = document.getElementById('displayStartDate').value;
+            const displayEndDate = document.getElementById('displayEndDate').value;
+            if (displayStartDate && displayEndDate && displayStartDate > displayEndDate) {
+                errors.push('表示終了日は開始日以降にしてください');
             }
 
             if (errors.length > 0) {

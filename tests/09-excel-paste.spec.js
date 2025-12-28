@@ -190,9 +190,9 @@ test.describe('Excel Paste Import Tests', () => {
 
         await expect(page.locator('#totalCount')).toHaveText('1');
         // 存在しない物件コードでもデータとしては取り込まれる（selectでは選択されない）
-        // 現状のバリデーションは空チェックのみなので、値があればOKになる
+        // 端末IDバリデーション追加により、物件選択時に端末がないとエラーになる
         const badge = page.locator('tr:first-child .status-badge');
-        await expect(badge).toHaveText('OK');
+        await expect(badge).toHaveText('エラー');
     });
 
     test('invalid vendor is imported (data is preserved but select shows no match)', async ({ page }) => {
@@ -372,9 +372,9 @@ test.describe('Excel Paste Mixed Data Tests', () => {
         await page.click('#importPasteBtn');
 
         await expect(page.locator('#totalCount')).toHaveText('3');
-        // 現状のバリデーションは空チェックのみなので、全行が有効になる
-        // （マスタに存在しない値でも文字列が入っていればOK）
-        await expect(page.locator('#validCount')).toHaveText('3');
+        // 端末IDバリデーション追加により、無効な物件コードの行はエラーになる
+        // 有効な行: 2行（2010, 120406）、無効な行: 1行（99999）
+        await expect(page.locator('#validCount')).toHaveText('2');
     });
 
     test('large dataset import works', async ({ page }) => {

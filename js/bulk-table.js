@@ -473,6 +473,15 @@ export function validateRow(rowId, callbacks) {
     if (!row.propertyCode) row.errors.push('物件');
     if (!row.vendorName) row.errors.push('受注先');
     if (!row.inspectionType) row.errors.push('点検種別');
+    if (row.propertyCode && !row.terminalId) row.errors.push('端末');
+
+    // 日付の論理チェック
+    if (row.startDate && row.endDate && row.startDate > row.endDate) {
+        row.errors.push('点検終了日は開始日以降');
+    }
+    if (row.displayStartDate && row.displayEndDate && row.displayStartDate > row.displayEndDate) {
+        row.errors.push('表示終了日は開始日以降');
+    }
 
     // 表示時間のチェック
     const displayTimeMax = settings.display_time_max || 30;

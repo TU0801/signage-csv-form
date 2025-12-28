@@ -50,8 +50,12 @@ export function saveAutoSave() {
         }))
     };
 
-    localStorage.setItem(getAutoSaveKey(), JSON.stringify(data));
-    console.log('Auto-saved', rows.length, 'rows');
+    try {
+        localStorage.setItem(getAutoSaveKey(), JSON.stringify(data));
+        console.log('Auto-saved', rows.length, 'rows');
+    } catch (e) {
+        console.warn('Auto-save failed (localStorage may be full or disabled):', e);
+    }
 }
 
 export function restoreAutoSave(callbacks) {
@@ -230,12 +234,12 @@ export function generateCSV() {
 
         // 改行を\r\nに変換（1件入力と同じ）
         const remarksText = (row.remarks || '').replace(/\n/g, '\r\n');
-        const noticeText = (row.noticeText || inspection?.notice_text || '').replace(/\n/g, '\r\n');
+        const noticeText = (row.noticeText || inspection?.default_text || '').replace(/\n/g, '\r\n');
 
         // TRUE/False（Excelマクロと同じ）
         const showOnBoard = row.showOnBoard !== false ? 'TRUE' : 'False';
 
-        const positionValue = row.position !== undefined ? String(row.position) : '1';
+        const positionValue = row.position !== undefined ? String(row.position) : '2';
 
         const values = [
             '',                                          // 点検CO

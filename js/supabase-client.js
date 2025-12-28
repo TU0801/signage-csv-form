@@ -125,6 +125,7 @@ export async function getEntries() {
 
 export async function createEntry(entry) {
   const user = await getUser();
+  if (!user) throw new Error('ログインが必要です');
   const { data, error } = await supabase
     .from('signage_entries')
     .insert({ ...entry, user_id: user.id })
@@ -136,6 +137,7 @@ export async function createEntry(entry) {
 
 export async function createEntries(entries) {
   const user = await getUser();
+  if (!user) throw new Error('ログインが必要です');
   const entriesWithUser = entries.map(e => ({ ...e, user_id: user.id }));
   const { data, error } = await supabase
     .from('signage_entries')
@@ -413,14 +415,15 @@ export async function approveEntries(ids) {
   return data;
 }
 
-export async function rejectEntry(id) {
+export async function rejectEntry(id, reason = '') {
   // 却下 = 削除（スキーマにrejectedステータスがないため）
+  // reason は将来的にログや通知で使用可能（現在は未使用）
   const { error } = await supabase
     .from('signage_entries')
     .delete()
     .eq('id', id);
   if (error) throw error;
-  return { id };
+  return { id, reason };
 }
 
 // ========================================
