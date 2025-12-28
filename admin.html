@@ -942,7 +942,7 @@
             <div class="tab-content" id="tab-users">
                 <div class="action-bar">
                     <button class="btn btn-primary" id="addUserBtn">
-                        <span class="btn-icon">✉️</span> ユーザー招待
+                        <span class="btn-icon">➕</span> ユーザー追加
                     </button>
                 </div>
                 <div class="table-container">
@@ -1093,30 +1093,30 @@
         </div>
     </div>
 
-    <!-- ユーザー招待モーダル -->
+    <!-- ユーザー追加モーダル -->
     <div id="userModal">
         <div class="modal-content" style="max-width: 500px;">
             <div class="modal-header">
-                <h3>ユーザー招待</h3>
+                <h3>ユーザー追加</h3>
                 <button type="button" class="modal-close" onclick="closeUserModal()">×</button>
             </div>
             <form id="userForm">
                 <div class="modal-body">
-                    <p style="color: #64748b; font-size: 0.875rem; margin-bottom: 1rem;">
-                        入力したメールアドレスに招待メールが送信されます。<br>
-                        ユーザーはメール内のリンクからパスワードを設定できます。
-                    </p>
                     <div class="form-group">
                         <label>メールアドレス *</label>
-                        <input type="email" id="inviteEmail" required placeholder="example@company.com">
+                        <input type="email" id="newUserEmail" required placeholder="example@company.com">
+                    </div>
+                    <div class="form-group">
+                        <label>パスワード *</label>
+                        <input type="password" id="newUserPassword" required minlength="6" placeholder="6文字以上">
                     </div>
                     <div class="form-group">
                         <label>会社名</label>
-                        <input type="text" id="inviteCompany" placeholder="株式会社〇〇">
+                        <input type="text" id="newUserCompany" placeholder="株式会社〇〇">
                     </div>
                     <div class="form-group">
                         <label>権限 *</label>
-                        <select id="inviteRole" required>
+                        <select id="newUserRole" required>
                             <option value="user">ユーザー</option>
                             <option value="admin">管理者</option>
                         </select>
@@ -1124,7 +1124,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline" onclick="closeUserModal()">キャンセル</button>
-                    <button type="submit" class="btn btn-primary" id="userSubmitBtn">招待</button>
+                    <button type="submit" class="btn btn-primary" id="userSubmitBtn">追加</button>
                 </div>
             </form>
         </div>

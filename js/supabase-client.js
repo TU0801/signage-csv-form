@@ -304,13 +304,15 @@ export async function updateProfileRole(id, role) {
   return data;
 }
 
-// ユーザー招待（管理者用）- 招待メールを送信
-export async function inviteUser(email, companyName, role) {
-  // 1. 仮パスワードでユーザー作成
-  const tempPassword = crypto.randomUUID();
+// ユーザー作成（管理者用）- 直接パスワード設定
+export async function createUser(email, password, companyName, role) {
+  // 現在のセッションを保存
+  const { data: { session: currentSession } } = await supabase.auth.getSession();
+
+  // 1. ユーザー作成
   const { data: authData, error: authError } = await supabase.auth.signUp({
     email,
-    password: tempPassword,
+    password,
     options: {
       data: {
         company_name: companyName,
@@ -342,14 +344,12 @@ export async function inviteUser(email, companyName, role) {
     console.warn('Profile creation warning:', profileError);
   }
 
-  // 3. パスワードリセットメールを送信（ユーザーがパスワードを設定できるように）
-  const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: window.location.origin + '/login.html'
-  });
-
-  if (resetError) {
-    console.warn('Password reset email warning:', resetError);
-    // メール送信失敗してもユーザーは作成済み
+  // 3. 元の管理者セッションを復元
+  if (currentSession) {
+    await supabase.auth.setSession({
+      access_token: currentSession.access_token,
+      refresh_token: currentSession.refresh_token
+    });
   }
 
   return authData.user;
