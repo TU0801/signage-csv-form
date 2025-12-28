@@ -227,9 +227,22 @@
         .btn-primary { background: var(--primary); color: white; }
         .btn-primary:hover { background: #1e40af; }
         .btn-success { background: var(--success); color: white; }
+        .btn-success:hover { background: #047857; }
         .btn-danger { background: var(--danger); color: white; }
+        .btn-danger:hover { background: #b91c1c; }
         .btn-outline { background: white; color: var(--text); border: 1px solid var(--border); }
+        .btn-outline:hover { background: #f8fafc; border-color: #94a3b8; }
         .btn-sm { padding: 0.2rem 0.4rem; font-size: 0.7rem; }
+
+        /* ボタン共通状態 */
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+        .btn:active:not(:disabled) {
+            transform: scale(0.98);
+        }
 
         /* ヘッダー用ボタン */
         .header .btn-header {
@@ -353,6 +366,10 @@
             cursor: pointer;
             transition: all 0.15s;
         }
+        .position-cell:hover:not(.active) {
+            background: #e2e8f0;
+            border-color: #cbd5e1;
+        }
 
         .position-cell.active {
             background: var(--primary-light);
@@ -443,6 +460,16 @@
             border-radius: 3px;
             cursor: pointer;
             font-size: 12px;
+            transition: background 0.15s;
+        }
+        .spin-btn:hover {
+            background: #e2e8f0;
+        }
+
+        .hint {
+            color: #64748b;
+            font-size: 0.75rem;
+            margin-left: 0.25rem;
         }
 
         .toast {
