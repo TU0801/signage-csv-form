@@ -124,7 +124,7 @@ export function renderRow(row, callbacks) {
                 <select class="property-select" data-row-id="${row.id}">
                     <option value="">-- 物件を選択 --</option>
                     ${uniqueProperties.map(p =>
-                        `<option value="${p.property_code}" ${row.propertyCode === p.property_code ? 'selected' : ''}>${p.property_code} ${p.property_name}</option>`
+                        `<option value="${p.property_code}" ${String(row.propertyCode) === String(p.property_code) ? 'selected' : ''}>${p.property_code} ${p.property_name}</option>`
                     ).join('')}
                 </select>
             </div>
@@ -182,7 +182,8 @@ export function renderRow(row, callbacks) {
     setupRowEventListeners(tr, row.id, callbacks);
 
     if (row.propertyCode) {
-        updateTerminals(row.id, row.propertyCode);
+        // 復元時は既存の端末選択を保持
+        updateTerminals(row.id, row.propertyCode, true);
     }
 }
 
@@ -533,15 +534,21 @@ export function deleteSelectedRows(callbacks) {
     document.getElementById('selectAll').checked = false;
 }
 
-export function updateTerminals(rowId, propertyCode) {
+export function updateTerminals(rowId, propertyCode, preserveSelection = false) {
     const masterData = getMasterData();
     const tr = document.querySelector(`tr[data-row-id="${rowId}"]`);
     if (!tr) return;
 
     const terminalSelect = tr.querySelector('.terminal-select');
+    const row = getRowById(rowId);
+    const currentTerminalId = row?.terminalId;
+
     terminalSelect.innerHTML = '<option value="">-- 端末 --</option>';
 
-    const terminals = masterData.properties.filter(p => p.property_code === propertyCode);
+    // 型を揃えて比較（文字列同士で比較）
+    const propCodeStr = String(propertyCode);
+    const terminals = masterData.properties.filter(p => String(p.property_code) === propCodeStr);
+
     if (terminals.length > 0) {
         terminals.forEach(t => {
             const opt = document.createElement('option');
@@ -549,9 +556,14 @@ export function updateTerminals(rowId, propertyCode) {
             opt.textContent = t.supplement ? `${t.terminal_id} (${t.supplement})` : t.terminal_id;
             terminalSelect.appendChild(opt);
         });
-        terminalSelect.value = terminals[0].terminal_id;
-        const row = getRowById(rowId);
-        if (row) row.terminalId = terminals[0].terminal_id;
+
+        // 既存の選択を保持するか、最初の端末を自動選択
+        if (preserveSelection && currentTerminalId && terminals.some(t => t.terminal_id === currentTerminalId)) {
+            terminalSelect.value = currentTerminalId;
+        } else {
+            terminalSelect.value = terminals[0].terminal_id;
+            if (row) row.terminalId = terminals[0].terminal_id;
+        }
     }
 }
 
