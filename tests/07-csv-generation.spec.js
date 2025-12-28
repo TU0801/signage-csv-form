@@ -59,10 +59,10 @@ test.describe('CSV Generation Tests', () => {
     expect(csvContent).toContain('2025/12/01');
   });
 
-  test('CSV contains showOnBoard as True/False', async ({ page }) => {
+  test('CSV contains showOnBoard as TRUE/False', async ({ page }) => {
     await page.click('button:has-text("CSV")');
     const csvContent = await page.locator('#csvPreview').textContent();
-    expect(csvContent).toMatch(/True|False/);
+    expect(csvContent).toMatch(/TRUE|False/);
   });
 
   test('CSV contains poster type', async ({ page }) => {

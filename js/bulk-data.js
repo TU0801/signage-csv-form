@@ -212,8 +212,8 @@ export function generateCSV() {
         const remarksText = (row.remarks || '').replace(/\n/g, '\r\n');
         const noticeText = (row.noticeText || inspection?.notice_text || '').replace(/\n/g, '\r\n');
 
-        // True/False（1件入力と同じ大文字小文字）
-        const showOnBoard = row.showOnBoard !== false ? 'True' : 'False';
+        // TRUE/False（Excelマクロと同じ）
+        const showOnBoard = row.showOnBoard !== false ? 'TRUE' : 'False';
 
         const positionValue = row.position !== undefined ? String(row.position) : '1';
 
