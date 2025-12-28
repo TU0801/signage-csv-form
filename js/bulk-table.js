@@ -481,6 +481,9 @@ export function validateRow(rowId, callbacks) {
     if (callbacks && callbacks.updateStats) {
         callbacks.updateStats();
     }
+    if (callbacks && callbacks.updateButtons) {
+        callbacks.updateButtons();
+    }
 }
 
 // ========================================
