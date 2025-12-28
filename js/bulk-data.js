@@ -105,25 +105,25 @@ export async function saveAll(callbacks) {
             const vendor = masterData.vendors.find(v => v.vendor_name === row.vendorName);
             const inspection = masterData.inspectionTypes.find(i => i.inspection_name === row.inspectionType);
 
-            const displayStartDate = row.displayStartDate || row.startDate;
-            const displayEndDate = row.displayEndDate || row.endDate;
+            const displayStartDate = row.displayStartDate || row.startDate || null;
+            const displayEndDate = row.displayEndDate || row.endDate || null;
 
             return {
-                property_code: row.propertyCode,
+                property_code: String(row.propertyCode),
                 terminal_id: row.terminalId || property?.terminal_id || '',
                 vendor_name: row.vendorName,
                 emergency_contact: vendor?.emergency_contact || '',
                 inspection_type: row.inspectionType,
                 template_no: inspection?.template_no || '',
-                start_date: row.startDate,
-                end_date: row.endDate,
-                remarks: row.remarks,
-                notice_text: row.noticeText || inspection?.default_text || '',
+                start_date: row.startDate || null,
+                end_date: row.endDate || null,
+                remarks: row.remarks || '',
+                notice_text: row.noticeText || inspection?.notice_text || '',
                 display_start_date: displayStartDate,
-                display_start_time: row.displayStartTime || '',
+                display_start_time: row.displayStartTime || null,
                 display_end_date: displayEndDate,
-                display_end_time: row.displayEndTime || '',
-                display_time: row.displayTime,
+                display_end_time: row.displayEndTime || null,
+                display_time: row.displayTime || 6,
                 show_on_board: row.showOnBoard !== false,
                 poster_type: 'テンプレート',
                 position: row.position !== undefined ? row.position : 2,
@@ -131,6 +131,7 @@ export async function saveAll(callbacks) {
             };
         });
 
+        console.log('Sending entries:', entries);
         await createEntries(entries);
 
         localStorage.removeItem(getAutoSaveKey());
@@ -143,7 +144,18 @@ export async function saveAll(callbacks) {
 
     } catch (error) {
         console.error('Save failed:', error);
-        callbacks.showToast('保存に失敗しました: ' + error.message, 'error');
+        // より詳細なエラーメッセージを表示
+        let errorMsg = '保存に失敗しました';
+        if (error.message) {
+            errorMsg += ': ' + error.message;
+        }
+        if (error.details) {
+            errorMsg += ' (' + error.details + ')';
+        }
+        if (error.hint) {
+            console.log('Hint:', error.hint);
+        }
+        callbacks.showToast(errorMsg, 'error');
     } finally {
         saveBtn.disabled = false;
         saveBtn.innerHTML = '<span class="btn-icon">↑</span> 申請する';
@@ -263,9 +275,11 @@ export function showToast(message, type = 'info') {
     const toast = document.getElementById('toast');
     toast.textContent = message;
     toast.className = `toast ${type} show`;
+    // エラーの場合は長めに表示
+    const duration = type === 'error' ? 5000 : 2500;
     setTimeout(() => {
         toast.classList.remove('show');
-    }, 2500);
+    }, duration);
 }
 
 // ========================================

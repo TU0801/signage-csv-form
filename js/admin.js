@@ -191,6 +191,20 @@ function setupEventListeners() {
     document.getElementById('addInspectionBtn').addEventListener('click', () => openMasterModal('inspection'));
     document.getElementById('addCategoryBtn')?.addEventListener('click', () => openMasterModal('category'));
 
+    // マスター検索
+    document.getElementById('propertySearch')?.addEventListener('input', (e) => {
+        renderProperties(e.target.value);
+    });
+    document.getElementById('vendorSearch')?.addEventListener('input', (e) => {
+        renderVendors(e.target.value);
+    });
+    document.getElementById('inspectionSearch')?.addEventListener('input', (e) => {
+        renderInspections(e.target.value);
+    });
+    document.getElementById('categorySearch')?.addEventListener('input', (e) => {
+        renderCategories(e.target.value);
+    });
+
     // 設定保存ボタン
     document.getElementById('saveSettingsBtn')?.addEventListener('click', saveSettings);
 
@@ -530,78 +544,138 @@ function copyCSV() {
 // ========================================
 
 function loadMasterData() {
-    // 物件
+    renderProperties();
+    renderVendors();
+    renderInspections();
+    loadCategories();
+}
+
+function renderProperties(filter = '') {
     const propertiesList = document.getElementById('propertiesList');
     propertiesList.innerHTML = '';
-    document.getElementById('propertyCount').textContent = masterData.properties.length;
 
-    masterData.properties.forEach(p => {
+    const filtered = masterData.properties.filter(p => {
+        if (!filter) return true;
+        const searchText = `${p.property_code} ${p.property_name}`.toLowerCase();
+        return searchText.includes(filter.toLowerCase());
+    });
+
+    document.getElementById('propertyCount').textContent = filtered.length;
+
+    if (filtered.length === 0) {
+        propertiesList.innerHTML = `
+            <div class="master-empty">
+                <div class="master-empty-icon">📋</div>
+                <h4>${filter ? '検索結果がありません' : '物件が登録されていません'}</h4>
+                <p>${filter ? '検索条件を変更してください' : '「新規追加」から物件を追加してください'}</p>
+            </div>
+        `;
+        return;
+    }
+
+    filtered.forEach(p => {
         const div = document.createElement('div');
         div.className = 'master-item';
+        div.dataset.id = p.id;
         const terminals = typeof p.terminals === 'string' ? JSON.parse(p.terminals) : p.terminals;
         div.innerHTML = `
             <div class="master-item-info">
                 <div class="master-item-name">${escapeHtml(p.property_code)} ${escapeHtml(p.property_name)}</div>
                 <div class="master-item-sub">端末: ${terminals?.length || 0}台</div>
             </div>
-            <div style="display: flex; gap: 0.25rem;">
-                <button class="btn btn-outline btn-sm" data-action="edit">✏️</button>
-                <button class="btn btn-outline btn-sm" data-action="delete">🗑️</button>
+            <div class="master-item-actions">
+                <button class="btn btn-outline btn-sm" data-action="edit">編集</button>
+                <button class="btn btn-outline btn-sm btn-danger-outline" data-action="delete">削除</button>
             </div>
         `;
         div.querySelector('[data-action="edit"]').addEventListener('click', () => editProperty(p.id));
         div.querySelector('[data-action="delete"]').addEventListener('click', () => deleteMasterProperty(p.id));
         propertiesList.appendChild(div);
     });
+}
 
-    // 受注先
+function renderVendors(filter = '') {
     const vendorsList = document.getElementById('vendorsList');
     vendorsList.innerHTML = '';
-    document.getElementById('vendorCount').textContent = masterData.vendors.length;
 
-    masterData.vendors.forEach(v => {
+    const filtered = masterData.vendors.filter(v => {
+        if (!filter) return true;
+        return v.vendor_name.toLowerCase().includes(filter.toLowerCase());
+    });
+
+    document.getElementById('vendorCount').textContent = filtered.length;
+
+    if (filtered.length === 0) {
+        vendorsList.innerHTML = `
+            <div class="master-empty">
+                <div class="master-empty-icon">🏢</div>
+                <h4>${filter ? '検索結果がありません' : '受注先が登録されていません'}</h4>
+                <p>${filter ? '検索条件を変更してください' : '「新規追加」から受注先を追加してください'}</p>
+            </div>
+        `;
+        return;
+    }
+
+    filtered.forEach(v => {
         const div = document.createElement('div');
         div.className = 'master-item';
+        div.dataset.id = v.id;
         div.innerHTML = `
             <div class="master-item-info">
                 <div class="master-item-name">${escapeHtml(v.vendor_name)}</div>
-                <div class="master-item-sub">📞 ${escapeHtml(v.emergency_contact) || '-'}</div>
+                <div class="master-item-sub">📞 ${escapeHtml(v.emergency_contact) || '連絡先未設定'}</div>
             </div>
-            <div style="display: flex; gap: 0.25rem;">
-                <button class="btn btn-outline btn-sm" data-action="edit">✏️</button>
-                <button class="btn btn-outline btn-sm" data-action="delete">🗑️</button>
+            <div class="master-item-actions">
+                <button class="btn btn-outline btn-sm" data-action="edit">編集</button>
+                <button class="btn btn-outline btn-sm btn-danger-outline" data-action="delete">削除</button>
             </div>
         `;
         div.querySelector('[data-action="edit"]').addEventListener('click', () => editVendor(v.id));
         div.querySelector('[data-action="delete"]').addEventListener('click', () => deleteMasterVendor(v.id));
         vendorsList.appendChild(div);
     });
+}
 
-    // 点検種別
+function renderInspections(filter = '') {
     const inspectionsList = document.getElementById('inspectionsList');
     inspectionsList.innerHTML = '';
-    document.getElementById('inspectionCount').textContent = masterData.inspectionTypes.length;
 
-    masterData.inspectionTypes.forEach(i => {
+    const filtered = masterData.inspectionTypes.filter(i => {
+        if (!filter) return true;
+        return i.inspection_name.toLowerCase().includes(filter.toLowerCase());
+    });
+
+    document.getElementById('inspectionCount').textContent = filtered.length;
+
+    if (filtered.length === 0) {
+        inspectionsList.innerHTML = `
+            <div class="master-empty">
+                <div class="master-empty-icon">🔧</div>
+                <h4>${filter ? '検索結果がありません' : '点検種別が登録されていません'}</h4>
+                <p>${filter ? '検索条件を変更してください' : '「新規追加」から点検種別を追加してください'}</p>
+            </div>
+        `;
+        return;
+    }
+
+    filtered.forEach(i => {
         const div = document.createElement('div');
         div.className = 'master-item';
+        div.dataset.id = i.id;
         div.innerHTML = `
             <div class="master-item-info">
                 <div class="master-item-name">${escapeHtml(i.inspection_name)}</div>
-                <div class="master-item-sub">テンプレート: ${escapeHtml(i.template_no) || '-'}</div>
+                <div class="master-item-sub">テンプレート: ${escapeHtml(i.template_no) || '未設定'}</div>
             </div>
-            <div style="display: flex; gap: 0.25rem;">
-                <button class="btn btn-outline btn-sm" data-action="edit">✏️</button>
-                <button class="btn btn-outline btn-sm" data-action="delete">🗑️</button>
+            <div class="master-item-actions">
+                <button class="btn btn-outline btn-sm" data-action="edit">編集</button>
+                <button class="btn btn-outline btn-sm btn-danger-outline" data-action="delete">削除</button>
             </div>
         `;
         div.querySelector('[data-action="edit"]').addEventListener('click', () => editInspection(i.id));
         div.querySelector('[data-action="delete"]').addEventListener('click', () => deleteMasterInspection(i.id));
         inspectionsList.appendChild(div);
     });
-
-    // カテゴリを読み込み
-    loadCategories();
 }
 
 // ========================================
@@ -953,25 +1027,42 @@ async function loadCategories() {
     }
 }
 
-function renderCategories() {
+function renderCategories(filter = '') {
     const list = document.getElementById('categoriesList');
     if (!list) return;
     list.innerHTML = '';
 
-    const count = document.getElementById('categoryCount');
-    if (count) count.textContent = masterData.categories?.length || 0;
+    const filtered = (masterData.categories || []).filter(cat => {
+        if (!filter) return true;
+        return cat.category_name.toLowerCase().includes(filter.toLowerCase());
+    });
 
-    masterData.categories?.forEach(cat => {
+    const count = document.getElementById('categoryCount');
+    if (count) count.textContent = filtered.length;
+
+    if (filtered.length === 0) {
+        list.innerHTML = `
+            <div class="master-empty">
+                <div class="master-empty-icon">📁</div>
+                <h4>${filter ? '検索結果がありません' : 'カテゴリが登録されていません'}</h4>
+                <p>${filter ? '検索条件を変更してください' : '「新規追加」からカテゴリを追加してください'}</p>
+            </div>
+        `;
+        return;
+    }
+
+    filtered.forEach(cat => {
         const div = document.createElement('div');
         div.className = 'master-item';
+        div.dataset.id = cat.id;
         div.innerHTML = `
-            <div class="master-item-content">
-                <strong>${escapeHtml(cat.category_name)}</strong>
-                <span class="text-muted">順序: ${cat.sort_order || 0}</span>
+            <div class="master-item-info">
+                <div class="master-item-name">${escapeHtml(cat.category_name)}</div>
+                <div class="master-item-sub">表示順序: ${cat.sort_order || 0}</div>
             </div>
             <div class="master-item-actions">
                 <button class="btn btn-sm btn-outline" data-action="edit">編集</button>
-                <button class="btn btn-sm btn-danger" data-action="delete">削除</button>
+                <button class="btn btn-sm btn-outline btn-danger-outline" data-action="delete">削除</button>
             </div>
         `;
         div.querySelector('[data-action="edit"]').addEventListener('click', () => editMasterCategory(cat.id));

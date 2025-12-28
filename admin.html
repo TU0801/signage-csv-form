@@ -213,32 +213,80 @@
         .master-list::-webkit-scrollbar-thumb:hover {
             background: #94a3b8;
         }
+        /* マスター検索 */
+        .master-search {
+            margin-bottom: 1rem;
+        }
+        .master-search input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 0.9375rem;
+            transition: all 0.2s ease;
+        }
+        .master-search input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .master-search input::placeholder {
+            color: #94a3b8;
+        }
+
         .master-item {
             display: flex;
             justify-content: space-between;
             align-items: center;
             padding: 1rem 1.25rem;
             background: white;
-            border-radius: 10px;
+            border-radius: 12px;
             border: 1px solid #e2e8f0;
             transition: all 0.2s ease;
+            margin-bottom: 0.5rem;
         }
         .master-item:hover {
             border-color: #667eea;
             box-shadow: 0 4px 15px -3px rgba(102, 126, 234, 0.15);
-            transform: translateX(4px);
         }
         .master-item-info {
             flex: 1;
+            min-width: 0;
         }
         .master-item-name {
             font-weight: 600;
             color: #1e293b;
             margin-bottom: 0.25rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .master-item-sub {
             font-size: 0.75rem;
             color: #64748b;
+        }
+        .master-item-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-left: 1rem;
+            flex-shrink: 0;
+        }
+        .master-item-actions .btn {
+            padding: 0.5rem 0.875rem;
+            font-size: 0.8125rem;
+        }
+        .master-empty {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: #94a3b8;
+        }
+        .master-empty-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+        .master-empty h4 {
+            color: #64748b;
+            margin-bottom: 0.5rem;
         }
 
         /* ユーザー権限バッジ */
@@ -334,6 +382,15 @@
         }
         .btn-danger:hover {
             background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+        }
+        .btn-danger-outline {
+            background: transparent;
+            color: #ef4444;
+            border: 1px solid #fecaca;
+        }
+        .btn-danger-outline:hover {
+            background: #fef2f2;
+            border-color: #ef4444;
         }
 
         /* マスターコンテンツ */
@@ -524,32 +581,44 @@
 
                 <div id="master-properties" class="master-content">
                     <div class="action-bar">
-                        <span><span id="propertyCount">0</span>件</span>
-                        <button class="btn btn-primary btn-sm" id="addPropertyBtn">➕ 追加</button>
+                        <span><span id="propertyCount">0</span>件の物件</span>
+                        <button class="btn btn-primary btn-sm" id="addPropertyBtn">+ 新規追加</button>
+                    </div>
+                    <div class="master-search">
+                        <input type="text" id="propertySearch" placeholder="物件コード・物件名で検索...">
                     </div>
                     <div class="master-list" id="propertiesList"></div>
                 </div>
 
                 <div id="master-vendors" class="master-content" style="display: none;">
                     <div class="action-bar">
-                        <span><span id="vendorCount">0</span>件</span>
-                        <button class="btn btn-primary btn-sm" id="addVendorBtn">➕ 追加</button>
+                        <span><span id="vendorCount">0</span>件の受注先</span>
+                        <button class="btn btn-primary btn-sm" id="addVendorBtn">+ 新規追加</button>
+                    </div>
+                    <div class="master-search">
+                        <input type="text" id="vendorSearch" placeholder="受注先名で検索...">
                     </div>
                     <div class="master-list" id="vendorsList"></div>
                 </div>
 
                 <div id="master-inspections" class="master-content" style="display: none;">
                     <div class="action-bar">
-                        <span><span id="inspectionCount">0</span>件</span>
-                        <button class="btn btn-primary btn-sm" id="addInspectionBtn">➕ 追加</button>
+                        <span><span id="inspectionCount">0</span>件の点検種別</span>
+                        <button class="btn btn-primary btn-sm" id="addInspectionBtn">+ 新規追加</button>
+                    </div>
+                    <div class="master-search">
+                        <input type="text" id="inspectionSearch" placeholder="点検種別名で検索...">
                     </div>
                     <div class="master-list" id="inspectionsList"></div>
                 </div>
 
                 <div id="master-categories" class="master-content" style="display: none;">
                     <div class="action-bar">
-                        <span><span id="categoryCount">0</span>件</span>
-                        <button class="btn btn-primary btn-sm" id="addCategoryBtn">➕ 追加</button>
+                        <span><span id="categoryCount">0</span>件のカテゴリ</span>
+                        <button class="btn btn-primary btn-sm" id="addCategoryBtn">+ 新規追加</button>
+                    </div>
+                    <div class="master-search">
+                        <input type="text" id="categorySearch" placeholder="カテゴリ名で検索...">
                     </div>
                     <div class="master-list" id="categoriesList"></div>
                 </div>
