@@ -304,12 +304,13 @@ export async function updateProfileRole(id, role) {
   return data;
 }
 
-// ユーザー作成（管理者用）
-export async function createUser(email, password, companyName, role) {
-  // 1. Supabase Authでユーザー作成
+// ユーザー招待（管理者用）- 招待メールを送信
+export async function inviteUser(email, companyName, role) {
+  // 1. 仮パスワードでユーザー作成
+  const tempPassword = crypto.randomUUID();
   const { data: authData, error: authError } = await supabase.auth.signUp({
     email,
-    password,
+    password: tempPassword,
     options: {
       data: {
         company_name: companyName,
@@ -319,9 +320,15 @@ export async function createUser(email, password, companyName, role) {
   });
 
   if (authError) throw authError;
+
+  // signUpが成功しても、既存ユーザーの場合はidentitiesが空
+  if (authData.user && authData.user.identities && authData.user.identities.length === 0) {
+    throw new Error('このメールアドレスは既に登録されています');
+  }
+
   if (!authData.user) throw new Error('ユーザー作成に失敗しました');
 
-  // 2. プロファイルテーブルにも追加（トリガーがない場合の保険）
+  // 2. プロファイルテーブルにも追加
   const { error: profileError } = await supabase
     .from('signage_profiles')
     .upsert({
@@ -333,7 +340,16 @@ export async function createUser(email, password, companyName, role) {
 
   if (profileError) {
     console.warn('Profile creation warning:', profileError);
-    // プロファイル作成失敗しても認証ユーザーは作成済み
+  }
+
+  // 3. パスワードリセットメールを送信（ユーザーがパスワードを設定できるように）
+  const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin + '/login.html'
+  });
+
+  if (resetError) {
+    console.warn('Password reset email warning:', resetError);
+    // メール送信失敗してもユーザーは作成済み
   }
 
   return authData.user;

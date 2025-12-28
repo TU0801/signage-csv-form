@@ -9,7 +9,7 @@ import {
     getAllEntries,
     getAllProfiles,
     updateProfileRole,
-    createUser,
+    inviteUser,
     deleteEntry,
     getPendingEntries,
     approveEntry,
@@ -754,32 +754,31 @@ async function handleUserFormSubmit(e) {
     e.preventDefault();
 
     const email = document.getElementById('userEmail').value.trim();
-    const password = document.getElementById('userPassword').value;
     const companyName = document.getElementById('userCompany').value.trim();
     const role = document.getElementById('userRole').value;
     const submitBtn = document.getElementById('userSubmitBtn');
 
     submitBtn.disabled = true;
-    submitBtn.textContent = '追加中...';
+    submitBtn.textContent = '招待中...';
 
     try {
-        await createUser(email, password, companyName, role);
-        showToast('ユーザーを追加しました', 'success');
+        await inviteUser(email, companyName, role);
+        showToast('招待メールを送信しました', 'success');
         closeUserModal();
 
         // ユーザー一覧を更新
         profiles = await getAllProfiles();
         loadUsers();
     } catch (error) {
-        console.error('User creation error:', error);
-        if (error.message.includes('already registered')) {
+        console.error('User invitation error:', error);
+        if (error.message.includes('既に登録')) {
             showToast('このメールアドレスは既に登録されています', 'error');
         } else {
-            showToast('ユーザーの追加に失敗しました: ' + error.message, 'error');
+            showToast('招待に失敗しました: ' + error.message, 'error');
         }
     } finally {
         submitBtn.disabled = false;
-        submitBtn.textContent = '追加';
+        submitBtn.textContent = '招待';
     }
 }
 
