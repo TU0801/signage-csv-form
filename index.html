@@ -67,7 +67,7 @@
                                 <option value="アンケート">アンケート</option>
                             </select>
                         </div>
-                        <div class="form-group">
+                        <div class="form-group" id="inspectionTypeGroup">
                             <label>点検工事案内 <span class="required">*</span></label>
                             <select id="inspectionType" onchange="onInspectionTypeChange()">
                                 <option value="">選択してください</option>
@@ -78,13 +78,29 @@
                             <div class="inline-group" style="height: 28px;">
                                 <div class="radio-group">
                                     <label class="radio-item">
-                                        <input type="radio" name="posterType" value="template" checked>
+                                        <input type="radio" name="posterType" value="template" checked onchange="onPosterTypeChange()">
                                         テンプレート
                                     </label>
                                     <label class="radio-item">
-                                        <input type="radio" name="posterType" value="custom">
+                                        <input type="radio" name="posterType" value="custom" onchange="onPosterTypeChange()">
                                         追加
                                     </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 画像アップロード（追加モード時のみ表示） -->
+                        <div class="form-group full-width" id="customImageGroup" style="display: none;">
+                            <label>貼紙画像 <span class="required">*</span></label>
+                            <div class="file-upload-area" id="fileUploadArea">
+                                <input type="file" id="customImage" accept=".jpg,.jpeg,.png" onchange="onImageSelected(event)" style="display: none;">
+                                <div class="upload-placeholder" onclick="document.getElementById('customImage').click()">
+                                    <span style="font-size: 2rem;">📷</span>
+                                    <p>クリックして画像を選択<br><small>JPG, JPEG, PNG形式（5MB以下）</small></p>
+                                </div>
+                                <div class="upload-preview" id="uploadPreview" style="display: none;">
+                                    <img id="previewImg" src="" alt="プレビュー">
+                                    <button type="button" class="btn btn-sm btn-danger" onclick="clearCustomImage()">削除</button>
                                 </div>
                             </div>
                         </div>
@@ -97,12 +113,12 @@
 
                         <div class="section-divider">点検期間・表示設定</div>
 
-                        <!-- 点検期間 -->
-                        <div class="form-group">
+                        <!-- 点検期間（テンプレートモード時のみ表示） -->
+                        <div class="form-group" id="startDateGroup">
                             <label>点検開始日</label>
                             <input type="date" id="startDate" onchange="updatePreview()">
                         </div>
-                        <div class="form-group">
+                        <div class="form-group" id="endDateGroup">
                             <label>点検終了日</label>
                             <input type="date" id="endDate" onchange="updatePreview()">
                         </div>

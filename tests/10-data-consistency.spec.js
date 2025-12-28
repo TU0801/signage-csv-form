@@ -142,29 +142,28 @@ test.describe('Data Consistency Tests - 一件入力と一括入力のデータ�
 
     const entry = capturedEntries[0];
 
-    // 必須フィールドが正しい形式で存在することを確認
+    // 必須フィールドが正しい形式で存在することを確認（Supabaseスキーマに合わせた列名）
     expect(entry).toHaveProperty('property_code');
     expect(entry).toHaveProperty('terminal_id');
     expect(entry).toHaveProperty('vendor_name');
     expect(entry).toHaveProperty('emergency_contact');
     expect(entry).toHaveProperty('inspection_type');
     expect(entry).toHaveProperty('template_no');
-    expect(entry).toHaveProperty('start_date');
-    expect(entry).toHaveProperty('end_date');
+    expect(entry).toHaveProperty('inspection_start');  // 旧: start_date
+    expect(entry).toHaveProperty('inspection_end');    // 旧: end_date
     expect(entry).toHaveProperty('remarks');
-    expect(entry).toHaveProperty('display_time');
-    expect(entry).toHaveProperty('show_on_board');
+    expect(entry).toHaveProperty('display_duration');  // 旧: display_time
     expect(entry).toHaveProperty('poster_type');
-    expect(entry).toHaveProperty('position');
+    expect(entry).toHaveProperty('poster_position');   // 旧: position
     expect(entry).toHaveProperty('status');
 
     // 値の検証
     expect(entry.property_code).toBe('2010');
     expect(entry.vendor_name).toBe(testData.vendorName);
     expect(entry.inspection_type).toBe(testData.inspectionType);
-    expect(entry.start_date).toBe(testData.startDate);
+    expect(entry.inspection_start).toBe(testData.startDate);
     expect(entry.remarks).toBe(testData.remarks);
-    expect(entry.status).toBe('pending');
+    expect(entry.status).toBe('draft');  // 旧: 'pending'
 
     console.log('Single entry captured data:', JSON.stringify(entry, null, 2));
   });
@@ -279,29 +278,28 @@ test.describe('Data Consistency Tests - 一件入力と一括入力のデータ�
 
     const entry = capturedEntries[0];
 
-    // 必須フィールドが正しい形式で存在することを確認
+    // 必須フィールドが正しい形式で存在することを確認（Supabaseスキーマに合わせた列名）
     expect(entry).toHaveProperty('property_code');
     expect(entry).toHaveProperty('terminal_id');
     expect(entry).toHaveProperty('vendor_name');
     expect(entry).toHaveProperty('emergency_contact');
     expect(entry).toHaveProperty('inspection_type');
     expect(entry).toHaveProperty('template_no');
-    expect(entry).toHaveProperty('start_date');
-    expect(entry).toHaveProperty('end_date');
+    expect(entry).toHaveProperty('inspection_start');  // 旧: start_date
+    expect(entry).toHaveProperty('inspection_end');    // 旧: end_date
     expect(entry).toHaveProperty('remarks');
-    expect(entry).toHaveProperty('display_time');
-    expect(entry).toHaveProperty('show_on_board');
+    expect(entry).toHaveProperty('display_duration');  // 旧: display_time
     expect(entry).toHaveProperty('poster_type');
-    expect(entry).toHaveProperty('position');
+    expect(entry).toHaveProperty('poster_position');   // 旧: position
     expect(entry).toHaveProperty('status');
 
     // 値の検証
     expect(entry.property_code).toBe('2010');
     expect(entry.vendor_name).toBe(testData.vendorName);
     expect(entry.inspection_type).toBe(testData.inspectionType);
-    expect(entry.start_date).toBe(testData.startDate);
+    expect(entry.inspection_start).toBe(testData.startDate);
     expect(entry.remarks).toBe(testData.remarks);
-    expect(entry.status).toBe('pending');
+    expect(entry.status).toBe('draft');  // 旧: 'pending'
 
     console.log('Bulk entry captured data:', JSON.stringify(entry, null, 2));
   });
@@ -593,24 +591,23 @@ test.describe('Data Field Mapping Tests - フィールドマッピング確認',
     expect(capturedEntry).not.toHaveProperty('noticeText');
     expect(capturedEntry).not.toHaveProperty('frameNo');
 
-    // スネークケースであることを確認
+    // スネークケースであることを確認（Supabaseスキーマに合わせた列名）
     expect(capturedEntry).toHaveProperty('property_code');
     expect(capturedEntry).toHaveProperty('terminal_id');
     expect(capturedEntry).toHaveProperty('vendor_name');
     expect(capturedEntry).toHaveProperty('emergency_contact');
     expect(capturedEntry).toHaveProperty('inspection_type');
     expect(capturedEntry).toHaveProperty('template_no');
-    expect(capturedEntry).toHaveProperty('start_date');
-    expect(capturedEntry).toHaveProperty('end_date');
-    expect(capturedEntry).toHaveProperty('show_on_board');
+    expect(capturedEntry).toHaveProperty('inspection_start');   // 旧: start_date
+    expect(capturedEntry).toHaveProperty('inspection_end');     // 旧: end_date
     expect(capturedEntry).toHaveProperty('poster_type');
-    expect(capturedEntry).toHaveProperty('display_time');
+    expect(capturedEntry).toHaveProperty('display_duration');   // 旧: display_time
     expect(capturedEntry).toHaveProperty('display_start_date');
     expect(capturedEntry).toHaveProperty('display_end_date');
     expect(capturedEntry).toHaveProperty('display_start_time');
     expect(capturedEntry).toHaveProperty('display_end_time');
-    expect(capturedEntry).toHaveProperty('notice_text');
-    expect(capturedEntry).toHaveProperty('position');
+    expect(capturedEntry).toHaveProperty('announcement');       // 旧: notice_text
+    expect(capturedEntry).toHaveProperty('poster_position');    // 旧: position
     expect(capturedEntry).toHaveProperty('status');
   });
 });

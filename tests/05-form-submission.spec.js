@@ -138,16 +138,47 @@ test.describe('Poster Type Tests', () => {
   });
 
   test('poster type is saved in entry', async ({ page }) => {
-    await page.click('input[name="posterType"][value="custom"]');
-
+    // テンプレートモードでエントリを追加
     await page.selectOption('#property', '2010');
     await page.selectOption('#vendor', '0');
     await page.selectOption('#inspectionType', '0');
     await page.click('button:has-text("データを追加")');
 
-    // Edit to verify
+    // 編集してカスタムモードに変更
     await page.click('.data-item button:has-text("編集")');
-    const customRadio = page.locator('input[name="posterType"][value="custom"]');
-    await expect(customRadio).toBeChecked();
+    await page.click('input[name="posterType"][value="custom"]');
+
+    // カスタムモードではinspectionTypeが非表示になることを確認
+    const inspectionTypeGroup = page.locator('#inspectionTypeGroup');
+    await expect(inspectionTypeGroup).not.toBeVisible();
+
+    // テンプレートに戻す
+    await page.click('input[name="posterType"][value="template"]');
+    const templateRadio = page.locator('input[name="posterType"][value="template"]');
+    await expect(templateRadio).toBeChecked();
+  });
+
+  test('custom mode shows image upload and hides inspection fields', async ({ page }) => {
+    // カスタムモードを選択
+    await page.click('input[name="posterType"][value="custom"]');
+
+    // 画像アップロードエリアが表示されること
+    const customImageGroup = page.locator('#customImageGroup');
+    await expect(customImageGroup).toBeVisible();
+
+    // 点検工事案内・点検日が非表示になること
+    const inspectionTypeGroup = page.locator('#inspectionTypeGroup');
+    const startDateGroup = page.locator('#startDateGroup');
+    const endDateGroup = page.locator('#endDateGroup');
+    await expect(inspectionTypeGroup).not.toBeVisible();
+    await expect(startDateGroup).not.toBeVisible();
+    await expect(endDateGroup).not.toBeVisible();
+
+    // テンプレートモードに戻すと元に戻る
+    await page.click('input[name="posterType"][value="template"]');
+    await expect(inspectionTypeGroup).toBeVisible();
+    await expect(startDateGroup).toBeVisible();
+    await expect(endDateGroup).toBeVisible();
+    await expect(customImageGroup).not.toBeVisible();
   });
 });

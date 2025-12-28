@@ -523,3 +523,53 @@
             border-radius: 4px;
             overflow-x: auto;
             white-space: pre;
+        }
+
+        /* ファイルアップロードエリア */
+        .file-upload-area {
+            border: 2px dashed var(--border);
+            border-radius: 8px;
+            background: #f8fafc;
+            transition: border-color 0.2s, background 0.2s;
+        }
+
+        .file-upload-area:hover {
+            border-color: var(--primary);
+            background: var(--primary-light);
+        }
+
+        .upload-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+            cursor: pointer;
+            text-align: center;
+        }
+
+        .upload-placeholder p {
+            margin: 0.5rem 0 0;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+        }
+
+        .upload-placeholder small {
+            color: var(--text-muted);
+            opacity: 0.7;
+        }
+
+        .upload-preview {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            padding: 0.75rem;
+        }
+
+        .upload-preview img {
+            max-width: 150px;
+            max-height: 100px;
+            object-fit: contain;
+            border-radius: 4px;
+            border: 1px solid var(--border);

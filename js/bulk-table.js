@@ -69,13 +69,15 @@ export function addRow(data = {}, callbacks) {
     const masterData = getMasterData();
     const rows = getRows();
     const rowId = getNextRowId();
+    // デフォルトの日付（今日）
+    const today = new Date().toISOString().split('T')[0];
     const row = {
         id: rowId,
         propertyCode: data.propertyCode || '',
         terminalId: data.terminalId || '',
         vendorName: data.vendorName || '',
         inspectionType: data.inspectionType || '',
-        startDate: data.startDate || '',
+        startDate: data.startDate || today,
         endDate: data.endDate || '',
         remarks: data.remarks || '',
         displayTime: data.displayTime || 6,
@@ -607,7 +609,9 @@ export function updateTerminals(rowId, propertyCode, preserveSelection = false) 
         }
 
         if (terminals.length > 0) {
-            terminals.forEach(terminalId => {
+            terminals.forEach(terminal => {
+                // 端末IDが文字列かオブジェクトかを判定
+                const terminalId = typeof terminal === 'string' ? terminal : (terminal.id || terminal.terminal_id || String(terminal));
                 const opt = document.createElement('option');
                 opt.value = terminalId;
                 opt.textContent = terminalId;

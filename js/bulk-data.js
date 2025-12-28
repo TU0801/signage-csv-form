@@ -115,19 +115,18 @@ export async function saveAll(callbacks) {
                 emergency_contact: vendor?.emergency_contact || '',
                 inspection_type: row.inspectionType,
                 template_no: inspection?.template_no || '',
-                start_date: row.startDate || null,
-                end_date: row.endDate || null,
+                inspection_start: row.startDate || null,
+                inspection_end: row.endDate || null,
                 remarks: row.remarks || '',
-                notice_text: row.noticeText || inspection?.notice_text || '',
+                announcement: row.noticeText || inspection?.default_text || '',
                 display_start_date: displayStartDate,
                 display_start_time: row.displayStartTime || null,
                 display_end_date: displayEndDate,
                 display_end_time: row.displayEndTime || null,
-                display_time: row.displayTime || 6,
-                show_on_board: row.showOnBoard !== false,
-                poster_type: 'テンプレート',
-                position: row.position !== undefined ? row.position : 2,
-                status: 'pending'
+                display_duration: row.displayTime || 6,
+                poster_type: row.showOnBoard !== false ? 'template' : 'custom',
+                poster_position: row.position !== undefined ? String(row.position) : '2',
+                status: 'draft'
             };
         });
 
@@ -145,7 +144,7 @@ export async function saveAll(callbacks) {
     } catch (error) {
         console.error('Save failed:', error);
         // より詳細なエラーメッセージを表示
-        let errorMsg = '保存に失敗しました';
+        let errorMsg = '申請に失敗しました';
         if (error.message) {
             errorMsg += ': ' + error.message;
         }

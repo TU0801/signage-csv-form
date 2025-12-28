@@ -229,10 +229,26 @@ const templateImages = {
             const terminalId = document.getElementById('terminal').value;
             const vendorIdx = document.getElementById('vendor').value;
             const inspectionIdx = document.getElementById('inspectionType').value;
+            const posterType = document.querySelector('input[name="posterType"]:checked').value;
+            const isCustomMode = posterType === 'custom';
 
-            if (!propertyCode || vendorIdx === '' || inspectionIdx === '') {
+            // カスタムモード: 物件・受注先・画像が必須
+            // テンプレートモード: 物件・受注先・点検工事案内が必須
+            if (!propertyCode || vendorIdx === '') {
                 showToast('必須項目を入力してください', 'error');
                 return;
+            }
+
+            if (isCustomMode) {
+                if (!window.customImageData) {
+                    showToast('貼紙画像を選択してください', 'error');
+                    return;
+                }
+            } else {
+                if (inspectionIdx === '') {
+                    showToast('点検工事案内を選択してください', 'error');
+                    return;
+                }
             }
 
             // 設定値によるバリデーション
@@ -272,9 +288,8 @@ const templateImages = {
             }
 
             const vendor = masterData.vendors[vendorIdx];
-            const notice = masterData.notices[inspectionIdx];
+            const notice = isCustomMode ? null : masterData.notices[inspectionIdx];
             const property = masterData.properties.find(p => p.propertyCode === parseInt(propertyCode));
-            const posterType = document.querySelector('input[name="posterType"]:checked').value;
 
             const entry = {
                 terminalId: terminalId || property.terminalId,
@@ -282,11 +297,11 @@ const templateImages = {
                 propertyName: property.propertyName,
                 vendorName: vendor.vendorName,
                 emergencyContact: vendor.emergencyContact,
-                inspectionType: notice.inspectionType,
+                inspectionType: isCustomMode ? '追加画像' : notice.inspectionType,
                 showOnBoard: document.getElementById('showOnBoard').checked,
-                templateNo: notice.templateNo,
-                startDate: document.getElementById('startDate').value,
-                endDate: document.getElementById('endDate').value,
+                templateNo: isCustomMode ? '' : notice.templateNo,
+                startDate: isCustomMode ? '' : document.getElementById('startDate').value,
+                endDate: isCustomMode ? '' : document.getElementById('endDate').value,
                 remarks: remarks,
                 noticeText: noticeText,
                 frameNo: currentPosition,
@@ -295,7 +310,8 @@ const templateImages = {
                 displayStartTime: document.getElementById('displayStartTime').value,
                 displayEndTime: document.getElementById('displayEndTime').value,
                 displayTime: displayTime,
-                posterType: posterType
+                posterType: posterType,
+                customImageData: isCustomMode ? window.customImageData : null
             };
 
             if (editingIndex >= 0) {
@@ -395,7 +411,99 @@ const templateImages = {
             document.getElementById('startDate').value = today;
             document.getElementById('displayStartDate').value = today;
             document.querySelector('input[name="posterType"][value="template"]').checked = true;
+            clearCustomImage();
+            onPosterTypeChange();
             updatePreview();
+        }
+
+        // 貼紙タイプ切り替え（テンプレート/追加）
+        function onPosterTypeChange() {
+            const posterType = document.querySelector('input[name="posterType"]:checked').value;
+            const isCustom = posterType === 'custom';
+
+            // 追加モードの場合: 画像アップロードを表示、点検関連フィールドを非表示
+            document.getElementById('customImageGroup').style.display = isCustom ? 'block' : 'none';
+            document.getElementById('inspectionTypeGroup').style.display = isCustom ? 'none' : 'block';
+            document.getElementById('startDateGroup').style.display = isCustom ? 'none' : 'block';
+            document.getElementById('endDateGroup').style.display = isCustom ? 'none' : 'block';
+
+            // プレビューを更新
+            if (isCustom && window.customImageData) {
+                updateCustomImagePreview();
+            } else {
+                updatePreview();
+            }
+        }
+
+        // カスタム画像選択時
+        function onImageSelected(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // ファイル形式チェック
+            const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+            if (!validTypes.includes(file.type)) {
+                showToast('JPG, JPEG, PNG形式の画像を選択してください', 'error');
+                event.target.value = '';
+                return;
+            }
+
+            // ファイルサイズチェック (5MB以下)
+            const maxSize = 5 * 1024 * 1024;
+            if (file.size > maxSize) {
+                showToast('画像サイズは5MB以下にしてください', 'error');
+                event.target.value = '';
+                return;
+            }
+
+            // プレビュー表示
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                window.customImageData = e.target.result;
+                window.customImageFile = file;
+
+                document.getElementById('previewImg').src = e.target.result;
+                document.querySelector('.upload-placeholder').style.display = 'none';
+                document.getElementById('uploadPreview').style.display = 'flex';
+
+                // 貼紙プレビューにも表示
+                updateCustomImagePreview();
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // カスタム画像プレビュー更新
+        function updateCustomImagePreview() {
+            const container = document.getElementById('posterPreview');
+            if (window.customImageData) {
+                container.innerHTML = `<img src="${window.customImageData}" alt="カスタム貼紙" style="width: 100%; height: 100%; object-fit: contain;">`;
+            } else {
+                container.innerHTML = '<div class="poster-preview-placeholder">画像を選択してください</div>';
+            }
+        }
+
+        // カスタム画像クリア
+        function clearCustomImage() {
+            window.customImageData = null;
+            window.customImageFile = null;
+
+            const customImageInput = document.getElementById('customImage');
+            if (customImageInput) {
+                customImageInput.value = '';
+            }
+
+            const placeholder = document.querySelector('.upload-placeholder');
+            const preview = document.getElementById('uploadPreview');
+            if (placeholder) placeholder.style.display = 'block';
+            if (preview) preview.style.display = 'none';
+
+            // テンプレートモードの場合はテンプレートプレビューを表示
+            const posterType = document.querySelector('input[name="posterType"]:checked');
+            if (posterType && posterType.value === 'template') {
+                updatePreview();
+            } else {
+                updateCustomImagePreview();
+            }
         }
 
         function generateCSV() {
@@ -488,19 +596,18 @@ const templateImages = {
                         emergency_contact: e.emergencyContact || '',
                         inspection_type: e.inspectionType,
                         template_no: e.templateNo || '',
-                        start_date: e.startDate || null,
-                        end_date: e.endDate || null,
+                        inspection_start: e.startDate || null,
+                        inspection_end: e.endDate || null,
                         remarks: e.remarks || '',
-                        notice_text: e.noticeText || '',
+                        announcement: e.noticeText || '',
                         display_start_date: displayStartDate,
                         display_start_time: e.displayStartTime || null,
                         display_end_date: displayEndDate,
                         display_end_time: e.displayEndTime || null,
-                        display_time: e.displayTime || 6,
-                        show_on_board: e.showOnBoard !== false,
-                        poster_type: e.posterType === 'template' ? 'テンプレート' : '追加',
-                        position: e.frameNo !== undefined ? e.frameNo : 2,
-                        status: 'pending'
+                        display_duration: e.displayTime || 6,
+                        poster_type: e.posterType === 'template' ? 'template' : 'custom',
+                        poster_position: e.frameNo !== undefined ? String(e.frameNo) : '2',
+                        status: 'draft'
                     };
                 });
 
