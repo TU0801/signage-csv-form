@@ -1,0 +1,621 @@
+// admin-masters.js - マスタデータ管理
+
+import {
+    getAllMasterData,
+    getMasterCategories,
+    addProperty,
+    updateProperty,
+    deleteProperty,
+    addVendor,
+    updateVendor,
+    deleteVendor,
+    addInspectionType,
+    updateInspectionType,
+    deleteInspectionType,
+    addCategory,
+    updateCategory,
+    deleteCategory
+} from './supabase-client.js';
+
+// ========================================
+// テンプレート画像マッピング
+// ========================================
+
+export const templateImages = {
+    // 点検・調査
+    "Investigation": "調査",
+    "building_inspection": "建物点検",
+    "elevator_inspection": "エレベーター点検",
+    "exterior_wall_tile_inspection": "外壁タイル点検",
+    "shared_area_drain_pipe_inspection": "共用部排水管点検",
+    "electrical_measurement": "電気測定",
+
+    // 清掃
+    "cleaning": "清掃",
+    "cleaning_bucket": "清掃（バケツ）",
+    "glass_clean": "ガラス清掃",
+    "high_pressure_cleaning": "高圧洗浄",
+    "high_pressure_cleaning_2": "高圧洗浄2",
+    "shared_area_drain_pipe_wash": "共用部排水管洗浄",
+    "drainage_pipe": "排水管",
+
+    // 消毒・植栽
+    "disinfection": "消毒",
+    "disinfection_tree": "消毒・植栽",
+    "planting_management": "植栽管理",
+
+    // 工事・修繕
+    "construction_building_large_scale": "大規模修繕",
+    "construction_outer_wall": "外壁工事",
+    "construction_light": "照明工事",
+    "construction_toolbox": "工具箱工事",
+    "construction_television_equipment": "テレビ設備工事",
+    "construction_jcom_cable": "JCOM配線工事",
+    "construction_Intercom": "インターホン工事",
+    "construction_coin_parking": "コインパーキング工事",
+    "construction_involving_sound_vibration": "騒音・振動工事",
+    "construction_roller_paint": "ローラー塗装",
+    "construction_spanner": "スパナ工事",
+    "construction_mobile_antenna": "モバイルアンテナ工事",
+    "Construction_without_sound": "静音工事",
+    "waterproof_construction": "防水工事",
+    "fire_construction": "消防工事",
+    "vending_machine_construction": "自販機工事",
+    "vending_machine_construction_2": "自販機工事2",
+    "water_activator_construction": "水質活性化工事",
+    "water_supply_pump_construction": "給水ポンプ工事",
+
+    // 塗装
+    "painting_water_pipe": "水道管塗装",
+    "iron_part_coating": "鉄部塗装",
+
+    // 交換
+    "exchange_light_battery": "照明・電池交換",
+    "exchange_light_battery_2": "照明・電池交換2",
+    "exchange_corridor": "廊下交換",
+    "elevator_mat_replacement": "エレベーターマット交換",
+    "fire_exchange": "消防設備交換",
+    "fire_extinguisher_explain": "消火器説明",
+
+    // 設備
+    "automtic_doors": "自動ドア",
+    "mechanical_parking": "機械式駐車場",
+    "mechanical_parking_turntable": "ターンテーブル駐車場",
+    "tower_mechanical_parking": "タワー式駐車場",
+    "delivery_box": "宅配ボックス",
+    "delivery_box_stop_using": "宅配ボックス使用停止",
+    "simple_dedicated_water_supply": "専用水道設備",
+    "shared_electrical_equipment": "共用部電気設備",
+    "card_reader": "カードリーダー",
+
+    // 防犯・安全
+    "surveillance_camera": "防犯カメラ",
+    "surveillance_camera_installation_work": "防犯カメラ設置",
+    "protect_balcony_from_birds": "鳥害対策",
+    "protect_balcony_from_birds_2": "鳥害対策2",
+
+    // その他
+    "bicycle_removal": "自転車撤去",
+    "merchari_installation": "メルカリ設置",
+    "Questionnaire_conducted01": "アンケート",
+    "Questionnaire_conducted02": "アンケート2"
+};
+
+// ========================================
+// HTMLエスケープ
+// ========================================
+
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+// ========================================
+// マスターデータ描画
+// ========================================
+
+export function loadMasterData(masterData) {
+    renderProperties(masterData);
+    renderVendors(masterData);
+    renderInspections(masterData);
+    loadCategories(masterData);
+}
+
+export function renderProperties(masterData, filter = '') {
+    const propertiesList = document.getElementById('propertiesList');
+    propertiesList.innerHTML = '';
+
+    const filtered = masterData.properties.filter(p => {
+        if (!filter) return true;
+        const searchText = `${p.property_code} ${p.property_name}`.toLowerCase();
+        return searchText.includes(filter.toLowerCase());
+    });
+
+    document.getElementById('propertyCount').textContent = filtered.length;
+
+    if (filtered.length === 0) {
+        propertiesList.innerHTML = `
+            <div class="master-empty">
+                <div class="master-empty-icon">📋</div>
+                <h4>${filter ? '検索結果がありません' : '物件が登録されていません'}</h4>
+                <p>${filter ? '検索条件を変更してください' : '「新規追加」から物件を追加してください'}</p>
+            </div>
+        `;
+        return;
+    }
+
+    filtered.forEach(p => {
+        const div = document.createElement('div');
+        div.className = 'master-item';
+        div.dataset.id = p.id;
+        const terminals = typeof p.terminals === 'string' ? JSON.parse(p.terminals) : p.terminals;
+        div.innerHTML = `
+            <div class="master-item-info">
+                <div class="master-item-name">${escapeHtml(p.property_code)} ${escapeHtml(p.property_name)}</div>
+                <div class="master-item-sub">端末: ${terminals?.length || 0}台</div>
+            </div>
+            <div class="master-item-actions">
+                <button class="btn btn-outline btn-sm" data-action="edit">編集</button>
+                <button class="btn btn-outline btn-sm btn-danger-outline" data-action="delete">削除</button>
+            </div>
+        `;
+        div.querySelector('[data-action="edit"]').addEventListener('click', () => window.editProperty(p.id));
+        div.querySelector('[data-action="delete"]').addEventListener('click', () => window.deleteMasterProperty(p.id));
+        propertiesList.appendChild(div);
+    });
+}
+
+export function renderVendors(masterData, filter = '') {
+    const vendorsList = document.getElementById('vendorsList');
+    vendorsList.innerHTML = '';
+
+    const filtered = masterData.vendors.filter(v => {
+        if (!filter) return true;
+        return v.vendor_name.toLowerCase().includes(filter.toLowerCase());
+    });
+
+    document.getElementById('vendorCount').textContent = filtered.length;
+
+    if (filtered.length === 0) {
+        vendorsList.innerHTML = `
+            <div class="master-empty">
+                <div class="master-empty-icon">🏢</div>
+                <h4>${filter ? '検索結果がありません' : '受注先が登録されていません'}</h4>
+                <p>${filter ? '検索条件を変更してください' : '「新規追加」から受注先を追加してください'}</p>
+            </div>
+        `;
+        return;
+    }
+
+    filtered.forEach(v => {
+        const div = document.createElement('div');
+        div.className = 'master-item';
+        div.dataset.id = v.id;
+        div.innerHTML = `
+            <div class="master-item-info">
+                <div class="master-item-name">${escapeHtml(v.vendor_name)}</div>
+                <div class="master-item-sub">📞 ${escapeHtml(v.emergency_contact) || '連絡先未設定'}</div>
+            </div>
+            <div class="master-item-actions">
+                <button class="btn btn-outline btn-sm" data-action="edit">編集</button>
+                <button class="btn btn-outline btn-sm btn-danger-outline" data-action="delete">削除</button>
+            </div>
+        `;
+        div.querySelector('[data-action="edit"]').addEventListener('click', () => window.editVendor(v.id));
+        div.querySelector('[data-action="delete"]').addEventListener('click', () => window.deleteMasterVendor(v.id));
+        vendorsList.appendChild(div);
+    });
+}
+
+export function renderInspections(masterData, filter = '') {
+    const inspectionsList = document.getElementById('inspectionsList');
+    inspectionsList.innerHTML = '';
+
+    const filtered = masterData.inspectionTypes.filter(i => {
+        if (!filter) return true;
+        return i.inspection_name.toLowerCase().includes(filter.toLowerCase());
+    });
+
+    document.getElementById('inspectionCount').textContent = filtered.length;
+
+    if (filtered.length === 0) {
+        inspectionsList.innerHTML = `
+            <div class="master-empty">
+                <div class="master-empty-icon">🔧</div>
+                <h4>${filter ? '検索結果がありません' : '点検種別が登録されていません'}</h4>
+                <p>${filter ? '検索条件を変更してください' : '「新規追加」から点検種別を追加してください'}</p>
+            </div>
+        `;
+        return;
+    }
+
+    filtered.forEach(i => {
+        const div = document.createElement('div');
+        div.className = 'master-item';
+        div.dataset.id = i.id;
+        const categoryBadge = i.category ? `<span style="background: #e0e7ff; color: #3730a3; padding: 0.125rem 0.5rem; border-radius: 4px; font-size: 0.75rem; margin-left: 0.5rem;">${escapeHtml(i.category)}</span>` : '';
+        const templateLabel = i.template_no ? (templateImages[i.template_no] || i.template_no) : '未設定';
+        div.innerHTML = `
+            <div class="master-item-info">
+                <div class="master-item-name">${escapeHtml(i.inspection_name)}${categoryBadge}</div>
+                <div class="master-item-sub">画像: ${escapeHtml(templateLabel)}</div>
+            </div>
+            <div class="master-item-actions">
+                <button class="btn btn-outline btn-sm" data-action="edit">編集</button>
+                <button class="btn btn-outline btn-sm btn-danger-outline" data-action="delete">削除</button>
+            </div>
+        `;
+        div.querySelector('[data-action="edit"]').addEventListener('click', () => window.editInspection(i.id));
+        div.querySelector('[data-action="delete"]').addEventListener('click', () => window.deleteMasterInspection(i.id));
+        inspectionsList.appendChild(div);
+    });
+}
+
+export function renderCategories(masterData, filter = '') {
+    const list = document.getElementById('categoriesList');
+    if (!list) return;
+    list.innerHTML = '';
+
+    const filtered = (masterData.categories || []).filter(cat => {
+        if (!filter) return true;
+        return cat.category_name.toLowerCase().includes(filter.toLowerCase());
+    });
+
+    const count = document.getElementById('categoryCount');
+    if (count) count.textContent = filtered.length;
+
+    if (filtered.length === 0) {
+        list.innerHTML = `
+            <div class="master-empty">
+                <div class="master-empty-icon">📁</div>
+                <h4>${filter ? '検索結果がありません' : 'カテゴリが登録されていません'}</h4>
+                <p>${filter ? '検索条件を変更してください' : '「新規追加」からカテゴリを追加してください'}</p>
+            </div>
+        `;
+        return;
+    }
+
+    filtered.forEach(cat => {
+        const div = document.createElement('div');
+        div.className = 'master-item';
+        div.dataset.id = cat.id;
+        div.innerHTML = `
+            <div class="master-item-info">
+                <div class="master-item-name">${escapeHtml(cat.category_name)}</div>
+                <div class="master-item-sub">表示順序: ${cat.sort_order || 0}</div>
+            </div>
+            <div class="master-item-actions">
+                <button class="btn btn-sm btn-outline" data-action="edit">編集</button>
+                <button class="btn btn-sm btn-outline btn-danger-outline" data-action="delete">削除</button>
+            </div>
+        `;
+        div.querySelector('[data-action="edit"]').addEventListener('click', () => window.editMasterCategory(cat.id));
+        div.querySelector('[data-action="delete"]').addEventListener('click', () => window.deleteMasterCategory(cat.id));
+        list.appendChild(div);
+    });
+}
+
+export async function loadCategories(masterData) {
+    try {
+        masterData.categories = await getMasterCategories();
+        renderCategories(masterData);
+    } catch (error) {
+        console.error('Failed to load categories:', error);
+    }
+}
+
+// ========================================
+// マスターモーダル
+// ========================================
+
+export function openMasterModal(type, masterData, data = null) {
+    const modal = document.getElementById('masterModal');
+    const title = document.getElementById('masterModalTitle');
+
+    // 全フィールドを非表示
+    document.getElementById('propertyFields').style.display = 'none';
+    document.getElementById('vendorFields').style.display = 'none';
+    document.getElementById('inspectionFields').style.display = 'none';
+    document.getElementById('categoryFields')?.style && (document.getElementById('categoryFields').style.display = 'none');
+
+    // タイプを設定
+    document.getElementById('masterType').value = type;
+    document.getElementById('masterId').value = data?.id || '';
+
+    // タイプに応じてフィールドを表示
+    if (type === 'property') {
+        document.getElementById('propertyFields').style.display = 'block';
+        title.textContent = data ? '物件を編集' : '物件を追加';
+        if (data) {
+            document.getElementById('propertyCode').value = data.property_code || '';
+            document.getElementById('propertyName').value = data.property_name || '';
+            document.getElementById('terminalId').value = data.terminal_id || '';
+            document.getElementById('supplement').value = data.supplement || '';
+            document.getElementById('address').value = data.address || '';
+        } else {
+            document.getElementById('propertyCode').value = '';
+            document.getElementById('propertyName').value = '';
+            document.getElementById('terminalId').value = '';
+            document.getElementById('supplement').value = '';
+            document.getElementById('address').value = '';
+        }
+    } else if (type === 'vendor') {
+        document.getElementById('vendorFields').style.display = 'block';
+        title.textContent = data ? '受注先を編集' : '受注先を追加';
+        if (data) {
+            document.getElementById('vendorName').value = data.vendor_name || '';
+            document.getElementById('emergencyContact').value = data.emergency_contact || '';
+            document.getElementById('vendorCategory').value = data.category || '点検';
+        } else {
+            document.getElementById('vendorName').value = '';
+            document.getElementById('emergencyContact').value = '';
+            document.getElementById('vendorCategory').value = '点検';
+        }
+    } else if (type === 'inspection') {
+        document.getElementById('inspectionFields').style.display = 'block';
+        title.textContent = data ? '点検種別を編集' : '点検種別を追加';
+
+        // カテゴリドロップダウンを構築
+        const categorySelect = document.getElementById('inspectionCategory');
+        categorySelect.innerHTML = '<option value="">カテゴリを選択</option>';
+        (masterData.categories || []).forEach(cat => {
+            const option = document.createElement('option');
+            option.value = cat.category_name;
+            option.textContent = cat.category_name;
+            categorySelect.appendChild(option);
+        });
+
+        // テンプレート画像ドロップダウンを構築
+        const templateSelect = document.getElementById('templateNo');
+        templateSelect.innerHTML = '<option value="">画像なし</option>';
+        Object.entries(templateImages).forEach(([key, label]) => {
+            const option = document.createElement('option');
+            option.value = key;
+            option.textContent = label;
+            templateSelect.appendChild(option);
+        });
+
+        // プレビュー更新イベント
+        templateSelect.onchange = () => updateTemplatePreview(templateSelect.value);
+
+        if (data) {
+            document.getElementById('inspectionName').value = data.inspection_name || '';
+            categorySelect.value = data.category || '';
+
+            // 日時プレフィックス付きの場合（例: "1124 235959cleaning"）、キーを抽出
+            let templateKeyForSelect = data.template_no || '';
+            if (templateKeyForSelect && !templateImages[templateKeyForSelect]) {
+                for (const key of Object.keys(templateImages)) {
+                    if (templateKeyForSelect.endsWith(key)) {
+                        templateKeyForSelect = key;
+                        break;
+                    }
+                }
+            }
+            templateSelect.value = templateKeyForSelect;
+
+            document.getElementById('noticeText').value = data.notice_text || '';
+            document.getElementById('showOnBoard').checked = data.show_on_board !== false;
+            updateTemplatePreview(data.template_no);
+        } else {
+            document.getElementById('inspectionName').value = '';
+            categorySelect.value = '';
+            templateSelect.value = '';
+            document.getElementById('noticeText').value = '';
+            document.getElementById('showOnBoard').checked = true;
+            updateTemplatePreview('');
+        }
+    } else if (type === 'category') {
+        document.getElementById('categoryFields').style.display = 'block';
+        title.textContent = data ? 'カテゴリを編集' : 'カテゴリを追加';
+        if (data) {
+            document.getElementById('categoryName').value = data.category_name || '';
+            document.getElementById('categorySortOrder').value = data.sort_order || 0;
+        } else {
+            document.getElementById('categoryName').value = '';
+            document.getElementById('categorySortOrder').value = 0;
+        }
+    }
+
+    modal.classList.add('active');
+}
+
+export function closeMasterModal() {
+    document.getElementById('masterModal').classList.remove('active');
+    document.getElementById('masterForm').reset();
+    updateTemplatePreview('');
+}
+
+export function updateTemplatePreview(templateKey) {
+    const preview = document.getElementById('templatePreview');
+    if (!preview) return;
+
+    if (!templateKey) {
+        preview.innerHTML = '<span style="color: #94a3b8; font-size: 0.875rem;">プレビュー</span>';
+        return;
+    }
+
+    // 直接マッチするか確認
+    let matchedKey = templateKey;
+    if (!templateImages[templateKey]) {
+        // 日時プレフィックス付きの場合（例: "1124 235959cleaning"）、末尾のキーを抽出
+        for (const key of Object.keys(templateImages)) {
+            if (templateKey.endsWith(key)) {
+                matchedKey = key;
+                break;
+            }
+        }
+    }
+
+    if (templateImages[matchedKey]) {
+        preview.innerHTML = `<img src="images/${matchedKey}.png" alt="${templateImages[matchedKey]}" style="max-height: 120px; max-width: 100%; border-radius: 4px;" onerror="this.parentElement.innerHTML='<span style=\\'color: #ef4444; font-size: 0.875rem;\\'>画像が見つかりません</span>'">`;
+    } else {
+        preview.innerHTML = `<span style="color: #94a3b8; font-size: 0.875rem;">${escapeHtml(templateKey)}</span>`;
+    }
+}
+
+// ========================================
+// マスターフォーム送信
+// ========================================
+
+export async function handleMasterFormSubmit(e, masterData, showToast, updateStats) {
+    e.preventDefault();
+
+    const type = document.getElementById('masterType').value;
+    const id = document.getElementById('masterId').value;
+
+    try {
+        if (type === 'property') {
+            const data = {
+                property_code: parseInt(document.getElementById('propertyCode').value),
+                property_name: document.getElementById('propertyName').value,
+                terminal_id: document.getElementById('terminalId').value,
+                supplement: document.getElementById('supplement').value,
+                address: document.getElementById('address').value,
+            };
+            if (id) {
+                await updateProperty(id, data);
+                showToast('物件を更新しました', 'success');
+            } else {
+                await addProperty(data);
+                showToast('物件を追加しました', 'success');
+            }
+        } else if (type === 'vendor') {
+            const data = {
+                vendor_name: document.getElementById('vendorName').value,
+                emergency_contact: document.getElementById('emergencyContact').value,
+                category: document.getElementById('vendorCategory').value,
+            };
+            if (id) {
+                await updateVendor(id, data);
+                showToast('受注先を更新しました', 'success');
+            } else {
+                await addVendor(data);
+                showToast('受注先を追加しました', 'success');
+            }
+        } else if (type === 'inspection') {
+            const data = {
+                inspection_name: document.getElementById('inspectionName').value,
+                category: document.getElementById('inspectionCategory').value,
+                template_no: document.getElementById('templateNo').value,
+                notice_text: document.getElementById('noticeText').value,
+                show_on_board: document.getElementById('showOnBoard').checked,
+            };
+            if (id) {
+                await updateInspectionType(id, data);
+                showToast('点検種別を更新しました', 'success');
+            } else {
+                await addInspectionType(data);
+                showToast('点検種別を追加しました', 'success');
+            }
+        } else if (type === 'category') {
+            const data = {
+                category_name: document.getElementById('categoryName').value,
+                sort_order: parseInt(document.getElementById('categorySortOrder').value) || 0,
+            };
+            if (id) {
+                await updateCategory(id, data);
+                showToast('カテゴリを更新しました', 'success');
+            } else {
+                await addCategory(data);
+                showToast('カテゴリを追加しました', 'success');
+            }
+        }
+
+        closeMasterModal();
+        // マスターデータを再読み込み
+        const newMasterData = await getAllMasterData();
+        Object.assign(masterData, newMasterData);
+        loadMasterData(masterData);
+        updateStats();
+        return true;
+    } catch (error) {
+        console.error('Failed to save master data:', error);
+        showToast('保存に失敗しました', 'error');
+        return false;
+    }
+}
+
+// ========================================
+// マスター削除
+// ========================================
+
+export async function deleteMasterPropertyAction(id, masterData, entries, showToast, updateStats) {
+    const property = masterData.properties.find(p => p.id === id);
+    if (property) {
+        const usedEntries = entries.filter(e => e.property_code === property.property_code);
+        if (usedEntries.length > 0) {
+            showToast(`この物件は${usedEntries.length}件のエントリで使用中です`, 'error');
+            return false;
+        }
+    }
+    if (!confirm('この物件を削除しますか？')) return false;
+    try {
+        await deleteProperty(id);
+        showToast('物件を削除しました', 'success');
+        const newMasterData = await getAllMasterData();
+        Object.assign(masterData, newMasterData);
+        loadMasterData(masterData);
+        updateStats();
+        return true;
+    } catch (error) {
+        showToast('削除に失敗しました', 'error');
+        return false;
+    }
+}
+
+export async function deleteMasterVendorAction(id, masterData, showToast) {
+    if (!confirm('この受注先を削除しますか？')) return false;
+    try {
+        await deleteVendor(id);
+        showToast('受注先を削除しました', 'success');
+        const newMasterData = await getAllMasterData();
+        Object.assign(masterData, newMasterData);
+        loadMasterData(masterData);
+        return true;
+    } catch (error) {
+        showToast('削除に失敗しました', 'error');
+        return false;
+    }
+}
+
+export async function deleteMasterInspectionAction(id, masterData, entries, showToast) {
+    const inspection = masterData.inspectionTypes.find(i => i.id === id);
+    if (inspection) {
+        const usedEntries = entries.filter(e => e.inspection_type === inspection.inspection_name);
+        if (usedEntries.length > 0) {
+            showToast(`この点検種別は${usedEntries.length}件のエントリで使用中です`, 'error');
+            return false;
+        }
+    }
+    if (!confirm('この点検種別を削除しますか？')) return false;
+    try {
+        await deleteInspectionType(id);
+        showToast('点検種別を削除しました', 'success');
+        const newMasterData = await getAllMasterData();
+        Object.assign(masterData, newMasterData);
+        loadMasterData(masterData);
+        return true;
+    } catch (error) {
+        showToast('削除に失敗しました', 'error');
+        return false;
+    }
+}
+
+export async function deleteMasterCategoryAction(id, masterData, showToast) {
+    if (!confirm('このカテゴリを削除しますか？')) return false;
+    try {
+        await deleteCategory(id);
+        showToast('カテゴリを削除しました', 'success');
+        await loadCategories(masterData);
+        return true;
+    } catch (error) {
+        showToast('削除に失敗しました', 'error');
+        return false;
+    }
+}

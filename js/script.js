@@ -463,4 +463,60 @@ const templateImages = {
         }
 
         document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+        // Supabaseへの申請
+        async function submitEntries() {
+            if (entries.length === 0) {
+                showToast('申請するデータがありません', 'error');
+                return;
+            }
+
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = '申請中...';
+
+            try {
+                // 一括入力と同じデータ構造に変換
+                const supabaseEntries = entries.map(e => {
+                    const displayStartDate = e.displayStartDate || e.startDate || null;
+                    const displayEndDate = e.displayEndDate || e.endDate || null;
+
+                    return {
+                        property_code: String(e.propertyCode),
+                        terminal_id: e.terminalId || '',
+                        vendor_name: e.vendorName,
+                        emergency_contact: e.emergencyContact || '',
+                        inspection_type: e.inspectionType,
+                        template_no: e.templateNo || '',
+                        start_date: e.startDate || null,
+                        end_date: e.endDate || null,
+                        remarks: e.remarks || '',
+                        notice_text: e.noticeText || '',
+                        display_start_date: displayStartDate,
+                        display_start_time: e.displayStartTime || null,
+                        display_end_date: displayEndDate,
+                        display_end_time: e.displayEndTime || null,
+                        display_time: e.displayTime || 6,
+                        show_on_board: e.showOnBoard !== false,
+                        poster_type: e.posterType === 'template' ? 'テンプレート' : '追加',
+                        position: e.frameNo !== undefined ? e.frameNo : 2,
+                        status: 'pending'
+                    };
+                });
+
+                await window.createEntriesToSupabase(supabaseEntries);
+                showToast(`${entries.length}件のデータを申請しました`, 'success');
+
+                // データをクリア
+                entries.length = 0;
+                renderDataList();
+            } catch (error) {
+                console.error('Submit failed:', error);
+                showToast('申請に失敗しました: ' + (error.message || ''), 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = '申請する';
+            }
+        }
+
         init();

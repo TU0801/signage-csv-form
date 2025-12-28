@@ -177,6 +177,7 @@
                         <div class="empty-state">📭 データなし</div>
                     </div>
                     <div class="export-buttons" id="exportSection" style="display: none;">
+                        <button class="btn btn-primary btn-sm" id="submitBtn" onclick="submitEntries()">申請する</button>
                         <button class="btn btn-success btn-sm" onclick="downloadCSV()">💾 DL</button>
                         <button class="btn btn-outline btn-sm" onclick="previewCSV()">👁️ CSV</button>
                         <button class="btn btn-outline btn-sm" onclick="copyCSV()">📋 コピー</button>
@@ -209,7 +210,10 @@
     </script>
     <script type="module">
         // 認証モジュール（ログイン必須）
-        import { getUser, getProfile, isAdmin, signOut, getSettings } from './js/supabase-client.js';
+        import { getUser, getProfile, isAdmin, signOut, getSettings, createEntries } from './js/supabase-client.js';
+
+        // script.jsから使えるようにwindowに公開
+        window.createEntriesToSupabase = createEntries;
 
         async function initAuth() {
             try {
