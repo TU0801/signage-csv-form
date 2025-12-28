@@ -53,45 +53,83 @@ function escapeHtml(str) {
 // ========================================
 
 const templateImages = {
-    "exchange_light_battery_2": "照明・電池交換2",
-    "painting_water_pipe": "水道管塗装",
-    "disinfection_tree": "消毒・植栽",
-    "exchange_light_battery": "照明・電池交換",
-    "waterproof_construction": "防水工事",
+    // 点検・調査
+    "Investigation": "調査",
+    "building_inspection": "建物点検",
+    "elevator_inspection": "エレベーター点検",
+    "exterior_wall_tile_inspection": "外壁タイル点検",
+    "shared_area_drain_pipe_inspection": "共用部排水管点検",
+    "electrical_measurement": "電気測定",
+
+    // 清掃
+    "cleaning": "清掃",
+    "cleaning_bucket": "清掃（バケツ）",
+    "glass_clean": "ガラス清掃",
+    "high_pressure_cleaning": "高圧洗浄",
     "high_pressure_cleaning_2": "高圧洗浄2",
-    "bicycle_removal": "自転車撤去",
+    "shared_area_drain_pipe_wash": "共用部排水管洗浄",
+    "drainage_pipe": "排水管",
+
+    // 消毒・植栽
+    "disinfection": "消毒",
+    "disinfection_tree": "消毒・植栽",
+    "planting_management": "植栽管理",
+
+    // 工事・修繕
     "construction_building_large_scale": "大規模修繕",
-    "construction_coin_parking": "コインパーキング工事",
-    "fire_extinguisher_explain": "消火器説明",
+    "construction_outer_wall": "外壁工事",
     "construction_light": "照明工事",
     "construction_toolbox": "工具箱工事",
-    "cleaning": "清掃",
-    "Investigation": "調査",
     "construction_television_equipment": "テレビ設備工事",
-    "water_activator_construction": "水質活性化工事",
-    "high_pressure_cleaning": "高圧洗浄",
-    "automtic_doors": "自動ドア",
-    "glass_clean": "ガラス清掃",
-    "mechanical_parking": "機械式駐車場",
-    "planting_management": "植栽管理",
-    "construction_outer_wall": "外壁工事",
     "construction_jcom_cable": "JCOM配線工事",
-    "simple_dedicated_water_supply": "専用水道設備",
-    "surveillance_camera_installation_work": "防犯カメラ設置",
-    "tower_mechanical_parking": "タワー式駐車場",
+    "construction_Intercom": "インターホン工事",
+    "construction_coin_parking": "コインパーキング工事",
     "construction_involving_sound_vibration": "騒音・振動工事",
-    "elevator_inspection": "エレベーター点検",
-    "shared_electrical_equipment": "共用部電気設備",
-    "mechanical_parking_turntable": "ターンテーブル駐車場",
-    "delivery_box": "宅配ボックス",
-    "disinfection": "消毒",
-    "Questionnaire_conducted01": "アンケート",
-    "protect_balcony_from_birds": "鳥害対策",
-    "elevator_mat_replacement": "エレベーターマット交換",
     "construction_roller_paint": "ローラー塗装",
-    "merchari_installation": "メルカリ設置",
+    "construction_spanner": "スパナ工事",
+    "construction_mobile_antenna": "モバイルアンテナ工事",
+    "Construction_without_sound": "静音工事",
+    "waterproof_construction": "防水工事",
+    "fire_construction": "消防工事",
+    "vending_machine_construction": "自販機工事",
+    "vending_machine_construction_2": "自販機工事2",
+    "water_activator_construction": "水質活性化工事",
+    "water_supply_pump_construction": "給水ポンプ工事",
+
+    // 塗装
+    "painting_water_pipe": "水道管塗装",
     "iron_part_coating": "鉄部塗装",
-    "construction_Intercom": "インターホン工事"
+
+    // 交換
+    "exchange_light_battery": "照明・電池交換",
+    "exchange_light_battery_2": "照明・電池交換2",
+    "exchange_corridor": "廊下交換",
+    "elevator_mat_replacement": "エレベーターマット交換",
+    "fire_exchange": "消防設備交換",
+    "fire_extinguisher_explain": "消火器説明",
+
+    // 設備
+    "automtic_doors": "自動ドア",
+    "mechanical_parking": "機械式駐車場",
+    "mechanical_parking_turntable": "ターンテーブル駐車場",
+    "tower_mechanical_parking": "タワー式駐車場",
+    "delivery_box": "宅配ボックス",
+    "delivery_box_stop_using": "宅配ボックス使用停止",
+    "simple_dedicated_water_supply": "専用水道設備",
+    "shared_electrical_equipment": "共用部電気設備",
+    "card_reader": "カードリーダー",
+
+    // 防犯・安全
+    "surveillance_camera": "防犯カメラ",
+    "surveillance_camera_installation_work": "防犯カメラ設置",
+    "protect_balcony_from_birds": "鳥害対策",
+    "protect_balcony_from_birds_2": "鳥害対策2",
+
+    // その他
+    "bicycle_removal": "自転車撤去",
+    "merchari_installation": "メルカリ設置",
+    "Questionnaire_conducted01": "アンケート",
+    "Questionnaire_conducted02": "アンケート2"
 };
 
 // ========================================
@@ -803,7 +841,19 @@ function openMasterModal(type, data = null) {
         if (data) {
             document.getElementById('inspectionName').value = data.inspection_name || '';
             categorySelect.value = data.category || '';
-            templateSelect.value = data.template_no || '';
+
+            // 日時プレフィックス付きの場合（例: "1124 235959cleaning"）、キーを抽出
+            let templateKeyForSelect = data.template_no || '';
+            if (templateKeyForSelect && !templateImages[templateKeyForSelect]) {
+                for (const key of Object.keys(templateImages)) {
+                    if (templateKeyForSelect.endsWith(key)) {
+                        templateKeyForSelect = key;
+                        break;
+                    }
+                }
+            }
+            templateSelect.value = templateKeyForSelect;
+
             document.getElementById('noticeText').value = data.notice_text || '';
             document.getElementById('showOnBoard').checked = data.show_on_board !== false;
             updateTemplatePreview(data.template_no);
@@ -840,10 +890,27 @@ function updateTemplatePreview(templateKey) {
     const preview = document.getElementById('templatePreview');
     if (!preview) return;
 
-    if (templateKey && templateImages[templateKey]) {
-        preview.innerHTML = `<img src="images/${templateKey}.png" alt="${templateImages[templateKey]}" style="max-height: 120px; max-width: 100%; border-radius: 4px;" onerror="this.parentElement.innerHTML='<span style=\\'color: #ef4444; font-size: 0.875rem;\\'>画像が見つかりません</span>'">`;
-    } else {
+    if (!templateKey) {
         preview.innerHTML = '<span style="color: #94a3b8; font-size: 0.875rem;">プレビュー</span>';
+        return;
+    }
+
+    // 直接マッチするか確認
+    let matchedKey = templateKey;
+    if (!templateImages[templateKey]) {
+        // 日時プレフィックス付きの場合（例: "1124 235959cleaning"）、末尾のキーを抽出
+        for (const key of Object.keys(templateImages)) {
+            if (templateKey.endsWith(key)) {
+                matchedKey = key;
+                break;
+            }
+        }
+    }
+
+    if (templateImages[matchedKey]) {
+        preview.innerHTML = `<img src="images/${matchedKey}.png" alt="${templateImages[matchedKey]}" style="max-height: 120px; max-width: 100%; border-radius: 4px;" onerror="this.parentElement.innerHTML='<span style=\\'color: #ef4444; font-size: 0.875rem;\\'>画像が見つかりません</span>'">`;
+    } else {
+        preview.innerHTML = `<span style="color: #94a3b8; font-size: 0.875rem;">${escapeHtml(templateKey)}</span>`;
     }
 }
 
