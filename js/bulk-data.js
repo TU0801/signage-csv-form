@@ -173,7 +173,7 @@ export function generateCSV() {
     const validRows = rows.filter(r => r.isValid);
     if (validRows.length === 0) return '';
 
-    // サンプルCSVに合わせた列順
+    // サンプルCSVに合わせた列順（1件入力と同じ）
     const headers = [
         '点検CO', '端末ID', '物件コード', '受注先名', '緊急連絡先番号',
         '点検工事案内', '掲示板に表示する', '点検案内TPLNo', '点検開始日',
@@ -182,6 +182,11 @@ export function generateCSV() {
         '制御', '変更日', '変更時刻', '最終エクスポート日時', 'ID', '変更日時',
         '点検日時', '表示日時', '貼紙区分'
     ];
+
+    // 現在日時（1件入力と同じ形式）
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0].replace(/-/g, '/');
+    const timeStr = now.toTimeString().substring(0, 8);
 
     const csvRows = [headers.join(',')];
 
@@ -194,22 +199,23 @@ export function generateCSV() {
         const formatDate = (d) => d ? d.replace(/-/g, '/') : '';
         const displayTimeFormatted = `0:00:${String(row.displayTime || 6).padStart(2, '0')}`;
 
+        const sd = formatDate(row.startDate);
+        const ed = formatDate(row.endDate) || sd;
         const displayStartDate = row.displayStartDate || row.startDate;
         const displayEndDate = row.displayEndDate || row.endDate;
+        const dsd = formatDate(displayStartDate);
+        const ded = formatDate(displayEndDate) || ed;
         const displayStartTime = row.displayStartTime || '';
         const displayEndTime = row.displayEndTime || '';
 
-        const noticeText = row.noticeText || inspection?.notice_text || '';
-        const showOnBoard = row.showOnBoard !== false ? 'TRUE' : 'False';
+        // 改行を\r\nに変換（1件入力と同じ）
+        const remarksText = (row.remarks || '').replace(/\n/g, '\r\n');
+        const noticeText = (row.noticeText || inspection?.notice_text || '').replace(/\n/g, '\r\n');
+
+        // True/False（1件入力と同じ大文字小文字）
+        const showOnBoard = row.showOnBoard !== false ? 'True' : 'False';
 
         const positionValue = row.position !== undefined ? String(row.position) : '1';
-
-        // 日時フォーマット（サンプルに合わせる）
-        const now = new Date();
-        const formatDateTime = (dateStr) => {
-            if (!dateStr) return '';
-            return `${formatDate(dateStr)} [00:00:00]`;
-        };
 
         const values = [
             '',                                          // 点検CO
@@ -220,29 +226,33 @@ export function generateCSV() {
             row.inspectionType,                          // 点検工事案内
             showOnBoard,                                 // 掲示板に表示する
             inspection?.template_no || '',               // 点検案内TPLNo
-            formatDate(row.startDate),                   // 点検開始日
-            formatDate(row.endDate),                     // 点検完了日
-            row.remarks || '',                           // 掲示備考
+            sd,                                          // 点検開始日
+            ed,                                          // 点検完了日
+            remarksText,                                 // 掲示備考
             noticeText,                                  // 掲示板用案内文
             positionValue,                               // frame_No
-            formatDate(displayStartDate),                // 表示開始日
-            formatDate(displayEndDate),                  // 表示終了日
+            dsd,                                         // 表示開始日
+            ded,                                         // 表示終了日
             displayStartTime,                            // 表示開始時刻
             displayEndTime,                              // 表示終了時刻
             displayTimeFormatted,                        // 表示時間
             '',                                          // 統合ポリシー
             '',                                          // 制御
-            '',                                          // 変更日
+            dateStr,                                     // 変更日
             '',                                          // 変更時刻
             '',                                          // 最終エクスポート日時
             '',                                          // ID
-            '',                                          // 変更日時
-            formatDateTime(row.startDate),               // 点検日時
-            formatDateTime(displayStartDate),            // 表示日時
+            `${dateStr} [${timeStr}]`,                   // 変更日時
+            `${sd} [00:00:00]`,                          // 点検日時
+            `${dsd} [00:00:00]`,                         // 表示日時
             'テンプレート'                                // 貼紙区分
         ];
 
-        csvRows.push(values.map(v => `"${v}"`).join(','));
+        csvRows.push(values.map(v => {
+            if (v == null) return '';
+            const s = String(v);
+            return (s.includes(',') || s.includes('"') || s.includes('\n')) ? '"' + s.replace(/"/g, '""') + '"' : s;
+        }).join(','));
     });
 
     return csvRows.join('\n');
