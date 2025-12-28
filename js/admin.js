@@ -763,8 +763,13 @@ async function handleUserFormSubmit(e) {
     submitBtn.textContent = '追加中...';
 
     try {
-        await createUser(email, password, companyName, role);
-        showToast('ユーザーを追加しました', 'success');
+        const user = await createUser(email, password, companyName, role);
+
+        if (user._needsEmailConfirmation) {
+            showToast('ユーザーを追加しました（メール確認が必要です）', 'warning');
+        } else {
+            showToast('ユーザーを追加しました', 'success');
+        }
         closeUserModal();
 
         // ユーザー一覧を更新
@@ -774,6 +779,8 @@ async function handleUserFormSubmit(e) {
         console.error('User creation error:', error);
         if (error.message.includes('既に登録')) {
             showToast('このメールアドレスは既に登録されています', 'error');
+        } else if (error.message.includes('プロファイル')) {
+            showToast(error.message, 'error');
         } else {
             showToast('追加に失敗しました: ' + error.message, 'error');
         }

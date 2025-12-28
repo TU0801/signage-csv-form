@@ -309,6 +309,8 @@ export async function createUser(email, password, companyName, role) {
   // 現在のセッションを保存
   const { data: { session: currentSession } } = await supabase.auth.getSession();
 
+  console.log('Creating user:', email);
+
   // 1. ユーザー作成
   const { data: authData, error: authError } = await supabase.auth.signUp({
     email,
@@ -321,6 +323,8 @@ export async function createUser(email, password, companyName, role) {
     }
   });
 
+  console.log('SignUp result:', { authData, authError });
+
   if (authError) throw authError;
 
   // signUpが成功しても、既存ユーザーの場合はidentitiesが空
@@ -330,18 +334,26 @@ export async function createUser(email, password, companyName, role) {
 
   if (!authData.user) throw new Error('ユーザー作成に失敗しました');
 
+  // メール確認が必要かチェック
+  const needsEmailConfirmation = !authData.session;
+  console.log('Needs email confirmation:', needsEmailConfirmation);
+
   // 2. プロファイルテーブルにも追加
-  const { error: profileError } = await supabase
+  const { data: profileData, error: profileError } = await supabase
     .from('signage_profiles')
     .upsert({
       id: authData.user.id,
       email: email,
       company_name: companyName,
       role: role
-    }, { onConflict: 'id' });
+    }, { onConflict: 'id' })
+    .select();
+
+  console.log('Profile upsert result:', { profileData, profileError });
 
   if (profileError) {
-    console.warn('Profile creation warning:', profileError);
+    console.error('Profile creation failed:', profileError);
+    throw new Error('プロファイル作成に失敗しました: ' + profileError.message);
   }
 
   // 3. 元の管理者セッションを復元
@@ -350,6 +362,13 @@ export async function createUser(email, password, companyName, role) {
       access_token: currentSession.access_token,
       refresh_token: currentSession.refresh_token
     });
+  }
+
+  // メール確認が必要な場合は警告を含める
+  if (needsEmailConfirmation) {
+    const result = authData.user;
+    result._needsEmailConfirmation = true;
+    return result;
   }
 
   return authData.user;
