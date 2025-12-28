@@ -583,6 +583,49 @@
             color: #374151;
             margin-bottom: 0.75rem;
         }
+        #entryDetailModal .modal-content {
+            background: white;
+            border-radius: 16px;
+            width: 100%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        #entryDetailModal .modal-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        #entryDetailModal .modal-header h3 {
+            margin: 0;
+            font-size: 1.125rem;
+            font-weight: 600;
+        }
+        #entryDetailModal .modal-body {
+            padding: 1.5rem;
+        }
+        #entryDetailModal .modal-footer {
+            padding: 1rem 1.5rem;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+        }
+        #entryDetailModal .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #94a3b8;
+            padding: 0;
+            line-height: 1;
+            transition: color 0.2s;
+        }
+        #entryDetailModal .modal-close:hover {
+            color: #64748b;
+        }
 
         /* ユーザー追加モーダル */
         #userModal {
