@@ -524,16 +524,12 @@ function closeEntryDetailModal() {
 function populateFilters() {
     const properties = masterData.properties;
     const filterProperty = document.getElementById('filterProperty');
-    const exportProperty = document.getElementById('exportProperty');
 
     properties.forEach(p => {
-        const opt1 = document.createElement('option');
-        opt1.value = p.property_code;
-        opt1.textContent = `${p.property_code} ${p.property_name}`;
-        filterProperty.appendChild(opt1);
-
-        const opt2 = opt1.cloneNode(true);
-        exportProperty.appendChild(opt2);
+        const opt = document.createElement('option');
+        opt.value = p.property_code;
+        opt.textContent = `${p.property_code} ${p.property_name}`;
+        filterProperty.appendChild(opt);
     });
 }
 
