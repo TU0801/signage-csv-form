@@ -312,20 +312,17 @@ export async function getPendingEntries() {
   const { data, error } = await supabase
     .from('signage_entries')
     .select('*')
-    .eq('status', 'pending')
+    .eq('status', 'draft')
     .order('created_at', { ascending: false });
   if (error) throw error;
   return data;
 }
 
 export async function approveEntry(id) {
-  const user = await getUser();
   const { data, error } = await supabase
     .from('signage_entries')
     .update({
-      status: 'approved',
-      approved_by: user.id,
-      approved_at: new Date().toISOString()
+      status: 'submitted'
     })
     .eq('id', id)
     .select()
@@ -335,13 +332,10 @@ export async function approveEntry(id) {
 }
 
 export async function approveEntries(ids) {
-  const user = await getUser();
   const { data, error } = await supabase
     .from('signage_entries')
     .update({
-      status: 'approved',
-      approved_by: user.id,
-      approved_at: new Date().toISOString()
+      status: 'submitted'
     })
     .in('id', ids)
     .select();
@@ -349,21 +343,14 @@ export async function approveEntries(ids) {
   return data;
 }
 
-export async function rejectEntry(id, reason = '') {
-  const user = await getUser();
-  const { data, error } = await supabase
+export async function rejectEntry(id) {
+  // 却下 = 削除（スキーマにrejectedステータスがないため）
+  const { error } = await supabase
     .from('signage_entries')
-    .update({
-      status: 'rejected',
-      approved_by: user.id,
-      approved_at: new Date().toISOString(),
-      rejection_reason: reason
-    })
-    .eq('id', id)
-    .select()
-    .single();
+    .delete()
+    .eq('id', id);
   if (error) throw error;
-  return data;
+  return { id };
 }
 
 // ========================================

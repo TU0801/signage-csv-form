@@ -32,7 +32,7 @@ async function setupExportMock(page, options = {}) {
       display_duration: 6,
       poster_type: 'template',
       poster_position: '2',
-      status: 'approved',
+      status: 'submitted',
       user_id: 'test-user',
       created_at: '2025-01-01T10:00:00Z',
       signage_profiles: { email: 'user@example.com', company_name: 'テスト会社' }
@@ -50,7 +50,7 @@ async function setupExportMock(page, options = {}) {
       display_duration: 10,
       poster_type: 'template',
       poster_position: '1',
-      status: 'approved',
+      status: 'submitted',
       user_id: 'test-user',
       created_at: '2025-01-10T10:00:00Z',
       signage_profiles: { email: 'user@example.com', company_name: 'テスト会社' }
@@ -68,7 +68,7 @@ async function setupExportMock(page, options = {}) {
       display_duration: 8,
       poster_type: 'template',
       poster_position: '3',
-      status: 'approved',
+      status: 'submitted',
       user_id: 'test-user-2',
       created_at: '2025-01-20T10:00:00Z',
       signage_profiles: { email: 'user2@example.com', company_name: '別会社' }

@@ -616,7 +616,7 @@ test.describe('E2E: Data Structure Consistency', () => {
                   return {
                     select: (cols) => ({
                       eq: (col, val) => {
-                        if (table === 'signage_entries' && col === 'status' && val === 'pending') {
+                        if (table === 'signage_entries' && col === 'status' && val === 'draft') {
                           return {
                             order: () => ({ data: mockEntries, error: null })
                           };

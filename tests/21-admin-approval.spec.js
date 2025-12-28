@@ -3,8 +3,8 @@ const { test, expect } = require('@playwright/test');
 
 // Mock pending entries for approval workflow tests
 const mockPendingEntries = [
-  { id: 1, property_code: '2010', inspection_type: 'テスト点検', inspection_start: '2025-01-01', start_date: '2025-01-01', status: 'pending', user_id: 'test-user', created_at: '2025-01-01T10:00:00Z' },
-  { id: 2, property_code: '2020', inspection_type: '定期清掃', inspection_start: '2025-01-02', start_date: '2025-01-02', status: 'pending', user_id: 'test-user', created_at: '2025-01-02T10:00:00Z' }
+  { id: 1, property_code: '2010', inspection_type: 'テスト点検', inspection_start: '2025-01-01', start_date: '2025-01-01', status: 'draft', user_id: 'test-user', created_at: '2025-01-01T10:00:00Z' },
+  { id: 2, property_code: '2020', inspection_type: '定期清掃', inspection_start: '2025-01-02', start_date: '2025-01-02', status: 'draft', user_id: 'test-user', created_at: '2025-01-02T10:00:00Z' }
 ];
 
 /**
@@ -111,8 +111,8 @@ async function setupAuthMockWithPendingEntries(page, url, options = {}) {
 
                     return {
                       eq: (col, val) => {
-                        // Handle status filter for pending entries
-                        if (table === 'signage_entries' && col === 'status' && val === 'pending') {
+                        // Handle status filter for pending entries (draft status)
+                        if (table === 'signage_entries' && col === 'status' && val === 'draft') {
                           return createChainableResult(mockData.pendingEntries);
                         }
 

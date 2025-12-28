@@ -3,8 +3,8 @@ const { test, expect } = require('@playwright/test');
 const { baseUrl } = require('./test-helpers');
 
 const mockEntries = [
-  { id: 1, property_code: '2010', inspection_type: 'テスト点検', inspection_start: '2025-01-01', status: 'approved', user_id: 'test-user', created_at: '2025-01-01T10:00:00Z' },
-  { id: 2, property_code: '2020', inspection_type: '定期清掃', inspection_start: '2025-01-15', status: 'approved', user_id: 'test-user', created_at: '2025-01-15T10:00:00Z' },
+  { id: 1, property_code: '2010', inspection_type: 'テスト点検', inspection_start: '2025-01-01', status: 'submitted', user_id: 'test-user', created_at: '2025-01-01T10:00:00Z' },
+  { id: 2, property_code: '2020', inspection_type: '定期清掃', inspection_start: '2025-01-15', status: 'submitted', user_id: 'test-user', created_at: '2025-01-15T10:00:00Z' },
   { id: 3, property_code: '2010', inspection_type: 'エレベーター点検', inspection_start: '2025-02-01', status: 'draft', user_id: 'test-user', created_at: '2025-02-01T10:00:00Z' }
 ];
 
