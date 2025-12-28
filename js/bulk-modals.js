@@ -374,8 +374,9 @@ export function createRowDetailModal(callbacks) {
             <div class="modal-body">
                 <div class="detail-section">
                     <h4>掲示板用案内文</h4>
-                    <textarea id="detailNoticeText" class="form-control" rows="3"
+                    <textarea id="detailNoticeText" class="form-control" rows="3" maxlength="200"
                         placeholder="例：エレベーター点検のため、一時的に停止いたします。"></textarea>
+                    <div class="char-counter"><span id="noticeTextCount">0</span>/200</div>
                 </div>
 
                 <div class="detail-section">
@@ -420,6 +421,13 @@ export function createRowDetailModal(callbacks) {
     document.getElementById('cancelRowDetail').addEventListener('click', closeRowDetailModal);
     document.getElementById('applyRowDetail').addEventListener('click', () => applyRowDetail(callbacks));
 
+    // 文字数カウンター
+    const noticeTextarea = document.getElementById('detailNoticeText');
+    const noticeCount = document.getElementById('noticeTextCount');
+    noticeTextarea.addEventListener('input', () => {
+        noticeCount.textContent = noticeTextarea.value.length;
+    });
+
     modal.addEventListener('click', (e) => {
         if (e.target.id === 'rowDetailModal') closeRowDetailModal();
     });
@@ -438,11 +446,26 @@ export function openRowDetailModal(rowId, callbacks) {
     const rowIndex = rows.indexOf(row) + 1;
     document.getElementById('detailRowNum').textContent = `(行 ${rowIndex})`;
 
-    document.getElementById('detailNoticeText').value = row.noticeText || '';
-    document.getElementById('detailDisplayStartDate').value = row.displayStartDate || '';
+    // 案内文は点検種別のデフォルトテキストをフォールバック
+    let noticeText = row.noticeText || '';
+    if (!noticeText && row.inspectionType) {
+        const masterData = getMasterData();
+        const inspection = masterData.inspectionTypes.find(i => i.inspection_name === row.inspectionType);
+        if (inspection && inspection.default_text) {
+            noticeText = inspection.default_text;
+        }
+    }
+    document.getElementById('detailNoticeText').value = noticeText;
+    document.getElementById('noticeTextCount').textContent = noticeText.length;
+
+    // 表示開始日は点検開始日をデフォルト
+    document.getElementById('detailDisplayStartDate').value = row.displayStartDate || row.startDate || '';
     document.getElementById('detailDisplayStartTime').value = row.displayStartTime || '';
-    document.getElementById('detailDisplayEndDate').value = row.displayEndDate || '';
+
+    // 表示終了日は点検終了日をデフォルト
+    document.getElementById('detailDisplayEndDate').value = row.displayEndDate || row.endDate || '';
     document.getElementById('detailDisplayEndTime').value = row.displayEndTime || '';
+
     document.getElementById('detailShowOnBoard').checked = row.showOnBoard !== false;
 
     document.getElementById('rowDetailModal').classList.add('active');

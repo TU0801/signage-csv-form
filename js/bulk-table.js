@@ -160,7 +160,7 @@ export function renderRow(row, callbacks) {
             <input type="date" class="end-date" data-row-id="${row.id}" value="${row.endDate}" title="点検終了日">
         </td>
         <td class="col-remarks">
-            <input type="text" class="remarks-input" data-row-id="${row.id}" value="${row.remarks}" placeholder="任意入力">
+            <input type="text" class="remarks-input" data-row-id="${row.id}" value="${row.remarks}" placeholder="任意入力" maxlength="125" title="1行25文字×5行まで">
         </td>
         <td class="col-time">
             <input type="number" class="display-time" data-row-id="${row.id}" value="${row.displayTime}" min="1" max="30" title="表示秒数">

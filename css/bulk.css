@@ -791,6 +791,13 @@
     margin: 0 0 0.75rem 0;
 }
 
+.char-counter {
+    text-align: right;
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-top: 0.25rem;
+}
+
 .form-row-inline {
     display: grid;
     grid-template-columns: 1fr 1fr;
