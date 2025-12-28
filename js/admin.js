@@ -380,13 +380,27 @@ function showEntryDetail(entry) {
     const formatDate = (d) => d ? new Date(d).toLocaleDateString('ja-JP') : '-';
     const formatDateTime = (d) => d ? new Date(d).toLocaleString('ja-JP') : '-';
 
+    // terminal_idを正規化（JSON文字列の場合は端末ID文字列を抽出）
+    const normalizeTerminalId = (terminalId) => {
+        if (!terminalId) return '-';
+        if (typeof terminalId === 'string' && terminalId.startsWith('{')) {
+            try {
+                const parsed = JSON.parse(terminalId);
+                return parsed.terminalId || parsed.terminal_id || parsed.id || terminalId;
+            } catch (e) {
+                return terminalId;
+            }
+        }
+        return terminalId;
+    };
+
     const html = `
         <div class="detail-grid">
             <div class="detail-label">物件コード</div>
             <div class="detail-value">${escapeHtml(entry.property_code)}</div>
 
             <div class="detail-label">端末ID</div>
-            <div class="detail-value">${escapeHtml(entry.terminal_id || '-')}</div>
+            <div class="detail-value">${escapeHtml(normalizeTerminalId(entry.terminal_id))}</div>
 
             <div class="detail-label">受注先</div>
             <div class="detail-value">${escapeHtml(entry.vendor_name)}</div>
@@ -608,9 +622,23 @@ function generateCSV(data) {
         // frame_No (poster_position)
         const frameNo = entry.poster_position || '2';
 
+        // terminal_idを正規化（JSON文字列の場合は端末ID文字列を抽出）
+        const normalizeTerminalId = (terminalId) => {
+            if (!terminalId) return '';
+            if (typeof terminalId === 'string' && terminalId.startsWith('{')) {
+                try {
+                    const parsed = JSON.parse(terminalId);
+                    return parsed.terminalId || parsed.terminal_id || parsed.id || terminalId;
+                } catch (e) {
+                    return terminalId;
+                }
+            }
+            return terminalId;
+        };
+
         const values = [
             '',                                          // 点検CO
-            entry.terminal_id || '',                     // 端末ID
+            normalizeTerminalId(entry.terminal_id),      // 端末ID
             entry.property_code || '',                   // 物件コード
             entry.vendor_name || '',                     // 受注先名
             entry.emergency_contact || '',               // 緊急連絡先番号

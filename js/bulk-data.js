@@ -108,9 +108,30 @@ export async function saveAll(callbacks) {
             const displayStartDate = row.displayStartDate || row.startDate || null;
             const displayEndDate = row.displayEndDate || row.endDate || null;
 
+            // terminal_idを正規化（JSON文字列やオブジェクトから端末ID文字列を抽出）
+            const normalizeTerminalId = (terminalId) => {
+                if (!terminalId) return '';
+                if (typeof terminalId === 'string') {
+                    // JSON文字列の場合はパースして抽出
+                    if (terminalId.startsWith('{')) {
+                        try {
+                            const parsed = JSON.parse(terminalId);
+                            return parsed.terminalId || parsed.terminal_id || parsed.id || terminalId;
+                        } catch (e) {
+                            return terminalId;
+                        }
+                    }
+                    return terminalId;
+                }
+                if (typeof terminalId === 'object') {
+                    return terminalId.terminalId || terminalId.terminal_id || terminalId.id || '';
+                }
+                return String(terminalId);
+            };
+
             return {
                 property_code: String(row.propertyCode),
-                terminal_id: row.terminalId || property?.terminal_id || '',
+                terminal_id: normalizeTerminalId(row.terminalId) || property?.terminal_id || '',
                 vendor_name: row.vendorName,
                 emergency_contact: vendor?.emergency_contact || '',
                 inspection_type: row.inspectionType,

@@ -609,9 +609,19 @@ export function updateTerminals(rowId, propertyCode, preserveSelection = false) 
         }
 
         if (terminals.length > 0) {
-            terminals.forEach(terminal => {
-                // 端末IDが文字列かオブジェクトかを判定
-                const terminalId = typeof terminal === 'string' ? terminal : (terminal.id || terminal.terminal_id || String(terminal));
+            // 端末IDを文字列に正規化する関数
+            const extractTerminalId = (terminal) => {
+                if (typeof terminal === 'string') return terminal;
+                if (terminal && typeof terminal === 'object') {
+                    return terminal.terminalId || terminal.terminal_id || terminal.id || '';
+                }
+                return '';
+            };
+
+            // 正規化された端末IDリストを作成
+            const terminalIds = terminals.map(extractTerminalId).filter(id => id);
+
+            terminalIds.forEach(terminalId => {
                 const opt = document.createElement('option');
                 opt.value = terminalId;
                 opt.textContent = terminalId;
@@ -619,11 +629,11 @@ export function updateTerminals(rowId, propertyCode, preserveSelection = false) 
             });
 
             // 既存の選択を保持するか、最初の端末を自動選択
-            if (preserveSelection && currentTerminalId && terminals.includes(currentTerminalId)) {
+            if (preserveSelection && currentTerminalId && terminalIds.includes(currentTerminalId)) {
                 terminalSelect.value = currentTerminalId;
-            } else {
-                terminalSelect.value = terminals[0];
-                if (row) row.terminalId = terminals[0];
+            } else if (terminalIds.length > 0) {
+                terminalSelect.value = terminalIds[0];
+                if (row) row.terminalId = terminalIds[0];
             }
         }
     }
