@@ -397,6 +397,47 @@
         .master-content {
             padding: 0.5rem 0;
         }
+        .master-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 1.25rem;
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            border-radius: 12px;
+            margin-bottom: 1rem;
+            border: 1px solid #e2e8f0;
+        }
+        .master-header-info {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .master-header-icon {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: white;
+            border-radius: 10px;
+            font-size: 1.25rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .master-header-text h4 {
+            margin: 0;
+            font-size: 1rem;
+            font-weight: 600;
+            color: #1e293b;
+        }
+        .master-header-text span {
+            font-size: 0.8125rem;
+            color: #64748b;
+        }
+        .master-header .btn-primary {
+            padding: 0.625rem 1.25rem;
+            font-size: 0.9375rem;
+            font-weight: 600;
+        }
 
         /* 検索ボタン */
         #searchBtn {
@@ -580,9 +621,15 @@
                 </div>
 
                 <div id="master-properties" class="master-content">
-                    <div class="action-bar">
-                        <span><span id="propertyCount">0</span>件の物件</span>
-                        <button class="btn btn-primary btn-sm" id="addPropertyBtn">+ 新規追加</button>
+                    <div class="master-header">
+                        <div class="master-header-info">
+                            <div class="master-header-icon">🏢</div>
+                            <div class="master-header-text">
+                                <h4>物件マスター</h4>
+                                <span><span id="propertyCount">0</span>件登録</span>
+                            </div>
+                        </div>
+                        <button class="btn btn-primary" id="addPropertyBtn">+ 新規追加</button>
                     </div>
                     <div class="master-search">
                         <input type="text" id="propertySearch" placeholder="物件コード・物件名で検索...">
@@ -591,9 +638,15 @@
                 </div>
 
                 <div id="master-vendors" class="master-content" style="display: none;">
-                    <div class="action-bar">
-                        <span><span id="vendorCount">0</span>件の受注先</span>
-                        <button class="btn btn-primary btn-sm" id="addVendorBtn">+ 新規追加</button>
+                    <div class="master-header">
+                        <div class="master-header-info">
+                            <div class="master-header-icon">👥</div>
+                            <div class="master-header-text">
+                                <h4>受注先マスター</h4>
+                                <span><span id="vendorCount">0</span>件登録</span>
+                            </div>
+                        </div>
+                        <button class="btn btn-primary" id="addVendorBtn">+ 新規追加</button>
                     </div>
                     <div class="master-search">
                         <input type="text" id="vendorSearch" placeholder="受注先名で検索...">
@@ -602,9 +655,15 @@
                 </div>
 
                 <div id="master-inspections" class="master-content" style="display: none;">
-                    <div class="action-bar">
-                        <span><span id="inspectionCount">0</span>件の点検種別</span>
-                        <button class="btn btn-primary btn-sm" id="addInspectionBtn">+ 新規追加</button>
+                    <div class="master-header">
+                        <div class="master-header-info">
+                            <div class="master-header-icon">🔧</div>
+                            <div class="master-header-text">
+                                <h4>点検種別マスター</h4>
+                                <span><span id="inspectionCount">0</span>件登録</span>
+                            </div>
+                        </div>
+                        <button class="btn btn-primary" id="addInspectionBtn">+ 新規追加</button>
                     </div>
                     <div class="master-search">
                         <input type="text" id="inspectionSearch" placeholder="点検種別名で検索...">
@@ -613,9 +672,15 @@
                 </div>
 
                 <div id="master-categories" class="master-content" style="display: none;">
-                    <div class="action-bar">
-                        <span><span id="categoryCount">0</span>件のカテゴリ</span>
-                        <button class="btn btn-primary btn-sm" id="addCategoryBtn">+ 新規追加</button>
+                    <div class="master-header">
+                        <div class="master-header-info">
+                            <div class="master-header-icon">📁</div>
+                            <div class="master-header-text">
+                                <h4>カテゴリマスター</h4>
+                                <span><span id="categoryCount">0</span>件登録</span>
+                            </div>
+                        </div>
+                        <button class="btn btn-primary" id="addCategoryBtn">+ 新規追加</button>
                     </div>
                     <div class="master-search">
                         <input type="text" id="categorySearch" placeholder="カテゴリ名で検索...">
