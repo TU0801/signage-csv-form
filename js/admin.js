@@ -753,9 +753,9 @@ function closeUserModal() {
 async function handleUserFormSubmit(e) {
     e.preventDefault();
 
-    const email = document.getElementById('userEmail').value.trim();
-    const companyName = document.getElementById('userCompany').value.trim();
-    const role = document.getElementById('userRole').value;
+    const email = document.getElementById('inviteEmail').value.trim();
+    const companyName = document.getElementById('inviteCompany').value.trim();
+    const role = document.getElementById('inviteRole').value;
     const submitBtn = document.getElementById('userSubmitBtn');
 
     submitBtn.disabled = true;
