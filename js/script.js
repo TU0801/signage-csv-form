@@ -1,3 +1,14 @@
+// セキュリティ: HTMLエスケープ
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 const templateImages = {
     "exchange_light_battery_2": "images/exchange_light_battery_2.png",
     "painting_water_pipe": "images/painting_water_pipe.png",
@@ -274,16 +285,23 @@ const templateImages = {
             container.innerHTML = entries.map((e, i) => `
                 <div class="data-item">
                     <div class="data-item-info">
-                        <div class="data-item-title">${e.inspectionType}</div>
-                        <div class="data-item-sub">${e.propertyCode} | ${e.startDate || '-'}</div>
+                        <div class="data-item-title">${escapeHtml(e.inspectionType)}</div>
+                        <div class="data-item-sub">${escapeHtml(e.propertyCode)} | ${escapeHtml(e.startDate) || '-'}</div>
                     </div>
                     <span class="badge badge-success">${e.showOnBoard ? '表示' : '非表示'}</span>
                     <div class="data-item-actions">
-                        <button class="btn btn-sm btn-outline" onclick="editEntry(${i})">編集</button>
-                        <button class="btn btn-sm btn-danger" onclick="deleteEntry(${i})">削除</button>
+                        <button class="btn btn-sm btn-outline" data-action="edit" data-index="${i}">編集</button>
+                        <button class="btn btn-sm btn-danger" data-action="delete" data-index="${i}">削除</button>
                     </div>
                 </div>
             `).join('');
+            // イベントリスナーを追加
+            container.querySelectorAll('[data-action="edit"]').forEach(btn => {
+                btn.addEventListener('click', () => editEntry(parseInt(btn.dataset.index)));
+            });
+            container.querySelectorAll('[data-action="delete"]').forEach(btn => {
+                btn.addEventListener('click', () => deleteEntry(parseInt(btn.dataset.index)));
+            });
         }
 
         function editEntry(idx) {

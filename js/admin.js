@@ -35,6 +35,20 @@ import {
 } from './supabase-client.js';
 
 // ========================================
+// セキュリティ: HTMLエスケープ
+// ========================================
+
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+// ========================================
 // グローバル変数
 // ========================================
 
@@ -253,17 +267,20 @@ function renderPendingEntries() {
             : '-';
 
         tr.innerHTML = `
-            <td><input type="checkbox" data-id="${entry.id}" onchange="updateSelectedPending()"></td>
-            <td>${getUserEmail(entry.user_id)}</td>
-            <td>${entry.property_code}</td>
-            <td>${entry.inspection_type}</td>
-            <td>${startDate}</td>
-            <td>${createdAt}</td>
+            <td><input type="checkbox" data-id="${escapeHtml(entry.id)}" onchange="updateSelectedPending()"></td>
+            <td>${escapeHtml(getUserEmail(entry.user_id))}</td>
+            <td>${escapeHtml(entry.property_code)}</td>
+            <td>${escapeHtml(entry.inspection_type)}</td>
+            <td>${escapeHtml(startDate)}</td>
+            <td>${escapeHtml(createdAt)}</td>
             <td>
-                <button class="btn btn-success btn-sm" onclick="approveSingle('${entry.id}')">✅</button>
-                <button class="btn btn-outline btn-sm" onclick="rejectSingle('${entry.id}')">❌</button>
+                <button class="btn btn-success btn-sm" data-action="approve" data-id="${escapeHtml(entry.id)}">✅</button>
+                <button class="btn btn-outline btn-sm" data-action="reject" data-id="${escapeHtml(entry.id)}">❌</button>
             </td>
         `;
+        // イベントリスナーを追加
+        tr.querySelector('[data-action="approve"]').addEventListener('click', () => approveSingle(entry.id));
+        tr.querySelector('[data-action="reject"]').addEventListener('click', () => rejectSingle(entry.id));
         tbody.appendChild(tr);
     });
 }
@@ -392,15 +409,16 @@ function renderEntries() {
             : '-';
 
         tr.innerHTML = `
-            <td>${getUserEmail(entry.user_id)}</td>
-            <td>${entry.property_code}</td>
-            <td>${entry.inspection_type}</td>
-            <td>${inspectionStart}</td>
-            <td>${createdAt}</td>
+            <td>${escapeHtml(getUserEmail(entry.user_id))}</td>
+            <td>${escapeHtml(entry.property_code)}</td>
+            <td>${escapeHtml(entry.inspection_type)}</td>
+            <td>${escapeHtml(inspectionStart)}</td>
+            <td>${escapeHtml(createdAt)}</td>
             <td>
-                <button class="btn btn-outline btn-sm" onclick="deleteEntryById('${entry.id}')">🗑️</button>
+                <button class="btn btn-outline btn-sm" data-action="delete" data-id="${escapeHtml(entry.id)}">🗑️</button>
             </td>
         `;
+        tr.querySelector('[data-action="delete"]').addEventListener('click', () => deleteEntryById(entry.id));
         tbody.appendChild(tr);
     });
 
@@ -523,14 +541,16 @@ function loadMasterData() {
         const terminals = typeof p.terminals === 'string' ? JSON.parse(p.terminals) : p.terminals;
         div.innerHTML = `
             <div class="master-item-info">
-                <div class="master-item-name">${p.property_code} ${p.property_name}</div>
+                <div class="master-item-name">${escapeHtml(p.property_code)} ${escapeHtml(p.property_name)}</div>
                 <div class="master-item-sub">端末: ${terminals?.length || 0}台</div>
             </div>
             <div style="display: flex; gap: 0.25rem;">
-                <button class="btn btn-outline btn-sm" onclick="editProperty('${p.id}')">✏️</button>
-                <button class="btn btn-outline btn-sm" onclick="deleteMasterProperty('${p.id}')">🗑️</button>
+                <button class="btn btn-outline btn-sm" data-action="edit">✏️</button>
+                <button class="btn btn-outline btn-sm" data-action="delete">🗑️</button>
             </div>
         `;
+        div.querySelector('[data-action="edit"]').addEventListener('click', () => editProperty(p.id));
+        div.querySelector('[data-action="delete"]').addEventListener('click', () => deleteMasterProperty(p.id));
         propertiesList.appendChild(div);
     });
 
@@ -544,14 +564,16 @@ function loadMasterData() {
         div.className = 'master-item';
         div.innerHTML = `
             <div class="master-item-info">
-                <div class="master-item-name">${v.vendor_name}</div>
-                <div class="master-item-sub">📞 ${v.emergency_contact || '-'}</div>
+                <div class="master-item-name">${escapeHtml(v.vendor_name)}</div>
+                <div class="master-item-sub">📞 ${escapeHtml(v.emergency_contact) || '-'}</div>
             </div>
             <div style="display: flex; gap: 0.25rem;">
-                <button class="btn btn-outline btn-sm" onclick="editVendor('${v.id}')">✏️</button>
-                <button class="btn btn-outline btn-sm" onclick="deleteMasterVendor('${v.id}')">🗑️</button>
+                <button class="btn btn-outline btn-sm" data-action="edit">✏️</button>
+                <button class="btn btn-outline btn-sm" data-action="delete">🗑️</button>
             </div>
         `;
+        div.querySelector('[data-action="edit"]').addEventListener('click', () => editVendor(v.id));
+        div.querySelector('[data-action="delete"]').addEventListener('click', () => deleteMasterVendor(v.id));
         vendorsList.appendChild(div);
     });
 
@@ -565,14 +587,16 @@ function loadMasterData() {
         div.className = 'master-item';
         div.innerHTML = `
             <div class="master-item-info">
-                <div class="master-item-name">${i.inspection_name}</div>
-                <div class="master-item-sub">テンプレート: ${i.template_no || '-'}</div>
+                <div class="master-item-name">${escapeHtml(i.inspection_name)}</div>
+                <div class="master-item-sub">テンプレート: ${escapeHtml(i.template_no) || '-'}</div>
             </div>
             <div style="display: flex; gap: 0.25rem;">
-                <button class="btn btn-outline btn-sm" onclick="editInspection('${i.id}')">✏️</button>
-                <button class="btn btn-outline btn-sm" onclick="deleteMasterInspection('${i.id}')">🗑️</button>
+                <button class="btn btn-outline btn-sm" data-action="edit">✏️</button>
+                <button class="btn btn-outline btn-sm" data-action="delete">🗑️</button>
             </div>
         `;
+        div.querySelector('[data-action="edit"]').addEventListener('click', () => editInspection(i.id));
+        div.querySelector('[data-action="delete"]').addEventListener('click', () => deleteMasterInspection(i.id));
         inspectionsList.appendChild(div);
     });
 
@@ -752,6 +776,15 @@ window.editInspection = function(id) {
 };
 
 window.deleteMasterProperty = async function(id) {
+    // 使用中チェック
+    const property = masterData.properties.find(p => p.id === id);
+    if (property) {
+        const usedEntries = entries.filter(e => e.property_code === property.property_code);
+        if (usedEntries.length > 0) {
+            showToast(`この物件は${usedEntries.length}件のエントリで使用中です`, 'error');
+            return;
+        }
+    }
     if (!confirm('この物件を削除しますか？')) return;
     try {
         await deleteProperty(id);
@@ -777,6 +810,15 @@ window.deleteMasterVendor = async function(id) {
 };
 
 window.deleteMasterInspection = async function(id) {
+    // 使用中チェック
+    const inspection = masterData.inspectionTypes.find(i => i.id === id);
+    if (inspection) {
+        const usedEntries = entries.filter(e => e.inspection_type === inspection.inspection_name);
+        if (usedEntries.length > 0) {
+            showToast(`この点検種別は${usedEntries.length}件のエントリで使用中です`, 'error');
+            return;
+        }
+    }
     if (!confirm('この点検種別を削除しますか？')) return;
     try {
         await deleteInspectionType(id);
@@ -924,14 +966,16 @@ function renderCategories() {
         div.className = 'master-item';
         div.innerHTML = `
             <div class="master-item-content">
-                <strong>${cat.category_name}</strong>
+                <strong>${escapeHtml(cat.category_name)}</strong>
                 <span class="text-muted">順序: ${cat.sort_order || 0}</span>
             </div>
             <div class="master-item-actions">
-                <button class="btn btn-sm btn-outline" onclick="editMasterCategory('${cat.id}')">編集</button>
-                <button class="btn btn-sm btn-danger" onclick="deleteMasterCategory('${cat.id}')">削除</button>
+                <button class="btn btn-sm btn-outline" data-action="edit">編集</button>
+                <button class="btn btn-sm btn-danger" data-action="delete">削除</button>
             </div>
         `;
+        div.querySelector('[data-action="edit"]').addEventListener('click', () => editMasterCategory(cat.id));
+        div.querySelector('[data-action="delete"]').addEventListener('click', () => deleteMasterCategory(cat.id));
         list.appendChild(div);
     });
 }
