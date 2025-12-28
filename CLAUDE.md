@@ -4,11 +4,20 @@
 - 言語: 日本語でやりとりする
 - コミット時は必ずバージョンを更新する（js/version.js）
 
-## スキル使用方針
-- 利用可能なスキルは積極的に使用する
-- `/commit` - コミット作成時に使用
-- `/review-pr` - PRレビュー時に使用
-- その他のスキルも適切な場面で活用する
+## Agent Skills（自動発動）
+`.claude/skills/` に以下のスキルを配置：
+
+| スキル | 発動条件 |
+|--------|----------|
+| communication | 常時適用 |
+| self-improvement | タスク完了時、エラー時、「評価して」 |
+| testing | コード変更後、プッシュ前 |
+| version-release | 「プッシュして」 |
+| ask-user-question | 選択肢を提示する時 |
+| supabase | DB操作時 |
+| bulk-module | 一括入力画面の変更時 |
+| admin-improvements | 管理画面の改善時 |
+| file-structure | ファイル探索時 |
 
 ## 並列化方針
 - 独立したファイル操作は並列実行
