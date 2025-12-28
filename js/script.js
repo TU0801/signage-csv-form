@@ -629,7 +629,6 @@ const templateImages = {
                         display_end_time: e.displayEndTime || null,
                         display_duration: e.displayTime || 6,
                         poster_type: e.posterType === 'template' ? 'template' : 'custom',
-                        poster_image: e.customImageData || null,
                         poster_position: e.frameNo !== undefined ? String(e.frameNo) : '2',
                         status: 'draft'
                     };
