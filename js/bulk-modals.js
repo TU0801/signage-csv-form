@@ -586,6 +586,28 @@ export function closePasteModal() {
     document.getElementById('pasteModal').classList.remove('active');
 }
 
+// テンプレートダウンロード
+export function downloadExcelTemplate() {
+    // TSV形式でテンプレートを作成（Excelで開ける）
+    const header = ['物件コード', '端末ID', '受注先名', '点検種別', '開始日', '終了日', '備考'];
+    const example1 = ['120406', 'z1003A01', '山本クリーンシステム　有限会社', 'エレベーター定期点検', '2025/1/15', '2025/1/15', '午前中'];
+    const example2 = ['2010', 'h0001A00', '(株)ビルメンテナンス', '消防設備点検', '2025/2/1', '2025/2/3', ''];
+
+    const content = [header, example1, example2].map(row => row.join('\t')).join('\n');
+
+    // BOM付きUTF-8でダウンロード（Excelで文字化けしない）
+    const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+    const blob = new Blob([bom, content], { type: 'text/tab-separated-values;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '一括入力テンプレート.tsv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
 export function importFromPaste(callbacks) {
     const text = document.getElementById('pasteArea').value.trim();
     if (!text) {
@@ -598,10 +620,23 @@ export function importFromPaste(callbacks) {
     let importCount = 0;
     let errorCount = 0;
 
-    // ヘッダー行をスキップするかどうか判定（最初の行に「物件コード」等が含まれている場合）
+    // ヘッダー行をスキップするかどうか判定（最初の列がヘッダーキーワードかどうかで判断）
     let startIndex = 0;
-    const firstLine = lines[0]?.toLowerCase() || '';
-    if (firstLine.includes('物件コード') || firstLine.includes('端末id') || firstLine.includes('property')) {
+    const firstLine = lines[0] || '';
+    const firstCols = firstLine.split('\t');
+    const firstColLower = (firstCols[0] || '').toLowerCase().trim();
+    const secondColLower = (firstCols[1] || '').toLowerCase().trim();
+
+    // 最初の2列がヘッダーっぽいかどうかで判定（データ内のキーワードと区別）
+    const headerKeywords = [
+        '物件コード', '物件', 'property',
+        '端末id', '端末', 'terminal',
+        '受注先', '業者', 'vendor'
+    ];
+    const isHeaderRow = headerKeywords.some(keyword =>
+        firstColLower === keyword.toLowerCase() || secondColLower === keyword.toLowerCase()
+    );
+    if (isHeaderRow) {
         startIndex = 1;
     }
 

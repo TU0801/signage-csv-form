@@ -10,7 +10,7 @@ import {
     createContextMenu, showContextMenu, hideContextMenu,
     createBulkEditModal, openBulkEditModal, closeBulkEditModal,
     openRowDetailModal, closeRowDetailModal,
-    openPasteModal, closePasteModal, importFromPaste,
+    openPasteModal, closePasteModal, importFromPaste, downloadExcelTemplate,
     openSaveTemplateModal, closeTemplateModal, saveTemplate,
     loadTemplates, applyTemplate
 } from './bulk-modals.js';
@@ -116,6 +116,7 @@ function setupEventListeners() {
     document.getElementById('closePasteModal').addEventListener('click', closePasteModal);
     document.getElementById('cancelPasteBtn').addEventListener('click', closePasteModal);
     document.getElementById('importPasteBtn').addEventListener('click', () => importFromPaste(callbacks));
+    document.getElementById('downloadTemplateBtn').addEventListener('click', downloadExcelTemplate);
     document.getElementById('pasteModal').addEventListener('click', (e) => {
         if (e.target.id === 'pasteModal') closePasteModal();
     });

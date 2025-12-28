@@ -140,22 +140,63 @@
 
     <!-- ペーストモーダル -->
     <div class="modal-overlay" id="pasteModal">
-        <div class="modal-content">
+        <div class="modal-content" style="max-width: 700px;">
             <div class="modal-header">
                 <h3>Excelからデータを取り込む</h3>
                 <button class="modal-close" id="closePasteModal">&times;</button>
             </div>
             <div class="modal-body">
-                <p class="modal-description">Excelでコピーしたデータをそのまま貼り付けてください。</p>
+                <p class="modal-description">Excelでコピーしたデータをそのまま貼り付けてください。<br>
+                <small style="color: #64748b;">ヘッダー行（「物件コード」等）がある場合は自動でスキップされます。</small></p>
                 <textarea class="paste-textarea" id="pasteArea" placeholder="ここにExcelからコピーしたデータを貼り付け..."></textarea>
-                <div class="paste-format">
-                    <strong>対応形式:</strong>
-                    <code>物件コード → 受注先名 → 点検種別 → 開始日 → 終了日 → 備考</code>
-                </div>
+
+                <details class="paste-help" style="margin-top: 0.75rem;">
+                    <summary style="cursor: pointer; font-weight: 600; color: #1a56db; font-size: 0.85rem;">
+                        📋 列の順序・対応形式を確認
+                    </summary>
+                    <div style="background: #f8fafc; border-radius: 6px; padding: 0.75rem; margin-top: 0.5rem; font-size: 0.8rem;">
+                        <p style="margin: 0 0 0.5rem; font-weight: 500;">対応する列の順序:</p>
+                        <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
+                            <tr style="background: #e2e8f0;">
+                                <th style="padding: 0.3rem; text-align: left; border: 1px solid #cbd5e1;">A列</th>
+                                <th style="padding: 0.3rem; text-align: left; border: 1px solid #cbd5e1;">B列</th>
+                                <th style="padding: 0.3rem; text-align: left; border: 1px solid #cbd5e1;">C列</th>
+                                <th style="padding: 0.3rem; text-align: left; border: 1px solid #cbd5e1;">D列</th>
+                                <th style="padding: 0.3rem; text-align: left; border: 1px solid #cbd5e1;">E列</th>
+                                <th style="padding: 0.3rem; text-align: left; border: 1px solid #cbd5e1;">F列</th>
+                                <th style="padding: 0.3rem; text-align: left; border: 1px solid #cbd5e1;">G列</th>
+                            </tr>
+                            <tr>
+                                <td style="padding: 0.3rem; border: 1px solid #cbd5e1;">物件コード</td>
+                                <td style="padding: 0.3rem; border: 1px solid #cbd5e1;">端末ID</td>
+                                <td style="padding: 0.3rem; border: 1px solid #cbd5e1;">受注先名</td>
+                                <td style="padding: 0.3rem; border: 1px solid #cbd5e1;">点検種別</td>
+                                <td style="padding: 0.3rem; border: 1px solid #cbd5e1;">開始日</td>
+                                <td style="padding: 0.3rem; border: 1px solid #cbd5e1;">終了日</td>
+                                <td style="padding: 0.3rem; border: 1px solid #cbd5e1;">備考</td>
+                            </tr>
+                            <tr style="color: #64748b;">
+                                <td style="padding: 0.3rem; border: 1px solid #cbd5e1;">120406</td>
+                                <td style="padding: 0.3rem; border: 1px solid #cbd5e1;">z1003A01</td>
+                                <td style="padding: 0.3rem; border: 1px solid #cbd5e1;">山本クリーン...</td>
+                                <td style="padding: 0.3rem; border: 1px solid #cbd5e1;">エレベーター...</td>
+                                <td style="padding: 0.3rem; border: 1px solid #cbd5e1;">2025/1/15</td>
+                                <td style="padding: 0.3rem; border: 1px solid #cbd5e1;">2025/1/15</td>
+                                <td style="padding: 0.3rem; border: 1px solid #cbd5e1;">午前中</td>
+                            </tr>
+                        </table>
+                        <p style="margin: 0.5rem 0 0; color: #64748b; font-size: 0.7rem;">
+                            ※ 端末ID（B列）は省略可能です。省略時は物件から自動設定されます。
+                        </p>
+                    </div>
+                </details>
             </div>
-            <div class="modal-footer">
-                <button class="btn btn-outline" id="cancelPasteBtn">キャンセル</button>
-                <button class="btn btn-primary" id="importPasteBtn">取り込む</button>
+            <div class="modal-footer" style="justify-content: space-between;">
+                <button class="btn btn-outline btn-sm" id="downloadTemplateBtn" title="Excelテンプレートをダウンロード">📥 テンプレート</button>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button class="btn btn-outline" id="cancelPasteBtn">キャンセル</button>
+                    <button class="btn btn-primary" id="importPasteBtn">取り込む</button>
+                </div>
             </div>
         </div>
     </div>
