@@ -638,6 +638,19 @@ export function importFromPaste(callbacks) {
                 displayTime: cols[18] ? parseDisplayTime(cols[18].trim()) : 6,
                 showOnBoard: cols[6]?.trim().toLowerCase() !== 'false'
             };
+        } else if (cols.length >= 7) {
+            // 端末ID付き形式（7-9列）: 物件コード, 端末ID, 受注先, 点検種別, 開始日, 終了日, 備考
+            rowData = {
+                propertyCode: cols[0]?.trim() || '',
+                terminalId: cols[1]?.trim() || '',
+                vendorName: cols[2]?.trim() || '',
+                inspectionType: cols[3]?.trim() || '',
+                startDate: formatDateForInput(cols[4]?.trim() || ''),
+                endDate: formatDateForInput(cols[5]?.trim() || ''),
+                remarks: cols[6]?.trim() || '',
+                noticeText: cols[7]?.trim() || '',
+                position: cols[8] ? parseInt(cols[8]) : 2
+            };
         } else {
             // シンプルな形式（6列以下）: 物件コード, 受注先, 点検種別, 開始日, 終了日, 備考
             rowData = {
