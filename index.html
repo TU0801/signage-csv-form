@@ -226,10 +226,11 @@
     </script>
     <script type="module">
         // 認証モジュール（ログイン必須）
-        import { getUser, getProfile, isAdmin, signOut, getSettings, createEntries } from './js/supabase-client.js';
+        import { getUser, getProfile, isAdmin, signOut, getSettings, createEntries, uploadPosterImage } from './js/supabase-client.js';
 
         // script.jsから使えるようにwindowに公開
         window.createEntriesToSupabase = createEntries;
+        window.uploadPosterImage = uploadPosterImage;
 
         async function initAuth() {
             try {

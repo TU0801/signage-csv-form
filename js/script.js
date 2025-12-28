@@ -607,8 +607,23 @@ const templateImages = {
             submitBtn.textContent = '申請中...';
 
             try {
+                // カスタム画像をアップロード（並列処理）
+                const uploadPromises = entries.map(async (e) => {
+                    if (e.posterType === 'custom' && e.customImageData) {
+                        try {
+                            const imageUrl = await window.uploadPosterImage(e.customImageData);
+                            return { ...e, posterImageUrl: imageUrl };
+                        } catch (uploadError) {
+                            console.error('Image upload failed:', uploadError);
+                            throw new Error('画像のアップロードに失敗しました');
+                        }
+                    }
+                    return e;
+                });
+                const entriesWithImages = await Promise.all(uploadPromises);
+
                 // 一括入力と同じデータ構造に変換
-                const supabaseEntries = entries.map(e => {
+                const supabaseEntries = entriesWithImages.map(e => {
                     const displayStartDate = e.displayStartDate || e.startDate || null;
                     const displayEndDate = e.displayEndDate || e.endDate || null;
 
@@ -629,6 +644,7 @@ const templateImages = {
                         display_end_time: e.displayEndTime || null,
                         display_duration: e.displayTime || 6,
                         poster_type: e.posterType === 'template' ? 'template' : 'custom',
+                        poster_image: e.posterImageUrl || null,
                         poster_position: e.frameNo !== undefined ? String(e.frameNo) : '2',
                         status: 'draft'
                     };

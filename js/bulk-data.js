@@ -150,6 +150,7 @@ export async function saveAll(callbacks) {
                 display_end_time: row.displayEndTime || null,
                 display_duration: row.displayTime || 6,
                 poster_type: row.showOnBoard !== false ? 'template' : 'custom',
+                poster_image: null,
                 poster_position: row.position !== undefined ? String(row.position) : '2',
                 status: 'draft'
             };
