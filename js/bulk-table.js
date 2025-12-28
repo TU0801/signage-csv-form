@@ -92,6 +92,12 @@ export function addRow(data = {}, callbacks) {
 
     addRowToState(row);
     renderRow(row, callbacks);
+
+    // インポート時のプロパティが設定されている場合は端末リストを更新
+    if (row.propertyCode) {
+        updateTerminals(rowId, row.propertyCode, true);
+    }
+
     validateRow(rowId, callbacks);
     callbacks.updateStats();
     callbacks.updateEmptyState();

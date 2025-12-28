@@ -98,21 +98,32 @@ async function setupAuthMockWithMasterData(page, url, options = {}) {
   } = options;
 
   const mockProperties = [
-    { id: 1, property_code: '2010', property_name: 'テスト物件A', terminal_id: 'h0001A00' },
-    { id: 2, property_code: '120406', property_name: 'テスト物件B', terminal_id: 'h0002A00' }
+    { id: 1, property_code: '2010', property_name: 'エンクレストガーデン福岡', terminals: '["h0001A00", "h0001A01", "h0001A02"]' },
+    { id: 2, property_code: '120406', property_name: 'アソシアグロッツォ天神サウス', terminals: '["z1003A01"]' },
+    { id: 3, property_code: '120408', property_name: 'アソシアグロッツォ博多プレイス', terminals: '["z1006A01"]' }
   ];
 
   const mockVendors = [
-    { id: 1, vendor_name: '山本クリーンシステム', phone: '092-934-0407' },
-    { id: 2, vendor_name: 'テスト業者', phone: '03-1234-5678' }
+    { id: 1, vendor_name: '山本クリーンシステム　有限会社', emergency_contact: '092-934-0407' },
+    { id: 2, vendor_name: '日本オーチス・エレベータ　株式会社', emergency_contact: '0120-085-050' },
+    { id: 3, vendor_name: '株式会社　えん建物管理', emergency_contact: '092-263-8040' },
+    { id: 4, vendor_name: 'テスト業者', emergency_contact: '03-1234-5678' }
   ];
 
   const mockInspectionTypes = [
-    { id: 1, template_no: 0, inspection_name: '定期清掃', category: '清掃' },
-    { id: 2, template_no: 1, inspection_name: 'エレベーター点検', category: '点検' },
-    { id: 3, template_no: 2, inspection_name: '消防設備点検', category: '点検' },
-    { id: 4, template_no: 3, inspection_name: '防犯カメラ取付工事', category: '工事' },
-    { id: 5, template_no: 4, inspection_name: '消防設備点検アンケート', category: 'アンケート' }
+    { id: 1, template_no: 'cleaning', inspection_name: '定期清掃', category: '清掃', default_text: '定期清掃を実施いたします。' },
+    { id: 2, template_no: 'elevator_inspection', inspection_name: 'エレベーター定期点検', category: '点検', default_text: 'エレベーター定期点検を実施いたします。' },
+    { id: 3, template_no: 'fire_inspection', inspection_name: '消防設備点検', category: '点検', default_text: '消防設備点検を実施いたします。' },
+    { id: 4, template_no: 'construction', inspection_name: '防犯カメラ取付工事', category: '工事', default_text: '' },
+    { id: 5, template_no: 'survey', inspection_name: '消防設備点検アンケート', category: 'アンケート', default_text: '' },
+    { id: 6, template_no: 'building_inspection', inspection_name: '建物設備点検', category: '点検', default_text: '建物設備点検を実施いたします。' }
+  ];
+
+  const mockSettings = [
+    { id: 1, setting_key: 'display_time_max', setting_value: '30' },
+    { id: 2, setting_key: 'remarks_chars_per_line', setting_value: '25' },
+    { id: 3, setting_key: 'remarks_max_lines', setting_value: '5' },
+    { id: 4, setting_key: 'notice_text_max_chars', setting_value: '200' }
   ];
 
   const mockCategories = [
@@ -150,7 +161,8 @@ async function setupAuthMockWithMasterData(page, url, options = {}) {
             inspectionTypes: ${JSON.stringify(mockInspectionTypes)},
             categories: ${JSON.stringify(mockCategories)},
             entries: ${JSON.stringify(mockEntries)},
-            users: ${JSON.stringify(mockUsers)}
+            users: ${JSON.stringify(mockUsers)},
+            settings: ${JSON.stringify(mockSettings)}
           };
 
           export function createClient() {
@@ -181,6 +193,7 @@ async function setupAuthMockWithMasterData(page, url, options = {}) {
                     case 'signage_master_categories': return mockData.categories;
                     case 'signage_entries': return mockData.entries;
                     case 'signage_profiles': return mockData.users;
+                    case 'signage_settings': return mockData.settings;
                     default: return [];
                   }
                 };
