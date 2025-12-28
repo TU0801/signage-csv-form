@@ -1,0 +1,3100 @@
+================================================================================
+ファイル: Sheet1.cls
+================================================================================
+Attribute VB_Name = "Sheet1"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+Option Explicit
+
+
+
+================================================================================
+ファイル: Sheet10.cls
+================================================================================
+Attribute VB_Name = "Sheet10"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+Option Explicit
+
+
+
+================================================================================
+ファイル: Sheet2.cls
+================================================================================
+Attribute VB_Name = "Sheet2"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+Option Explicit
+
+
+
+================================================================================
+ファイル: Sheet4.cls
+================================================================================
+Attribute VB_Name = "Sheet4"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+Attribute VB_Control = "CommandButton2, 2, 0, MSForms, CommandButton"
+Attribute VB_Control = "CommandButton1, 1, 1, MSForms, CommandButton"
+Option Explicit
+
+Private Sub CommandButton1_Click()
+
+Call 入力フォームを表示
+
+End Sub
+
+Private Sub CommandButton2_Click()
+
+Call CSV出力フォームを表示
+
+End Sub
+
+
+================================================================================
+ファイル: Sheet5.cls
+================================================================================
+Attribute VB_Name = "Sheet5"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+Option Explicit
+
+
+
+================================================================================
+ファイル: Sheet6.cls
+================================================================================
+Attribute VB_Name = "Sheet6"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+Option Explicit
+
+
+
+================================================================================
+ファイル: Sheet7.cls
+================================================================================
+Attribute VB_Name = "Sheet7"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+Option Explicit
+
+
+
+================================================================================
+ファイル: Sheet8.cls
+================================================================================
+Attribute VB_Name = "Sheet8"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+Option Explicit
+
+
+
+================================================================================
+ファイル: Sheet9.cls
+================================================================================
+Attribute VB_Name = "Sheet9"
+Attribute VB_Base = "0{00020820-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+Option Explicit
+
+
+
+================================================================================
+ファイル: ThisWorkbook.cls
+================================================================================
+Attribute VB_Name = "ThisWorkbook"
+Attribute VB_Base = "0{00020819-0000-0000-C000-000000000046}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = True
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = True
+Option Explicit
+
+
+
+================================================================================
+ファイル: UserForm1.frm
+================================================================================
+Attribute VB_Name = "UserForm1"
+Attribute VB_Base = "0{9BC9E3FF-B7EC-4C15-BC12-F5BCF2D3C439}{A76344D9-8429-4DC0-B02B-0AEB57F1769E}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = False
+Option Explicit
+
+Private Sub ComboBox1_Change()
+
+With Me.ComboBox1
+ If .Value = "" And .ListCount > 0 Then
+  .Value = .List(0)
+ End If
+End With
+Call 入力候補リスト更新
+
+End Sub
+
+Private Sub ComboBox2_Change()
+
+Call 受注先入力
+
+End Sub
+
+Private Sub ComboBox3_Change()
+
+Call 案内文カテゴリ選択
+
+End Sub
+
+Private Sub ComboBox4_Change()
+
+Call 案内文選択
+
+End Sub
+
+Private Sub ComboBox5_Change()
+
+Call 入力候補リスト更新
+
+End Sub
+
+Private Sub CommandButton2_Click()
+
+Call フォームサイズ変更
+
+End Sub
+
+Private Sub CommandButton3_Click()
+
+Call 入力の編集内容記録
+
+End Sub
+
+Private Sub CommandButton4_Click()
+
+Call 貼紙サンプル表示
+
+End Sub
+
+Private Sub CommandButton5_Click()
+
+Call サンプルイメージ削除
+
+End Sub
+
+Private Sub CommandButton6_Click()
+
+Call 入力の編集内容記録(True)
+
+End Sub
+
+Private Sub CommandButton7_Click()
+
+
+If Me.Label32.ForeColor = RGB(255, 255, 255) Then
+ Me.Label32.ForeColor = RGB(0, 0, 0)
+Else
+ Me.Label32.ForeColor = RGB(255, 255, 255)
+End If
+
+
+End Sub
+
+Private Sub ListBox1_Click()
+
+Call 候補リスト選択
+
+End Sub
+
+Private Sub OptionButton1_Click()
+
+Call 入力候補リスト更新
+
+End Sub
+
+Private Sub OptionButton2_Click()
+
+Call 入力候補リスト更新
+
+End Sub
+
+Private Sub OptionButton3_Click()
+
+Call 入力候補リスト更新
+
+End Sub
+
+Private Sub OptionButton4_Click()
+
+Call 貼紙表示位置
+
+End Sub
+
+Private Sub OptionButton5_Click()
+
+Call 貼紙表示位置
+
+End Sub
+
+Private Sub OptionButton6_Click()
+
+Call 貼紙表示位置
+
+End Sub
+
+Private Sub OptionButton7_Click()
+
+Call 貼紙表示位置
+
+End Sub
+
+Private Sub OptionButton8_Click()
+
+Call 貼紙表示位置
+
+End Sub
+
+Private Sub OptionButton9_Change()
+
+If Me.OptionButton9.Value = True Then
+ Call 貼紙サンプル表示
+End If
+
+End Sub
+
+Private Sub SpinButton1_SpinDown()
+
+Dim n As Long
+
+n = Me.TextBox25.Value
+If n > 1 Then
+ Me.TextBox25.Value = n - 1
+End If
+
+End Sub
+
+Private Sub SpinButton1_SpinUp()
+
+Dim n As Long
+Dim Lim As Long
+
+Lim = Me.Label50.Caption
+n = Me.TextBox25.Value
+If n < Lim Then
+ Me.TextBox25.Value = n + 1
+End If
+
+End Sub
+
+Private Sub TextBox1_Change()
+
+InputNum Me.TextBox1
+Call 物件コード入力
+Call 入力候補リスト更新
+
+End Sub
+
+Private Sub TextBox1_MouseUp(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+
+SlctTxtBox Me.TextBox1, Button
+
+End Sub
+
+Private Sub TextBox10_Change()
+
+InputNum Me.TextBox10
+Call 点検期間入力
+
+End Sub
+
+Private Sub TextBox10_MouseUp(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+
+SlctTxtBox Me.TextBox10, Button
+
+End Sub
+
+Private Sub TextBox11_Change()
+
+Dim Str As String
+
+If Me.掲示備考サンプル = False Then
+ Call 掲示備考入力
+ Str = Me.TextBox11.Value
+Else
+ Str = ""
+End If
+Me.Label33.Caption = Str
+
+End Sub
+
+Private Sub TextBox11_Enter()
+
+If Me.掲示備考サンプル.Value = True Then
+ Call 掲示備考入力待機
+End If
+
+End Sub
+
+Private Sub TextBox11_Exit(ByVal Cancel As MSForms.ReturnBoolean)
+
+If Me.TextBox11.Value = "" Then
+ Call 掲示備考サンプル表示
+End If
+
+End Sub
+
+Private Sub TextBox12_Change()
+
+InputNum Me.TextBox12
+
+End Sub
+
+Private Sub TextBox12_MouseUp(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+
+SlctTxtBox Me.TextBox12, Button
+
+End Sub
+
+Private Sub TextBox13_Change()
+
+InputNum Me.TextBox13
+
+End Sub
+
+Private Sub TextBox13_MouseUp(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+
+SlctTxtBox Me.TextBox13, Button
+
+End Sub
+
+Private Sub TextBox14_Change()
+
+InputNum Me.TextBox14
+
+End Sub
+
+Private Sub TextBox14_MouseUp(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+
+SlctTxtBox Me.TextBox14, Button
+
+End Sub
+
+Private Sub TextBox15_Change()
+
+InputNum Me.TextBox15
+
+End Sub
+
+Private Sub TextBox15_MouseUp(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+
+SlctTxtBox Me.TextBox15, Button
+
+End Sub
+
+Private Sub TextBox16_Change()
+
+InputNum Me.TextBox16
+
+End Sub
+
+Private Sub TextBox16_MouseUp(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+
+SlctTxtBox Me.TextBox16, Button
+
+End Sub
+
+Private Sub TextBox17_Change()
+
+InputNum Me.TextBox17
+
+End Sub
+
+Private Sub TextBox17_MouseUp(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+
+SlctTxtBox Me.TextBox17, Button
+
+End Sub
+
+Private Sub TextBox18_Change()
+
+InputNum Me.TextBox18
+
+End Sub
+
+Private Sub TextBox18_MouseUp(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+
+SlctTxtBox Me.TextBox18, Button
+
+End Sub
+
+Private Sub TextBox19_Change()
+
+InputNum Me.TextBox19
+
+End Sub
+
+Private Sub TextBox19_MouseUp(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+
+SlctTxtBox Me.TextBox19, Button
+
+End Sub
+
+Private Sub TextBox20_Change()
+
+InputNum Me.TextBox20
+
+End Sub
+
+Private Sub TextBox20_MouseUp(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+
+SlctTxtBox Me.TextBox20, Button
+
+End Sub
+
+Private Sub TextBox21_MouseUp(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+
+SlctTxtBox Me.TextBox21, Button
+
+End Sub
+
+Private Sub TextBox22_Change()
+
+Dim Str As String
+
+ Str = Me.TextBox22.Value
+
+Me.Label31.Caption = Str
+
+End Sub
+
+Private Sub TextBox25_Change()
+
+InputNum Me.TextBox25
+If Me.TextBox25.Value = "" Then Me.TextBox25.Value = "6"
+
+End Sub
+
+Private Sub TextBox25_MouseUp(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+
+SlctTxtBox Me.TextBox25, Button
+
+End Sub
+
+Private Sub TextBox4_Change()
+
+InputABC Me.TextBox4, 許可する文字列:="- "
+
+End Sub
+
+Private Sub TextBox5_Change()
+
+InputNum Me.TextBox5
+Call 点検期間入力
+
+End Sub
+
+Private Sub TextBox5_MouseUp(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+
+SlctTxtBox Me.TextBox5, Button
+
+End Sub
+
+Private Sub TextBox6_Change()
+
+InputNum Me.TextBox6
+Call 点検期間入力
+
+End Sub
+
+Private Sub TextBox6_MouseUp(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+
+SlctTxtBox Me.TextBox6, Button
+
+End Sub
+
+Private Sub TextBox7_Change()
+
+InputNum Me.TextBox7
+Call 点検期間入力
+
+End Sub
+
+Private Sub TextBox7_MouseUp(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+
+SlctTxtBox Me.TextBox7, Button
+
+End Sub
+
+Private Sub TextBox8_Change()
+
+InputNum Me.TextBox8
+Call 点検期間入力
+
+End Sub
+
+Private Sub TextBox8_MouseUp(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+
+SlctTxtBox Me.TextBox8, Button
+
+End Sub
+
+Private Sub TextBox9_Change()
+
+InputNum Me.TextBox9
+Call 点検期間入力
+
+End Sub
+
+Private Sub TextBox9_MouseUp(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+
+SlctTxtBox Me.TextBox9, Button
+
+End Sub
+
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+
+If CloseMode = 0 Then
+ If MsgBox("このフォームを閉じても良いですか？" & vbLf & "※編集中のデータは破棄されます※", vbQuestion Or vbYesNo Or vbSystemModal) = vbYes Then
+  Call 履歴を記録
+  Unload Me
+ Else
+  Cancel = True
+ End If
+End If
+
+End Sub
+
+
+
+================================================================================
+ファイル: UserForm2.frm
+================================================================================
+Attribute VB_Name = "UserForm2"
+Attribute VB_Base = "0{AA979C9F-41B8-4E5C-9B4B-942E1C69B24D}{95764907-0045-4DA8-B5AE-5ACE19128EB2}"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+Attribute VB_TemplateDerived = False
+Attribute VB_Customizable = False
+Option Explicit
+
+Private Sub CheckBox1_Click()
+
+Dim Opt As Boolean
+Dim i As Long
+
+Opt = Me.CheckBox1.Value
+
+With Me.ListBox1
+ For i = 1 To .ListCount - 1
+  .Selected(i) = Opt
+ Next i
+End With
+
+End Sub
+
+Private Sub ComboBox1_Change()
+
+Call CSV出力の候補リスト更新
+
+End Sub
+
+Private Sub ComboBox2_Change()
+
+'InputABC Me.ComboBox2, True
+Call CSV出力の候補リスト更新
+
+End Sub
+
+Private Sub ComboBox2_MouseUp(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+
+SlctTxtBox Me.ComboBox2, Button
+
+End Sub
+
+Private Sub CommandButton1_Click()
+
+Call CSV出力処理
+
+End Sub
+
+Private Sub TextBox1_Change()
+
+InputNum Me.TextBox1
+Call CSV出力物件検索
+Call CSV出力の候補リスト更新
+
+End Sub
+
+Private Sub TextBox1_MouseUp(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+
+SlctTxtBox Me.TextBox1, Button
+
+End Sub
+
+Private Sub TextBox4_Change()
+
+Call CSV出力の候補リスト更新
+
+End Sub
+
+
+
+================================================================================
+ファイル: □テキストボックスサンプル.bas
+================================================================================
+Attribute VB_Name = "□テキストボックスサンプル"
+Option Explicit
+
+Sub 掲示備考サンプル表示()
+
+Dim mlCnt As String, mrCnt As String
+
+With UserForm1
+ .掲示備考サンプル.Value = True
+ mlCnt = StrConv(.Label51.Caption, vbWide)
+ mrCnt = StrConv(.Label52.Caption, vbWide)
+ With .TextBox11
+  .ForeColor = RGB(155, 155, 155)
+  .Value = "＜入力例＞" & vbLf & _
+           "００１号機：９時３０分～１１時００分" & vbLf & _
+           "１行につき" & mlCnt & "文字程度、" & mrCnt & "行以内で入力してください。"
+ End With
+End With
+
+End Sub
+
+Sub 掲示備考入力待機()
+
+
+With UserForm1.TextBox11
+ .ForeColor = RGB(0, 0, 0)
+ .Value = ""
+End With
+UserForm1.掲示備考サンプル.Value = False
+
+End Sub
+
+
+================================================================================
+ファイル: ◇CSV出力_00_フォームを表示.bas
+================================================================================
+Attribute VB_Name = "◇CSV出力_00_フォームを表示"
+Option Explicit
+
+Sub CSV出力フォームを表示()
+
+Dim Opt As Boolean
+Dim bNum As String
+Dim ws As Worksheet
+
+Set ws = ThisWorkbook.Worksheets("情報")
+bNum = ws.UsedRange.Find("物件コード").Offset(0, 1).Value
+
+Unload UserForm1
+
+Opt = GetOPT
+Call 検索範囲ボックス設定
+
+With UserForm2
+ .TextBox1.Value = bNum
+ .CheckBox2.Visible = Opt
+ .Show
+End With
+
+End Sub
+
+Private Sub 検索範囲ボックス設定()
+
+Dim D As Date, i As Long
+
+With UserForm2.ComboBox1
+ .Clear
+ .AddItem "指定なし"
+ D = DateSerial(Year(Date), Month(Date), 1)
+ For i = 1 To 3
+  .AddItem D
+  D = DateSerial(Year(D), Month(D) - 1, 1)
+ Next i
+ 
+ .Value = .List(0)
+End With
+
+
+End Sub
+
+
+================================================================================
+ファイル: ◇CSV出力_01_物件検索.bas
+================================================================================
+Attribute VB_Name = "◇CSV出力_01_物件検索"
+Option Explicit
+
+Dim sR As Long, mR As Long, C() As Long
+Dim ws As Worksheet
+
+Sub CSV出力物件検索()
+
+Dim sRa  As Long, eRa As Long
+Dim bNum As String, bName As String
+
+If ws Is Nothing Then
+ Call 物件リストの行列番号取得(ws, sR, mR, C)
+End If
+
+bNum = UserForm2.TextBox1.Value
+
+If Application.WorksheetFunction.CountIf(ws.Columns(C(1)), bNum) > 0 And bNum <> "" Then
+ With ws.Columns(C(1))
+  sRa = .Find(bNum, lookat:=xlWhole).Row
+  eRa = .Find(bNum, searchdirection:=xlPrevious).Row
+ End With
+ bName = ws.Cells(sRa, C(2)).Value
+ Call 端末コードリスト作成(bNum, sRa, eRa)
+Else
+ bName = ""
+End If
+
+UserForm2.TextBox2.Value = bName
+
+
+End Sub
+
+Private Sub 端末コードリスト作成(ByVal bNum As String, ByVal sRa As Long, ByVal eRa As Long)
+
+Dim R As Long, i As Long
+
+With UserForm2.ComboBox2
+ .Clear
+ .AddItem "全端末": i = 0
+ For R = sRa To eRa
+  If ws.Cells(R, C(1)).Value = bNum Then
+   .AddItem: i = i + 1
+   .List(i, 0) = ws.Cells(R, C(4)).Value
+   .List(i, 1) = ws.Cells(R, C(5)).Value
+  End If
+ Next R
+ .Value = "全端末"
+End With
+
+End Sub
+
+
+
+================================================================================
+ファイル: ◇CSV出力_02_候補リスト更新.bas
+================================================================================
+Attribute VB_Name = "◇CSV出力_02_候補リスト更新"
+Option Explicit
+
+Dim Mx As Long, Ca() As Long
+Dim sR As Long, mR As Long, C() As Long
+Dim aws As Worksheet
+
+Sub CSV出力の候補リスト更新()
+
+Dim bNum As String, Cod As String, LimD As Date
+Dim Check As String, dStr As String
+Dim R As Long, i As Long, n As Long
+
+lp:
+With UserForm2
+ bNum = .TextBox1.Value
+ Cod = UCase(.ComboBox2.Value)
+ dStr = .ComboBox1.Value
+ If dStr <> "" And IsDate(dStr) = True Then
+  LimD = DateValue(.ComboBox1.Value)
+ Else
+  LimD = 0
+ End If
+ Check = "*" & .TextBox4.Value & "*"
+End With
+
+If bNum = "" Or Cod = "" Then Exit Sub
+
+If aws Is Nothing Then
+ Call CSV作成用の行列番号取得(aws, sR, mR, C)
+End If
+mR = aws.Cells(aws.Rows.Count, C(2)).End(xlUp).Row
+Call 準備
+
+UserForm2.CheckBox1.Value = False
+
+With UserForm2.ListBox1
+ i = 0
+ For R = sR To mR
+  If aws.Cells(R, C(3)).Value = bNum And (UCase(aws.Cells(R, C(2)).Value) = Cod Or Cod = "全端末") Then
+   If DateValue(aws.Cells(R, C(25)).Value) > LimD Then
+    If aws.Cells(R, C(6)).Value Like Check Then
+     .AddItem
+     i = i + 1
+     .List(i, 0) = R
+     For n = 1 To Mx
+      .List(i, n) = aws.Cells(R, Ca(n)).Value
+     Next n
+    End If
+   End If
+  End If
+ Next R
+End With
+
+UserForm2.CheckBox1.Value = True
+
+   
+   
+
+
+
+End Sub
+
+Private Sub 準備()
+
+Dim n As Long
+Dim cList As String
+
+Mx = Application.WorksheetFunction.Max(aws.Rows(1))
+cList = "0"
+
+ReDim Ca(1 To Mx) As Long
+
+cList = "0"
+With UserForm2.ListBox1
+ .Clear
+ .ColumnCount = Mx + 1
+ .AddItem
+ For n = 1 To Mx
+  Ca(n) = aws.Rows(1).Find(n, lookat:=xlWhole).Column
+  cList = cList & "," & aws.Columns(Ca(n)).ColumnWidth * 6
+  .List(0, n) = aws.Cells(sR - 1, Ca(n)).Value
+ Next n
+ .ColumnWidths = cList
+End With
+
+
+End Sub
+
+
+================================================================================
+ファイル: ◇CSV出力_03_出力処理.bas
+================================================================================
+Attribute VB_Name = "◇CSV出力_03_出力処理"
+Option Explicit
+
+Sub CSV出力処理()
+
+With Application
+ .ScreenUpdating = False
+ .EnableEvents = False
+ .DisplayAlerts = False
+ .Calculation = xlCalculationManual
+End With
+
+Dim mStr As String
+Dim rList As String, fName As String
+Dim i As Long
+
+rList = ""
+With UserForm2.ListBox1
+ For i = 1 To .ListCount - 1
+  If .Selected(i) = True Then
+   rList = rList & .List(i, 0) & "/"
+  End If
+ Next i
+End With
+
+If rList <> "" Then
+ Call 処理開始(rList, fName)
+ Call Excelレポート出力(rList, fName)
+ mStr = "CSVファイルを作成しました。"
+Else
+ mStr = "対象が選択されていません。"
+End If
+
+With Application
+ .Calculation = xlCalculationAutomatic
+ .DisplayAlerts = True
+ .EnableEvents = True
+ .ScreenUpdating = True
+End With
+
+MsgBox mStr, vbInformation Or vbSystemModal
+
+End Sub
+
+Private Sub 処理開始(ByVal rList As String, ByRef fName As String)
+
+Dim fol As String ', fName As String
+Dim R As Long, sR As Long, mR As Long, C() As Long
+Dim wb As Workbook, ws As Worksheet, Sh As Worksheet
+
+Call 保存フォルダ設定(fol)
+Call CSV作成用の行列番号取得(Sh, sR, mR, C)
+
+Sh.Copy
+Set wb = ActiveWorkbook
+Set ws = Worksheets(1)
+
+rList = "/" & sR - 1 & "/" & rList
+For R = mR To 1 Step -1
+ If InStr(rList, "/" & R & "/") = 0 Then
+  ws.Rows(R).Delete
+ End If
+Next R
+
+With UserForm2
+ fName = .TextBox1.Value & "-" & .ComboBox2.Value & "-" & Format(Date, "yyyymmdd") & " " & Format(Now, "hhmmss") & ".csv"
+End With
+
+wb.SaveAs Filename:=fol & fName, FileFormat:=xlCSV
+wb.Close
+
+End Sub
+
+Private Sub 保存フォルダ設定(ByRef fol As String)
+
+Dim sFol As String
+
+fol = GetMyPath & "アップロード用CSV"
+If Dir(fol, vbDirectory) = "" Then MkDir fol
+
+fol = fol & "\"
+
+End Sub
+
+
+================================================================================
+ファイル: ◇CSV出力_04_レポート出力.bas
+================================================================================
+Attribute VB_Name = "◇CSV出力_04_レポート出力"
+Option Explicit
+
+Sub Excelレポート出力(ByVal rList As String, ByVal fName As String)
+If UserForm2.CheckBox2.Value = False Then Exit Sub
+
+Dim R As Long, Rx As Long
+Dim sR As Long, mR As Long, C() As Long
+Dim sRx As Long, mRx As Long, Cx() As Long
+Dim awb As Workbook, aws As Worksheet, Gns As Worksheet
+Dim ws As Worksheet
+
+Set Gns = ThisWorkbook.Worksheets("レポート")
+If Gns.Visible = False Then Gns.Visible = True
+Gns.Copy
+
+Set awb = ActiveWorkbook
+Set aws = awb.Worksheets(1)
+Gns.Visible = False
+
+Set ws = ThisWorkbook.Worksheets("CSV作成用")
+
+aws.Range("1:5").Find("※CSV出力レポート", lookat:=xlWhole).Value = "※CSV出力レポート：" & fName
+
+Call レポートの行列番号取得(aws, sR, mR, C)
+Call レポートの行列番号取得(ws, sRx, mRx, Cx)
+
+Dim i As Long
+Dim n As Long, Mx As Long
+
+Mx = UBound(C)
+
+R = sR - 1
+Do While rList <> ""
+ i = InStr(rList, "/")
+ Rx = Left(rList, i - 1)
+ rList = Right$(rList, Len(rList) - i)
+ R = R + 1
+ For n = 1 To Mx
+  aws.Cells(R, C(n)).Value = ws.Cells(Rx, Cx(n)).Value
+ Next n
+Loop
+
+Call 保存処理(awb, fName)
+
+End Sub
+
+Private Sub 保存処理(ByVal awb As Workbook, ByVal CSVname As String)
+
+Dim fol As String, sFol As String
+Dim wbn As String
+
+fol = GetMyPath
+sFol = Dir(fol & "*レポート*", vbDirectory)
+If sFol = "" Then
+ sFol = "Excelレポート"
+ MkDir fol & sFol
+End If
+fol = fol & sFol & "\"
+
+CSVname = Left$(CSVname, Len(CSVname) - 4)
+wbn = "【レポート】" & CSVname & ".xlsx"
+
+awb.SaveAs fol & wbn, FileFormat:=xlOpenXMLWorkbook
+
+End Sub
+
+
+================================================================================
+ファイル: ○入力_00_フォームを表示.bas
+================================================================================
+Attribute VB_Name = "○入力_00_フォームを表示"
+Option Explicit
+
+Sub 入力フォームを表示()
+
+Dim Opt As Boolean
+
+Call 入力フォームを初期化
+Unload UserForm2
+
+Opt = GetOPT
+
+
+With UserForm1
+ .CommandButton7.Visible = Opt
+ .Label36.Caption = .Width
+ .Label37.Caption = .Height
+ .Label38.Caption = .Frame5.Left
+ .MultiPage1.Value = 0
+ .MultiPage2.Value = 0
+ Call 設定を読み込み
+ Call 履歴を読み込み
+ .Show
+End With
+
+End Sub
+
+Private Sub 履歴を読み込み()
+
+Dim Cod As String
+Dim ws As Worksheet
+
+Set ws = ThisWorkbook.Worksheets("情報")
+With ws.UsedRange
+ Cod = .Find("物件コード").Offset(0, 1).Value
+
+
+End With
+
+With UserForm1
+ .TextBox1.Value = Cod
+
+
+End With
+
+End Sub
+
+Private Sub 設定を読み込み()
+
+Dim Rng As Range
+Dim mlCnt  As Long, mrCnt As Long
+
+Set Rng = ThisWorkbook.Worksheets("設定").UsedRange
+mlCnt = Rng.Find("掲示備考の文字数制限-行", LookIn:=xlFormulas, lookat:=xlWhole).Offset(0, 1).Value
+mrCnt = Rng.Find("掲示備考の行数制限").Offset(0, 1).Value
+With UserForm1
+ .Label50.Caption = Rng.Find("表示時間の上限", LookIn:=xlFormulas, lookat:=xlWhole).Offset(0, 1).Value
+ .Label51.Caption = mlCnt
+ .Label52.Caption = mrCnt
+
+
+
+End With
+
+
+End Sub
+
+
+================================================================================
+ファイル: ○入力_01_物件コード入力.bas
+================================================================================
+Attribute VB_Name = "○入力_01_物件コード入力"
+Option Explicit
+
+Dim sR As Long, mR As Long, C() As Long
+Dim ws As Worksheet, fCol As Range
+
+Sub 物件コード入力()
+If UserForm1.処理中.Value = True Then Exit Sub
+If ws Is Nothing Then
+ Call 物件リストの行列番号取得(ws, sR, mR, C)
+ Set fCol = ws.Columns(C(1))
+End If
+
+Dim sRa As Long, eRa As Long
+Dim bNum As String
+Dim bName As String
+
+bNum = UserForm1.TextBox1.Value
+
+If Application.WorksheetFunction.CountIf(ws.Columns(C(1)), bNum) > 0 Then
+ With fCol
+  sRa = .Find(bNum, lookat:=xlWhole).Row
+  eRa = .Find(bNum, searchdirection:=xlPrevious).Row
+ End With
+ bName = ws.Cells(sRa, C(2)).Value
+Else
+ bName = ""
+ sRa = 1
+ eRa = 0
+End If
+Call 端末コードリスト作成(bNum, sRa, eRa)
+
+UserForm1.TextBox2.Value = bName
+
+End Sub
+
+Private Sub 端末コードリスト作成(ByVal bNum As String, ByVal sRa As Long, ByVal eRa As Long)
+
+Dim R As Long, i As Long
+
+With UserForm1.ComboBox5
+ .Clear: i = -1
+ For R = sRa To eRa
+  If ws.Cells(R, C(1)).Value = bNum Then
+   .AddItem: i = i + 1
+   .List(i, 0) = ws.Cells(R, C(4)).Value
+   .List(i, 1) = ws.Cells(R, C(5)).Value
+  End If
+ Next R
+End With
+
+End Sub
+
+
+================================================================================
+ファイル: ○入力_02_候補リスト更新.bas
+================================================================================
+Attribute VB_Name = "○入力_02_候補リスト更新"
+Option Explicit
+
+Dim Mx As Long, Ca() As Long
+Dim sR As Long, mR As Long, C() As Long
+Dim ws As Worksheet
+
+Sub 入力候補リスト更新()
+If UserForm1.処理中.Value = True Then Exit Sub
+If ws Is Nothing Then
+ Call CSV作成用の行列番号取得(ws, sR, mR, C)
+End If
+mR = ws.Cells(ws.Rows.Count, C(2)).End(xlUp).Row
+
+Dim LimD As Date, sortC As Long
+Dim bNum As String, idStr As String
+
+With UserForm1
+ bNum = .TextBox1.Value
+ idStr = UCase(.ComboBox5.Value)
+ If IsDate(.ComboBox1.Value) = True Then
+  LimD = DateValue(.ComboBox1.Value)
+ Else
+  LimD = 0
+End If
+
+ If .OptionButton1.Value = True Then
+  sortC = C(25)
+ ElseIf .OptionButton2.Value = True Then
+  sortC = C(26)
+ ElseIf .OptionButton3.Value = True Then
+  sortC = C(27)
+ Else
+  sortC = C(25)
+ End If
+End With
+
+Call 候補リスト初期化
+
+If bNum <> "" And idStr <> "" Then
+ If mR > sR Then
+  ws.Rows(sR & ":" & mR).Sort key1:=ws.Cells(sR - 1, sortC), order1:=降順
+ End If
+ Call リスト更新(bNum, idStr, LimD)
+End If
+
+
+End Sub
+
+Private Sub 候補リスト初期化()
+
+Dim n As Long
+Dim cList As String
+
+Mx = Application.WorksheetFunction.Max(ws.Rows(1))
+ReDim Ca(1 To Mx) As Long
+
+cList = "0"
+With UserForm1.ListBox1
+ .Clear
+ .ColumnCount = Mx + 1
+ .AddItem
+ For n = 1 To Mx
+  Ca(n) = ws.Rows(1).Find(n, lookat:=xlWhole).Column
+  cList = cList & "," & ws.Columns(Ca(n)).ColumnWidth * 6
+  .List(0, n) = ws.Cells(sR - 1, Ca(n)).Value
+ Next n
+ .ColumnWidths = cList
+' .AddItem
+' .List(1, 0) = 0
+' .List(1, 1) = "新規作成"
+' .List(1, 2) = "　―"
+' .List(1, 3) = "　―"
+End With
+
+End Sub
+
+Private Sub リスト更新(ByVal bNum As String, ByVal idStr As String, ByVal LimD As Date)
+
+Dim R As Long
+Dim i As Long, n As Long
+
+With UserForm1.ListBox1
+ i = .ListCount - 1
+ For R = sR To mR
+  If ws.Cells(R, C(3)).Value = bNum And UCase(ws.Cells(R, C(2)).Value) = idStr And ws.Cells(R, C(21)).Value >= LimD Then
+   .AddItem
+   i = i + 1
+   .List(i, 0) = R
+   For n = 1 To Mx
+    .List(i, n) = ws.Cells(R, Ca(n)).Value
+   Next n
+  End If
+ Next R
+End With
+
+End Sub
+
+
+================================================================================
+ファイル: ○入力_03_候補リスト選択.bas
+================================================================================
+Attribute VB_Name = "○入力_03_候補リスト選択"
+Option Explicit
+
+Dim sR As Long, mR As Long, C() As Long
+Dim ws As Worksheet
+
+Sub 候補リスト選択()
+
+Dim i As Long, R As Long
+
+With UserForm1.ListBox1
+ i = .ListIndex
+ If i > 0 Then
+  R = .List(i, 0)
+  Call 入力フォームを初期化
+  If R > 0 Then
+   Call 作成済を取得(R)
+  End If
+ End If
+End With
+
+End Sub
+
+Private Sub 作成済を取得(ByVal R As Long)
+
+Call CSV作成用の行列番号取得(ws, sR, mR, C)
+
+UserForm1.処理中.Value = True
+
+Call 掲載条件取得(R)
+Call 掲示内容取得(R)
+
+UserForm1.処理中.Value = False
+
+Call 点検期間入力
+
+End Sub
+
+Private Sub 掲載条件取得(ByVal R As Long)
+
+Dim 点検開始 As Date, 点検終了 As Date
+
+点検開始 = 0: 点検終了 = 0
+On Error Resume Next
+点検開始 = ws.Cells(R, C(9)).Value
+点検終了 = ws.Cells(R, C(10)).Value
+On Error GoTo 0
+
+With UserForm1
+ .ComboBox2.Value = ws.Cells(R, C(4)).Value
+ .TextBox4.Value = ws.Cells(R, C(5)).Value
+ If 点検開始 > 0 Then
+  .TextBox5.Value = Year(点検開始)
+  .TextBox6.Value = Month(点検開始)
+  .TextBox7.Value = Day(点検開始)
+ End If
+ If 点検終了 > 0 Then
+  .TextBox8.Value = Year(点検終了)
+  .TextBox9.Value = Month(点検終了)
+  .TextBox10.Value = Day(点検終了)
+ End If
+ .TextBox11.Value = ws.Cells(R, C(11)).Value
+ Call 表示開始日時(R)
+ Call 表示終了日時(R)
+ .TextBox25.Value = Second(ws.Cells(R, C(18)).Value)
+ Call 表示位置取得(R)
+End With
+
+End Sub
+
+Private Sub 表示開始日時(ByVal R As Long)
+
+Dim 開始日 As Date, 開始時間 As Date
+
+開始日 = 0: 開始時間 = 0
+On Error Resume Next
+If ws.Cells(R, C(14)).Value <> "" Then 開始日 = ws.Cells(R, C(14)).Value
+If ws.Cells(R, C(16)).Value <> "" Then 開始時間 = ws.Cells(R, C(16)).Value
+On Error GoTo 0
+
+With UserForm1
+ If 開始日 > 0 Then
+  .TextBox12.Value = Year(開始日)
+  .TextBox13.Value = Month(開始日)
+  .TextBox14.Value = Day(開始日)
+ End If
+ If 開始時間 > 0 Then
+  .TextBox15.Value = Hour(開始時間)
+  .TextBox16.Value = Minute(開始時間)
+ End If
+End With
+
+End Sub
+
+Private Sub 表示終了日時(ByVal R As Long)
+
+Dim 終了日 As Date, 終了時間 As Date
+
+終了日 = 0: 終了時間 = 0
+On Error Resume Next
+If ws.Cells(R, C(15)).Value <> "" Then 終了日 = ws.Cells(R, C(15)).Value
+If ws.Cells(R, C(17)).Value <> "" Then 終了時間 = ws.Cells(R, C(17)).Value
+On Error GoTo 0
+
+With UserForm1
+ If 終了日 > 0 Then
+  .TextBox17.Value = Year(終了日)
+  .TextBox18.Value = Month(終了日)
+  .TextBox19.Value = Day(終了日)
+ End If
+ If 終了時間 > 0 Then
+  .TextBox20.Value = Hour(終了時間)
+  .TextBox21.Value = Minute(終了時間)
+ End If
+End With
+
+End Sub
+
+Private Sub 表示位置取得(ByVal R As Long)
+
+Dim n As Long
+
+If ws.Cells(R, C(13)).Value <> "" Then
+ n = ws.Cells(R, C(13)).Value
+ With UserForm1
+  If n = 1 Then
+   .OptionButton4.Value = True
+  ElseIf n = 2 Then
+   .OptionButton5.Value = True
+  ElseIf n = 3 Then
+   .OptionButton6.Value = True
+  ElseIf n = 4 Then
+   .OptionButton7.Value = True
+  ElseIf n = 0 Then
+   .OptionButton8.Value = True
+  End If
+ End With
+End If
+
+End Sub
+
+Private Sub 掲示内容取得(ByVal R As Long)
+
+Dim Str As String
+Dim fol As String, sFol As String
+Dim fName As String, Check As String
+
+Str = ws.Cells(R, C(28)).Value
+fol = GetMyPath
+fName = ""
+With UserForm1
+ .TextBox22.Value = ws.Cells(R, C(12)).Value
+ .ComboBox4.Value = ws.Cells(R, C(6)).Value
+ Check = ws.Cells(R, C(8)).Value
+ If Str = "テンプレート" Then
+  .OptionButton9.Value = True
+  .Label29.Caption = Check
+  sFol = "*貼紙テンプレート*"
+ ElseIf Str = "追加" Then
+  .OptionButton10.Value = True
+  .TextBox24.Value = Check
+  sFol = "*貼紙*追加*"
+ End If
+ sFol = Dir(fol & sFol, vbDirectory)
+ If sFol <> "" Then
+  fol = fol & sFol & "\"
+  fName = Dir(fol & Check & ".jp*g")
+  If fName <> "" Then
+   fName = fol & fName
+   .Label30.Caption = fol & fName
+  End If
+ End If
+ .Frame3.Picture = LoadPicture(fName)
+End With
+
+End Sub
+
+
+
+================================================================================
+ファイル: ○入力_04_編集内容記録.bas
+================================================================================
+Attribute VB_Name = "○入力_04_編集内容記録"
+Option Explicit
+
+Dim sR As Long, mR As Long, C() As Long
+Dim aws As Worksheet
+
+Sub 入力の編集内容記録(Optional ByVal 新規登録 As Boolean = False)
+
+With Application
+ .ScreenUpdating = False
+ .EnableEvents = False
+ .DisplayAlerts = False
+ .Calculation = xlCalculationManual
+End With
+
+Dim mStr As String
+
+If MsgBox("この内容で記録しますか？", vbYesNo Or vbQuestion Or vbSystemModal) = vbYes Then
+ If aws Is Nothing Then
+  Call CSV作成用の行列番号取得(aws, sR, mR, C)
+ End If
+ Call 記録処理(新規登録)
+ Call 履歴を記録
+ ThisWorkbook.Save
+ mStr = "記録しました。"
+Else
+ mStr = "処理を中止しました。"
+End If
+
+With Application
+ .Calculation = xlCalculationAutomatic
+ .DisplayAlerts = True
+ .EnableEvents = True
+ .ScreenUpdating = True
+End With
+
+MsgBox mStr, vbInformation Or vbSystemModal
+
+End Sub
+
+Private Sub 記録処理(ByVal 新規登録 As Boolean)
+
+Dim i As Long
+Dim R As Long
+
+R = 0
+If 新規登録 = False Then
+ With UserForm1.ListBox1
+  i = .ListIndex
+  If i <= 0 Then
+   '編集を記録かつ既存リストが選択されていない
+  
+  Else
+   R = .List(i, 0)
+  End If
+ End With
+End If
+
+
+If R = 0 Then
+ mR = mR + 1
+ R = mR
+End If
+
+
+With UserForm1
+ aws.Cells(R, C(2)).Value = .ComboBox5.Value
+ aws.Cells(R, C(3)).Value = .TextBox1.Value
+ aws.Cells(R, C(4)).Value = .ComboBox2.Value
+ aws.Cells(R, C(5)).Value = .TextBox4.Value
+ 
+ Call 点検業者記録(.ComboBox2.Value, .TextBox4.Value)
+ 
+ aws.Cells(R, C(6)).Value = .ComboBox4.Value
+ aws.Cells(R, C(7)).Value = BooleToStr(.CheckBox1.Value)
+
+ 
+ aws.Cells(R, C(8)).Value = GetFileName(.Label30.Caption)
+ aws.Cells(R, C(9)).Value = SetDate(.TextBox5.Value, .TextBox6.Value, .TextBox7.Value)
+ 
+ aws.Cells(R, C(10)).Value = SetDate(.TextBox8.Value, .TextBox9.Value, .TextBox10.Value)
+ aws.Cells(R, C(11)).Value = .TextBox11.Value
+ aws.Cells(R, C(12)).Value = .TextBox22.Value
+ aws.Cells(R, C(13)).Value = SetFrameNO
+ aws.Cells(R, C(14)).Value = SetDate(.TextBox12.Value, .TextBox13.Value, .TextBox14.Value)
+ aws.Cells(R, C(15)).Value = SetDate(.TextBox17.Value, .TextBox18.Value, .TextBox19.Value)
+ aws.Cells(R, C(16)).Value = SetTime(.TextBox15.Value, .TextBox16.Value)
+ aws.Cells(R, C(17)).Value = SetTime(.TextBox20.Value, .TextBox21.Value)
+
+ aws.Cells(R, C(18)).Value = SetTime(0, 0, .TextBox25.Value)
+ aws.Cells(R, C(19)).Value = ""
+ aws.Cells(R, C(20)).Value = ""
+ aws.Cells(R, C(21)).Value = Date
+ aws.Cells(R, C(22)).Value = ""
+ aws.Cells(R, C(23)).Value = ""
+ aws.Cells(R, C(24)).Value = ""
+ aws.Cells(R, C(25)).Value = Now
+ aws.Cells(R, C(26)).Value = aws.Cells(R, C(9)).Value
+ aws.Cells(R, C(27)).Value = SetDateTime(aws.Cells(R, C(14)).Value, aws.Cells(R, C(16)).Value)
+ aws.Cells(R, C(28)).Value = SetKubun
+End With
+
+
+End Sub
+
+Private Function SetDateTime(ByVal dStr As String, ByVal tStr As String) As String
+
+Dim D As Date
+Dim Str As String
+
+If dStr <> "" Then
+ D = DateValue(dStr)
+ If tStr <> "" Then
+  D = D + TimeValue(tStr)
+ End If
+ Str = D
+Else
+ Str = ""
+End If
+
+SetDateTime = Str
+
+End Function
+
+Private Function BooleToStr(ByVal Val As Boolean) As String
+
+Dim Str As String
+
+If Val = True Then
+ Str = "TRUE"
+Else
+ Str = "FALSE"
+End If
+
+BooleToStr = Str
+
+End Function
+
+Private Function GetFileName(ByVal fStr As String) As String
+
+Dim i As Long
+
+i = InStrRev(fStr, "\")
+If i > 0 Then
+ fStr = Right$(fStr, Len(fStr) - i)
+End If
+
+i = InStrRev(fStr, ".")
+If i > 0 Then
+ fStr = Left$(fStr, i - 1)
+End If
+
+GetFileName = fStr
+
+End Function
+
+Private Function SetDate(ByVal yStr As String, ByVal mStr As String, ByVal dStr As String) As String
+
+Dim D As Date
+Dim Str As String
+
+If yStr <> "" And mStr <> "" And dStr <> "" Then
+ D = DateSerial(yStr, mStr, dStr)
+ Str = D
+Else
+ Str = ""
+End If
+
+SetDate = Str
+
+End Function
+
+Private Function SetTime(ByVal hStr As String, ByVal mStr As String, Optional ByVal sStr As String = "0") As String
+
+Dim Str As String
+If hStr <> "" And mStr <> "" Then
+ Str = hStr & ":" & mStr & ":" & sStr
+Else
+ Str = ""
+End If
+
+SetTime = Str
+
+End Function
+
+Private Function SetFrameNO() As String
+
+Dim nStr As String
+
+With UserForm1
+ If .OptionButton4.Value = True Then
+  nStr = "1"
+ ElseIf .OptionButton5.Value = True Then
+  nStr = "2"
+ ElseIf .OptionButton6.Value = True Then
+  nStr = "3"
+ ElseIf .OptionButton7.Value = True Then
+  nStr = "4"
+ ElseIf .OptionButton8.Value = True Then
+  nStr = "0"
+ Else
+  nStr = ""
+ End If
+End With
+
+SetFrameNO = nStr
+
+End Function
+
+Private Function SetKubun() As String
+
+Dim Str As String
+
+With UserForm1
+ If .OptionButton9.Value = True Then
+  Str = "テンプレート"
+ ElseIf .OptionButton10.Value = True Then
+  Str = "追加"
+ Else
+  Str = ""
+ End If
+End With
+
+SetKubun = Str
+
+End Function
+
+Private Sub 点検業者記録(ByVal 業者名 As String, ByVal 連絡先 As String)
+
+Dim R As Long, Ra As Long
+Dim sR As Long, mR As Long, C() As Long
+Dim CheckA As String, CheckB As String
+Dim TelA As String, TelB As String
+Dim ws As Worksheet
+
+Call 受注先リストの行列番号取得(ws, sR, mR, C)
+
+CheckA = 会社名調整(業者名)
+TelA = 連絡先調整(連絡先)
+
+Ra = mR + 1
+For R = sR To mR
+ CheckB = 会社名調整(ws.Cells(R, C(1)).Value)
+ TelB = 連絡先調整(ws.Cells(R, C(2)).Value)
+ If CheckA = CheckB And TelA = TelB Then
+  Ra = 0
+  Exit For
+ End If
+Next R
+
+If Ra > 0 Then
+ ws.Cells(Ra, C(1)).Value = 業者名
+ ws.Cells(Ra, C(2)).Value = 連絡先
+End If
+
+End Sub
+
+Private Function 会社名調整(ByVal Str As String) As String
+
+Str = StrConv(Str, vbWide)
+Str = Replace(Replace(Str, "株式会社", ""), "有限会社", "")
+Str = Replace(Replace(Str, "（株）", ""), "（有）", "")
+Str = Replace(Str, "　", "")
+
+会社名調整 = Str
+
+End Function
+
+Private Function 連絡先調整(ByVal Str As String) As String
+
+Str = StrConv(Str, vbNarrow)
+Str = Replace(Replace(Str, "-", ""), " ", "")
+
+連絡先調整 = Str
+
+End Function
+
+
+================================================================================
+ファイル: ○入力_10_受注先入力.bas
+================================================================================
+Attribute VB_Name = "○入力_10_受注先入力"
+Option Explicit
+
+Dim sR As Long, mR As Long, C() As Long
+Dim ws As Worksheet
+
+Sub 受注先入力()
+If UserForm1.処理中.Value = True Then Exit Sub
+If ws Is Nothing Then Call 受注先リストの行列番号取得(ws, sR, mR, C)
+
+Dim Check As String, Dflt As String
+Dim R As Long
+
+With UserForm1
+' Check = .ComboBox2.Value
+R = 0
+On Error Resume Next
+ R = .ComboBox2.Value
+On Error GoTo 0
+If R = 0 Then Exit Sub
+
+ 'If Application.WorksheetFunction.CountIf(ws.Columns(C(1)), Check) > 0 Then
+ ' R = ws.Columns(C(1)).Find(Check, lookat:=xlWhole).Row
+  .ComboBox2.Value = ws.Cells(R, C(1)).Value
+  Dflt = ws.Cells(R, C(3)).Value
+  
+  .TextBox4.Value = ws.Cells(R, C(2)).Value
+  .ComboBox3.Value = Dflt
+ 'Else
+ ' .TextBox4.Value = ""
+ 'End If
+End With
+
+End Sub
+
+
+================================================================================
+ファイル: ○入力_11_点検期間入力.bas
+================================================================================
+Attribute VB_Name = "○入力_11_点検期間入力"
+Option Explicit
+
+Sub 点検期間入力()
+If UserForm1.処理中.Value = True Then Exit Sub
+
+Dim sD As Date, eD As Date, CheckD As Date
+Dim stY As String, stM As String, stD As String
+Dim edY As String, edM As String, edD As String
+
+With UserForm1
+ stY = .TextBox5.Value
+ stM = .TextBox6.Value
+ stD = .TextBox7.Value
+ edY = .TextBox8.Value
+ edM = .TextBox9.Value
+ edD = .TextBox10.Value
+End With
+
+sD = 0: eD = 0: CheckD = 0
+If stY Like "????" And stM <> "" And stD <> "" Then sD = DateSerial(stY, stM, stD)
+If edY Like "????" And edM <> "" And edD <> "" Then eD = DateSerial(edY, edM, edD)
+
+If sD > 0 Or eD > 0 Then
+ If eD > 0 Then
+  CheckD = eD
+ Else
+  CheckD = sD
+ End If
+ With UserForm1
+  .TextBox17.Value = Year(CheckD)
+  .TextBox18.Value = Month(CheckD)
+  .TextBox19.Value = Day(CheckD)
+ End With
+End If
+
+Call プレビュー表示(sD, eD)
+
+End Sub
+
+Private Sub プレビュー表示(ByVal sD As Date, ByVal eD As Date)
+
+Const FormStr As String = "m月d日(aaa)"
+Dim dStr As String
+
+If sD > 0 And eD > 0 Then
+ If sD = eD Then
+  dStr = Format(sD, FormStr)
+ Else
+  dStr = Format(sD, FormStr) & "～" & Format(eD, FormStr)
+ End If
+ 
+ElseIf sD > 0 Or eD > 0 Then
+ If sD > 0 Then
+  dStr = Format(sD, FormStr)
+ Else
+  dStr = Format(eD, FormStr)
+ End If
+ 
+Else
+ dStr = ""
+End If
+
+UserForm1.Label32.Caption = dStr
+
+End Sub
+
+
+================================================================================
+ファイル: ○入力_12_掲示備考入力.bas
+================================================================================
+Attribute VB_Name = "○入力_12_掲示備考入力"
+Option Explicit
+
+Sub 掲示備考入力()
+If UserForm1.処理中.Value = True Then
+ Exit Sub
+Else
+ UserForm1.処理中.Value = True
+End If
+
+Dim i As Long, lCnt As Long, rCnt As Long
+Dim Str As String, Check As String, AnsTxt As String, BfrStr As String, nxtStr As String
+Dim mlCnt As Long, mrCnt As Long
+
+With UserForm1
+ mlCnt = .Label51.Caption * 2
+ mrCnt = .Label52.Caption
+ Str = .TextBox11.Value
+End With
+BfrStr = Str
+
+
+AnsTxt = ""
+lCnt = 0
+For i = 1 To Len(Str)
+ Check = Mid$(Str, i, 1)
+ If i < Len(Str) Then
+  nxtStr = Mid$(Str, i + 1, 1)
+ Else
+  nxtStr = ""
+ End If
+ If 改行コード判定(Check) = True Then
+  lCnt = 0
+ Else
+  lCnt = lCnt + LenB(StrConv(Check, vbFromUnicode))
+ End If
+ 
+ AnsTxt = AnsTxt & Check
+ If lCnt >= mlCnt And 改行コード判定(nxtStr) = False Then
+  AnsTxt = AnsTxt & vbCrLf
+  lCnt = 0
+ End If
+Next i
+AnsTxt = AnsTxt & nxtStr
+
+rCnt = 0
+i = InStr(AnsTxt, vbCrLf)
+Do While i > 0
+ rCnt = rCnt + 1
+ If rCnt > mrCnt Then
+  AnsTxt = Left$(AnsTxt, i - 1)
+  Exit Do
+ End If
+ i = InStr(i + 1, AnsTxt, vbCrLf)
+Loop
+
+If BfrStr <> AnsTxt Then
+ UserForm1.TextBox11.Value = AnsTxt
+End If
+
+UserForm1.処理中.Value = False
+
+End Sub
+
+Private Function 改行コード判定(ByVal Str As String) As Boolean
+
+Dim Opt As Boolean
+
+If InStr(Str, vbCr) > 0 Or InStr(Str, vbLf) > 0 Then
+ Opt = True
+Else
+ Opt = False
+End If
+
+改行コード判定 = Opt
+
+
+End Function
+
+
+================================================================================
+ファイル: ○入力_20_案内文カテゴリ選択.bas
+================================================================================
+Attribute VB_Name = "○入力_20_案内文カテゴリ選択"
+Option Explicit
+
+Dim sR As Long, mR As Long, C() As Long
+Dim ws As Worksheet
+
+Sub 案内文カテゴリ選択()
+If UserForm1.処理中.Value = True Then Exit Sub
+UserForm1.処理中.Value = True
+
+If ws Is Nothing Then Call 案内文候補の行列番号取得(ws, sR, mR, C)
+
+Dim Check As String
+Dim R As Long
+
+Check = "*" & UserForm1.ComboBox3.Value & "*"
+With UserForm1.ComboBox4
+ .Clear
+ For R = sR To mR
+  If ws.Cells(R, C(2)).Value Like Check Then
+   .AddItem ws.Cells(R, C(2)).Value
+  End If
+ Next R
+ 
+ UserForm1.処理中.Value = False
+ 
+ If .ListCount > 0 Then
+  .Value = .List(0)
+ End If
+End With
+
+End Sub
+
+
+================================================================================
+ファイル: ○入力_21_案内文選択.bas
+================================================================================
+Attribute VB_Name = "○入力_21_案内文選択"
+Option Explicit
+
+Dim sR As Long, mR As Long, C() As Long
+Dim ws As Worksheet
+
+Sub 案内文選択()
+If UserForm1.処理中.Value = True Then Exit Sub
+UserForm1.処理中.Value = True
+If ws Is Nothing Then Call 案内文候補の行列番号取得(ws, sR, mR, C)
+
+Dim R As Long
+Dim Str As String
+
+Str = UserForm1.ComboBox4.Value
+With UserForm1
+ Str = .ComboBox4.Value
+ .Label29.Caption = "-"
+ .TextBox22.Value = ""
+ .TextBox24.Value = ""
+End With
+
+If Application.WorksheetFunction.CountIf(ws.Columns(C(2)), Str) > 0 Then
+ R = ws.Columns(C(2)).Find(Str, lookat:=xlWhole).Row
+ With UserForm1
+  .TextBox22.Value = ws.Cells(R, C(6)).Value '案内文
+  .Label29.Caption = ws.Cells(R, C(5)).Value
+  .TextBox24.Value = ws.Cells(R, C(5)).Value
+ End With
+ 
+End If
+
+Call 貼紙サンプル表示
+
+UserForm1.処理中.Value = False
+UserForm1.OptionButton9.Value = True
+
+End Sub
+
+
+================================================================================
+ファイル: ○入力_22_貼紙サンプル表示.bas
+================================================================================
+Attribute VB_Name = "○入力_22_貼紙サンプル表示"
+Option Explicit
+
+Sub 貼紙サンプル表示()
+If UserForm1.Visible = False Then Exit Sub
+
+Dim fName As String, fol As String
+Dim Dflt As String, mStr As String
+
+Dflt = GetMyPath
+If UserForm1.OptionButton9.Value = True Then
+ Call テンプレート検索(Dflt, fol, fName, mStr)
+Else
+ Call 追加分を選択(Dflt, fol, fName)
+ mStr = ""
+End If
+
+If mStr <> "" Then
+' MsgBox mStr, vbExclamation Or vbSystemModal
+ fName = ""
+End If
+
+If fName = "" Then
+ fName = GetNoImage(Dflt)
+ fol = ""
+ UserForm1.Label29.Caption = "-"
+ UserForm1.Label30.Caption = ""
+Else
+ ChgToJpg fol, fName
+ UserForm1.Label29.Caption = fName
+ UserForm1.Label30.Caption = fol & fName
+End If
+
+UserForm1.Frame3.Picture = LoadPicture(fol & fName)
+Call 貼紙表示位置
+
+End Sub
+
+Private Sub テンプレート検索(ByVal Dflt As String, ByRef fol As String, ByRef fName As String, ByRef mStr As String)
+
+Dim sFol As String
+Dim Check As String
+
+mStr = ""
+sFol = Dir(Dflt & "*貼紙*テンプレート*", vbDirectory)
+If sFol <> "" Then
+ Check = UserForm1.TextBox24.Value
+ If Check <> "" Then
+  fol = Dflt & sFol & "\"
+  fName = Dir(fol & "*" & Check & "*.jp*g")
+  If fName = "" Then
+   fName = Dir(fol & "*" & Check & "*.png")
+   If fName <> "" Then
+    ChgToJpg fol, fName
+   End If
+  End If
+  
+  
+  If fName <> "" Then
+   fName = fName
+  Else
+   mStr = "※テンプレート（画像）が見つかりません"
+  End If
+ Else
+  mStr = "※テンプレート（ファイル名）が設定されていません"
+ End If
+Else
+ mStr = "※テンプレート保存用のフォルダが見つかりません"
+End If
+
+
+End Sub
+
+Private Sub 追加分を選択(ByVal Dflt As String, ByRef fol As String, ByRef fName As String)
+
+Dim i As Long
+Dim Drv As String, sFol As String
+
+sFol = Dir(Dflt & "*貼紙*追加", vbDirectory)
+If sFol <> "" Then
+ fol = Dflt & sFol
+Else
+ fol = Left$(Dflt, Len(Dflt) - 1)
+End If
+
+Drv = Left$(fol, 1)
+
+ChDrive Drv
+ChDir fol
+
+fName = Application.GetOpenFilename("画像を選択,*.jpeg;*.jpg;*.png")
+If fName = "False" Then
+ fName = ""
+ fol = ""
+Else
+ i = InStrRev(fName, "\")
+ fol = Left$(fName, i)
+ fName = Right$(fName, Len(fName) - i)
+End If
+
+End Sub
+
+Private Function GetNoImage(ByVal Dflt As String) As String
+
+Dim sFol As String, fol As String
+Dim fName As String
+
+fName = ""
+sFol = Dir(Dflt & "*貼紙*追加*", vbDirectory)
+If sFol <> "" Then
+ fol = Dflt & sFol & "\"
+ fName = Dir(fol & "*NOIMAGE*.jpg")
+ If fName <> "" Then
+  fName = fol & fName
+ End If
+End If
+
+GetNoImage = fName
+
+End Function
+
+
+================================================================================
+ファイル: ○入力_23_貼紙表示位置.bas
+================================================================================
+Attribute VB_Name = "○入力_23_貼紙表示位置"
+Option Explicit
+
+Sub 貼紙表示位置()
+
+Dim fName As String
+
+With UserForm1
+ fName = .Label30.Caption
+ .Frame6.Picture = LoadPicture("")
+ .Label43.Picture = LoadPicture("")
+ .Label44.Picture = LoadPicture("")
+ .Label45.Picture = LoadPicture("")
+ .Label46.Picture = LoadPicture("")
+ 
+ .Label43.Visible = False
+ .Label44.Visible = False
+ .Label45.Visible = False
+ .Label46.Visible = False
+ 
+ If Dir(fName) <> "" Then
+  If .OptionButton4.Value = True Then
+   DspPicture .Label43, fName
+  ElseIf .OptionButton5.Value = True Then
+   DspPicture .Label44, fName
+  ElseIf .OptionButton6.Value = True Then
+   DspPicture .Label45, fName
+  ElseIf .OptionButton7.Value = True Then
+   DspPicture .Label46, fName
+  ElseIf .OptionButton8.Value = True Then
+   .Frame6.Picture = LoadPicture(fName)
+  End If
+ End If
+End With
+
+End Sub
+
+Private Sub DspPicture(ByVal Lbl As Control, ByVal fName As String)
+
+Lbl.Picture = LoadPicture(fName)
+Lbl.Visible = True
+
+
+End Sub
+
+
+================================================================================
+ファイル: ○入力_97_履歴を記録.bas
+================================================================================
+Attribute VB_Name = "○入力_97_履歴を記録"
+Option Explicit
+
+Sub 履歴を記録()
+
+Dim Cod As String
+Dim ws As Worksheet
+
+Set ws = ThisWorkbook.Worksheets("情報")
+
+With UserForm1
+ Cod = .TextBox1.Value
+End With
+
+With ws.UsedRange
+ If Cod <> "" Then
+  .Find("物件コード").Offset(0, 1).Value = Cod
+ End If
+End With
+
+Call 一時フォルダを削除
+
+End Sub
+
+Private Sub 一時フォルダを削除()
+
+Dim Dflt As String
+Dim fol As String, fList As String
+
+Dflt = GetMyPath
+fol = Dir(Dflt & "一時画像保存", vbDirectory)
+If fol <> "" Then
+  Dim objFSO As Object
+  Dim strFolderPath As String
+  
+  Set objFSO = CreateObject("Scripting.FileSystemObject")
+  strFolderPath = Dflt & fol
+
+  objFSO.DeleteFolder strFolderPath
+
+End If
+
+End Sub
+
+
+================================================================================
+ファイル: ○入力_98_フォームサイズ変更.bas
+================================================================================
+Attribute VB_Name = "○入力_98_フォームサイズ変更"
+Option Explicit
+
+Sub フォームサイズ変更()
+
+Const MinH As Single = 64
+Const MinW As Single = 390
+Const MinL As Single = 12
+Dim MaxH As Single
+Dim MaxW As Single
+Dim MaxL As Single
+Dim MvLeft As Single
+
+With UserForm1
+ MaxW = .Label36.Caption
+ MaxH = .Label37.Caption
+ MaxL = .Label38.Caption
+ If .Width < MaxW Then
+  '大きくする
+  .Width = MaxW
+  .Height = MaxH
+  .Frame5.Left = MaxL
+  .MultiPage1.Visible = True
+  .Frame7.Visible = True
+  MvLeft = MinW - MaxW
+  .CommandButton2.Caption = "フォームを最小化"
+ Else
+  '小さくする
+  .Width = MinW
+  .Height = MinH
+  .Frame5.Left = MinL
+  .MultiPage1.Visible = False
+  .Frame7.Visible = False
+  MvLeft = MaxW - MinW
+  .CommandButton2.Caption = "元に戻す"
+ End If
+ .Left = .Left + MvLeft
+End With
+
+End Sub
+
+
+================================================================================
+ファイル: ○入力_99_フォームを初期化.bas
+================================================================================
+Attribute VB_Name = "○入力_99_フォームを初期化"
+Option Explicit
+
+Sub 入力フォームを初期化()
+
+UserForm1.処理中.Value = True
+
+Call 掲示内容初期化
+Call 登録状況初期化
+Call プレビュー関係初期化
+
+UserForm1.処理中.Value = False
+
+End Sub
+
+Private Sub 掲示内容初期化()
+
+Dim D As Date, nxtD As Date
+Dim Ctr As Control
+Dim TypStr As String
+
+For Each Ctr In UserForm1.MultiPage1.Pages(0).Controls
+ TypStr = TypeName(Ctr)
+ If TypStr = "ComboBox" Or TypStr = "TextBox" Then
+  Ctr.Value = ""
+ ElseIf TypStr = "CheckBox" Or TypStr = "OptionButton" Then
+  Ctr.Value = False
+ ElseIf TypStr = "ListBox" Then
+  Ctr.Clear
+ End If
+Next Ctr
+
+D = Date
+nxtD = DateSerial(Year(D), Month(D) + 1, 1)
+With UserForm1
+ .TextBox5.Value = Year(nxtD)
+ .TextBox6.Value = Month(nxtD)
+ .TextBox8.Value = Year(nxtD)
+ .TextBox9.Value = Month(nxtD)
+ 
+ .TextBox12.Value = Year(D)
+ .TextBox13.Value = Month(D)
+ .TextBox14.Value = Day(D)
+ 
+ .TextBox25.Value = "6"
+ 
+ .CheckBox1.Value = True
+ .OptionButton9.Value = True
+ .Label29.Caption = "-"
+ 
+End With
+
+Call 受注先リスト
+Call 案内内容ボックス
+Call 掲示備考サンプル表示
+
+End Sub
+
+Private Sub 登録状況初期化()
+
+Dim D As Date
+Dim Ctr As Control
+Dim TypStr As String
+
+For Each Ctr In UserForm1.MultiPage1.Pages(1).Controls
+ TypStr = TypeName(Ctr)
+ If TypStr = "TextBox" Or TypStr = "ComboBox" Then
+  Ctr.Value = ""
+ ElseIf TypStr = "CheckBox" Or TypStr = "OptionButton" Then
+  Ctr.Value = False
+ ElseIf TypStr = "LisBox" Then
+  Ctr.Clear
+ End If
+Next Ctr
+
+D = DateSerial(Year(Date), Month(Date), 1)
+With UserForm1
+ With .ComboBox1
+  .Clear
+  .AddItem D
+  .AddItem DateSerial(Year(D), Month(D) - 1, 1)
+  .AddItem DateSerial(Year(D), Month(D) - 2, 1)
+  .AddItem "指定なし"
+  .Value = D
+ End With
+ .OptionButton1.Value = True
+End With
+
+End Sub
+
+Private Sub 受注先リスト()
+
+Dim R As Long, i As Long
+Dim sR As Long, mR As Long, C() As Long
+Dim ws As Worksheet
+
+Call 受注先リストの行列番号取得(ws, sR, mR, C)
+
+With UserForm1.ComboBox2
+ .Clear: i = -1
+ For R = sR To mR
+  .AddItem: i = i + 1
+  .List(i, 0) = R
+  .List(i, 1) = ws.Cells(R, C(3)).Value & ","
+  
+  .List(i, 2) = ws.Cells(R, C(1)).Value
+ Next R
+End With
+
+End Sub
+
+Private Sub 掲載内容初期化()
+
+Dim Ctr As Control
+Dim TypStr As String
+
+For Each Ctr In UserForm1.MultiPage1.Pages(0).Controls
+ TypStr = TypeName(Ctr)
+ If TypStr = "TextBox" Then
+  Ctr.Value = ""
+ ElseIf TypStr = "OptionButton" Then
+  Ctr.Value = False
+ End If
+Next Ctr
+Call 案内内容ボックス
+Call 掲示備考サンプル表示
+
+End Sub
+
+Private Sub 案内内容ボックス()
+
+Dim R As Long, sR As Long, mR As Long, C As Long
+Dim ws As Worksheet
+
+Set ws = ThisWorkbook.Worksheets("案内文カテゴリ設定")
+With ws.Range("1:5")
+ sR = .Find("カテゴリ名", lookat:=xlWhole, searchdirection:=xlPrevious).Row + 1
+ C = .Find("カテゴリ名").Column
+End With
+mR = ws.Cells(ws.Rows.Count, C).End(xlUp).Row
+
+With UserForm1.ComboBox3
+ .Clear
+ For R = sR To mR
+  .AddItem ws.Cells(R, C).Value
+ Next R
+End With
+UserForm1.ComboBox4.Clear
+
+End Sub
+
+Private Sub プレビュー関係初期化()
+
+Dim Ctr As Control
+
+UserForm1.Label30.Caption = ""
+With UserForm1
+ With .Frame3
+  .Picture = LoadPicture("")
+  For Each Ctr In .Controls
+   If TypeName(Ctr) = "Label" Then
+    Ctr.Caption = ""
+   End If
+  Next Ctr
+ End With
+ .OptionButton4.Value = True
+ 
+End With
+
+Call サンプルイメージ削除
+
+End Sub
+
+Sub サンプルイメージ削除()
+
+With UserForm1
+ .Label31.Caption = ""
+ .Label32.Caption = ""
+ .Label33.Caption = ""
+ .Label34.Caption = ""
+ .Label35.Caption = ""
+ 
+ .Label43.Visible = False
+ .Label44.Visible = False
+ .Label45.Visible = False
+ .Label46.Visible = False
+ .Label43.Picture = LoadPicture("")
+ .Label44.Picture = LoadPicture("")
+ .Label45.Picture = LoadPicture("")
+ .Label46.Picture = LoadPicture("")
+ .Frame3.Picture = LoadPicture("")
+ 
+End With
+
+
+End Sub
+
+
+================================================================================
+ファイル: ☆CSV作成用の行列番号.bas
+================================================================================
+Attribute VB_Name = "☆CSV作成用の行列番号"
+Option Explicit
+
+Sub CSV作成用の行列番号取得(ByRef ws As Worksheet, ByRef sR As Long, ByRef mR As Long, ByRef C() As Long)
+
+If ws Is Nothing Then Set ws = ThisWorkbook.Worksheets("CSV作成用")
+Call フィルターを解除(ws)
+
+ReDim C(1 To 28) As Long
+With ws.Range("1:5")
+ C(1) = .Find("点検CO", LookIn:=xlFormulas, lookat:=xlWhole).Column
+ C(2) = .Find("端末ID").Column
+ C(3) = .Find("物件コード").Column
+ C(4) = .Find("受注先名").Column
+ C(5) = .Find("緊急連絡先番号").Column
+ C(6) = .Find("点検工事案内").Column
+ C(7) = .Find("掲示板に表示する").Column
+ C(8) = .Find("点検案内TPLNo").Column
+ C(9) = .Find("点検開始日").Column
+ C(10) = .Find("点検完了日").Column
+ C(11) = .Find("掲示備考").Column
+ C(12) = .Find("掲示板用案内文").Column
+ C(13) = .Find("frame_No").Column
+ C(14) = .Find("表示開始日").Column
+ C(15) = .Find("表示終了日").Column
+ C(16) = .Find("表示開始時刻").Column
+ C(17) = .Find("表示終了時刻").Column
+ C(18) = .Find("表示時間").Column
+ C(19) = .Find("統合ポリシー").Column
+ C(20) = .Find("制御").Column
+ C(21) = .Find("変更日").Column
+ C(22) = .Find("変更時刻").Column
+ C(23) = .Find("最終エクスポート日時").Column
+ C(24) = .Find("ID").Column
+ C(25) = .Find("変更日時").Column
+ C(26) = .Find("点検日時").Column
+ C(27) = .Find("表示日時").Column
+ C(28) = .Find("貼紙区分").Column
+ sR = .Find("物件コード").Row + 1
+End With
+mR = ws.Cells(ws.Rows.Count, C(3)).End(xlUp).Row
+
+End Sub
+
+
+================================================================================
+ファイル: ☆PNGからJPG.bas
+================================================================================
+Attribute VB_Name = "☆PNGからJPG"
+Option Explicit
+
+Sub ChgToJpg(ByRef 写真保存場所 As String, ByRef 写真パス As String)
+
+Dim ScrUpd As Boolean
+Dim i As Long
+Dim fol As String, imgName As String
+Dim TGT As String, fPath As String, fName As String, NewName As String, Exprt As Long
+Dim aws As Worksheet
+
+
+TGT = 写真保存場所 & 写真パス
+If Dir(TGT) = "" Or TGT Like "*.jp*g" Then Exit Sub
+
+
+fol = GetMyPath & "一時画像保存"
+If Dir(fol, vbDirectory) = "" Then MkDir fol
+fol = fol & "\"
+
+
+i = InStrRev(TGT, "\")
+imgName = Right$(TGT, Len(TGT) - i)
+i = InStrRev(imgName, ".")
+imgName = Left$(imgName, i - 1)
+
+With Application
+ ScrUpd = .ScreenUpdating
+ .ScreenUpdating = False
+ .EnableEvents = False
+ .DisplayAlerts = False
+End With
+
+Set aws = ThisWorkbook.Worksheets.Add
+aws.Activate
+aws.Pictures.Insert(TGT).Select
+
+fPath = Left(TGT, InStrRev(TGT, "\"))
+fName = Replace(TGT, fPath, "")
+fName = Left(fName, InStrRev(fName, ".") - 1)
+Selection.Name = fName
+
+写真保存場所 = fol
+NewName = Format(Date, "mmdd") & " " & Format(Now, "hhmmss") & imgName & ".jpg"
+写真パス = NewName
+
+Exprt = Export2Jpg(aws, fol & NewName)
+
+aws.Shapes(fName).Delete
+aws.Delete
+
+With Application
+ .DisplayAlerts = True
+ .EnableEvents = ScrUpd
+ .ScreenUpdating = ScrUpd
+End With
+
+End Sub
+
+Private Function Export2Jpg(ByVal aws As Worksheet, FF As String, Optional ByVal Obj As Object) As Long
+
+If Obj Is Nothing Then Set Obj = Selection
+Obj.CopyPicture xlScreen, xlBitmap
+
+With aws.ChartObjects.Add(Obj.Left, Obj.Top, Obj.Width, Obj.Height).Chart
+ .Parent.Select
+ .Paste
+ Application.CutCopyMode = False
+ .Export FF
+ .Parent.Delete
+End With
+
+End Function
+
+
+
+
+
+================================================================================
+ファイル: ☆デスクトップ.bas
+================================================================================
+Attribute VB_Name = "☆デスクトップ"
+Option Explicit
+
+Function DskTop() As String
+
+Dim WSH As Variant
+Dim fol As String
+
+Set WSH = CreateObject("Wscript.shell")
+fol = WSH.SpecialFolders("DeskTop") & "\"
+
+DskTop = fol
+
+End Function
+
+
+
+================================================================================
+ファイル: ☆パス取得.bas
+================================================================================
+Attribute VB_Name = "☆パス取得"
+Option Explicit
+
+Function GetMyPath() As String
+
+
+    'URL以外（httpで始まらない）ならそのまま返す。
+    Dim sPath As String
+    sPath = ThisWorkbook.Path
+    
+    If Not sPath Like "http*" Then
+        GetMyPath = sPath & "\"
+        Exit Function
+    End If
+  
+    '環境変数からOneDriveのフォルダを取得
+    Dim OneD As String: OneD = Environ("OneDrive")
+    
+    
+'　　If Environ("OneDriveConsumer") <> "" Then OneD = Environ("OneDriveConsumer")
+'　　If Environ("OneDriveCommercial") <> "" Then OneD = Environ("OneDriveCommercial")
+  
+    'URL「https://d.docs.live.net/xxxxxxxxxxxxxxxx/○○○」
+    '4番目の"/"以降（上記なら○○○の部分）を取り出す。
+    '最初の3つの"/"を別文字にReplaceしてから、InStrで"/"の位置を求めています。
+    
+    
+    Dim sTemp As String
+    sTemp = Replace(sPath, "/", "_", , 3)
+    GetMyPath = OneD & "\" & Mid(sTemp, InStr(sTemp, "/") + 1) & "\"
+
+    GetMyPath = Replace(GetMyPath, "/", "\")
+    
+End Function
+
+
+================================================================================
+ファイル: ☆フィルターを解除.bas
+================================================================================
+Attribute VB_Name = "☆フィルターを解除"
+Option Explicit
+
+Public Sub フィルターを解除(Optional ByVal ws As Worksheet)
+
+Dim n As Long
+If ws Is Nothing Then Set ws = ActiveSheet
+
+If ws.AutoFilterMode = True Then
+ If ws.AutoFilter.FilterMode = True Then
+  For n = 1 To ws.AutoFilter.Filters.Count
+   If ws.AutoFilter.Filters(n).On Then
+    ws.UsedRange.AutoFilter field:=n
+    If ws.AutoFilter.FilterMode = False Then Exit For
+   End If
+  Next n
+ End If
+End If
+
+End Sub
+
+
+
+================================================================================
+ファイル: ☆ユーザーフォーム入力補助.bas
+================================================================================
+Attribute VB_Name = "☆ユーザーフォーム入力補助"
+Option Explicit
+
+Public Sub InputNum(ByVal Ctr As Control, Optional ByVal 桁区切りを使用する As Boolean, Optional ByVal 空白の際に代入 As String, Optional ByVal MaxNum As Long = -1, Optional ByVal MinNum As Long = -1)
+If Ctr Is Nothing Then Exit Sub
+
+Dim i As Long, n As Long
+Dim Str As String, Txt As String, Check As String
+Dim Frm As String
+
+Str = TypeName(Ctr)
+If (Str = "TextBox" Or Str = "ComboBox") Then
+ Str = Ctr.Value
+ Txt = ""
+ If Str <> "" Then
+  For i = 1 To Len(Str)
+   Check = Mid(Str, i, 1)
+   If Check Like "[0-9]" Then
+    Txt = Txt & Check
+   End If
+  Next i
+ End If
+ If Txt = "" Then Txt = 空白の際に代入
+ 
+ If Txt <> "" And IsNumeric(Txt) = True Then
+  Frm = String$(Len(Txt), "0")
+  n = Txt
+  If MaxNum >= 0 And n > MaxNum Then
+   n = MaxNum
+  ElseIf MinNum >= 0 And n < MinNum Then
+   n = MinNum
+  End If
+  Txt = Format(n, Frm)
+ End If
+ 
+ If (Txt <> "" And IsNumeric(Txt) = True And 桁区切りを使用する = True) Then
+  Txt = Format(Txt, "#,###")
+ End If
+ 
+ Ctr.Value = Txt
+End If
+
+End Sub
+
+Public Sub InputABC(ByVal Ctr As Control, Optional ByVal 小文字使用可 As Boolean, Optional ByVal 許可する文字列 As String)
+If Ctr Is Nothing Then Exit Sub
+
+Dim n As Long
+Dim Str As String, Txt As String, Check As String
+
+
+Str = Ctr.Value
+
+Txt = ""
+If Str <> "" Then
+ Str = StrConv(Str, vbNarrow)
+ If 小文字使用可 = False Then Str = UCase(Str)
+ For n = 1 To Len(Str)
+  Check = Mid$(Str, n, 1)
+  If (Check Like "[0-9]" Or Check Like "[A-Z]" Or Check Like "[a-z]" Or InStr(許可する文字列, Check) > 0) Then
+   Txt = Txt & Check
+  End If
+ Next n
+End If
+
+If Ctr.Value <> Txt Then Ctr.Value = Txt
+
+End Sub
+
+Public Sub InputYen(ByVal Ctr As Control)
+
+Dim 金額 As String
+Dim Yen As String, n As Long, Cnt As Long
+Dim Str As String, Check As String, Txt As String
+
+金額 = Ctr.Value
+If 金額 <> "" Then
+ Str = StrConv(Replace(金額, ",", ""), vbNarrow)
+ Txt = ""
+ Cnt = 0
+ For n = 1 To Len(Str)
+  Check = Mid(Str, n, 1)
+  If IsNumeric(Check) = True Then
+   Txt = Txt & Check
+  ElseIf Check = "." And Cnt = 0 Then
+   Cnt = Cnt + 1
+   Txt = Txt & Check
+  End If
+ Next n
+ If IsNumeric(Txt) = True Then
+  On Error Resume Next
+  Err.Clear
+  Yen = Txt
+  If Err.Number > 0 Then
+   MsgBox "金額を確認してください。" & vbLf & Txt, vbSystemModal
+   Yen = Left(Txt, Len(Txt) - 1)
+  End If
+  On Error GoTo 0
+ ElseIf Txt Like "*." Then
+  Yen = Txt
+ Else
+  Yen = 0
+ End If
+Else
+ Yen = 0
+End If
+
+If Yen Like "*." Then
+ Str = Format(Yen, "#,##0.")
+ElseIf Yen Like "*.*" Then
+ Str = Format(Yen, "#.0##")
+Else
+ Str = Format(Yen, "#,##0")
+End If
+
+If Ctr.Value <> Str Then Ctr.Value = Str
+
+End Sub
+
+Public Sub InputDate(ByVal Ctr As Control, Optional ByVal Frm As String, Optional ByVal LimDate As String, Optional ByVal 下限日以前の場合は下限日を使用 As Boolean = True)
+If Frm = "" Then Frm = "yyyy/mm/dd"
+
+Dim Opt As Boolean
+Dim Str As String
+Dim n As Long, D As Date, LimD As Date
+Dim Txt As String, Check As String
+
+Opt = 下限日以前の場合は下限日を使用
+If LimDate = "" Or IsDate(LimDate) = False Then
+ LimD = 0
+Else
+ LimD = DateValue(LimDate)
+End If
+
+Str = Ctr.Value
+If Str = "0" Then Str = ""
+If Str = "" Then
+ Txt = ""
+Else
+ If IsDate(Str) = True Then
+  D = Str
+ ElseIf (Str Like "????????" And IsNumeric(Str) = True) Then
+  D = DateSerial(Left(Str, 4), Mid(Str, 5, 2), Right(Str, 2))
+ Else
+  D = 0
+ End If
+ If D = 0 Then
+  Txt = ""
+ Else
+  If D < LimD Then
+   If Opt = True Then
+    D = LimD
+   Else
+    D = DateSerial(Year(D) + 1, Month(D), Day(D))
+   End If
+  End If
+  Txt = Format(D, Frm)
+ End If
+End If
+
+If Ctr.Value <> Txt Then Ctr.Value = Txt
+
+End Sub
+
+Public Sub SlctTxtBox(ByVal TxtBox As Control, ByVal Btn As Long)
+
+If Btn = 1 Then
+ With TxtBox
+  .SetFocus
+  .SelStart = 0
+  .SelLength = Len(.Value)
+  
+ End With
+End If
+
+End Sub
+
+Function SpnBtn(ByVal ym As String, Optional ByVal UpDown As String = "UP", Optional ByVal LimMntCnt As Long = -1, Optional ByVal myFormat As String = "yyyymm") As String
+
+Dim D As Date, LimD As Date
+Dim Str As String
+
+If ym Like "??????" And IsNumeric(ym) = True Then
+ D = DateSerial(Left(ym, 4), Right(ym, 2), 1)
+ LimD = Date
+ UpDown = StrConv(UCase(UpDown), vbNarrow)
+ If UpDown = "UP" Then
+  LimD = DateSerial(Year(LimD), Month(LimD) + LimMntCnt, 1)
+  If D <> LimD Then
+   D = DateSerial(Year(D), Month(D) + 1, 1)
+  End If
+ Else
+  LimD = DateSerial(Year(LimD), Month(LimD) - LimMntCnt, 1)
+  If D <> LimD Then
+   D = DateSerial(Year(D), Month(D) - 1, 1)
+  End If
+ End If
+ Str = Format(D, myFormat)
+End If
+
+SpnBtn = Str
+
+End Function
+
+
+
+
+
+================================================================================
+ファイル: ☆レポートの行列番号取得.bas
+================================================================================
+Attribute VB_Name = "☆レポートの行列番号取得"
+Option Explicit
+
+Sub レポートの行列番号取得(ByVal ws As Worksheet, ByRef sR As Long, ByRef mR As Long, ByRef C() As Long)
+
+Call フィルターを解除(ws)
+
+ReDim C(1 To 6) As Long
+With ws.Range("1:5")
+ C(1) = .Find("端末ID", LookIn:=xlFormulas, lookat:=xlWhole).Column
+ C(2) = .Find("物件コード").Column
+ C(3) = .Find("点検工事案内").Column
+ C(4) = .Find("点検開始日").Column
+ C(5) = .Find("点検完了日").Column
+ C(6) = .Find("掲示備考").Column
+ sR = .Find("物件コード").Row + 1
+End With
+mR = ws.Cells(ws.Rows.Count, C(1)).End(xlUp).Row
+
+End Sub
+
+
+================================================================================
+ファイル: ☆受注先リストの行列番号.bas
+================================================================================
+Attribute VB_Name = "☆受注先リストの行列番号"
+Option Explicit
+
+Sub 受注先リストの行列番号取得(ByRef ws As Worksheet, ByRef sR As Long, ByRef mR As Long, ByRef C() As Long)
+
+If ws Is Nothing Then Set ws = ThisWorkbook.Worksheets("受注先リスト")
+
+Call フィルターを解除(ws)
+
+ReDim C(1 To 3) As Long
+With ws.Range("1:5")
+ C(1) = .Find("受注先", LookIn:=xlFormulas, lookat:=xlWhole).Column
+ C(2) = .Find("緊急連絡先").Column
+ C(3) = .Find("カテゴリ").Column
+ 
+ sR = .Find("受注先").Row + 1
+End With
+mR = ws.Cells(ws.Rows.Count, C(1)).End(xlUp).Row
+
+End Sub
+
+
+================================================================================
+ファイル: ☆定数.bas
+================================================================================
+Attribute VB_Name = "☆定数"
+Option Explicit
+
+Public Const xlsm As Long = xlOpenXMLWorkbookMacroEnabled
+Public Const xlsx As Long = xlOpenXMLWorkbook
+
+Public Const 昇順 As Long = xlAscending
+Public Const 降順 As Long = xlDescending
+
+
+
+
+================================================================================
+ファイル: ☆案内文候補の行列番号取得.bas
+================================================================================
+Attribute VB_Name = "☆案内文候補の行列番号取得"
+Option Explicit
+
+Sub 案内文候補の行列番号取得(ByRef ws As Worksheet, ByRef sR As Long, ByRef mR As Long, ByRef C() As Long)
+If ws Is Nothing Then Set ws = ThisWorkbook.Worksheets("掲示板案内文")
+
+Call フィルターを解除(ws)
+
+ReDim C(1 To 17) As Long
+With ws.Range("1:5")
+ C(1) = .Find("点検掲示種類ID", LookIn:=xlFormulas, lookat:=xlWhole).Column
+ C(2) = .Find("点検工事案内").Column
+ C(3) = .Find("受注カテゴリーID").Column
+ C(4) = .Find("掲示板に表示する").Column
+ C(5) = .Find("案内TPLNo").Column
+ C(6) = .Find("掲示板用案内文").Column
+ C(7) = .Find("frame_No").Column
+ On Error Resume Next
+ C(8) = .Find("案内画像").Column
+ C(9) = .Find("概要").Column
+ C(10) = .Find("表示開始日前日数").Column
+ C(11) = .Find("表示終了日後日数").Column
+ C(12) = .Find("表示開始時刻").Column
+ C(13) = .Find("表示終了時刻").Column
+ C(14) = .Find("表示時間").Column
+ C(15) = .Find("統合ポリシー").Column
+ C(16) = .Find("変更日").Column
+ C(17) = .Find("変更時刻").Column
+ On Error GoTo 0
+ sR = .Find("点検工事案内").Row + 1
+End With
+mR = ws.Cells(ws.Rows.Count, C(2)).End(xlUp).Row
+
+End Sub
+
+
+================================================================================
+ファイル: ☆物件リストの行列番号.bas
+================================================================================
+Attribute VB_Name = "☆物件リストの行列番号"
+Option Explicit
+
+Sub 物件リストの行列番号取得(ByRef ws As Worksheet, ByRef sR As Long, ByRef mR As Long, ByRef C() As Long)
+If ws Is Nothing Then Set ws = ThisWorkbook.Worksheets("物件リスト")
+
+Call フィルターを解除(ws)
+ReDim C(1 To 5) As Long
+With ws.Range("1:5")
+ C(1) = .Find("物件コード", LookIn:=xlFormulas, lookat:=xlWhole).Column
+ C(2) = .Find("物件名称").Column
+ C(3) = .Find("所在地").Column
+ C(4) = .Find("端末ID").Column
+ C(5) = .Find("補足").Column
+ sR = .Find("物件コード").Row + 1
+End With
+mR = ws.Cells(ws.Rows.Count, C(1)).End(xlUp).Row
+
+End Sub
+
+
+================================================================================
+ファイル: ☆表示オプション.bas
+================================================================================
+Attribute VB_Name = "☆表示オプション"
+Option Explicit
+
+Function GetOPT() As String
+
+Dim Opt As Boolean
+Dim Usr As String
+Dim Col As Range
+
+
+Usr = Environ("username")
+Set Col = ThisWorkbook.Worksheets("設定").UsedRange.Find("隠し表示").EntireColumn
+If Application.WorksheetFunction.CountIf(Col, Usr) > 0 Then
+ Opt = True
+Else
+ Opt = False
+End If
+
+GetOPT = Opt
+
+End Function
+
+
