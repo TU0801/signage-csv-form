@@ -102,13 +102,78 @@ export async function getMasterInspectionTypes() {
 
 // 全マスターデータを一括取得
 export async function getAllMasterData() {
-  const [properties, vendors, inspectionTypes, categories] = await Promise.all([
+  const [propertiesRaw, vendors, inspectionTypes, categories] = await Promise.all([
     getMasterProperties(),
     getMasterVendors(),
     getMasterInspectionTypes(),
     getMasterCategories(),
   ]);
+
+  // 物件を property_code でグループ化し、terminals配列を作成
+  const propertiesMap = new Map();
+  propertiesRaw.forEach(p => {
+    const code = p.property_code;
+    if (!propertiesMap.has(code)) {
+      propertiesMap.set(code, {
+        property_code: code,
+        property_name: p.property_name,
+        address: p.address || '',
+        terminals: []
+      });
+    }
+    propertiesMap.get(code).terminals.push({
+      terminal_id: p.terminal_id,
+      supplement: p.supplement || ''
+    });
+  });
+
+  const properties = Array.from(propertiesMap.values());
+
   return { properties, vendors, inspectionTypes, categories };
+}
+
+// マスターデータをキャメルケースに変換（script.js用）
+export async function getAllMasterDataCamelCase() {
+  const data = await getAllMasterData();
+
+  // properties: グループ化された物件を1端末=1レコードにフラット化し、camelCaseに変換
+  const properties = [];
+  data.properties.forEach(p => {
+    p.terminals.forEach(t => {
+      properties.push({
+        propertyCode: p.property_code,
+        propertyName: p.property_name,
+        terminalId: t.terminal_id,
+        supplement: t.supplement || '',
+        address: p.address || ''
+      });
+    });
+  });
+
+  // vendors: vendor_name -> vendorName, emergency_contact -> emergencyContact
+  const vendors = data.vendors.map(v => ({
+    vendorName: v.vendor_name,
+    emergencyContact: v.emergency_contact || '',
+    category: v.category || ''
+  }));
+
+  // categories: そのまま配列として返す
+  const categories = (data.categories || []).map(c => c.category_name || c);
+
+  // inspectionTypes -> notices形式に変換
+  const notices = data.inspectionTypes.map((it, index) => ({
+    id: index + 1,
+    inspectionType: it.inspection_name,
+    categoryId: it.category_id || 0,
+    showOnBoard: it.show_on_board !== false,
+    templateNo: it.template_no || '',
+    noticeText: it.notice_text || '',
+    frameNo: 2,
+    image: '',
+    daysBeforeStart: 30
+  }));
+
+  return { properties, vendors, categories, notices };
 }
 
 // ========================================
@@ -211,24 +276,77 @@ export async function updateEntriesStatusBulk(ids, status) {
 // ========================================
 
 export async function addProperty(property) {
-  const { data, error } = await supabase
-    .from('signage_master_properties')
-    .insert(property)
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+  // terminalsが配列の場合、各端末ごとにレコードを作成
+  if (Array.isArray(property.terminals) && property.terminals.length > 0) {
+    const records = property.terminals.map(terminal => ({
+      property_code: property.property_code,
+      property_name: property.property_name,
+      terminal_id: terminal.terminal_id,
+      supplement: terminal.supplement || property.supplement || '',
+      address: property.address || ''
+    }));
+    const { data, error } = await supabase
+      .from('signage_master_properties')
+      .insert(records)
+      .select();
+    if (error) throw error;
+    return data;
+  } else {
+    // 旧形式の場合（後方互換性）
+    const { data, error } = await supabase
+      .from('signage_master_properties')
+      .insert(property)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }
 }
 
 export async function updateProperty(id, property) {
-  const { data, error } = await supabase
-    .from('signage_master_properties')
-    .update(property)
-    .eq('id', id)
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+  // terminalsが配列の場合、同じproperty_codeの全レコードを更新/追加/削除
+  if (Array.isArray(property.terminals) && property.terminals.length > 0) {
+    // 既存のレコードを取得
+    const { data: existing, error: fetchError } = await supabase
+      .from('signage_master_properties')
+      .select('*')
+      .eq('property_code', property.property_code);
+    if (fetchError) throw fetchError;
+
+    // 既存のレコードを全て削除
+    if (existing && existing.length > 0) {
+      const { error: deleteError } = await supabase
+        .from('signage_master_properties')
+        .delete()
+        .eq('property_code', property.property_code);
+      if (deleteError) throw deleteError;
+    }
+
+    // 新しいレコードを挿入
+    const records = property.terminals.map(terminal => ({
+      property_code: property.property_code,
+      property_name: property.property_name,
+      terminal_id: terminal.terminal_id,
+      supplement: terminal.supplement || '',
+      address: property.address || ''
+    }));
+    const { data, error } = await supabase
+      .from('signage_master_properties')
+      .insert(records)
+      .select();
+    if (error) throw error;
+    return data;
+  } else {
+    // 旧形式の場合（後方互換性）
+    const { data, error } = await supabase
+      .from('signage_master_properties')
+      .update(property)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }
 }
 
 export async function deleteProperty(id) {

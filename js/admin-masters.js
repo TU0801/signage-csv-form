@@ -133,15 +133,34 @@ export function renderProperties(masterData, filter = '') {
     const propertiesList = document.getElementById('propertiesList');
     propertiesList.innerHTML = '';
 
-    const filtered = masterData.properties.filter(p => {
+    // 物件コードごとにグループ化
+    const grouped = {};
+    masterData.properties.forEach(p => {
+        if (!grouped[p.property_code]) {
+            grouped[p.property_code] = {
+                property_code: p.property_code,
+                property_name: p.property_name,
+                address: p.address,
+                terminals: [],
+                firstId: p.id
+            };
+        }
+        grouped[p.property_code].terminals.push({
+            terminal_id: p.terminal_id,
+            supplement: p.supplement
+        });
+    });
+
+    // フィルタリング
+    const properties = Object.values(grouped).filter(p => {
         if (!filter) return true;
         const searchText = `${p.property_code} ${p.property_name}`.toLowerCase();
         return searchText.includes(filter.toLowerCase());
     });
 
-    document.getElementById('propertyCount').textContent = filtered.length;
+    document.getElementById('propertyCount').textContent = properties.length;
 
-    if (filtered.length === 0) {
+    if (properties.length === 0) {
         propertiesList.innerHTML = `
             <div class="master-empty">
                 <div class="master-empty-icon">📋</div>
@@ -152,23 +171,22 @@ export function renderProperties(masterData, filter = '') {
         return;
     }
 
-    filtered.forEach(p => {
+    properties.forEach(p => {
         const div = document.createElement('div');
         div.className = 'master-item';
-        div.dataset.id = p.id;
-        const terminals = typeof p.terminals === 'string' ? JSON.parse(p.terminals) : p.terminals;
+        div.dataset.propertyCode = p.property_code;
         div.innerHTML = `
             <div class="master-item-info">
                 <div class="master-item-name">${escapeHtml(p.property_code)} ${escapeHtml(p.property_name)}</div>
-                <div class="master-item-sub">端末: ${terminals?.length || 0}台</div>
+                <div class="master-item-sub">端末: ${p.terminals.length}台</div>
             </div>
             <div class="master-item-actions">
                 <button class="btn btn-outline btn-sm" data-action="edit">編集</button>
                 <button class="btn btn-outline btn-sm btn-danger-outline" data-action="delete">削除</button>
             </div>
         `;
-        div.querySelector('[data-action="edit"]').addEventListener('click', () => window.editProperty(p.id));
-        div.querySelector('[data-action="delete"]').addEventListener('click', () => window.deleteMasterProperty(p.id));
+        div.querySelector('[data-action="edit"]').addEventListener('click', () => window.editPropertyByCode(p.property_code));
+        div.querySelector('[data-action="delete"]').addEventListener('click', () => window.deletePropertyByCode(p.property_code));
         propertiesList.appendChild(div);
     });
 }

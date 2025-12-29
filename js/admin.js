@@ -966,6 +966,69 @@ function showToast(message, type = 'info') {
 // グローバルスコープに公開（マスター編集・削除）
 // ========================================
 
+// 物件コードで物件を編集（複数端末対応）
+window.editPropertyByCode = function(propertyCode) {
+    // property_codeで全てのレコードを取得
+    const propertyRecords = masterData.properties.filter(p => String(p.property_code) === String(propertyCode));
+    if (propertyRecords.length === 0) return;
+
+    // 最初のレコードから基本情報を取得
+    const firstRecord = propertyRecords[0];
+
+    // 全端末情報を配列として構築
+    const terminals = propertyRecords.map(p => ({
+        terminal_id: p.terminal_id,
+        supplement: p.supplement || ''
+    }));
+
+    // モーダルに渡すデータを構築
+    const propertyData = {
+        property_code: firstRecord.property_code,
+        property_name: firstRecord.property_name,
+        address: firstRecord.address || '',
+        supplement: firstRecord.supplement || '',
+        terminals: terminals
+    };
+
+    openMasterModal('property', masterData, propertyData);
+};
+
+// 物件コードで物件を削除（複数端末対応）
+window.deletePropertyByCode = async function(propertyCode) {
+    // property_codeで全てのレコードを取得
+    const propertyRecords = masterData.properties.filter(p => String(p.property_code) === String(propertyCode));
+    if (propertyRecords.length === 0) return;
+
+    // エントリで使用されているかチェック
+    const usedEntries = entries.filter(e => String(e.property_code) === String(propertyCode));
+    if (usedEntries.length > 0) {
+        showToast(`この物件は${usedEntries.length}件のエントリで使用中です`, 'error');
+        return false;
+    }
+
+    const firstRecord = propertyRecords[0];
+    if (!confirm(`物件「${firstRecord.property_name}」（${propertyRecords.length}端末）を削除しますか？`)) return false;
+
+    try {
+        // 全てのレコードを削除
+        for (const record of propertyRecords) {
+            await deleteProperty(record.id);
+        }
+        showToast('物件を削除しました', 'success');
+
+        // マスターデータを再読み込み
+        const newMasterData = await getAllMasterData();
+        Object.assign(masterData, newMasterData);
+        loadMasterData(masterData);
+        updateStats();
+        return true;
+    } catch (error) {
+        console.error('Failed to delete property:', error);
+        showToast('削除に失敗しました', 'error');
+        return false;
+    }
+};
+
 window.editProperty = function(id) {
     const property = masterData.properties.find(p => p.id === id);
     if (property) openMasterModal('property', masterData, property);

@@ -226,7 +226,7 @@
     </script>
     <script type="module">
         // 認証モジュール（ログイン必須）
-        import { getUser, getProfile, isAdmin, signOut, getSettings, createEntries, uploadPosterImage } from './js/supabase-client.js';
+        import { getUser, getProfile, isAdmin, signOut, getSettings, createEntries, uploadPosterImage, getAllMasterDataCamelCase } from './js/supabase-client.js';
 
         // script.jsから使えるようにwindowに公開
         window.createEntriesToSupabase = createEntries;
@@ -265,6 +265,27 @@
                     console.log('App settings loaded:', window.appSettings);
                 } catch (e) {
                     console.error('Failed to load settings:', e);
+                }
+
+                // マスターデータを読み込み（Supabaseから動的に取得）
+                try {
+                    const freshMasterData = await getAllMasterDataCamelCase();
+                    // script.jsのmasterDataをSupabaseから取得したデータで上書き
+                    if (window.masterData) {
+                        window.masterData = freshMasterData;
+                    }
+                    console.log('Master data loaded from Supabase:', freshMasterData);
+
+                    // マスターデータのロード後にscript.jsの初期化を実行
+                    if (typeof window.initScript === 'function') {
+                        window.initScript();
+                    }
+                } catch (e) {
+                    console.error('Failed to load master data:', e);
+                    // エラーが発生してもハードコードされたデータで初期化
+                    if (typeof window.initScript === 'function') {
+                        window.initScript();
+                    }
                 }
 
                 // 管理者の場合は管理リンクを表示
