@@ -78,7 +78,7 @@ export const templateImages = {
     "fire_extinguisher_explain": "消火器説明",
 
     // 設備
-    "automtic_doors": "自動ドア",
+    "automatic_doors": "自動ドア",
     "mechanical_parking": "機械式駐車場",
     "mechanical_parking_turntable": "ターンテーブル駐車場",
     "tower_mechanical_parking": "タワー式駐車場",
@@ -87,6 +87,8 @@ export const templateImages = {
     "simple_dedicated_water_supply": "専用水道設備",
     "shared_electrical_equipment": "共用部電気設備",
     "card_reader": "カードリーダー",
+    "mail_box": "メールボックス",
+    "drain_pipe_cleaning_truck": "排水管洗浄トラック",
 
     // 防犯・安全
     "surveillance_camera": "防犯カメラ",
@@ -96,9 +98,10 @@ export const templateImages = {
 
     // その他
     "bicycle_removal": "自転車撤去",
-    "merchari_installation": "メルカリ設置",
-    "Questionnaire_conducted01": "アンケート",
-    "Questionnaire_conducted02": "アンケート2"
+    "merchari_installation": "シェアサイクル設置",
+    "disinfection": "消毒",
+    "questionnaire_conducted01": "アンケート",
+    "questionnaire_conducted02": "アンケート2"
 };
 
 // ========================================
@@ -313,6 +316,31 @@ export async function loadCategories(masterData) {
 // マスターモーダル
 // ========================================
 
+// 端末フィールドを追加する関数
+function addTerminalField(terminal = {}) {
+    const terminalsList = document.getElementById('terminalsList');
+    const terminalDiv = document.createElement('div');
+    terminalDiv.className = 'terminal-item';
+    terminalDiv.style.cssText = 'display: flex; gap: 0.5rem; align-items: center;';
+
+    terminalDiv.innerHTML = `
+        <input type="text" class="terminal-id" placeholder="端末ID" value="${escapeHtml(terminal.terminal_id || terminal.terminalId || '')}" style="flex: 1;" required>
+        <input type="text" class="terminal-supplement" placeholder="補足（任意）" value="${escapeHtml(terminal.supplement || '')}" style="flex: 1;">
+        <button type="button" class="btn btn-outline btn-sm btn-danger-outline remove-terminal-btn">削除</button>
+    `;
+
+    // 削除ボタンのイベントリスナー
+    terminalDiv.querySelector('.remove-terminal-btn').addEventListener('click', () => {
+        if (terminalsList.children.length > 1) {
+            terminalDiv.remove();
+        } else {
+            alert('最低1つの端末が必要です');
+        }
+    });
+
+    terminalsList.appendChild(terminalDiv);
+}
+
 export function openMasterModal(type, masterData, data = null) {
     const modal = document.getElementById('masterModal');
     const title = document.getElementById('masterModalTitle');
@@ -331,18 +359,36 @@ export function openMasterModal(type, masterData, data = null) {
     if (type === 'property') {
         document.getElementById('propertyFields').style.display = 'block';
         title.textContent = data ? '物件を編集' : '物件を追加';
+
+        // 端末リストを初期化
+        const terminalsList = document.getElementById('terminalsList');
+        terminalsList.innerHTML = '';
+
+        // 端末追加ボタンのイベントリスナーを設定
+        const addTerminalBtn = document.getElementById('addTerminalBtn');
+        addTerminalBtn.onclick = () => addTerminalField();
+
         if (data) {
             document.getElementById('propertyCode').value = data.property_code || '';
             document.getElementById('propertyName').value = data.property_name || '';
-            document.getElementById('terminalId').value = data.terminal_id || '';
             document.getElementById('supplement').value = data.supplement || '';
             document.getElementById('address').value = data.address || '';
+
+            // 端末リストを表示
+            const terminals = typeof data.terminals === 'string' ? JSON.parse(data.terminals) : data.terminals || [];
+            if (terminals.length > 0) {
+                terminals.forEach(terminal => addTerminalField(terminal));
+            } else {
+                // 端末がない場合は1つ追加
+                addTerminalField();
+            }
         } else {
             document.getElementById('propertyCode').value = '';
             document.getElementById('propertyName').value = '';
-            document.getElementById('terminalId').value = '';
             document.getElementById('supplement').value = '';
             document.getElementById('address').value = '';
+            // 新規追加の場合は1つ端末フィールドを追加
+            addTerminalField();
         }
     } else if (type === 'vendor') {
         document.getElementById('vendorFields').style.display = 'block';
@@ -471,10 +517,17 @@ export async function handleMasterFormSubmit(e, masterData, showToast, updateSta
 
     try {
         if (type === 'property') {
+            // 端末リストを収集
+            const terminalItems = document.querySelectorAll('#terminalsList .terminal-item');
+            const terminals = Array.from(terminalItems).map(item => ({
+                terminal_id: item.querySelector('.terminal-id').value,
+                supplement: item.querySelector('.terminal-supplement').value || ''
+            }));
+
             const data = {
                 property_code: parseInt(document.getElementById('propertyCode').value),
                 property_name: document.getElementById('propertyName').value,
-                terminal_id: document.getElementById('terminalId').value,
+                terminals: terminals,
                 supplement: document.getElementById('supplement').value,
                 address: document.getElementById('address').value,
             };
