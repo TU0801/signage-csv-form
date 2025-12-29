@@ -102,12 +102,13 @@ export async function getMasterInspectionTypes() {
 
 // 全マスターデータを一括取得
 export async function getAllMasterData() {
-  const [properties, vendors, inspectionTypes] = await Promise.all([
+  const [properties, vendors, inspectionTypes, categories] = await Promise.all([
     getMasterProperties(),
     getMasterVendors(),
     getMasterInspectionTypes(),
+    getMasterCategories(),
   ]);
-  return { properties, vendors, inspectionTypes };
+  return { properties, vendors, inspectionTypes, categories };
 }
 
 // ========================================

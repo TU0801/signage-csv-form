@@ -1,0 +1,1460 @@
+[
+  {
+    "inspection_id": "2",
+    "inspection_name": "リモート点検",
+    "category_id": 8,
+    "category_name": "点検",
+    "template_no": "elevator_inspection",
+    "notice_text": "",
+    "show_on_board": false
+  },
+  {
+    "inspection_id": "3",
+    "inspection_name": "建物設備点検",
+    "category_id": 4,
+    "category_name": "点検",
+    "template_no": "building_inspection",
+    "notice_text": "点検のため、マンション内に調査員が立ち入りいたします。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "4",
+    "inspection_name": "消防設備点検",
+    "category_id": 9,
+    "category_name": "点検",
+    "template_no": "fire_inspection",
+    "notice_text": "消防法令　第17条3の3に基づく消防設備点検です。避難器具の周囲には障害物を置かないで下さい是正対象となります。当日点検に伺う場合があります。点検予定希望日の事前アンケートにご協力下さい。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "5",
+    "inspection_name": "貯水槽清掃（断水）",
+    "category_id": 10,
+    "category_name": "点検",
+    "template_no": "simple_dedicated_water_supply",
+    "notice_text": "断水中は蛇口を閉めて下さい。断水中に蛇口を開けると、閉め忘れて漏水事故の恐れがあります。断水前に飲料水等の必要な水の確保をお願いします。トイレご排水にはお風呂の汲み置きが有効です。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "6",
+    "inspection_name": "簡易専用水道検査",
+    "category_id": 11,
+    "category_name": "点検",
+    "template_no": "building_inspection",
+    "notice_text": "点検のため、マンション内に調査員が立ち入り貯水槽の水質検査を行います。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "7",
+    "inspection_name": "自動扉点検",
+    "category_id": 12,
+    "category_name": "点検",
+    "template_no": "automatic_doors",
+    "notice_text": "点検のため、マンション内に点検員が立ち入りいたします。点検中に、オートロックが反応しない場合は点検員へお声をかけて頂きますよう、お願い致します。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "10",
+    "inspection_name": "防犯カメラ点検",
+    "category_id": 16,
+    "category_name": "点検",
+    "template_no": "surveillance_camera",
+    "notice_text": "点検のため、マンション内に点検員が立ち入りいたします。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "11",
+    "inspection_name": "防犯カメラ取付工事",
+    "category_id": 16,
+    "category_name": "点検",
+    "template_no": "surveillance_camera_installation_work",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "12",
+    "inspection_name": "給水ポンプ点検（断水）",
+    "category_id": 17,
+    "category_name": "点検",
+    "template_no": "water_supply_pump_construction",
+    "notice_text": "断水中は蛇口を閉めて下さい。断水中に蛇口を開けると、閉め忘れて漏水事故の恐れがあります。断水前に飲料水等の必要な水の確保をお願いします。トイレご排水にはお風呂の汲み置きが有効です。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "13",
+    "inspection_name": "定期清掃",
+    "category_id": 19,
+    "category_name": "清掃",
+    "template_no": "cleaning",
+    "notice_text": "床面が滑りやすくなっている場合があります。ご通行の際はご注意下さい。一時的に通行をご遠慮いただく事もございます。ご協力お願いします。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "15",
+    "inspection_name": "エントランス定期清掃",
+    "category_id": 19,
+    "category_name": "清掃",
+    "template_no": "cleaning",
+    "notice_text": "床面が滑りやすくなっている場合があります。ご通行の際はご注意下さい。一時的に通行をご遠慮いただく事もございます。ご協力お願いします。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "17",
+    "inspection_name": "共用部電気設備点検（停電）",
+    "category_id": 70,
+    "category_name": "点検",
+    "template_no": "shared_electrical_equipment",
+    "notice_text": "点検中、水道、エレベータ、インターホン、インターネット、機械駐車場が使えなくなります",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "18",
+    "inspection_name": "共用部電気設備点検",
+    "category_id": 70,
+    "category_name": "点検",
+    "template_no": "shared_electrical_equipment",
+    "notice_text": "点検のため、マンション内に調査員が立ち入りいたします。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "19",
+    "inspection_name": "消防設備点検ご協力のお願い",
+    "category_id": 9,
+    "category_name": "点検",
+    "template_no": "fire_inspection",
+    "notice_text": "消防設備誤作動調査のため、お部屋に声をかけさせて頂く場合があります。ご協力お願いいたします、",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "21",
+    "inspection_name": "植栽の手入れ",
+    "category_id": 23,
+    "category_name": "清掃",
+    "template_no": "planting_management",
+    "notice_text": "植栽の手入れ、剪定あとの片づけのため、トラックを駐車いたします。＊雨天・緊急等の場合　順延する場合があります。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "22",
+    "inspection_name": "芝生の手入れ",
+    "category_id": 23,
+    "category_name": "清掃",
+    "template_no": "planting_management",
+    "notice_text": "芝刈り中は危険ですのでそばを通らないようお願いします。＊雨天・緊急等の場合　順延する場合があります。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "24",
+    "inspection_name": "マット交換",
+    "category_id": 22,
+    "category_name": "清掃",
+    "template_no": "",
+    "notice_text": "ただいま、マットの準備中です。雨天の際に足元が滑りやすくなりますのでご注意ください。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "25",
+    "inspection_name": "お部屋の排水管洗浄",
+    "category_id": 39,
+    "category_name": "清掃",
+    "template_no": "drainage_pipe",
+    "notice_text": "作業は２０分程で台所、浴室、洗面所の各排水口を洗浄致します。排水口付近の整理と在宅にご協力ください。入居者様の費用負担はございませんが、未実施で発生した排水管の詰まりによる事故及び漏水等の被害は入居者様負担となりますので、必ず実施をお願い申し上げます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "26",
+    "inspection_name": "お部屋と共用の排水管洗浄",
+    "category_id": 39,
+    "category_name": "清掃",
+    "template_no": "drainage_pipe",
+    "notice_text": "作業は２０分程で台所、浴室、洗面所の各排水口を洗浄致します。排水口付近の整理と在宅にご協力ください。入居者様の費用負担はございませんが、未実施で発生した排水管の詰まりによる事故及び漏水等の被害は入居者様負担となりますので、必ず実施をお願い申し上げます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "27",
+    "inspection_name": "音、振動を伴う工事",
+    "category_id": 48,
+    "category_name": "清掃",
+    "template_no": "construction_involving_sound_vibration",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "28",
+    "inspection_name": "自動販売機工事",
+    "category_id": 58,
+    "category_name": "工事",
+    "template_no": "vending_machine_construction",
+    "notice_text": "作業のため、マンション敷地内に作業員が立ち入ります。物の搬入のため車両を駐車いたします。雨天の場合　順延する場合があります。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "29",
+    "inspection_name": "屋上防水工事",
+    "category_id": 139,
+    "category_name": "工事",
+    "template_no": "waterproof_construction",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "30",
+    "inspection_name": "鉄部塗装",
+    "category_id": 141,
+    "category_name": "工事",
+    "template_no": "iron_part_coating",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "32",
+    "inspection_name": "バイク置場工事",
+    "category_id": 67,
+    "category_name": "工事",
+    "template_no": "construction_involving_sound_vibration",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "33",
+    "inspection_name": "外壁タイル調査",
+    "category_id": 38,
+    "category_name": "点検",
+    "template_no": "exterior_wall_tile_inspection",
+    "notice_text": "調査員が立ち入り、音と振動を伴います。また外壁を調査員が下がってきますので窓のカーテンを閉めてください。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "34",
+    "inspection_name": "特殊建築物調査",
+    "category_id": 38,
+    "category_name": "点検",
+    "template_no": "building_inspection",
+    "notice_text": "点検のため、マンション内に調査員が立ち入りいたします。雨天の場合　順延する場合があります。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "35",
+    "inspection_name": "駐車場工事",
+    "category_id": 43,
+    "category_name": "工事",
+    "template_no": "construction_involving_sound_vibration",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "36",
+    "inspection_name": "インターネット機器工事",
+    "category_id": 58,
+    "category_name": "工事",
+    "template_no": "questionnaire_conducted02",
+    "notice_text": "インターネット機器工事を行います　工事中はインターネットの利用ができません",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "38",
+    "inspection_name": "ポンプ工事（断水）",
+    "category_id": 44,
+    "category_name": "工事",
+    "template_no": "water_supply_pump_construction",
+    "notice_text": "断水中は蛇口を閉めて下さい。断水中に蛇口を開けると、閉め忘れて漏水事故の恐れがあります。断水前に飲料水等の必要な水の確保をお願いします。トイレご排水にはお風呂の汲み置きが有効です。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "39",
+    "inspection_name": "貯水槽清掃",
+    "category_id": 10,
+    "category_name": "点検",
+    "template_no": "simple_dedicated_water_supply",
+    "notice_text": "貯水槽清掃のため、マンション内に作業員が立ち入りいたします。断水はありませんが完了後、濁り水が出る場合があります。その際はしばらく流してご使用ください。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "40",
+    "inspection_name": "給水ポンプ点検",
+    "category_id": 17,
+    "category_name": "点検",
+    "template_no": "water_supply_pump_construction",
+    "notice_text": "点検のため、マンション内に点検員が立ち入りいたします。断水はありませんが点検完了後、濁り水が出る場合があります。その際はしばらく流してご使用ください。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "41",
+    "inspection_name": "給水ポンプ点検",
+    "category_id": 4,
+    "category_name": "点検",
+    "template_no": "water_supply_pump_construction",
+    "notice_text": "点検のため、マンション内に点検員が立ち入りいたします。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "42",
+    "inspection_name": "携帯アンテナ工事",
+    "category_id": 58,
+    "category_name": "工事",
+    "template_no": "construction_mobile_antenna",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "43",
+    "inspection_name": "宅配ボックス使用停止中",
+    "category_id": 154,
+    "category_name": "工事",
+    "template_no": "delivery_box_stop_using",
+    "notice_text": "ご不便をおかけいたしています。対応中ですのでもうしばらくお待ちください。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "44",
+    "inspection_name": "共用部の排水管洗浄",
+    "category_id": 39,
+    "category_name": "清掃",
+    "template_no": "shared_area_drain_pipe_wash",
+    "notice_text": "共用部の排水管洗浄を行います。工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "45",
+    "inspection_name": "消防設備連結管耐圧試験",
+    "category_id": 51,
+    "category_name": "点検",
+    "template_no": "shared_area_drain_pipe_inspection",
+    "notice_text": "耐圧試験のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "47",
+    "inspection_name": "外壁タイル工事",
+    "category_id": 153,
+    "category_name": "工事",
+    "template_no": "construction_outer wall",
+    "notice_text": "作業には音と振動を伴います。また物の搬入のため車両を駐車いたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "48",
+    "inspection_name": "カードリーダー更新工事",
+    "category_id": 138,
+    "category_name": "工事",
+    "template_no": "card_reader",
+    "notice_text": "工事中に、オートロックが反応しない場合は別の出入り口に頂きますよう、お願い致します。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "52",
+    "inspection_name": "作業のため作業員が入ります",
+    "category_id": 48,
+    "category_name": "清掃",
+    "template_no": "construction_without_sound",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入ります。また荷物搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "53",
+    "inspection_name": "消防設備点検アンケート",
+    "category_id": 9,
+    "category_name": "点検",
+    "template_no": "questionnaire_conducted01",
+    "notice_text": "消防点検のアンケートを配布しております。ご協力お願いいたします。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "54",
+    "inspection_name": "消防設備工事アンケート",
+    "category_id": 143,
+    "category_name": "工事",
+    "template_no": "questionnaire_conducted01",
+    "notice_text": "消防設備改修のための、のアンケートを配布しております。ご協力お願いいたします。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "55",
+    "inspection_name": "排水管洗浄アンケート",
+    "category_id": 39,
+    "category_name": "清掃",
+    "template_no": "questionnaire_conducted01",
+    "notice_text": "排水管洗浄のアンケートを配布しております。ご協力お願いいたします。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "56",
+    "inspection_name": "インターホン工事アンケート",
+    "category_id": 136,
+    "category_name": "工事",
+    "template_no": "questionnaire_conducted01",
+    "notice_text": "インターホン取替工事のアンケートを配布しております。ご協力お願いいたします。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "57",
+    "inspection_name": "入居者様アンケート",
+    "category_id": 92,
+    "category_name": "アンケート",
+    "template_no": "questionnaire_conducted02",
+    "notice_text": "アンケート結果は、今後の物件企画・開発の為に参考にさせて頂きます。ご協力お願い致します。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "58",
+    "inspection_name": "1年点検アンケート",
+    "category_id": 73,
+    "category_name": "アンケート",
+    "template_no": "questionnaire_conducted02",
+    "notice_text": "竣工1年目のアフター点検のアンケートを配布しております。ご協力お願いいたします。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "59",
+    "inspection_name": "2年点検アンケート",
+    "category_id": 73,
+    "category_name": "アンケート",
+    "template_no": "questionnaire_conducted02",
+    "notice_text": "竣工2年目のアフター点検のアンケートを配布しております。ご協力お願いいたします。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "60",
+    "inspection_name": "大規模修繕工事アンケート",
+    "category_id": 74,
+    "category_name": "工事",
+    "template_no": "questionnaire_conducted02",
+    "notice_text": "大規模修繕に伴うアンケートを配布しております。ご協力お願いいたします。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "61",
+    "inspection_name": "給水ポンプ点検（断水）",
+    "category_id": 17,
+    "category_name": "点検",
+    "template_no": "water_supply_pump_construction",
+    "notice_text": "断水中は蛇口を閉めて下さい。断水中に蛇口を開けると、閉め忘れて漏水事故の恐れがあります。断水前に飲料水等の必要な水の確保をお願いします。トイレご排水にはお風呂の汲み置きが有効です。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "62",
+    "inspection_name": "チャリチャリ設置工事",
+    "category_id": 133,
+    "category_name": "工事",
+    "template_no": "merchari_installation",
+    "notice_text": "マンションに、シェアサイクルのポートを設置しております",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "63",
+    "inspection_name": "携帯アンテナ工事",
+    "category_id": 58,
+    "category_name": "工事",
+    "template_no": "construction_mobile_antenna",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "64",
+    "inspection_name": "消防訓練掲示",
+    "category_id": 9,
+    "category_name": "点検",
+    "template_no": "fire_extinguisher_explain",
+    "notice_text": "訓練中に、放送、警報が鳴る場合がございます",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "66",
+    "inspection_name": "建築設備調査",
+    "category_id": 38,
+    "category_name": "点検",
+    "template_no": "building_inspection",
+    "notice_text": "点検のため、マンション内に調査員が立ち入りいたします。雨天の場合　順延する場合があります。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "67",
+    "inspection_name": "植栽の手入れ",
+    "category_id": 146,
+    "category_name": "工事",
+    "template_no": "planting_management",
+    "notice_text": "植栽の手入れ、剪定あとの片づけのため、トラックを駐車いたします。＊雨天・緊急等の場合　順延する場合があります。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "68",
+    "inspection_name": "コインパーキング工事",
+    "category_id": 120,
+    "category_name": "工事",
+    "template_no": "construction_coin_parking",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "69",
+    "inspection_name": "音、振動を伴う工事",
+    "category_id": 78,
+    "category_name": "工事",
+    "template_no": "construction_involving_sound_vibration",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "71",
+    "inspection_name": "活水装置工事",
+    "category_id": 40,
+    "category_name": "工事",
+    "template_no": "water_activator_construction",
+    "notice_text": "断水中は蛇口を閉めて下さい。断水中に蛇口を開けると、閉め忘れて漏水事故の恐れがあります。断水前に飲料水等の必要な水の確保をお願いします。トイレご排水にはお風呂の汲み置きが有効です。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "72",
+    "inspection_name": "インターホン工事",
+    "category_id": 136,
+    "category_name": "工事",
+    "template_no": "construction_Intercom",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "73",
+    "inspection_name": "共用部照明工事",
+    "category_id": 137,
+    "category_name": "工事",
+    "template_no": "construction_light",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "74",
+    "inspection_name": "カードリーダー工事",
+    "category_id": 138,
+    "category_name": "工事",
+    "template_no": "card_reader",
+    "notice_text": "工事のため,カードリーダーが使用できません。作業には音と振動を伴います。皆様のご理解をお願いいたします。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "75",
+    "inspection_name": "連結送水管耐圧試験",
+    "category_id": 51,
+    "category_name": "点検",
+    "template_no": "shared_area_drain_pipe_inspection",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "76",
+    "inspection_name": "自動販売機工事",
+    "category_id": 58,
+    "category_name": "工事",
+    "template_no": "vending_machine_construction_2",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "77",
+    "inspection_name": "携帯アンテナ工事",
+    "category_id": 58,
+    "category_name": "工事",
+    "template_no": "construction_mobile_antenna",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "78",
+    "inspection_name": "大規模修繕工事",
+    "category_id": 74,
+    "category_name": "工事",
+    "template_no": "construction_building_large_scale",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "79",
+    "inspection_name": "外壁タイル工事",
+    "category_id": 74,
+    "category_name": "工事",
+    "template_no": "construction_outer_wall",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "80",
+    "inspection_name": "視聴設備更新工事",
+    "category_id": 140,
+    "category_name": "工事",
+    "template_no": "construction_television_equipment",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "81",
+    "inspection_name": "JCOMケーブル工事",
+    "category_id": 140,
+    "category_name": "工事",
+    "template_no": "construction_jcom_cable",
+    "notice_text": "点検のため、マンション内に調査員が立ち入りいたします。雨天の場合　順延する場合があります。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "82",
+    "inspection_name": "消防改修工事",
+    "category_id": 143,
+    "category_name": "工事",
+    "template_no": "fire_construction",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "83",
+    "inspection_name": "有線放送工事",
+    "category_id": 140,
+    "category_name": "工事",
+    "template_no": "construction_toolbox",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入ります。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "84",
+    "inspection_name": "ガラス清掃",
+    "category_id": 72,
+    "category_name": "清掃",
+    "template_no": "glass_clean",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "85",
+    "inspection_name": "共用部電気設備点検（停電）",
+    "category_id": 144,
+    "category_name": "点検",
+    "template_no": "shared_electrical_equipment",
+    "notice_text": "点検中、水道、エレベータ、インターホン、インターネット、機械駐車場が使えなくなります",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "86",
+    "inspection_name": "特定防火対象物点検",
+    "category_id": 38,
+    "category_name": "点検",
+    "template_no": "building_inspection",
+    "notice_text": "点検のため、マンション内に調査員が立ち入りいたします",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "87",
+    "inspection_name": "シャッター点検",
+    "category_id": 89,
+    "category_name": "点検",
+    "template_no": "electrical_measurement",
+    "notice_text": "点検のため、マンション内に調査員が立ち入りいたします",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "88",
+    "inspection_name": "電子掲示板メンテナンス",
+    "category_id": 123,
+    "category_name": "工事",
+    "template_no": "construction_toolbox",
+    "notice_text": "点検のため、建物内に作業員が立ち入りいたします",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "89",
+    "inspection_name": "空冷設備点検",
+    "category_id": 97,
+    "category_name": "点検",
+    "template_no": "building_inspection",
+    "notice_text": "点検のため、建物内に作業員が立ち入りいたします",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "90",
+    "inspection_name": "全熱交換器点検",
+    "category_id": 98,
+    "category_name": "点検",
+    "template_no": "building_inspection",
+    "notice_text": "点検のため、建物内に作業員が立ち入りいたします",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "91",
+    "inspection_name": "自動制御装置点検",
+    "category_id": 99,
+    "category_name": "点検",
+    "template_no": "building_inspection",
+    "notice_text": "調査のため、建物内に調査員が立ち入りいたします",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "92",
+    "inspection_name": "中央監視装置点検",
+    "category_id": 100,
+    "category_name": "点検",
+    "template_no": "building_inspection",
+    "notice_text": "調査のため、建物内に調査員が立ち入りいたします",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "93",
+    "inspection_name": "上水受水槽清掃",
+    "category_id": 102,
+    "category_name": "点検",
+    "template_no": "simple_dedicated_water_supply",
+    "notice_text": "貯水槽清掃のため、作業員が立ち入りいたします。断水はありませんが完了後、濁り水が出る場合があります。その際はしばらく流してご使用ください。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "94",
+    "inspection_name": "再生水受水槽清掃",
+    "category_id": 103,
+    "category_name": "点検",
+    "template_no": "simple_dedicated_water_supply",
+    "notice_text": "貯水槽清掃のため、作業員が立ち入りいたします。断水はありませんが完了後、濁り水が出る場合があります。その際はしばらく流してご使用ください。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "95",
+    "inspection_name": "貯湯タンク清掃",
+    "category_id": 104,
+    "category_name": "点検",
+    "template_no": "simple_dedicated_water_supply",
+    "notice_text": "貯水槽清掃のため、マンション内に作業員が立ち入りいたします。断水はありませんが完了後、濁り水が出る場合があります。その際はしばらく流してご使用ください。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "96",
+    "inspection_name": "水質検査",
+    "category_id": 105,
+    "category_name": "点検",
+    "template_no": "Investigation",
+    "notice_text": "水質検査のため、建物内に検査員が立ち入りいたします",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "97",
+    "inspection_name": "雑用水水質検査",
+    "category_id": 106,
+    "category_name": "点検",
+    "template_no": "Investigation",
+    "notice_text": "水質検査のため、建物内に検査員が立ち入りいたします",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "98",
+    "inspection_name": "残留塩素測定",
+    "category_id": 107,
+    "category_name": "点検",
+    "template_no": "Investigation",
+    "notice_text": "測定のため、建物内に調査員が立ち入りいたします",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "99",
+    "inspection_name": "簡易専用水道検査",
+    "category_id": 108,
+    "category_name": "点検",
+    "template_no": "building_inspection",
+    "notice_text": "水道検査のため、建物内に作業員が立ち入りいたします",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "100",
+    "inspection_name": "ホルムアルデヒド測定",
+    "category_id": 109,
+    "category_name": "点検",
+    "template_no": "Investigation",
+    "notice_text": "測定のため、建物内に調査員が立ち入りいたします",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "101",
+    "inspection_name": "空気環境測定",
+    "category_id": 110,
+    "category_name": "点検",
+    "template_no": "Investigation",
+    "notice_text": "環境測定のため、建物内に調査員が立ち入りいたします",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "102",
+    "inspection_name": "ねずみ等の調査・防除調査",
+    "category_id": 111,
+    "category_name": "点検",
+    "template_no": "Investigation",
+    "notice_text": "調査のため、建物内に調査員が立ち入りいたします",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "103",
+    "inspection_name": "グリーストラップ清掃",
+    "category_id": 114,
+    "category_name": "清掃",
+    "template_no": "cleaning_bucket",
+    "notice_text": "清掃のため、建物内に作業員が立ち入りいたします",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "104",
+    "inspection_name": "発電設備点検",
+    "category_id": 115,
+    "category_name": "点検",
+    "template_no": "electrical_measurement",
+    "notice_text": "点検のため、建物内に調査員が立ち入りいたします。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "106",
+    "inspection_name": "電子掲示板工事",
+    "category_id": 123,
+    "category_name": "工事",
+    "template_no": "construction_toolbox",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "107",
+    "inspection_name": "ガス安全点検",
+    "category_id": 145,
+    "category_name": "点検",
+    "template_no": "construction_toolbox",
+    "notice_text": "点検のため、建物内に作業員が立ち入りいたします",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "108",
+    "inspection_name": "アスファルト補修工事",
+    "category_id": 146,
+    "category_name": "工事",
+    "template_no": "construction_involving_sound_vibration",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "109",
+    "inspection_name": "植栽工事",
+    "category_id": 146,
+    "category_name": "工事",
+    "template_no": "construction_involving_sound_vibration",
+    "notice_text": "工事のため敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "110",
+    "inspection_name": "インターロッキング補修工事",
+    "category_id": 146,
+    "category_name": "工事",
+    "template_no": "construction_involving_sound_vibration",
+    "notice_text": "工事のため敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "111",
+    "inspection_name": "ゴミ置場補修工事",
+    "category_id": 146,
+    "category_name": "工事",
+    "template_no": "construction_involving_sound_vibration",
+    "notice_text": "工事のため敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "112",
+    "inspection_name": "駐輪場工事",
+    "category_id": 146,
+    "category_name": "工事",
+    "template_no": "construction_involving_sound_vibration",
+    "notice_text": "工事のため敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "113",
+    "inspection_name": "外壁補修工事",
+    "category_id": 146,
+    "category_name": "工事",
+    "template_no": "construction_outer wall",
+    "notice_text": "工事のため敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "114",
+    "inspection_name": "エントランスドア補修",
+    "category_id": 147,
+    "category_name": "工事",
+    "template_no": "construction_toolbox",
+    "notice_text": "工事のため敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "115",
+    "inspection_name": "窓サッシ補修工事",
+    "category_id": 147,
+    "category_name": "工事",
+    "template_no": "construction_toolbox",
+    "notice_text": "工事のため敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "116",
+    "inspection_name": "住戸玄関ドア工事",
+    "category_id": 147,
+    "category_name": "工事",
+    "template_no": "construction_toolbox",
+    "notice_text": "工事のため敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "117",
+    "inspection_name": "窓ガラス取替工事",
+    "category_id": 147,
+    "category_name": "工事",
+    "template_no": "construction_toolbox",
+    "notice_text": "工事のため敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "118",
+    "inspection_name": "エントランスドア調整工事",
+    "category_id": 147,
+    "category_name": "工事",
+    "template_no": "construction_toolbox",
+    "notice_text": "点検のため、建物内に作業員が立ち入りいたします",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "119",
+    "inspection_name": "共用部クロス補修工事",
+    "category_id": 147,
+    "category_name": "工事",
+    "template_no": "construction_roller_paint",
+    "notice_text": "点検のため、建物内に作業員が立ち入りいたします",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "120",
+    "inspection_name": "エントランス自動ドア工事",
+    "category_id": 148,
+    "category_name": "工事",
+    "template_no": "automatic_doors",
+    "notice_text": "工事のため敷地内に作業員が立ち入り、作業には音と振動を伴います。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "122",
+    "inspection_name": "裏口自動ドア工事",
+    "category_id": 148,
+    "category_name": "工事",
+    "template_no": "automatic_doors",
+    "notice_text": "工事のため敷地内に作業員が立ち入り、作業には音と振動を伴います。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "123",
+    "inspection_name": "駐輪場自動ドア工事",
+    "category_id": 148,
+    "category_name": "工事",
+    "template_no": "automatic_doors",
+    "notice_text": "工事のため敷地内に作業員が立ち入り、作業には音と振動を伴います。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "124",
+    "inspection_name": "照明取替工事",
+    "category_id": 149,
+    "category_name": "工事",
+    "template_no": "exchange_light_battery",
+    "notice_text": "取替作業のため敷地内に作業員が立ち入ります",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "125",
+    "inspection_name": "エントランス照明取替工事",
+    "category_id": 149,
+    "category_name": "工事",
+    "template_no": "exchange_light_battery",
+    "notice_text": "取替作業のため敷地内に作業員が立ち入ります",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "126",
+    "inspection_name": "照明器具メンテナンス作業",
+    "category_id": 150,
+    "category_name": "工事",
+    "template_no": "exchange_light_battery_2",
+    "notice_text": "取替作業のため敷地内に作業員が立ち入ります",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "128",
+    "inspection_name": "住宅玄関ドア枠塗装工事",
+    "category_id": 152,
+    "category_name": "工事",
+    "template_no": "construction_roller_paint",
+    "notice_text": "工事終了後は、塗装に気を付けてください",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "129",
+    "inspection_name": "玄関ドア取替工事",
+    "category_id": 152,
+    "category_name": "工事",
+    "template_no": "construction_toolbox",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "130",
+    "inspection_name": "外壁タイル補修工事",
+    "category_id": 153,
+    "category_name": "工事",
+    "template_no": "construction_building_large_scale",
+    "notice_text": "工事のため敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "131",
+    "inspection_name": "外壁補修工事",
+    "category_id": 153,
+    "category_name": "工事",
+    "template_no": "construction_building_large_scale",
+    "notice_text": "工事のため敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "132",
+    "inspection_name": "外壁塗装工事",
+    "category_id": 153,
+    "category_name": "工事",
+    "template_no": "construction_roller_paint",
+    "notice_text": "工事のため敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "133",
+    "inspection_name": "床タイル補修工事",
+    "category_id": 146,
+    "category_name": "工事",
+    "template_no": "construction_involving_sound_vibration",
+    "notice_text": "工事のため敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "135",
+    "inspection_name": "宅配ボックス設置工事",
+    "category_id": 154,
+    "category_name": "工事",
+    "template_no": "delivery_box",
+    "notice_text": "作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "137",
+    "inspection_name": "インターホンメンテンス作業",
+    "category_id": 155,
+    "category_name": "工事",
+    "template_no": "construction_involving_sound_vibration",
+    "notice_text": "作業のため、建物内に作業員が立ち入りいたします　工事中に警報等が鳴る場合もございます",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "138",
+    "inspection_name": "住戸インターホン取替作業",
+    "category_id": 155,
+    "category_name": "工事",
+    "template_no": "construction_involving_sound_vibration",
+    "notice_text": "作業のため、建物内に作業員が立ち入りいたします　工事中に警報等が鳴る場合もございます",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "139",
+    "inspection_name": "避雷針工事",
+    "category_id": 156,
+    "category_name": "工事",
+    "template_no": "construction_spanner",
+    "notice_text": "工事のため敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "140",
+    "inspection_name": "避雷針調査",
+    "category_id": 156,
+    "category_name": "工事",
+    "template_no": "building_inspection",
+    "notice_text": "調査のため、屋上、建物内に作業員が立ち入りいたします",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "141",
+    "inspection_name": "受水槽メンテナンス工事",
+    "category_id": 157,
+    "category_name": "工事",
+    "template_no": "construction_spanner",
+    "notice_text": "メンテナンス作業のため敷地内に作業員が立ち入ります",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "142",
+    "inspection_name": "受水槽ボールタップ取替作業",
+    "category_id": 157,
+    "category_name": "工事",
+    "template_no": "construction_toolbox",
+    "notice_text": "メンテナンス作業のため敷地内に作業員が立ち入ります",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "143",
+    "inspection_name": "受水槽塗装工事",
+    "category_id": 157,
+    "category_name": "工事",
+    "template_no": "construction_roller_paint",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "144",
+    "inspection_name": "受水槽取替工事",
+    "category_id": 157,
+    "category_name": "工事",
+    "template_no": "construction_involving_sound_vibration",
+    "notice_text": "断水中は蛇口を閉めて下さい。断水中に蛇口を開けると、閉め忘れて漏水事故の恐れがあります。断水前に飲料水等の必要な水の確保をお願いします。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "146",
+    "inspection_name": "メールボックス取替工事",
+    "category_id": 158,
+    "category_name": "工事",
+    "template_no": "construction_toolbox",
+    "notice_text": "作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "147",
+    "inspection_name": "メールボックス更新工事",
+    "category_id": 158,
+    "category_name": "工事",
+    "template_no": "construction_toolbox",
+    "notice_text": "工事中皆様にご不便をおかけいたします",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "148",
+    "inspection_name": "メールボックス部品取替作業",
+    "category_id": 158,
+    "category_name": "工事",
+    "template_no": "construction_toolbox",
+    "notice_text": "メンテナンス作業のため敷地内に作業員が立ち入ります",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "149",
+    "inspection_name": "排水管更新工事",
+    "category_id": 159,
+    "category_name": "工事",
+    "template_no": "construction_spanner",
+    "notice_text": "作業には音と振動を伴います。工事中、水を流すことができません。皆様にご不便をおかけいたします",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "150",
+    "inspection_name": "共用部　鳩ネット取付工事",
+    "category_id": 160,
+    "category_name": "工事",
+    "template_no": "construction_involving_sound_vibration",
+    "notice_text": "共用部のベランダに鳩ネット取付けます　工事中は、ﾌﾟﾗｲﾊﾞｼｰ保護のためベランダの窓を閉めてください",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "151",
+    "inspection_name": "害虫駆除調査",
+    "category_id": 160,
+    "category_name": "工事",
+    "template_no": "Investigation",
+    "notice_text": "調査のため、建物内に調査員が立ち入りいたします",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "152",
+    "inspection_name": "害虫駆除消毒",
+    "category_id": 160,
+    "category_name": "工事",
+    "template_no": "disinfection",
+    "notice_text": "消毒中皆様にご不便をおかけいたします",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "156",
+    "inspection_name": "共用廊下床シート工事",
+    "category_id": 161,
+    "category_name": "工事",
+    "template_no": "exchange_corridor",
+    "notice_text": "工事のため敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "157",
+    "inspection_name": "感知器取替工事",
+    "category_id": 162,
+    "category_name": "工事",
+    "template_no": "fire_exchange",
+    "notice_text": "取替作業のため敷地内に作業員が立ち入ります",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "158",
+    "inspection_name": "防犯カメラ工事",
+    "category_id": 163,
+    "category_name": "工事",
+    "template_no": "surveillance_camera_installation_work",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "159",
+    "inspection_name": "侵入防護柵工事",
+    "category_id": 163,
+    "category_name": "工事",
+    "template_no": "electrical_measurement",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "160",
+    "inspection_name": "セキュリティ工事",
+    "category_id": 163,
+    "category_name": "工事",
+    "template_no": "construction_toolbox",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "161",
+    "inspection_name": "出入口シャッター工事",
+    "category_id": 164,
+    "category_name": "工事",
+    "template_no": "construction_toolbox",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。皆様のご理解をお願いいたします。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "162",
+    "inspection_name": "屋内防火シャッター工事",
+    "category_id": 164,
+    "category_name": "工事",
+    "template_no": "construction_toolbox",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。皆様のご理解をお願いいたします。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "163",
+    "inspection_name": "屋外防火シャッター工事",
+    "category_id": 164,
+    "category_name": "工事",
+    "template_no": "construction_toolbox",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。皆様のご理解をお願いいたします。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "164",
+    "inspection_name": "消火ポンプメンテナンス",
+    "category_id": 44,
+    "category_name": "工事",
+    "template_no": "construction_spanner",
+    "notice_text": "取替作業のため敷地内に作業員が立ち入ります",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "165",
+    "inspection_name": "排水ポンプ取替工事",
+    "category_id": 44,
+    "category_name": "工事",
+    "template_no": "construction_spanner",
+    "notice_text": "工事のため作業員が出入りいたします",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "166",
+    "inspection_name": "消防ホース取替",
+    "category_id": 51,
+    "category_name": "点検",
+    "template_no": "construction_toolbox",
+    "notice_text": "取替作業のため敷地内に作業員が立ち入ります",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "167",
+    "inspection_name": "消防ホース耐圧試験",
+    "category_id": 51,
+    "category_name": "点検",
+    "template_no": "construction_toolbox",
+    "notice_text": "耐圧試験のためマンション内に作業員が立ち入ります。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "168",
+    "inspection_name": "屋上看板LED取替工事",
+    "category_id": 137,
+    "category_name": "工事",
+    "template_no": "construction_building_large_scale",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "169",
+    "inspection_name": "共用部照明LED変更工事",
+    "category_id": 137,
+    "category_name": "工事",
+    "template_no": "exchange_light_battery",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入ります。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "170",
+    "inspection_name": "照明器具更新工事",
+    "category_id": 137,
+    "category_name": "工事",
+    "template_no": "exchange_light_battery",
+    "notice_text": "照明器具取替のためマンション敷地内に作業員が立ち入ります。また物の搬入のため車両を駐車いたしますので、皆様のご理解をお願いいたします。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "171",
+    "inspection_name": "衛星アンテナ取替工事",
+    "category_id": 140,
+    "category_name": "工事",
+    "template_no": "construction_television_equipment",
+    "notice_text": "アンテナ工事に伴い、一時テレビが映らない場合があります。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "172",
+    "inspection_name": "テレビ視聴設備調査",
+    "category_id": 140,
+    "category_name": "工事",
+    "template_no": "building_inspection",
+    "notice_text": "テレビ視聴設備調査のため　マンション敷地内に作業員が立ち入ります。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "173",
+    "inspection_name": "住戸玄関ドア枠塗装",
+    "category_id": 141,
+    "category_name": "工事",
+    "template_no": "construction_roller_paint",
+    "notice_text": "塗装工事のためマンション敷地内に作業員が立ち入ります。塗装部分には乾くまで触らないようお願いします。、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "174",
+    "inspection_name": "共用ドア塗装工事",
+    "category_id": 141,
+    "category_name": "工事",
+    "template_no": "construction_roller_paint",
+    "notice_text": "塗装工事のためマンション敷地内に作業員が立ち入ります。塗装部分には乾くまで触らないようお願いします。、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "175",
+    "inspection_name": "エレベータドア塗装工事",
+    "category_id": 141,
+    "category_name": "工事",
+    "template_no": "construction_roller_paint",
+    "notice_text": "塗装工事のためマンション敷地内に作業員が立ち入ります。塗装部分には乾くまで触らないようお願いします。、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "176",
+    "inspection_name": "自動火災報知更新工事",
+    "category_id": 143,
+    "category_name": "工事",
+    "template_no": "construction_toolbox",
+    "notice_text": "工事中に、インターホンが使用できないﾊ場合がございます。試験のため、警報等が鳴る場合がございます。皆様にご不便をおかけいたします",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "177",
+    "inspection_name": "消火器取替",
+    "category_id": 143,
+    "category_name": "工事",
+    "template_no": "fire_extinguisher_explain",
+    "notice_text": "作業のためマンション内に作業員が出入りいたします。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "178",
+    "inspection_name": "ゴミ置場改修工事",
+    "category_id": 146,
+    "category_name": "工事",
+    "template_no": "construction_roller_paint",
+    "notice_text": "工事のため敷地内に作業員が立ち入り、作業には音と振動を伴います。皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "179",
+    "inspection_name": "外構工事",
+    "category_id": 146,
+    "category_name": "工事",
+    "template_no": "construction_roller_paint",
+    "notice_text": "工事のため敷地内に作業員が立ち入り、作業には音と振動を伴います。皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "180",
+    "inspection_name": "給水管更新工事",
+    "category_id": 159,
+    "category_name": "工事",
+    "template_no": "construction_spanner",
+    "notice_text": "断水中は蛇口を閉めて下さい。断水中に蛇口を開けると、閉め忘れて漏水事故の恐れがあります。断水前に飲料水等の必要な水の確保をお願いします。トイレご排水にはお風呂の汲み置きが有効です。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "181",
+    "inspection_name": "電気設備工事",
+    "category_id": 93,
+    "category_name": "工事",
+    "template_no": "electrical_measurement",
+    "notice_text": "取替作業のため敷地内に作業員が立ち入ります",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "182",
+    "inspection_name": "電気設備取替工事",
+    "category_id": 165,
+    "category_name": "工事",
+    "template_no": "construction_toolbox",
+    "notice_text": "工事のためマンション敷地内に作業員が立ち入り、作業には音と振動を伴います。皆様のご理解をお願いいたします。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "183",
+    "inspection_name": "消火用ボックス塗装工事",
+    "category_id": 141,
+    "category_name": "工事",
+    "template_no": "painting_water_pipe",
+    "notice_text": "塗装工事のためマンション敷地内に作業員が立ち入ります。塗装部分には乾くまで触らないようお願いします。、皆様のご理解をお願いいたします。雨天のため順延する場合がございます。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "186",
+    "inspection_name": "給水ポンプ更新工事(断水）",
+    "category_id": 44,
+    "category_name": "工事",
+    "template_no": "water_activator_construction",
+    "notice_text": "断水中は蛇口を閉めて下さい。断水中に蛇口を開けると、閉め忘れて漏水事故の恐れがあります。断水前に飲料水等の必要な水の確保をお願いします。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "187",
+    "inspection_name": "防鳩工事のお知らせ",
+    "category_id": 160,
+    "category_name": "工事",
+    "template_no": "protect_balcony_from_birds",
+    "notice_text": "お部屋ののベランダで工事を行います。作業には音と振動を伴います。",
+    "show_on_board": true
+  },
+  {
+    "inspection_id": "187",
+    "inspection_name": "ハトネット工事のお知らせ",
+    "category_id": 160,
+    "category_name": "工事",
+    "template_no": "protect_balcony_from_birds_2",
+    "notice_text": "お部屋ののベランダで工事を行います。作業には音と振動を伴います。",
+    "show_on_board": true
+  }
+]
