@@ -105,6 +105,19 @@ CREATE TABLE signage_master_inspection_types (
 );
 
 -- ========================================
+-- signage_master_template_images: テンプレート画像マスター
+-- ========================================
+CREATE TABLE signage_master_template_images (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  image_key TEXT NOT NULL UNIQUE,
+  display_name TEXT NOT NULL,
+  image_url TEXT NOT NULL,
+  category TEXT,
+  sort_order INTEGER DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- ========================================
 -- Row Level Security (RLS) 設定
 -- ========================================
 
@@ -178,6 +191,7 @@ CREATE POLICY "Admins can delete all entries"
 ALTER TABLE signage_master_properties ENABLE ROW LEVEL SECURITY;
 ALTER TABLE signage_master_vendors ENABLE ROW LEVEL SECURITY;
 ALTER TABLE signage_master_inspection_types ENABLE ROW LEVEL SECURITY;
+ALTER TABLE signage_master_template_images ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Anyone can read properties"
   ON signage_master_properties FOR SELECT
@@ -189,6 +203,10 @@ CREATE POLICY "Anyone can read vendors"
 
 CREATE POLICY "Anyone can read inspection_types"
   ON signage_master_inspection_types FOR SELECT
+  USING (true);
+
+CREATE POLICY "Anyone can read template_images"
+  ON signage_master_template_images FOR SELECT
   USING (true);
 
 -- 管理者のみマスターデータ更新可能
@@ -212,6 +230,15 @@ CREATE POLICY "Admins can manage vendors"
 
 CREATE POLICY "Admins can manage inspection_types"
   ON signage_master_inspection_types FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM signage_profiles
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins can manage template_images"
+  ON signage_master_template_images FOR ALL
   USING (
     EXISTS (
       SELECT 1 FROM signage_profiles

@@ -189,8 +189,8 @@ test.describe('物件マスター編集 - CRUD操作', () => {
   test('新規物件を追加できる（複数端末付き）', async ({ page }) => {
     // === 実行 ===
 
-    // Step 1: 新規追加ボタンをクリック
-    await page.locator('button:has-text("新規追加")').click();
+    // Step 1: 新規追加ボタンをクリック（物件マスター用の特定ボタンを指定）
+    await page.locator('#addPropertyBtn').click();
     await page.waitForTimeout(500);
 
     // Step 2: 物件情報を入力

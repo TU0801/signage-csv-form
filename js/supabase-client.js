@@ -102,11 +102,12 @@ export async function getMasterInspectionTypes() {
 
 // 全マスターデータを一括取得
 export async function getAllMasterData() {
-  const [propertiesRaw, vendors, inspectionTypes, categories] = await Promise.all([
+  const [propertiesRaw, vendors, inspectionTypes, categories, templateImages] = await Promise.all([
     getMasterProperties(),
     getMasterVendors(),
     getMasterInspectionTypes(),
     getMasterCategories(),
+    getMasterTemplateImages().catch(() => []), // テーブルが存在しない場合は空配列
   ]);
 
   // 物件を property_code でグループ化し、terminals配列を作成
@@ -142,7 +143,7 @@ export async function getAllMasterData() {
 
   const properties = Array.from(propertiesMap.values());
 
-  return { properties, vendors, inspectionTypes, categories };
+  return { properties, vendors, inspectionTypes, categories, templateImages };
 }
 
 // マスターデータをキャメルケースに変換（script.js用）
@@ -186,7 +187,13 @@ export async function getAllMasterDataCamelCase() {
     daysBeforeStart: 30
   }));
 
-  return { properties, vendors, categories, notices };
+  // templateImages: image_key -> imageUrl のマップを作成
+  const templateImages = {};
+  (data.templateImages || []).forEach(ti => {
+    templateImages[ti.image_key] = ti.image_url;
+  });
+
+  return { properties, vendors, categories, notices, templateImages };
 }
 
 // ========================================
@@ -663,6 +670,109 @@ export async function deleteCategory(id) {
     .delete()
     .eq('id', id);
   if (error) throw error;
+}
+
+// ========================================
+// テンプレート画像マスタ管理
+// ========================================
+
+export async function getMasterTemplateImages() {
+  const { data, error } = await supabase
+    .from('signage_master_template_images')
+    .select('*')
+    .order('sort_order')
+    .order('display_name');
+  if (error) throw error;
+  return data;
+}
+
+export async function addTemplateImage(templateImage) {
+  const { data, error } = await supabase
+    .from('signage_master_template_images')
+    .insert(templateImage)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateTemplateImage(id, templateImage) {
+  const { data, error } = await supabase
+    .from('signage_master_template_images')
+    .update(templateImage)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteTemplateImage(id) {
+  const { error } = await supabase
+    .from('signage_master_template_images')
+    .delete()
+    .eq('id', id);
+  if (error) throw error;
+}
+
+// テンプレート画像をStorageにアップロード
+export async function uploadTemplateImageFile(file, imageKey) {
+  if (!file) return null;
+
+  const user = await getUser();
+  if (!user) throw new Error('ログインが必要です');
+
+  // ファイル拡張子を取得
+  const extension = file.name.split('.').pop().toLowerCase();
+  if (!['png', 'jpg', 'jpeg'].includes(extension)) {
+    throw new Error('PNG、JPG形式の画像のみアップロードできます');
+  }
+
+  // ファイルサイズチェック（5MB）
+  if (file.size > 5 * 1024 * 1024) {
+    throw new Error('ファイルサイズは5MB以下にしてください');
+  }
+
+  // テンプレート画像用のパス
+  const fileName = `templates/${imageKey}.${extension}`;
+
+  // Storageにアップロード（既存ファイルがあれば上書き）
+  const { data, error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(fileName, file, {
+      contentType: file.type,
+      upsert: true
+    });
+
+  if (error) {
+    console.error('Template image upload error:', error);
+    throw new Error('画像のアップロードに失敗しました: ' + error.message);
+  }
+
+  // 公開URLを取得
+  const { data: urlData } = supabase.storage
+    .from(STORAGE_BUCKET)
+    .getPublicUrl(data.path);
+
+  return urlData.publicUrl;
+}
+
+// テンプレート画像をStorageから削除
+export async function deleteTemplateImageFile(imageUrl) {
+  if (!imageUrl) return;
+
+  const bucketUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/`;
+  if (!imageUrl.startsWith(bucketUrl)) return;
+
+  const path = imageUrl.replace(bucketUrl, '');
+
+  const { error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .remove([path]);
+
+  if (error) {
+    console.error('Template image delete error:', error);
+  }
 }
 
 // ========================================

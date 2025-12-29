@@ -214,6 +214,88 @@
         .master-list::-webkit-scrollbar-thumb:hover {
             background: #94a3b8;
         }
+        /* テンプレート画像グリッド */
+        .template-image-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 1rem;
+            max-height: 500px;
+        }
+        .template-image-card {
+            background: white;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            overflow: hidden;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        .template-image-card:hover {
+            border-color: #667eea;
+            box-shadow: 0 4px 15px -3px rgba(102, 126, 234, 0.2);
+            transform: translateY(-2px);
+        }
+        .template-image-card img {
+            width: 100%;
+            height: 100px;
+            object-fit: cover;
+            background: #f8fafc;
+        }
+        .template-image-card-body {
+            padding: 0.75rem;
+        }
+        .template-image-card-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 0.25rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .template-image-card-key {
+            font-size: 0.75rem;
+            color: #64748b;
+            font-family: monospace;
+            margin-bottom: 0.5rem;
+        }
+        .template-image-card-category {
+            display: inline-block;
+            font-size: 0.625rem;
+            padding: 0.125rem 0.5rem;
+            background: #f1f5f9;
+            color: #475569;
+            border-radius: 9999px;
+        }
+        .template-image-card-actions {
+            display: flex;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            border-top: 1px solid #f1f5f9;
+            background: #fafafa;
+        }
+        .template-image-card-actions button {
+            flex: 1;
+            padding: 0.375rem;
+            font-size: 0.75rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .template-image-card-actions .btn-edit {
+            background: #e0e7ff;
+            color: #4338ca;
+        }
+        .template-image-card-actions .btn-edit:hover {
+            background: #c7d2fe;
+        }
+        .template-image-card-actions .btn-delete {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+        .template-image-card-actions .btn-delete:hover {
+            background: #fecaca;
+        }
         /* マスター検索 */
         .master-search {
             margin-bottom: 1rem;
@@ -902,6 +984,7 @@
                     <button class="admin-tab" data-master="vendors">受注先</button>
                     <button class="admin-tab" data-master="inspections">点検種別</button>
                     <button class="admin-tab" data-master="categories">カテゴリ</button>
+                    <button class="admin-tab" data-master="templateImages">テンプレート画像</button>
                     <button class="admin-tab" data-master="settings">設定</button>
                 </div>
 
@@ -971,6 +1054,23 @@
                         <input type="text" id="categorySearch" placeholder="カテゴリ名で検索...">
                     </div>
                     <div class="master-list" id="categoriesList"></div>
+                </div>
+
+                <div id="master-templateImages" class="master-content" style="display: none;">
+                    <div class="master-header">
+                        <div class="master-header-info">
+                            <div class="master-header-icon">🖼️</div>
+                            <div class="master-header-text">
+                                <h4>テンプレート画像マスター</h4>
+                                <span><span id="templateImageCount">0</span>件登録</span>
+                            </div>
+                        </div>
+                        <button class="btn btn-primary" id="addTemplateImageBtn">+ 新規追加</button>
+                    </div>
+                    <div class="master-search">
+                        <input type="text" id="templateImageSearch" placeholder="画像キー・表示名で検索...">
+                    </div>
+                    <div class="master-list template-image-grid" id="templateImagesList"></div>
                 </div>
 
                 <div id="master-settings" class="master-content" style="display: none;">
@@ -1128,6 +1228,45 @@
                         <div class="form-group">
                             <label>表示順序</label>
                             <input type="number" id="categorySortOrder" min="0" value="0">
+                        </div>
+                    </div>
+
+                    <!-- テンプレート画像用フィールド -->
+                    <div id="templateImageFields" style="display:none;">
+                        <div class="form-group">
+                            <label>画像キー *</label>
+                            <input type="text" id="templateImageKey" required pattern="[a-z0-9_]+" title="英小文字、数字、アンダースコアのみ">
+                            <small>例: elevator_inspection（英小文字、数字、アンダースコアのみ）</small>
+                        </div>
+                        <div class="form-group">
+                            <label>表示名 *</label>
+                            <input type="text" id="templateImageDisplayName" required>
+                            <small>例: エレベーター点検</small>
+                        </div>
+                        <div class="form-group">
+                            <label>カテゴリ</label>
+                            <select id="templateImageCategory">
+                                <option value="">未分類</option>
+                                <option value="点検">点検</option>
+                                <option value="工事">工事</option>
+                                <option value="清掃">清掃</option>
+                                <option value="その他">その他</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>表示順序</label>
+                            <input type="number" id="templateImageSortOrder" min="0" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label>画像ファイル *</label>
+                            <input type="file" id="templateImageFile" accept=".png,.jpg,.jpeg">
+                            <small>PNG、JPG形式（5MB以下）</small>
+                        </div>
+                        <div class="form-group">
+                            <label>画像プレビュー</label>
+                            <div id="templateImagePreview" style="margin-top: 0.5rem; text-align: center; min-height: 120px; background: #f8fafc; border-radius: 8px; display: flex; align-items: center; justify-content: center; border: 2px dashed #e2e8f0;">
+                                <span style="color: #94a3b8; font-size: 0.875rem;">画像を選択するとプレビュー表示</span>
+                            </div>
                         </div>
                     </div>
                 </div>

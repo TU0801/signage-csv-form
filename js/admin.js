@@ -24,13 +24,15 @@ import {
     renderVendors,
     renderInspections,
     renderCategories,
+    renderTemplateImages,
     openMasterModal,
     closeMasterModal,
     handleMasterFormSubmit,
     deleteMasterPropertyAction,
     deleteMasterVendorAction,
     deleteMasterInspectionAction,
-    deleteMasterCategoryAction
+    deleteMasterCategoryAction,
+    deleteMasterTemplateImageAction
 } from './admin-masters.js';
 
 import {
@@ -56,7 +58,7 @@ function escapeHtml(str) {
 // グローバル変数
 // ========================================
 
-let masterData = { properties: [], vendors: [], inspectionTypes: [], categories: [] };
+let masterData = { properties: [], vendors: [], inspectionTypes: [], categories: [], templateImages: [] };
 let entries = [];
 let profiles = [];
 let pendingEntries = [];
@@ -198,6 +200,7 @@ function setupEventListeners() {
     document.getElementById('addVendorBtn').addEventListener('click', () => openMasterModal('vendor', masterData));
     document.getElementById('addInspectionBtn').addEventListener('click', () => openMasterModal('inspection', masterData));
     document.getElementById('addCategoryBtn')?.addEventListener('click', () => openMasterModal('category', masterData));
+    document.getElementById('addTemplateImageBtn')?.addEventListener('click', () => openMasterModal('templateImage', masterData));
 
     // マスター検索
     document.getElementById('propertySearch')?.addEventListener('input', (e) => {
@@ -211,6 +214,9 @@ function setupEventListeners() {
     });
     document.getElementById('categorySearch')?.addEventListener('input', (e) => {
         renderCategories(masterData, e.target.value);
+    });
+    document.getElementById('templateImageSearch')?.addEventListener('input', (e) => {
+        renderTemplateImages(masterData, e.target.value);
     });
 
     // 設定保存ボタン
@@ -1063,6 +1069,15 @@ window.deleteMasterInspection = async function(id) {
 
 window.deleteMasterCategory = async function(id) {
     await deleteMasterCategoryAction(id, masterData, showToast);
+};
+
+window.editTemplateImage = function(id) {
+    const templateImage = (masterData.templateImages || []).find(ti => ti.id === id);
+    if (templateImage) openMasterModal('templateImage', masterData, templateImage);
+};
+
+window.deleteMasterTemplateImage = async function(id) {
+    await deleteMasterTemplateImageAction(id, masterData, showToast);
 };
 
 window.closeMasterModal = closeMasterModal;

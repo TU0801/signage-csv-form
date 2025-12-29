@@ -14,7 +14,13 @@ import {
     deleteInspectionType,
     addCategory,
     updateCategory,
-    deleteCategory
+    deleteCategory,
+    getMasterTemplateImages,
+    addTemplateImage,
+    updateTemplateImage,
+    deleteTemplateImage,
+    uploadTemplateImageFile,
+    deleteTemplateImageFile
 } from './supabase-client.js';
 
 // ========================================
@@ -127,6 +133,7 @@ export function loadMasterData(masterData) {
     renderVendors(masterData);
     renderInspections(masterData);
     loadCategories(masterData);
+    renderTemplateImages(masterData);
 }
 
 export function renderProperties(masterData, filter = '') {
@@ -330,6 +337,61 @@ export async function loadCategories(masterData) {
     }
 }
 
+export function renderTemplateImages(masterData, filter = '') {
+    const list = document.getElementById('templateImagesList');
+    if (!list) return;
+    list.innerHTML = '';
+
+    const templateImages = masterData.templateImages || [];
+    const filtered = templateImages.filter(ti => {
+        if (!filter) return true;
+        const searchText = `${ti.image_key} ${ti.display_name} ${ti.category || ''}`.toLowerCase();
+        return searchText.includes(filter.toLowerCase());
+    });
+
+    const count = document.getElementById('templateImageCount');
+    if (count) count.textContent = filtered.length;
+
+    if (filtered.length === 0) {
+        list.innerHTML = `
+            <div class="master-empty" style="grid-column: 1 / -1;">
+                <div class="master-empty-icon">🖼️</div>
+                <h4>${filter ? '検索結果がありません' : 'テンプレート画像が登録されていません'}</h4>
+                <p>${filter ? '検索条件を変更してください' : '「新規追加」からテンプレート画像を追加してください'}</p>
+            </div>
+        `;
+        return;
+    }
+
+    filtered.forEach(ti => {
+        const card = document.createElement('div');
+        card.className = 'template-image-card';
+        card.dataset.id = ti.id;
+        card.innerHTML = `
+            <img src="${escapeHtml(ti.image_url)}" alt="${escapeHtml(ti.display_name)}"
+                 onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23f1f5f9%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2250%22 text-anchor=%22middle%22 dy=%22.35em%22 fill=%22%2394a3b8%22 font-size=%2212%22>No Image</text></svg>'">
+            <div class="template-image-card-body">
+                <div class="template-image-card-title">${escapeHtml(ti.display_name)}</div>
+                <div class="template-image-card-key">${escapeHtml(ti.image_key)}</div>
+                ${ti.category ? `<span class="template-image-card-category">${escapeHtml(ti.category)}</span>` : ''}
+            </div>
+            <div class="template-image-card-actions">
+                <button class="btn-edit" data-action="edit">編集</button>
+                <button class="btn-delete" data-action="delete">削除</button>
+            </div>
+        `;
+        card.querySelector('[data-action="edit"]').addEventListener('click', (e) => {
+            e.stopPropagation();
+            window.editTemplateImage(ti.id);
+        });
+        card.querySelector('[data-action="delete"]').addEventListener('click', (e) => {
+            e.stopPropagation();
+            window.deleteMasterTemplateImage(ti.id);
+        });
+        list.appendChild(card);
+    });
+}
+
 // ========================================
 // マスターモーダル
 // ========================================
@@ -368,6 +430,7 @@ export function openMasterModal(type, masterData, data = null) {
     document.getElementById('vendorFields').style.display = 'none';
     document.getElementById('inspectionFields').style.display = 'none';
     document.getElementById('categoryFields')?.style && (document.getElementById('categoryFields').style.display = 'none');
+    document.getElementById('templateImageFields')?.style && (document.getElementById('templateImageFields').style.display = 'none');
 
     // タイプを設定
     document.getElementById('masterType').value = type;
@@ -434,18 +497,44 @@ export function openMasterModal(type, masterData, data = null) {
             categorySelect.appendChild(option);
         });
 
-        // テンプレート画像ドロップダウンを構築
+        // テンプレート画像ドロップダウンを構築（DBテンプレート優先、ハードコードをフォールバック）
         const templateSelect = document.getElementById('templateNo');
         templateSelect.innerHTML = '<option value="">画像なし</option>';
-        Object.entries(templateImages).forEach(([key, label]) => {
-            const option = document.createElement('option');
-            option.value = key;
-            option.textContent = label;
-            templateSelect.appendChild(option);
-        });
+
+        const dbTemplateImages = masterData.templateImages || [];
+        if (dbTemplateImages.length > 0) {
+            // カテゴリごとにグループ化
+            const categories = {};
+            dbTemplateImages.forEach(ti => {
+                const cat = ti.category || '未分類';
+                if (!categories[cat]) categories[cat] = [];
+                categories[cat].push(ti);
+            });
+
+            Object.entries(categories).forEach(([category, images]) => {
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = category;
+                images.forEach(ti => {
+                    const option = document.createElement('option');
+                    option.value = ti.image_key;
+                    option.textContent = ti.display_name;
+                    option.dataset.imageUrl = ti.image_url;
+                    optgroup.appendChild(option);
+                });
+                templateSelect.appendChild(optgroup);
+            });
+        } else {
+            // フォールバック: ハードコードされたテンプレート画像
+            Object.entries(templateImages).forEach(([key, label]) => {
+                const option = document.createElement('option');
+                option.value = key;
+                option.textContent = label;
+                templateSelect.appendChild(option);
+            });
+        }
 
         // プレビュー更新イベント
-        templateSelect.onchange = () => updateTemplatePreview(templateSelect.value);
+        templateSelect.onchange = () => updateTemplatePreviewWithMasterData(templateSelect, masterData);
 
         if (data) {
             document.getElementById('inspectionName').value = data.inspection_name || '';
@@ -453,8 +542,11 @@ export function openMasterModal(type, masterData, data = null) {
 
             // 日時プレフィックス付きの場合（例: "1124 235959cleaning"）、キーを抽出
             let templateKeyForSelect = data.template_no || '';
-            if (templateKeyForSelect && !templateImages[templateKeyForSelect]) {
-                for (const key of Object.keys(templateImages)) {
+            const allKeys = dbTemplateImages.length > 0
+                ? dbTemplateImages.map(ti => ti.image_key)
+                : Object.keys(templateImages);
+            if (templateKeyForSelect && !allKeys.includes(templateKeyForSelect)) {
+                for (const key of allKeys) {
                     if (templateKeyForSelect.endsWith(key)) {
                         templateKeyForSelect = key;
                         break;
@@ -465,14 +557,14 @@ export function openMasterModal(type, masterData, data = null) {
 
             document.getElementById('noticeText').value = data.notice_text || '';
             document.getElementById('showOnBoard').checked = data.show_on_board !== false;
-            updateTemplatePreview(data.template_no);
+            updateTemplatePreviewWithMasterData(templateSelect, masterData);
         } else {
             document.getElementById('inspectionName').value = '';
             categorySelect.value = '';
             templateSelect.value = '';
             document.getElementById('noticeText').value = '';
             document.getElementById('showOnBoard').checked = true;
-            updateTemplatePreview('');
+            updateTemplatePreviewWithMasterData(templateSelect, masterData);
         }
     } else if (type === 'category') {
         document.getElementById('categoryFields').style.display = 'block';
@@ -483,6 +575,47 @@ export function openMasterModal(type, masterData, data = null) {
         } else {
             document.getElementById('categoryName').value = '';
             document.getElementById('categorySortOrder').value = 0;
+        }
+    } else if (type === 'templateImage') {
+        document.getElementById('templateImageFields').style.display = 'block';
+        title.textContent = data ? 'テンプレート画像を編集' : 'テンプレート画像を追加';
+
+        const fileInput = document.getElementById('templateImageFile');
+        const previewDiv = document.getElementById('templateImagePreview');
+
+        // ファイル選択時のプレビュー更新
+        fileInput.onchange = () => {
+            const file = fileInput.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    previewDiv.innerHTML = `<img src="${e.target.result}" alt="プレビュー" style="max-height: 150px; max-width: 100%; border-radius: 4px;">`;
+                };
+                reader.readAsDataURL(file);
+            } else {
+                previewDiv.innerHTML = '<span style="color: #94a3b8; font-size: 0.875rem;">画像を選択するとプレビュー表示</span>';
+            }
+        };
+
+        if (data) {
+            document.getElementById('templateImageKey').value = data.image_key || '';
+            document.getElementById('templateImageDisplayName').value = data.display_name || '';
+            document.getElementById('templateImageCategory').value = data.category || '';
+            document.getElementById('templateImageSortOrder').value = data.sort_order || 0;
+            // 編集時は画像ファイルは必須ではない（変更しない場合）
+            fileInput.required = false;
+            // 既存画像のプレビュー表示
+            if (data.image_url) {
+                previewDiv.innerHTML = `<img src="${escapeHtml(data.image_url)}" alt="${escapeHtml(data.display_name)}" style="max-height: 150px; max-width: 100%; border-radius: 4px;" onerror="this.parentElement.innerHTML='<span style=\\'color: #ef4444;\\'>画像が読み込めません</span>'">`;
+            }
+        } else {
+            document.getElementById('templateImageKey').value = '';
+            document.getElementById('templateImageDisplayName').value = '';
+            document.getElementById('templateImageCategory').value = '';
+            document.getElementById('templateImageSortOrder').value = 0;
+            fileInput.required = true;
+            fileInput.value = '';
+            previewDiv.innerHTML = '<span style="color: #94a3b8; font-size: 0.875rem;">画像を選択するとプレビュー表示</span>';
         }
     }
 
@@ -508,6 +641,52 @@ export function updateTemplatePreview(templateKey) {
     let matchedKey = templateKey;
     if (!templateImages[templateKey]) {
         // 日時プレフィックス付きの場合（例: "1124 235959cleaning"）、末尾のキーを抽出
+        for (const key of Object.keys(templateImages)) {
+            if (templateKey.endsWith(key)) {
+                matchedKey = key;
+                break;
+            }
+        }
+    }
+
+    if (templateImages[matchedKey]) {
+        preview.innerHTML = `<img src="images/${matchedKey}.png" alt="${templateImages[matchedKey]}" style="max-height: 120px; max-width: 100%; border-radius: 4px;" onerror="this.parentElement.innerHTML='<span style=\\'color: #ef4444; font-size: 0.875rem;\\'>画像が見つかりません</span>'">`;
+    } else {
+        preview.innerHTML = `<span style="color: #94a3b8; font-size: 0.875rem;">${escapeHtml(templateKey)}</span>`;
+    }
+}
+
+// DB対応版のプレビュー更新
+export function updateTemplatePreviewWithMasterData(selectElement, masterData) {
+    const preview = document.getElementById('templatePreview');
+    if (!preview) return;
+
+    const selectedOption = selectElement.selectedOptions[0];
+    const templateKey = selectElement.value;
+
+    if (!templateKey) {
+        preview.innerHTML = '<span style="color: #94a3b8; font-size: 0.875rem;">プレビュー</span>';
+        return;
+    }
+
+    // 選択されたオプションにdata-imageUrlがあればそれを使用（DB画像）
+    const imageUrl = selectedOption?.dataset?.imageUrl;
+    if (imageUrl) {
+        preview.innerHTML = `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(selectedOption.textContent)}" style="max-height: 120px; max-width: 100%; border-radius: 4px;" onerror="this.parentElement.innerHTML='<span style=\\'color: #ef4444; font-size: 0.875rem;\\'>画像が見つかりません</span>'">`;
+        return;
+    }
+
+    // DBテンプレート画像から検索
+    const dbTemplateImages = masterData.templateImages || [];
+    const dbImage = dbTemplateImages.find(ti => ti.image_key === templateKey);
+    if (dbImage) {
+        preview.innerHTML = `<img src="${escapeHtml(dbImage.image_url)}" alt="${escapeHtml(dbImage.display_name)}" style="max-height: 120px; max-width: 100%; border-radius: 4px;" onerror="this.parentElement.innerHTML='<span style=\\'color: #ef4444; font-size: 0.875rem;\\'>画像が見つかりません</span>'">`;
+        return;
+    }
+
+    // フォールバック: ハードコードされたテンプレート画像
+    let matchedKey = templateKey;
+    if (!templateImages[templateKey]) {
         for (const key of Object.keys(templateImages)) {
             if (templateKey.endsWith(key)) {
                 matchedKey = key;
@@ -595,6 +774,56 @@ export async function handleMasterFormSubmit(e, masterData, showToast, updateSta
             } else {
                 await addCategory(data);
                 showToast('カテゴリを追加しました', 'success');
+            }
+        } else if (type === 'templateImage') {
+            const imageKey = document.getElementById('templateImageKey').value;
+            const displayName = document.getElementById('templateImageDisplayName').value;
+            const category = document.getElementById('templateImageCategory').value;
+            const sortOrder = parseInt(document.getElementById('templateImageSortOrder').value) || 0;
+            const fileInput = document.getElementById('templateImageFile');
+            const file = fileInput.files[0];
+
+            let imageUrl = null;
+
+            // 新規追加時はファイル必須
+            if (!id && !file) {
+                showToast('画像ファイルを選択してください', 'error');
+                return false;
+            }
+
+            // ファイルがある場合はアップロード
+            if (file) {
+                try {
+                    imageUrl = await uploadTemplateImageFile(file, imageKey);
+                } catch (uploadError) {
+                    showToast(`画像のアップロードに失敗しました: ${uploadError.message}`, 'error');
+                    return false;
+                }
+            }
+
+            const data = {
+                image_key: imageKey,
+                display_name: displayName,
+                category: category || null,
+                sort_order: sortOrder,
+            };
+
+            // 新しい画像URLがある場合は追加
+            if (imageUrl) {
+                data.image_url = imageUrl;
+            }
+
+            if (id) {
+                await updateTemplateImage(id, data);
+                showToast('テンプレート画像を更新しました', 'success');
+            } else {
+                // 新規追加時はimage_urlが必須
+                if (!data.image_url) {
+                    showToast('画像のアップロードに失敗しました', 'error');
+                    return false;
+                }
+                await addTemplateImage(data);
+                showToast('テンプレート画像を追加しました', 'success');
             }
         }
 
@@ -686,6 +915,50 @@ export async function deleteMasterCategoryAction(id, masterData, showToast) {
         await loadCategories(masterData);
         return true;
     } catch (error) {
+        showToast('削除に失敗しました', 'error');
+        return false;
+    }
+}
+
+export async function deleteMasterTemplateImageAction(id, masterData, showToast) {
+    const templateImage = (masterData.templateImages || []).find(ti => ti.id === id);
+    if (!templateImage) {
+        showToast('テンプレート画像が見つかりません', 'error');
+        return false;
+    }
+
+    // 点検種別で使用中かチェック
+    const usedInspections = (masterData.inspectionTypes || []).filter(i => i.template_no === templateImage.image_key);
+    if (usedInspections.length > 0) {
+        const names = usedInspections.map(i => i.inspection_name).join(', ');
+        showToast(`この画像は点検種別で使用中です: ${names}`, 'error');
+        return false;
+    }
+
+    if (!confirm(`テンプレート画像「${templateImage.display_name}」を削除しますか？\n※Storageの画像ファイルも削除されます`)) {
+        return false;
+    }
+
+    try {
+        // Storageから画像を削除
+        try {
+            await deleteTemplateImageFile(templateImage.image_key);
+        } catch (storageError) {
+            console.warn('Storage deletion failed (may not exist):', storageError);
+            // Storageの削除に失敗しても続行
+        }
+
+        // DBレコードを削除
+        await deleteTemplateImage(id);
+        showToast('テンプレート画像を削除しました', 'success');
+
+        // マスターデータを再読み込み
+        const newMasterData = await getAllMasterData();
+        Object.assign(masterData, newMasterData);
+        renderTemplateImages(masterData);
+        return true;
+    } catch (error) {
+        console.error('Failed to delete template image:', error);
         showToast('削除に失敗しました', 'error');
         return false;
     }
