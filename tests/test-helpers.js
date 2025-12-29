@@ -7,14 +7,38 @@ const baseUrl = 'http://localhost:8080';
  * モックデータ定義
  */
 const mockData = {
-  // 物件マスター（フラット形式 - DBの実際の形式）
+  // 物件マスター（Supabaseの実際の形式 - terminalsがJSON配列）
   propertiesRaw: [
-    { id: 1, property_code: '2010', property_name: 'エンクレストガーデン福岡', terminal_id: 'h0001A00', supplement: 'センター棟', address: '福岡県福岡市中央区小笹４－５' },
-    { id: 2, property_code: '2010', property_name: 'エンクレストガーデン福岡', terminal_id: 'h0001A01', supplement: 'A棟', address: '福岡県福岡市中央区小笹４－５' },
-    { id: 3, property_code: '2010', property_name: 'エンクレストガーデン福岡', terminal_id: 'h0001A02', supplement: 'B棟', address: '福岡県福岡市中央区小笹４－５' },
-    { id: 4, property_code: '2010', property_name: 'エンクレストガーデン福岡', terminal_id: 'h0001A03', supplement: 'C棟', address: '福岡県福岡市中央区小笹４－５' },
-    { id: 5, property_code: '120406', property_name: 'アソシアグロッツォ天神サウス', terminal_id: 'z1003A01', supplement: '', address: '福岡県福岡市中央区天神' },
-    { id: 6, property_code: '120408', property_name: 'アソシアグロッツォ博多プレイス', terminal_id: 'z1006A01', supplement: '', address: '福岡県福岡市博多区' }
+    {
+      id: 1,
+      property_code: '2010',
+      property_name: 'エンクレストガーデン福岡',
+      address: '福岡県福岡市中央区小笹４－５',
+      terminals: [
+        { terminalId: 'h0001A00', supplement: 'センター棟' },
+        { terminalId: 'h0001A01', supplement: 'A棟' },
+        { terminalId: 'h0001A02', supplement: 'B棟' },
+        { terminalId: 'h0001A03', supplement: 'C棟' }
+      ]
+    },
+    {
+      id: 2,
+      property_code: '120406',
+      property_name: 'アソシアグロッツォ天神サウス',
+      address: '福岡県福岡市中央区天神',
+      terminals: [
+        { terminalId: 'z1003A01', supplement: '' }
+      ]
+    },
+    {
+      id: 3,
+      property_code: '120408',
+      property_name: 'アソシアグロッツォ博多プレイス',
+      address: '福岡県福岡市博多区',
+      terminals: [
+        { terminalId: 'z1006A01', supplement: '' }
+      ]
+    }
   ],
 
   // 受注先マスター
@@ -142,6 +166,8 @@ const mockData = {
 
 /**
  * 物件データをグループ化（getAllMasterData()形式）
+ * Supabaseの実際のデータ構造に対応:
+ * - terminals: JSON配列 [{terminalId, supplement}, ...]
  */
 function groupProperties(propertiesRaw) {
   const propertiesMap = new Map();
@@ -155,10 +181,22 @@ function groupProperties(propertiesRaw) {
         terminals: []
       });
     }
-    propertiesMap.get(code).terminals.push({
-      terminal_id: p.terminal_id,
-      supplement: p.supplement || ''
-    });
+
+    // terminals が JSON配列の場合（新データ構造）
+    if (Array.isArray(p.terminals)) {
+      p.terminals.forEach(t => {
+        propertiesMap.get(code).terminals.push({
+          terminal_id: t.terminalId || t.terminal_id || '',
+          supplement: t.supplement || ''
+        });
+      });
+    } else if (p.terminal_id) {
+      // terminal_id がフラットな場合（旧データ構造、フォールバック）
+      propertiesMap.get(code).terminals.push({
+        terminal_id: p.terminal_id,
+        supplement: p.supplement || ''
+      });
+    }
   });
   return Array.from(propertiesMap.values());
 }

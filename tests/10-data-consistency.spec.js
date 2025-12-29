@@ -37,7 +37,7 @@ test.describe('Data Consistency Tests - 一件入力と一括入力のデータ�
           contentType: 'application/javascript',
           body: `
             const mockProperties = [
-              { id: 1, property_code: '2010', property_name: 'エンクレストガーデン福岡', terminals: '["h0001A00", "h0001A01"]' }
+              { id: 1, property_code: '2010', property_name: 'エンクレストガーデン福岡', terminals: [{ terminalId: 'h0001A00', supplement: '' }, { terminalId: 'h0001A01', supplement: '' }] }
             ];
             const mockVendors = [
               { id: 1, vendor_name: '山本クリーンシステム　有限会社', emergency_contact: '092-934-0407' }
@@ -178,7 +178,7 @@ test.describe('Data Consistency Tests - 一件入力と一括入力のデータ�
           contentType: 'application/javascript',
           body: `
             const mockProperties = [
-              { id: 1, property_code: '2010', property_name: 'エンクレストガーデン福岡', terminals: '["h0001A00", "h0001A01"]' }
+              { id: 1, property_code: '2010', property_name: 'エンクレストガーデン福岡', terminals: [{ terminalId: 'h0001A00', supplement: '' }, { terminalId: 'h0001A01', supplement: '' }] }
             ];
             const mockVendors = [
               { id: 1, vendor_name: '山本クリーンシステム　有限会社', emergency_contact: '092-934-0407' }
@@ -501,7 +501,7 @@ test.describe('Data Field Mapping Tests - フィールドマッピング確認',
           status: 200,
           contentType: 'application/javascript',
           body: `
-            const mockProperties = [{ id: 1, property_code: '2010', property_name: 'Test', terminals: '["h0001A00"]' }];
+            const mockProperties = [{ id: 1, property_code: '2010', property_name: 'Test', terminals: [{ terminalId: 'h0001A00', supplement: '' }] }];
             const mockVendors = [{ id: 1, vendor_name: 'TestVendor', emergency_contact: '000-0000' }];
             const mockInspectionTypes = [{ id: 1, template_no: 'test', inspection_name: 'Test', category: 'Test', default_text: 'Test' }];
             const mockSettings = [];

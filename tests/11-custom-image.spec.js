@@ -12,7 +12,7 @@ const { test, expect } = require('@playwright/test');
 
 // モックデータ
 const mockProperties = [
-  { id: 1, property_code: '2010', property_name: 'エンクレストガーデン福岡', terminals: '["h0001A00"]' }
+  { id: 1, property_code: '2010', property_name: 'エンクレストガーデン福岡', terminals: [{ terminalId: 'h0001A00', supplement: '' }] }
 ];
 
 const mockVendors = [

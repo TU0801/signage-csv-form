@@ -110,6 +110,7 @@ export async function getAllMasterData() {
   ]);
 
   // 物件を property_code でグループ化し、terminals配列を作成
+  // Supabaseのデータ構造: terminals は JSON配列 [{terminalId, supplement}, ...]
   const propertiesMap = new Map();
   propertiesRaw.forEach(p => {
     const code = p.property_code;
@@ -121,10 +122,22 @@ export async function getAllMasterData() {
         terminals: []
       });
     }
-    propertiesMap.get(code).terminals.push({
-      terminal_id: p.terminal_id,
-      supplement: p.supplement || ''
-    });
+
+    // terminals が JSON配列の場合（新データ構造）
+    if (Array.isArray(p.terminals)) {
+      p.terminals.forEach(t => {
+        propertiesMap.get(code).terminals.push({
+          terminal_id: t.terminalId || t.terminal_id || '',
+          supplement: t.supplement || ''
+        });
+      });
+    } else if (p.terminal_id) {
+      // terminal_id がフラットな場合（旧データ構造、フォールバック）
+      propertiesMap.get(code).terminals.push({
+        terminal_id: p.terminal_id,
+        supplement: p.supplement || ''
+      });
+    }
   });
 
   const properties = Array.from(propertiesMap.values());

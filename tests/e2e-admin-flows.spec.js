@@ -53,8 +53,8 @@ const mockPendingEntries = [
 ];
 
 const mockProperties = [
-  { id: 1, property_code: '2010', property_name: 'エンクレストガーデン福岡', terminals: '["h0001A00", "h0001A01"]' },
-  { id: 2, property_code: '120406', property_name: 'アソシアグロッツォ天神', terminals: '["z1003A01"]' }
+  { id: 1, property_code: '2010', property_name: 'エンクレストガーデン福岡', terminals: [{ terminalId: 'h0001A00', supplement: '' }, { terminalId: 'h0001A01', supplement: '' }] },
+  { id: 2, property_code: '120406', property_name: 'アソシアグロッツォ天神', terminals: [{ terminalId: 'z1003A01', supplement: '' }] }
 ];
 
 const mockVendors = [
