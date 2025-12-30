@@ -1147,28 +1147,19 @@ function showToast(message, type = 'info') {
 
 // 物件コードで物件を編集（複数端末対応）
 window.editPropertyByCode = function(propertyCode) {
-    // property_codeで全てのレコードを取得
-    const propertyRecords = masterData.properties.filter(p => String(p.property_code) === String(propertyCode));
-    if (propertyRecords.length === 0) return;
-
-    // 最初のレコードから基本情報を取得
-    const firstRecord = propertyRecords[0];
-
-    // 全端末情報を配列として構築
-    const terminals = propertyRecords.map(p => ({
-        terminal_id: p.terminal_id,
-        supplement: p.supplement || ''
-    }));
+    // masterData.propertiesから該当する物件を検索（グループ化済み構造）
+    const property = masterData.properties.find(p => String(p.property_code) === String(propertyCode));
+    if (!property) return;
 
     // モーダルに渡すデータを構築
     const propertyData = {
-        property_code: firstRecord.property_code,
-        property_name: firstRecord.property_name,
-        address: firstRecord.address || '',
-        supplement: firstRecord.supplement || '',
-        terminals: terminals
+        property_code: property.property_code,
+        property_name: property.property_name,
+        address: property.address || '',
+        terminals: property.terminals || []
     };
 
+    console.log('Opening property modal with data:', propertyData);
     openMasterModal('property', masterData, propertyData);
 };
 

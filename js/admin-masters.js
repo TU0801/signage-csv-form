@@ -182,10 +182,17 @@ export function renderProperties(masterData, filter = '') {
         const div = document.createElement('div');
         div.className = 'master-item';
         div.dataset.propertyCode = p.property_code;
+
+        // 端末情報を簡潔に表示
+        const terminalDisplay = p.terminals.length > 0
+            ? p.terminals.map(t => t.terminal_id).slice(0, 3).join(', ') + (p.terminals.length > 3 ? '...' : '')
+            : 'なし';
+
         div.innerHTML = `
-            <div class="master-item-info">
-                <div class="master-item-name">${escapeHtml(p.property_code)} ${escapeHtml(p.property_name)}</div>
-                <div class="master-item-sub">端末: ${p.terminals.length}台</div>
+            <div class="master-item-name">${escapeHtml(p.property_code)}</div>
+            <div class="master-item-details">
+                <span>${escapeHtml(p.property_name)}</span>
+                <span style="color: #94a3b8;">端末: ${escapeHtml(terminalDisplay)} (${p.terminals.length}台)</span>
             </div>
             <div class="master-item-actions">
                 <button class="btn btn-outline btn-sm" data-action="edit">編集</button>
