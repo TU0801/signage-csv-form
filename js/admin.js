@@ -9,6 +9,8 @@ import {
     getAllEntries,
     getAllProfiles,
     updateProfileRole,
+    updateUserProfile,
+    updateUserStatus,
     createUser,
     deleteEntry,
     getPendingEntries,
@@ -21,6 +23,7 @@ import {
     approveBuildingRequest,
     rejectBuildingRequest,
     removeBuildingVendor,
+    addBuildingVendor,
     getMasterVendors
 } from './supabase-client.js';
 
@@ -861,6 +864,9 @@ async function loadUsers() {
         const roleClass = profile.role === 'admin' ? 'admin' : 'user';
         const roleText = profile.role === 'admin' ? '管理者' : 'ユーザー';
         const isSelf = profile.id === currentUserId;
+        const status = profile.status || 'active';
+        const statusClass = status === 'active' ? 'status-active' : 'status-inactive';
+        const statusText = status === 'active' ? '有効' : '無効';
 
         // ベンダー名を取得
         let vendorName = '-';
@@ -874,12 +880,12 @@ async function loadUsers() {
             <td>${escapeHtml(profile.company_name || '-')}</td>
             <td>${escapeHtml(vendorName)}</td>
             <td><span class="user-role ${roleClass}">${roleText}</span></td>
+            <td><span class="status-badge ${statusClass}">${statusText}</span></td>
             <td>${createdAt}</td>
             <td>
-                <select class="role-select" data-user-id="${escapeHtml(profile.id)}" ${isSelf ? 'disabled title="自分の権限は変更できません"' : ''} style="padding: 0.25rem; border-radius: 4px; border: 1px solid #e2e8f0;">
-                    <option value="user" ${profile.role === 'user' ? 'selected' : ''}>ユーザー</option>
-                    <option value="admin" ${profile.role === 'admin' ? 'selected' : ''}>管理者</option>
-                </select>
+                <button class="btn btn-sm btn-outline" onclick="openEditUserModal('${profile.id}')" ${isSelf ? 'disabled title="自分は編集できません"' : ''}>編集</button>
+                ${!isSelf && status === 'active' ? `<button class="btn btn-sm btn-danger" onclick="handleDeactivateUser('${profile.id}')">無効化</button>` : ''}
+                ${!isSelf && status === 'inactive' ? `<button class="btn btn-sm btn-success" onclick="handleActivateUser('${profile.id}')">有効化</button>` : ''}
             </td>
         `;
         tbody.appendChild(tr);
@@ -984,8 +990,125 @@ async function handleUserFormSubmit(e) {
     }
 }
 
+// ユーザー編集モーダル
+async function openEditUserModal(userId) {
+    const profile = profiles.find(p => p.id === userId);
+    if (!profile) return;
+
+    const modal = document.getElementById('userModal');
+    const form = document.getElementById('userForm');
+    const vendorSelect = document.getElementById('newUserVendor');
+    const submitBtn = document.getElementById('userSubmitBtn');
+
+    // フォームに既存データを設定
+    document.getElementById('newUserEmail').value = profile.email;
+    document.getElementById('newUserEmail').disabled = true; // メールは変更不可
+    document.getElementById('newUserPassword').value = '';
+    document.getElementById('newUserPassword').required = false; // 編集時はパスワード任意
+    document.getElementById('newUserPassword').placeholder = '変更する場合のみ入力';
+    document.getElementById('newUserCompany').value = profile.company_name || '';
+    document.getElementById('newUserRole').value = profile.role;
+
+    // ベンダー選択肢を読み込み
+    try {
+        const vendors = await getMasterVendors();
+        vendorSelect.innerHTML = '<option value="">-- 選択なし（管理者の場合） --</option>';
+        vendors.forEach(v => {
+            const selected = v.id === profile.vendor_id ? 'selected' : '';
+            vendorSelect.innerHTML += `<option value="${v.id}" ${selected}>${escapeHtml(v.vendor_name)}</option>`;
+        });
+    } catch (error) {
+        console.error('Failed to load vendors:', error);
+    }
+
+    // モーダルタイトルとボタンを変更
+    modal.querySelector('.modal-header h3').textContent = 'ユーザー編集';
+    submitBtn.textContent = '更新';
+
+    // フォーム送信時の処理を編集用に変更
+    form.onsubmit = async (e) => {
+        e.preventDefault();
+        await handleEditUserSubmit(userId);
+    };
+
+    modal.classList.add('active');
+}
+
+// ユーザー編集の送信処理
+async function handleEditUserSubmit(userId) {
+    const email = document.getElementById('newUserEmail').value.trim();
+    const companyName = document.getElementById('newUserCompany').value.trim();
+    const role = document.getElementById('newUserRole').value;
+    const vendorId = document.getElementById('newUserVendor').value || null;
+    const submitBtn = document.getElementById('userSubmitBtn');
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = '更新中...';
+
+    try {
+        // プロファイル更新
+        await updateUserProfile(userId, {
+            company_name: companyName,
+            role: role,
+            vendor_id: vendorId
+        });
+
+        showToast('ユーザー情報を更新しました', 'success');
+        closeUserModal();
+
+        // フォームをリセット
+        const form = document.getElementById('userForm');
+        form.onsubmit = handleUserFormSubmit; // 元の処理に戻す
+        document.getElementById('newUserEmail').disabled = false;
+        document.getElementById('newUserPassword').required = true;
+        document.getElementById('newUserPassword').placeholder = '6文字以上';
+        form.querySelector('.modal-header h3').textContent = 'ユーザー追加';
+
+        // ユーザー一覧を更新
+        profiles = await getAllProfiles();
+        loadUsers();
+    } catch (error) {
+        console.error('User update error:', error);
+        showToast('更新に失敗しました: ' + error.message, 'error');
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '更新';
+    }
+}
+
+// ユーザーを無効化
+async function handleDeactivateUser(userId) {
+    if (!confirm('このユーザーを無効化してもよろしいですか？\nログインできなくなります。')) return;
+
+    try {
+        await updateUserStatus(userId, 'inactive');
+        showToast('ユーザーを無効化しました', 'success');
+        profiles = await getAllProfiles();
+        loadUsers();
+    } catch (error) {
+        console.error('Failed to deactivate user:', error);
+        showToast('無効化に失敗しました', 'error');
+    }
+}
+
+// ユーザーを有効化
+async function handleActivateUser(userId) {
+    try {
+        await updateUserStatus(userId, 'active');
+        showToast('ユーザーを有効化しました', 'success');
+        profiles = await getAllProfiles();
+        loadUsers();
+    } catch (error) {
+        console.error('Failed to activate user:', error);
+        showToast('有効化に失敗しました', 'error');
+    }
+}
+
 // グローバルに公開
 window.closeUserModal = closeUserModal;
+window.openEditUserModal = openEditUserModal;
+window.handleDeactivateUser = handleDeactivateUser;
+window.handleActivateUser = handleActivateUser;
 
 // ========================================
 // ユーティリティ
@@ -1160,40 +1283,65 @@ async function loadBuildingVendorRelationships(vendorId) {
 // 紐付け一覧を描画
 function renderBuildingVendorRelationships(relationships) {
     const container = document.getElementById('relationshipsTableContainer');
-
-    if (!relationships || relationships.length === 0) {
-        container.innerHTML = '<p style="color: #64748b; text-align: center; padding: 2rem;">紐付けがありません</p>';
-        return;
-    }
+    const vendorId = document.getElementById('filterVendor').value;
 
     const activeRelationships = relationships.filter(r => r.status === 'active');
 
     container.innerHTML = `
-        <div class="table-container">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>物件コード</th>
-                        <th>ステータス</th>
-                        <th>登録日</th>
-                        <th>操作</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${activeRelationships.map(r => `
-                        <tr>
-                            <td>${escapeHtml(r.property_code)}</td>
-                            <td><span class="status-badge status-active">有効</span></td>
-                            <td>${new Date(r.created_at).toLocaleDateString('ja-JP')}</td>
-                            <td>
-                                <button class="btn btn-danger btn-sm" onclick="handleRemoveBuildingVendor('${r.id}')">削除</button>
-                            </td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
+        <div style="margin-bottom: 1rem;">
+            <button class="btn btn-primary btn-sm" onclick="openAddBuildingModal('${vendorId}')">
+                <span class="btn-icon">➕</span> ビルを追加
+            </button>
         </div>
+        ${activeRelationships.length === 0 ?
+            '<p style="color: #64748b; text-align: center; padding: 2rem;">紐付けがありません</p>' :
+            `<div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>物件コード</th>
+                            <th>ステータス</th>
+                            <th>登録日</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${activeRelationships.map(r => `
+                            <tr>
+                                <td>${escapeHtml(r.property_code)}</td>
+                                <td><span class="status-badge status-active">有効</span></td>
+                                <td>${new Date(r.created_at).toLocaleDateString('ja-JP')}</td>
+                                <td>
+                                    <button class="btn btn-danger btn-sm" onclick="handleRemoveBuildingVendor('${r.id}')">削除</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>`
+        }
     `;
+}
+
+// ビル追加モーダルを開く
+async function openAddBuildingModal(vendorId) {
+    const propertyCode = prompt('追加する物件コードを入力してください:');
+    if (!propertyCode) return;
+
+    try {
+        await addBuildingVendor(propertyCode, vendorId);
+        showToast('ビルを追加しました', 'success');
+        await loadBuildingVendorRelationships(vendorId);
+    } catch (error) {
+        console.error('Failed to add building-vendor relationship:', error);
+        if (error.message.includes('duplicate') || error.message.includes('unique')) {
+            showToast('この物件は既に追加されています', 'error');
+        } else if (error.message.includes('foreign key') || error.message.includes('not found')) {
+            showToast('物件コードが見つかりません', 'error');
+        } else {
+            showToast('追加に失敗しました: ' + error.message, 'error');
+        }
+    }
 }
 
 // 紐付けを削除（非表示化）
@@ -1286,6 +1434,7 @@ async function handleRejectBuildingRequest(requestId) {
 
 // グローバルに公開
 window.handleRemoveBuildingVendor = handleRemoveBuildingVendor;
+window.openAddBuildingModal = openAddBuildingModal;
 window.handleApproveBuildingRequest = handleApproveBuildingRequest;
 window.handleRejectBuildingRequest = handleRejectBuildingRequest;
 

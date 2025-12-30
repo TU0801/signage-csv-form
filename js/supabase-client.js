@@ -645,6 +645,30 @@ export async function updateProfileRole(id, role) {
   return data;
 }
 
+// ユーザープロファイル更新（管理者用）
+export async function updateUserProfile(id, updates) {
+  const { data, error } = await supabase
+    .from('signage_profiles')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+// ユーザーのステータス変更（管理者用）
+export async function updateUserStatus(id, status) {
+  const { data, error } = await supabase
+    .from('signage_profiles')
+    .update({ status })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 // ユーザー作成（管理者用）- 直接パスワード設定
 export async function createUser(email, password, companyName, role, vendorId = null) {
   // 現在のセッションを保存
