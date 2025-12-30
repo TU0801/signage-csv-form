@@ -140,26 +140,9 @@ export function renderProperties(masterData, filter = '') {
     const propertiesList = document.getElementById('propertiesList');
     propertiesList.innerHTML = '';
 
-    // 物件コードごとにグループ化
-    const grouped = {};
-    masterData.properties.forEach(p => {
-        if (!grouped[p.property_code]) {
-            grouped[p.property_code] = {
-                property_code: p.property_code,
-                property_name: p.property_name,
-                address: p.address,
-                terminals: [],
-                firstId: p.id
-            };
-        }
-        grouped[p.property_code].terminals.push({
-            terminal_id: p.terminal_id,
-            supplement: p.supplement
-        });
-    });
-
-    // フィルタリング
-    const properties = Object.values(grouped).filter(p => {
+    // masterData.propertiesは既にグループ化済み（getAllMasterData()から）
+    // フィルタリングのみ実行
+    const properties = masterData.properties.filter(p => {
         if (!filter) return true;
         const searchText = `${p.property_code} ${p.property_name}`.toLowerCase();
         return searchText.includes(filter.toLowerCase());
@@ -184,15 +167,16 @@ export function renderProperties(masterData, filter = '') {
         div.dataset.propertyCode = p.property_code;
 
         // 端末情報を簡潔に表示
-        const terminalDisplay = p.terminals.length > 0
-            ? p.terminals.map(t => t.terminal_id).slice(0, 3).join(', ') + (p.terminals.length > 3 ? '...' : '')
+        const terminals = p.terminals || [];
+        const terminalDisplay = terminals.length > 0
+            ? terminals.map(t => t.terminal_id || t.terminalId).filter(Boolean).slice(0, 4).join(', ') + (terminals.length > 4 ? '...' : '')
             : 'なし';
 
         div.innerHTML = `
             <div class="master-item-name">${escapeHtml(p.property_code)}</div>
             <div class="master-item-details">
-                <span>${escapeHtml(p.property_name)}</span>
-                <span style="color: #94a3b8;">端末: ${escapeHtml(terminalDisplay)} (${p.terminals.length}台)</span>
+                <span style="font-weight: 500; color: #1e293b;">${escapeHtml(p.property_name)}</span>
+                <span style="color: #94a3b8; font-size: 0.8125rem;">端末: ${escapeHtml(terminalDisplay)} (${terminals.length}台)</span>
             </div>
             <div class="master-item-actions">
                 <button class="btn btn-outline btn-sm" data-action="edit">編集</button>

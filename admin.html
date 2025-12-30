@@ -421,8 +421,8 @@
 
         .master-item {
             display: grid;
-            grid-template-columns: minmax(120px, 1fr) minmax(300px, 4fr) auto;
-            gap: 1.5rem;
+            grid-template-columns: minmax(100px, 0.8fr) minmax(250px, 5fr) auto;
+            gap: 1rem;
             align-items: center;
             padding: 0.875rem 1.25rem;
             background: white;
@@ -460,8 +460,12 @@
             font-size: 0.875rem;
             color: #64748b;
             display: flex;
-            gap: 1.5rem;
-            align-items: center;
+            flex-direction: column;
+            gap: 0.25rem;
+            justify-content: center;
+        }
+        .master-item-details > span {
+            line-height: 1.4;
         }
         .master-item-actions {
             display: flex;
