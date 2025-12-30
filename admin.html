@@ -9,7 +9,103 @@
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
     <style>
-        /* タブナビゲーション */
+        /* サイドバーレイアウト */
+        .admin-layout {
+            display: flex;
+            min-height: calc(100vh - 4rem);
+            gap: 0;
+        }
+
+        .admin-sidebar {
+            width: 280px;
+            background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1.5rem;
+            position: sticky;
+            top: 0;
+            height: calc(100vh - 4rem);
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .admin-main {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+            background: #f8fafc;
+        }
+
+        /* サイドバー統計カード */
+        .sidebar-stats {
+            margin-bottom: 2rem;
+        }
+
+        .sidebar-stat {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .sidebar-stat-label {
+            font-size: 0.75rem;
+            opacity: 0.9;
+            margin-bottom: 0.25rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .sidebar-stat-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+        }
+
+        /* サイドバーナビゲーション */
+        .sidebar-nav {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .sidebar-nav-item {
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar-nav-link {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.875rem 1rem;
+            border-radius: 10px;
+            background: transparent;
+            border: none;
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 0.9375rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+            text-align: left;
+        }
+
+        .sidebar-nav-link:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+        }
+
+        .sidebar-nav-link.active {
+            background: rgba(255, 255, 255, 0.25);
+            color: white;
+            font-weight: 600;
+        }
+
+        .sidebar-nav-icon {
+            font-size: 1.125rem;
+        }
+
+        /* タブナビゲーション（旧スタイル - 非表示） */
         .admin-tabs {
             display: flex;
             gap: 0;
@@ -859,30 +955,68 @@
         </div>
     </header>
 
-    <div class="container">
-        <!-- 統計 -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-card-label">総登録数</div>
-                <div class="stat-card-value" id="statTotal">-</div>
+    <div class="admin-layout">
+        <!-- サイドバー -->
+        <aside class="admin-sidebar">
+            <!-- 統計 -->
+            <div class="sidebar-stats">
+                <div class="sidebar-stat">
+                    <div class="sidebar-stat-label">総登録数</div>
+                    <div class="sidebar-stat-value" id="statTotal">-</div>
+                </div>
+                <div class="sidebar-stat">
+                    <div class="sidebar-stat-label">今月の登録</div>
+                    <div class="sidebar-stat-value" id="statMonth">-</div>
+                </div>
+                <div class="sidebar-stat">
+                    <div class="sidebar-stat-label">ユーザー数</div>
+                    <div class="sidebar-stat-value" id="statUsers">-</div>
+                </div>
+                <div class="sidebar-stat">
+                    <div class="sidebar-stat-label">物件数</div>
+                    <div class="sidebar-stat-value" id="statProperties">-</div>
+                </div>
             </div>
-            <div class="stat-card">
-                <div class="stat-card-label">今月の登録</div>
-                <div class="stat-card-value" id="statMonth">-</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-card-label">ユーザー数</div>
-                <div class="stat-card-value" id="statUsers">-</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-card-label">物件数</div>
-                <div class="stat-card-value" id="statProperties">-</div>
-            </div>
-        </div>
 
-        <!-- タブ -->
-        <div class="card">
-            <div class="admin-tabs">
+            <!-- ナビゲーション -->
+            <nav class="sidebar-nav">
+                <li class="sidebar-nav-item">
+                    <button class="sidebar-nav-link active" data-tab="approval">
+                        <span class="sidebar-nav-icon">✅</span>
+                        <span>承認待ち</span>
+                    </button>
+                </li>
+                <li class="sidebar-nav-item">
+                    <button class="sidebar-nav-link" data-tab="entries">
+                        <span class="sidebar-nav-icon">📊</span>
+                        <span>データ一覧</span>
+                    </button>
+                </li>
+                <li class="sidebar-nav-item">
+                    <button class="sidebar-nav-link" data-tab="relationships">
+                        <span class="sidebar-nav-icon">🔗</span>
+                        <span>紐付け管理</span>
+                    </button>
+                </li>
+                <li class="sidebar-nav-item">
+                    <button class="sidebar-nav-link" data-tab="master">
+                        <span class="sidebar-nav-icon">📋</span>
+                        <span>マスター管理</span>
+                    </button>
+                </li>
+                <li class="sidebar-nav-item">
+                    <button class="sidebar-nav-link" data-tab="users">
+                        <span class="sidebar-nav-icon">👥</span>
+                        <span>ユーザー管理</span>
+                    </button>
+                </li>
+            </nav>
+        </aside>
+
+        <!-- メインコンテンツ -->
+        <main class="admin-main">
+            <!-- 旧タブUI（非表示） -->
+            <div class="admin-tabs" style="display: none;">
                 <button class="admin-tab active" data-tab="approval">✅ 承認待ち</button>
                 <button class="admin-tab" data-tab="entries">📊 データ一覧</button>
                 <button class="admin-tab" data-tab="relationships">🔗 紐付け管理</button>
@@ -1175,7 +1309,7 @@
                     </table>
                 </div>
             </div>
-        </div>
+        </main>
     </div>
 
     <!-- トースト通知用 -->

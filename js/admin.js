@@ -175,11 +175,15 @@ async function loadAllData() {
 // ========================================
 
 function setupEventListeners() {
-    // タブ切り替え
-    document.querySelectorAll('.admin-tab[data-tab]').forEach(tab => {
+    // タブ切り替え（サイドバーナビゲーション + 旧タブ対応）
+    const tabSelectors = '.admin-tab[data-tab], .sidebar-nav-link[data-tab]';
+    document.querySelectorAll(tabSelectors).forEach(tab => {
         tab.addEventListener('click', () => {
-            document.querySelectorAll('.admin-tab[data-tab]').forEach(t => t.classList.remove('active'));
+            // すべてのタブからactiveを削除
+            document.querySelectorAll(tabSelectors).forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+            // クリックされたタブをアクティブに
             tab.classList.add('active');
             document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
         });

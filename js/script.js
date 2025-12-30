@@ -478,6 +478,7 @@ function hasTemplateImage(templateKey) {
             document.getElementById('inspectionTypeGroup').style.display = isCustom ? 'none' : 'block';
             document.getElementById('startDateGroup').style.display = isCustom ? 'none' : 'block';
             document.getElementById('endDateGroup').style.display = isCustom ? 'none' : 'block';
+            document.getElementById('noticeTextGroup').style.display = isCustom ? 'none' : 'block';
 
             // 追加モードの場合: 掲示板内の表示開始日/終了日を非活性化
             document.getElementById('displayStartDate').disabled = isCustom;

@@ -1,6 +1,6 @@
 // bulk.js - 一括入力画面のメインエントリーポイント
 
-import { getUser, getProfile, signOut, getAllMasterData, getSettings } from './supabase-client.js';
+import { getUser, getProfile, isAdmin, signOut, getAllMasterData, getSettings } from './supabase-client.js';
 import { setMasterData, setCurrentUserId, setCurrentFilter, clearRows, getRows, setAppSettings } from './bulk-state.js';
 import {
     addRowWithCopy, duplicateSelectedRows, deleteSelectedRows,
@@ -52,6 +52,12 @@ async function init() {
 
     const profile = await getProfile();
     document.getElementById('userEmail').textContent = profile?.email || user.email;
+
+    // 管理者の場合は管理リンクを表示
+    const admin = await isAdmin();
+    if (admin) {
+        document.getElementById('adminLink').style.display = 'block';
+    }
 
     document.getElementById('logoutBtn').addEventListener('click', async () => {
         await signOut();
