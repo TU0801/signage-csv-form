@@ -421,7 +421,7 @@
 
         .master-item {
             display: grid;
-            grid-template-columns: minmax(100px, 0.8fr) minmax(250px, 5fr) auto;
+            grid-template-columns: minmax(100px, 1fr) minmax(300px, 6fr) minmax(140px, auto);
             gap: 1rem;
             align-items: center;
             padding: 0.875rem 1.25rem;
@@ -462,19 +462,18 @@
             display: flex;
             align-items: center;
             gap: 1rem;
+            min-width: 0;
+        }
+        .master-item-details > span {
             white-space: nowrap;
-            overflow: hidden;
         }
         .master-item-details > span:first-child {
             font-weight: 500;
             color: #1e293b;
-            overflow: hidden;
-            text-overflow: ellipsis;
         }
         .master-item-details > span:last-child {
             color: #94a3b8;
             font-size: 0.8125rem;
-            flex-shrink: 0;
         }
         .master-item-actions {
             display: flex;
