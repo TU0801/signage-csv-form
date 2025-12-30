@@ -294,8 +294,7 @@
             display: flex;
             flex-direction: column;
             gap: 0.5rem;
-            max-height: 400px;
-            min-height: 100px;
+            min-height: 200px;
             overflow-y: auto;
             padding-right: 0.5rem;
         }
@@ -421,40 +420,54 @@
         }
 
         .master-item {
-            display: flex;
-            justify-content: space-between;
+            display: grid;
+            grid-template-columns: minmax(150px, 2fr) minmax(200px, 3fr) auto;
+            gap: 1.5rem;
             align-items: center;
-            padding: 1rem 1.25rem;
+            padding: 0.875rem 1.25rem;
             background: white;
-            border-radius: 12px;
+            border-radius: 8px;
             border: 1px solid #e2e8f0;
-            transition: all 0.2s ease;
+            transition: all 0.15s ease;
         }
         .master-item:hover {
             border-color: #667eea;
-            box-shadow: 0 4px 15px -3px rgba(102, 126, 234, 0.15);
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.12);
+            background: #fafbff;
         }
         .master-item-info {
-            flex: 1;
             min-width: 0;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
         }
         .master-item-name {
             font-weight: 600;
             color: #1e293b;
-            margin-bottom: 0.25rem;
+            font-size: 0.9375rem;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
         .master-item-sub {
-            font-size: 0.75rem;
+            font-size: 0.875rem;
             color: #64748b;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .master-item-details {
+            font-size: 0.875rem;
+            color: #64748b;
+            display: flex;
+            gap: 1.5rem;
+            align-items: center;
         }
         .master-item-actions {
             display: flex;
             gap: 0.5rem;
-            margin-left: 1rem;
             flex-shrink: 0;
+            justify-content: flex-end;
         }
         .master-item-actions .btn {
             padding: 0.5rem 0.875rem;
