@@ -397,20 +397,24 @@
         }
         /* マスター検索 */
         .master-search {
-            margin-bottom: 1rem;
+            margin-bottom: 1.5rem;
         }
         .master-search input {
             width: 100%;
-            padding: 0.75rem 1rem;
+            max-width: 500px;
+            padding: 0.875rem 1.25rem 0.875rem 2.75rem;
             border: 2px solid #e2e8f0;
-            border-radius: 10px;
+            border-radius: 24px;
             font-size: 0.9375rem;
             transition: all 0.2s ease;
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="%2394a3b8" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>');
+            background-repeat: no-repeat;
+            background-position: 1rem center;
         }
         .master-search input:focus {
             outline: none;
             border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
         }
         .master-search input::placeholder {
             color: #94a3b8;
@@ -498,15 +502,38 @@
         }
 
         /* マスタータブ内のサブタブ */
+        /* マスター管理サブタブ - モダンピルスタイル */
         #tab-master .admin-tabs {
-            border-bottom: 1px solid #e2e8f0;
-            margin-bottom: 1.25rem;
-            padding-bottom: 0;
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            background: white;
+            padding: 1rem 1.25rem;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            margin-bottom: 1.5rem;
+            border-bottom: none;
         }
         #tab-master .admin-tab {
-            padding: 0.625rem 1rem;
-            font-size: 0.8125rem;
+            padding: 0.75rem 1.5rem;
+            font-size: 0.875rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 20px;
+            background: white;
+            font-weight: 600;
+            transition: all 0.2s;
             border-bottom-width: 2px;
+        }
+        #tab-master .admin-tab:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+            transform: translateY(-1px);
+        }
+        #tab-master .admin-tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: #667eea;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
         }
 
         /* 設定フォーム */
@@ -582,42 +609,43 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 1rem 1.25rem;
-            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            padding: 1.5rem;
+            background: linear-gradient(135deg, #f8f9ff 0%, #f0f2ff 100%);
             border-radius: 12px;
-            margin-bottom: 1rem;
-            border: 1px solid #e2e8f0;
+            margin-bottom: 1.5rem;
+            border: 1px solid #e0e4ff;
         }
         .master-header-info {
             display: flex;
             align-items: center;
-            gap: 0.75rem;
+            gap: 1rem;
         }
         .master-header-icon {
-            width: 40px;
-            height: 40px;
+            width: 56px;
+            height: 56px;
             display: flex;
             align-items: center;
             justify-content: center;
             background: white;
-            border-radius: 10px;
-            font-size: 1.25rem;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            border-radius: 12px;
+            font-size: 1.75rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
         .master-header-text h4 {
-            margin: 0;
-            font-size: 1rem;
-            font-weight: 600;
+            margin: 0 0 0.25rem 0;
+            font-size: 1.25rem;
+            font-weight: 700;
             color: #1e293b;
         }
         .master-header-text span {
-            font-size: 0.8125rem;
+            font-size: 0.875rem;
             color: #64748b;
         }
         .master-header .btn-primary {
-            padding: 0.625rem 1.25rem;
+            padding: 0.75rem 1.5rem;
             font-size: 0.9375rem;
             font-weight: 600;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
         }
 
         /* マスターモーダル（ポップアップ） */
