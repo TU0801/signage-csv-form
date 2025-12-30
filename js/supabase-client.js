@@ -646,11 +646,11 @@ export async function updateProfileRole(id, role) {
 }
 
 // ユーザー作成（管理者用）- 直接パスワード設定
-export async function createUser(email, password, companyName, role) {
+export async function createUser(email, password, companyName, role, vendorId = null) {
   // 現在のセッションを保存
   const { data: { session: currentSession } } = await supabase.auth.getSession();
 
-  console.log('Creating user:', email);
+  console.log('Creating user:', email, 'with vendor:', vendorId);
 
   // 1. ユーザー作成
   const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -680,17 +680,24 @@ export async function createUser(email, password, companyName, role) {
   console.log('Needs email confirmation:', needsEmailConfirmation);
 
   // 2. プロファイルテーブルにも追加
-  const { data: profileData, error: profileError } = await supabase
+  const profileData = {
+    id: authData.user.id,
+    email: email,
+    company_name: companyName,
+    role: role
+  };
+
+  // vendor_idが指定されている場合のみ追加
+  if (vendorId) {
+    profileData.vendor_id = vendorId;
+  }
+
+  const { data: profile, error: profileError } = await supabase
     .from('signage_profiles')
-    .upsert({
-      id: authData.user.id,
-      email: email,
-      company_name: companyName,
-      role: role
-    }, { onConflict: 'id' })
+    .upsert(profileData, { onConflict: 'id' })
     .select();
 
-  console.log('Profile upsert result:', { profileData, profileError });
+  console.log('Profile upsert result:', { profile, profileError });
 
   if (profileError) {
     console.error('Profile creation failed:', profileError);

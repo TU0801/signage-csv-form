@@ -862,9 +862,17 @@ async function loadUsers() {
         const roleText = profile.role === 'admin' ? '管理者' : 'ユーザー';
         const isSelf = profile.id === currentUserId;
 
+        // ベンダー名を取得
+        let vendorName = '-';
+        if (profile.vendor_id) {
+            const vendor = masterData.vendors.find(v => v.id === profile.vendor_id);
+            vendorName = vendor ? vendor.vendor_name : 'Unknown';
+        }
+
         tr.innerHTML = `
             <td>${escapeHtml(profile.email)}${isSelf ? ' (自分)' : ''}</td>
             <td>${escapeHtml(profile.company_name || '-')}</td>
+            <td>${escapeHtml(vendorName)}</td>
             <td><span class="user-role ${roleClass}">${roleText}</span></td>
             <td>${createdAt}</td>
             <td>
@@ -909,10 +917,24 @@ async function loadUsers() {
 // ユーザー追加モーダル
 // ========================================
 
-function openUserModal() {
+async function openUserModal() {
     const modal = document.getElementById('userModal');
     const form = document.getElementById('userForm');
+    const vendorSelect = document.getElementById('newUserVendor');
+
     form.reset();
+
+    // ベンダー選択肢を読み込み
+    try {
+        const vendors = await getMasterVendors();
+        vendorSelect.innerHTML = '<option value="">-- 選択なし（管理者の場合） --</option>';
+        vendors.forEach(v => {
+            vendorSelect.innerHTML += `<option value="${v.id}">${escapeHtml(v.vendor_name)}</option>`;
+        });
+    } catch (error) {
+        console.error('Failed to load vendors:', error);
+    }
+
     modal.classList.add('active');
 }
 
@@ -928,13 +950,14 @@ async function handleUserFormSubmit(e) {
     const password = document.getElementById('newUserPassword').value;
     const companyName = document.getElementById('newUserCompany').value.trim();
     const role = document.getElementById('newUserRole').value;
+    const vendorId = document.getElementById('newUserVendor').value || null;
     const submitBtn = document.getElementById('userSubmitBtn');
 
     submitBtn.disabled = true;
     submitBtn.textContent = '追加中...';
 
     try {
-        const user = await createUser(email, password, companyName, role);
+        const user = await createUser(email, password, companyName, role, vendorId);
 
         if (user._needsEmailConfirmation) {
             showToast('ユーザーを追加しました（メール確認が必要です）', 'warning');

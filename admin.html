@@ -1156,6 +1156,7 @@
                             <tr>
                                 <th>メールアドレス</th>
                                 <th>会社名</th>
+                                <th>メンテナンス会社</th>
                                 <th>権限</th>
                                 <th>登録日</th>
                                 <th>操作</th>
@@ -1358,6 +1359,13 @@
                     <div class="form-group">
                         <label>会社名</label>
                         <input type="text" id="newUserCompany" placeholder="株式会社〇〇">
+                    </div>
+                    <div class="form-group">
+                        <label>メンテナンス会社</label>
+                        <select id="newUserVendor">
+                            <option value="">-- 選択なし（管理者の場合） --</option>
+                        </select>
+                        <small style="color: #64748b; font-size: 0.875rem;">一般ユーザーの場合は必ず選択してください</small>
                     </div>
                     <div class="form-group">
                         <label>権限 *</label>
