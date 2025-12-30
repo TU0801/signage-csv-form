@@ -101,9 +101,21 @@ export async function getMasterInspectionTypes() {
 }
 
 // 全マスターデータを一括取得
+// 権限フィルター付き: 一般ユーザーは担当ビルのみ、管理者は全ビル
 export async function getAllMasterData() {
-  const [propertiesRaw, vendors, inspectionTypes, categories, templateImages] = await Promise.all([
-    getMasterProperties(),
+  const profile = await getProfile();
+
+  // 権限に応じて物件を取得
+  let propertiesRaw;
+  if (profile && profile.role === 'admin') {
+    // 管理者: 全物件
+    propertiesRaw = await getMasterProperties();
+  } else {
+    // 一般ユーザー: 担当物件のみ
+    propertiesRaw = await getAssignedBuildings();
+  }
+
+  const [vendors, inspectionTypes, categories, templateImages] = await Promise.all([
     getMasterVendors(),
     getMasterInspectionTypes(),
     getMasterCategories(),
@@ -147,17 +159,37 @@ export async function getAllMasterData() {
 }
 
 // マスターデータをキャメルケースに変換（script.js用）
+// 権限フィルター付き: 一般ユーザーは担当ビルのみ、管理者は全ビル
 export async function getAllMasterDataCamelCase() {
-  const data = await getAllMasterData();
+  const profile = await getProfile();
+
+  // 権限に応じて物件を取得
+  let propertiesRaw;
+  if (profile && profile.role === 'admin') {
+    // 管理者: 全物件
+    propertiesRaw = await getMasterProperties();
+  } else {
+    // 一般ユーザー: 担当物件のみ
+    propertiesRaw = await getAssignedBuildings();
+  }
+
+  // 他のマスターデータは全件取得
+  const [vendors, inspectionTypes, categories, templateImages] = await Promise.all([
+    getMasterVendors(),
+    getMasterInspectionTypes(),
+    getMasterCategories(),
+    getMasterTemplateImages().catch(() => []),
+  ]);
 
   // properties: グループ化された物件を1端末=1レコードにフラット化し、camelCaseに変換
   const properties = [];
-  data.properties.forEach(p => {
-    p.terminals.forEach(t => {
+  propertiesRaw.forEach(p => {
+    const terminals = Array.isArray(p.terminals) ? p.terminals : [];
+    terminals.forEach(t => {
       properties.push({
         propertyCode: p.property_code,
         propertyName: p.property_name,
-        terminalId: t.terminal_id,
+        terminalId: t.terminalId || t.terminal_id || '',
         supplement: t.supplement || '',
         address: p.address || ''
       });
@@ -165,17 +197,18 @@ export async function getAllMasterDataCamelCase() {
   });
 
   // vendors: vendor_name -> vendorName, emergency_contact -> emergencyContact
-  const vendors = data.vendors.map(v => ({
+  const vendorsFormatted = vendors.map(v => ({
     vendorName: v.vendor_name,
     emergencyContact: v.emergency_contact || '',
-    category: v.category || ''
+    category: v.category || '',
+    inspectionType: v.inspection_type || ''
   }));
 
   // categories: そのまま配列として返す
-  const categories = (data.categories || []).map(c => c.category_name || c);
+  const categoriesFormatted = (categories || []).map(c => c.category_name || c);
 
   // inspectionTypes -> notices形式に変換
-  const notices = data.inspectionTypes.map((it, index) => ({
+  const notices = inspectionTypes.map((it, index) => ({
     id: index + 1,
     inspectionType: it.inspection_name,
     categoryId: it.category_id || 0,
@@ -188,12 +221,165 @@ export async function getAllMasterDataCamelCase() {
   }));
 
   // templateImages: image_key -> imageUrl のマップを作成
-  const templateImages = {};
-  (data.templateImages || []).forEach(ti => {
-    templateImages[ti.image_key] = ti.image_url;
+  const templateImagesMap = {};
+  (templateImages || []).forEach(ti => {
+    templateImagesMap[ti.image_key] = ti.image_url;
   });
 
-  return { properties, vendors, categories, notices, templateImages };
+  return {
+    properties,
+    vendors: vendorsFormatted,
+    categories: categoriesFormatted,
+    notices,
+    templateImages: templateImagesMap
+  };
+}
+
+// ========================================
+// Building-Vendor Relationships（物件×ベンダー紐付け）
+// ========================================
+
+// ユーザーの担当ビル一覧を取得（一般ユーザー用）
+export async function getAssignedBuildings() {
+  const profile = await getProfile();
+  if (!profile) throw new Error('ログインが必要です');
+
+  // 管理者は全ビルを返す
+  if (profile.role === 'admin') {
+    return await getMasterProperties();
+  }
+
+  // 一般ユーザー: vendor_idに紐づくビルのみ
+  if (!profile.vendor_id) {
+    return []; // vendor_idが未設定の場合は空配列
+  }
+
+  const { data, error } = await supabase
+    .from('building_vendors')
+    .select('property_code, signage_master_properties(property_code, property_name, terminals)')
+    .eq('vendor_id', profile.vendor_id)
+    .eq('status', 'active');
+
+  if (error) throw error;
+
+  // ネストされたデータを平坦化
+  return data.map(bv => bv.signage_master_properties).filter(Boolean);
+}
+
+// 特定ベンダーの担当ビルを取得（管理者用）
+export async function getBuildingsByVendor(vendorId) {
+  const { data, error } = await supabase
+    .from('building_vendors')
+    .select('property_code, signage_master_properties(property_code, property_name, terminals)')
+    .eq('vendor_id', vendorId)
+    .eq('status', 'active');
+
+  if (error) throw error;
+  return data.map(bv => bv.signage_master_properties).filter(Boolean);
+}
+
+// ビル×ベンダーの紐付け一覧を取得（管理者用）
+export async function getBuildingVendors(filters = {}) {
+  let query = supabase
+    .from('building_vendors')
+    .select('*, signage_master_vendors(vendor_name, inspection_type)')
+    .order('created_at', { ascending: false });
+
+  if (filters.vendorId) {
+    query = query.eq('vendor_id', filters.vendorId);
+  }
+  if (filters.status) {
+    query = query.eq('status', filters.status);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data;
+}
+
+// 承認待ちのビル追加リクエストを取得（管理者用）
+export async function getPendingBuildingRequests() {
+  const { data, error } = await supabase
+    .from('building_vendors')
+    .select(`
+      *,
+      signage_master_vendors(vendor_name),
+      requested_by_profile:signage_profiles!building_vendors_requested_by_fkey(email)
+    `)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data;
+}
+
+// ビル×ベンダー紐付けを追加（一般ユーザー: pending、管理者: active）
+export async function addBuildingVendor(propertyCode, vendorId = null) {
+  const profile = await getProfile();
+  if (!profile) throw new Error('ログインが必要です');
+
+  const user = await getUser();
+  const isAdminUser = profile.role === 'admin';
+  const finalVendorId = vendorId || profile.vendor_id;
+
+  if (!finalVendorId) {
+    throw new Error('ベンダーIDが設定されていません');
+  }
+
+  const { data, error } = await supabase
+    .from('building_vendors')
+    .insert({
+      property_code: propertyCode,
+      vendor_id: finalVendorId,
+      status: isAdminUser ? 'active' : 'pending',
+      requested_by: user.id,
+      approved_by: isAdminUser ? user.id : null
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+// ビル追加リクエストを承認（管理者のみ）
+export async function approveBuildingRequest(buildingVendorId) {
+  const user = await getUser();
+  const { data, error } = await supabase
+    .from('building_vendors')
+    .update({
+      status: 'active',
+      approved_by: user.id
+    })
+    .eq('id', buildingVendorId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+// ビル追加リクエストを却下（削除）（管理者のみ）
+export async function rejectBuildingRequest(buildingVendorId) {
+  const { error } = await supabase
+    .from('building_vendors')
+    .delete()
+    .eq('id', buildingVendorId);
+
+  if (error) throw error;
+}
+
+// ビル×ベンダー紐付けを削除（非表示化）
+export async function removeBuildingVendor(buildingVendorId) {
+  const { data, error } = await supabase
+    .from('building_vendors')
+    .update({ status: 'deleted' })
+    .eq('id', buildingVendorId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
 }
 
 // ========================================
