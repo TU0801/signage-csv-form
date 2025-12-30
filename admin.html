@@ -605,47 +605,63 @@
         .master-content {
             padding: 0.5rem 0;
         }
-        .master-header {
+        /* マスターヘッダー - コンパクト版 */
+        .master-section-title {
+            font-size: 1rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin: 0 0 1rem 0;
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            padding: 1.5rem;
-            background: linear-gradient(135deg, #f8f9ff 0%, #f0f2ff 100%);
-            border-radius: 12px;
-            margin-bottom: 1.5rem;
-            border: 1px solid #e0e4ff;
+            gap: 0.5rem;
         }
-        .master-header-info {
+        .master-section-title .icon {
+            font-size: 1.25rem;
+        }
+
+        .master-toolbar {
             display: flex;
             align-items: center;
             gap: 1rem;
-        }
-        .master-header-icon {
-            width: 56px;
-            height: 56px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            margin-bottom: 1.5rem;
+            padding: 1rem 1.25rem;
             background: white;
             border-radius: 12px;
-            font-size: 1.75rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border: 1px solid #e2e8f0;
         }
-        .master-header-text h4 {
-            margin: 0 0 0.25rem 0;
-            font-size: 1.25rem;
-            font-weight: 700;
-            color: #1e293b;
-        }
-        .master-header-text span {
-            font-size: 0.875rem;
-            color: #64748b;
-        }
-        .master-header .btn-primary {
-            padding: 0.75rem 1.5rem;
+
+        .master-count {
             font-size: 0.9375rem;
+            color: #64748b;
             font-weight: 600;
-            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+            white-space: nowrap;
+        }
+
+        .master-search-inline {
+            flex: 1;
+            max-width: 400px;
+        }
+
+        .master-search-inline input {
+            width: 100%;
+            padding: 0.75rem 1rem 0.75rem 2.5rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="%2394a3b8" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>');
+            background-repeat: no-repeat;
+            background-position: 0.875rem center;
+        }
+
+        .master-search-inline input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .master-add-btn {
+            white-space: nowrap;
         }
 
         /* マスターモーダル（ポップアップ） */
@@ -1204,86 +1220,76 @@
                 </div>
 
                 <div id="master-properties" class="master-content">
-                    <div class="master-header">
-                        <div class="master-header-info">
-                            <div class="master-header-icon">🏢</div>
-                            <div class="master-header-text">
-                                <h4>物件マスター</h4>
-                                <span><span id="propertyCount">0</span>件登録</span>
-                            </div>
+                    <h3 class="master-section-title">
+                        <span class="icon">🏢</span>
+                        物件マスター
+                    </h3>
+                    <div class="master-toolbar">
+                        <span class="master-count"><span id="propertyCount">0</span>件</span>
+                        <div class="master-search-inline">
+                            <input type="text" id="propertySearch" placeholder="物件コード・物件名で検索...">
                         </div>
-                        <button class="btn btn-primary" id="addPropertyBtn">+ 新規追加</button>
-                    </div>
-                    <div class="master-search">
-                        <input type="text" id="propertySearch" placeholder="物件コード・物件名で検索...">
+                        <button class="btn btn-primary master-add-btn" id="addPropertyBtn">+ 新規追加</button>
                     </div>
                     <div class="master-list" id="propertiesList"></div>
                 </div>
 
                 <div id="master-vendors" class="master-content" style="display: none;">
-                    <div class="master-header">
-                        <div class="master-header-info">
-                            <div class="master-header-icon">👥</div>
-                            <div class="master-header-text">
-                                <h4>受注先マスター</h4>
-                                <span><span id="vendorCount">0</span>件登録</span>
-                            </div>
+                    <h3 class="master-section-title">
+                        <span class="icon">👥</span>
+                        受注先マスター
+                    </h3>
+                    <div class="master-toolbar">
+                        <span class="master-count"><span id="vendorCount">0</span>件</span>
+                        <div class="master-search-inline">
+                            <input type="text" id="vendorSearch" placeholder="受注先名で検索...">
                         </div>
-                        <button class="btn btn-primary" id="addVendorBtn">+ 新規追加</button>
-                    </div>
-                    <div class="master-search">
-                        <input type="text" id="vendorSearch" placeholder="受注先名で検索...">
+                        <button class="btn btn-primary master-add-btn" id="addVendorBtn">+ 新規追加</button>
                     </div>
                     <div class="master-list" id="vendorsList"></div>
                 </div>
 
                 <div id="master-inspections" class="master-content" style="display: none;">
-                    <div class="master-header">
-                        <div class="master-header-info">
-                            <div class="master-header-icon">🔧</div>
-                            <div class="master-header-text">
-                                <h4>点検種別マスター</h4>
-                                <span><span id="inspectionCount">0</span>件登録</span>
-                            </div>
+                    <h3 class="master-section-title">
+                        <span class="icon">🔧</span>
+                        点検種別マスター
+                    </h3>
+                    <div class="master-toolbar">
+                        <span class="master-count"><span id="inspectionCount">0</span>件</span>
+                        <div class="master-search-inline">
+                            <input type="text" id="inspectionSearch" placeholder="点検種別名で検索...">
                         </div>
-                        <button class="btn btn-primary" id="addInspectionBtn">+ 新規追加</button>
-                    </div>
-                    <div class="master-search">
-                        <input type="text" id="inspectionSearch" placeholder="点検種別名で検索...">
+                        <button class="btn btn-primary master-add-btn" id="addInspectionBtn">+ 新規追加</button>
                     </div>
                     <div class="master-list" id="inspectionsList"></div>
                 </div>
 
                 <div id="master-categories" class="master-content" style="display: none;">
-                    <div class="master-header">
-                        <div class="master-header-info">
-                            <div class="master-header-icon">📁</div>
-                            <div class="master-header-text">
-                                <h4>カテゴリマスター</h4>
-                                <span><span id="categoryCount">0</span>件登録</span>
-                            </div>
+                    <h3 class="master-section-title">
+                        <span class="icon">📁</span>
+                        カテゴリマスター
+                    </h3>
+                    <div class="master-toolbar">
+                        <span class="master-count"><span id="categoryCount">0</span>件</span>
+                        <div class="master-search-inline">
+                            <input type="text" id="categorySearch" placeholder="カテゴリ名で検索...">
                         </div>
-                        <button class="btn btn-primary" id="addCategoryBtn">+ 新規追加</button>
-                    </div>
-                    <div class="master-search">
-                        <input type="text" id="categorySearch" placeholder="カテゴリ名で検索...">
+                        <button class="btn btn-primary master-add-btn" id="addCategoryBtn">+ 新規追加</button>
                     </div>
                     <div class="master-list" id="categoriesList"></div>
                 </div>
 
                 <div id="master-templateImages" class="master-content" style="display: none;">
-                    <div class="master-header">
-                        <div class="master-header-info">
-                            <div class="master-header-icon">🖼️</div>
-                            <div class="master-header-text">
-                                <h4>テンプレート画像マスター</h4>
-                                <span><span id="templateImageCount">0</span>件登録</span>
-                            </div>
+                    <h3 class="master-section-title">
+                        <span class="icon">🖼️</span>
+                        テンプレート画像マスター
+                    </h3>
+                    <div class="master-toolbar">
+                        <span class="master-count"><span id="templateImageCount">0</span>件</span>
+                        <div class="master-search-inline">
+                            <input type="text" id="templateImageSearch" placeholder="画像キー・表示名で検索...">
                         </div>
-                        <button class="btn btn-primary" id="addTemplateImageBtn">+ 新規追加</button>
-                    </div>
-                    <div class="master-search">
-                        <input type="text" id="templateImageSearch" placeholder="画像キー・表示名で検索...">
+                        <button class="btn btn-primary master-add-btn" id="addTemplateImageBtn">+ 新規追加</button>
                     </div>
                     <div class="master-list template-image-grid" id="templateImagesList"></div>
                 </div>
