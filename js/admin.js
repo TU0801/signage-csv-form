@@ -877,7 +877,6 @@ async function loadUsers() {
 
         tr.innerHTML = `
             <td>${escapeHtml(profile.email)}${isSelf ? ' (自分)' : ''}</td>
-            <td>${escapeHtml(profile.company_name || '-')}</td>
             <td>${escapeHtml(vendorName)}</td>
             <td><span class="user-role ${roleClass}">${roleText}</span></td>
             <td><span class="status-badge ${statusClass}">${statusText}</span></td>
@@ -927,13 +926,22 @@ async function openUserModal() {
     const modal = document.getElementById('userModal');
     const form = document.getElementById('userForm');
     const vendorSelect = document.getElementById('newUserVendor');
+    const submitBtn = document.getElementById('userSubmitBtn');
 
     form.reset();
+
+    // モーダルタイトルとボタンをリセット
+    modal.querySelector('.modal-header h3').textContent = 'ユーザー追加';
+    submitBtn.textContent = '追加';
+    document.getElementById('newUserEmail').disabled = false;
+    document.getElementById('newUserPassword').required = true;
+    document.getElementById('newUserPassword').placeholder = '6文字以上';
+    form.onsubmit = handleUserFormSubmit;
 
     // ベンダー選択肢を読み込み
     try {
         const vendors = await getMasterVendors();
-        vendorSelect.innerHTML = '<option value="">-- 選択なし（管理者の場合） --</option>';
+        vendorSelect.innerHTML = '<option value="">-- 選択してください --</option>';
         vendors.forEach(v => {
             vendorSelect.innerHTML += `<option value="${v.id}">${escapeHtml(v.vendor_name)}</option>`;
         });
@@ -954,16 +962,20 @@ async function handleUserFormSubmit(e) {
 
     const email = document.getElementById('newUserEmail').value.trim();
     const password = document.getElementById('newUserPassword').value;
-    const companyName = document.getElementById('newUserCompany').value.trim();
     const role = document.getElementById('newUserRole').value;
     const vendorId = document.getElementById('newUserVendor').value || null;
     const submitBtn = document.getElementById('userSubmitBtn');
+
+    if (!vendorId) {
+        showToast('メンテナンス会社を選択してください', 'error');
+        return;
+    }
 
     submitBtn.disabled = true;
     submitBtn.textContent = '追加中...';
 
     try {
-        const user = await createUser(email, password, companyName, role, vendorId);
+        const user = await createUser(email, password, null, role, vendorId);
 
         if (user._needsEmailConfirmation) {
             showToast('ユーザーを追加しました（メール確認が必要です）', 'warning');
@@ -1006,7 +1018,6 @@ async function openEditUserModal(userId) {
     document.getElementById('newUserPassword').value = '';
     document.getElementById('newUserPassword').required = false; // 編集時はパスワード任意
     document.getElementById('newUserPassword').placeholder = '変更する場合のみ入力';
-    document.getElementById('newUserCompany').value = profile.company_name || '';
     document.getElementById('newUserRole').value = profile.role;
 
     // ベンダー選択肢を読み込み
@@ -1037,10 +1048,14 @@ async function openEditUserModal(userId) {
 // ユーザー編集の送信処理
 async function handleEditUserSubmit(userId) {
     const email = document.getElementById('newUserEmail').value.trim();
-    const companyName = document.getElementById('newUserCompany').value.trim();
     const role = document.getElementById('newUserRole').value;
     const vendorId = document.getElementById('newUserVendor').value || null;
     const submitBtn = document.getElementById('userSubmitBtn');
+
+    if (!vendorId) {
+        showToast('メンテナンス会社を選択してください', 'error');
+        return;
+    }
 
     submitBtn.disabled = true;
     submitBtn.textContent = '更新中...';
@@ -1048,7 +1063,6 @@ async function handleEditUserSubmit(userId) {
     try {
         // プロファイル更新
         await updateUserProfile(userId, {
-            company_name: companyName,
             role: role,
             vendor_id: vendorId
         });
