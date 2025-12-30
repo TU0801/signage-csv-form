@@ -15,7 +15,13 @@ import {
     approveEntry,
     approveEntries,
     rejectEntry,
-    updateEntriesStatusBulk
+    updateEntriesStatusBulk,
+    getBuildingVendors,
+    getPendingBuildingRequests,
+    approveBuildingRequest,
+    rejectBuildingRequest,
+    removeBuildingVendor,
+    getMasterVendors
 } from './supabase-client.js';
 
 import {
@@ -62,6 +68,7 @@ let masterData = { properties: [], vendors: [], inspectionTypes: [], categories:
 let entries = [];
 let profiles = [];
 let pendingEntries = [];
+let pendingBuildingRequests = [];
 let selectedPendingIds = [];
 
 // ユーザーIDからメールアドレスを取得
@@ -111,10 +118,12 @@ async function init() {
     updateStats();
     populateFilters();
     loadPendingEntries();
+    loadPendingBuildingRequests();
     loadEntries();
     loadMasterData(masterData);
     loadUsers();
     loadAppSettings();
+    initRelationshipsTab();
 }
 
 async function loadAllData() {
@@ -1082,6 +1091,180 @@ window.deleteMasterTemplateImage = async function(id) {
 
 window.closeMasterModal = closeMasterModal;
 window.closeEntryDetailModal = closeEntryDetailModal;
+
+// ========================================
+// Building-Vendor Relationships（紐付け管理）
+// ========================================
+
+// 紐付け管理タブの初期化
+async function initRelationshipsTab() {
+    const filterVendor = document.getElementById('filterVendor');
+
+    // ベンダー選択肢を読み込む
+    try {
+        const vendors = await getMasterVendors();
+        filterVendor.innerHTML = '<option value="">-- 選択してください --</option>';
+        vendors.forEach(v => {
+            filterVendor.innerHTML += `<option value="${v.id}">${escapeHtml(v.vendor_name)}</option>`;
+        });
+    } catch (error) {
+        console.error('Failed to load vendors:', error);
+    }
+
+    // ベンダー選択時のイベント
+    filterVendor.addEventListener('change', async (e) => {
+        const vendorId = e.target.value;
+        if (!vendorId) {
+            document.getElementById('relationshipsTableContainer').innerHTML =
+                '<p style="color: #64748b; text-align: center; padding: 2rem;">メンテナンス会社を選択してください</p>';
+            return;
+        }
+        await loadBuildingVendorRelationships(vendorId);
+    });
+}
+
+// 特定ベンダーの紐付け一覧を表示
+async function loadBuildingVendorRelationships(vendorId) {
+    try {
+        const relationships = await getBuildingVendors({ vendorId });
+        renderBuildingVendorRelationships(relationships);
+    } catch (error) {
+        console.error('Failed to load building-vendor relationships:', error);
+        showToast('紐付け情報の読み込みに失敗しました', 'error');
+    }
+}
+
+// 紐付け一覧を描画
+function renderBuildingVendorRelationships(relationships) {
+    const container = document.getElementById('relationshipsTableContainer');
+
+    if (!relationships || relationships.length === 0) {
+        container.innerHTML = '<p style="color: #64748b; text-align: center; padding: 2rem;">紐付けがありません</p>';
+        return;
+    }
+
+    const activeRelationships = relationships.filter(r => r.status === 'active');
+
+    container.innerHTML = `
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>物件コード</th>
+                        <th>ステータス</th>
+                        <th>登録日</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${activeRelationships.map(r => `
+                        <tr>
+                            <td>${escapeHtml(r.property_code)}</td>
+                            <td><span class="status-badge status-active">有効</span></td>
+                            <td>${new Date(r.created_at).toLocaleDateString('ja-JP')}</td>
+                            <td>
+                                <button class="btn btn-danger btn-sm" onclick="handleRemoveBuildingVendor('${r.id}')">削除</button>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+// 紐付けを削除（非表示化）
+async function handleRemoveBuildingVendor(relationshipId) {
+    if (!confirm('この紐付けを削除してもよろしいですか？')) return;
+
+    try {
+        await removeBuildingVendor(relationshipId);
+        showToast('紐付けを削除しました', 'success');
+        // 再読み込み
+        const vendorId = document.getElementById('filterVendor').value;
+        if (vendorId) {
+            await loadBuildingVendorRelationships(vendorId);
+        }
+    } catch (error) {
+        console.error('Failed to remove building-vendor relationship:', error);
+        showToast('削除に失敗しました', 'error');
+    }
+}
+
+// ========================================
+// Pending Building Requests（ビル追加リクエスト承認）
+// ========================================
+
+// ビル追加リクエストを読み込み
+async function loadPendingBuildingRequests() {
+    try {
+        pendingBuildingRequests = await getPendingBuildingRequests();
+        renderPendingBuildingRequests();
+    } catch (error) {
+        console.error('Failed to load pending building requests:', error);
+    }
+}
+
+// ビル追加リクエストを描画
+function renderPendingBuildingRequests() {
+    const tbody = document.getElementById('pendingBuildingsBody');
+    const emptyMsg = document.getElementById('pendingBuildingsEmpty');
+    const countSpan = document.getElementById('pendingBuildingCount');
+
+    countSpan.textContent = pendingBuildingRequests.length;
+
+    if (pendingBuildingRequests.length === 0) {
+        tbody.innerHTML = '';
+        emptyMsg.style.display = 'block';
+        return;
+    }
+
+    emptyMsg.style.display = 'none';
+    tbody.innerHTML = pendingBuildingRequests.map(req => `
+        <tr>
+            <td>${escapeHtml(req.property_code)}</td>
+            <td>${escapeHtml(req.property_code)}</td>
+            <td>${escapeHtml(req.signage_master_vendors?.vendor_name || '-')}</td>
+            <td>${escapeHtml(req.requested_by_profile?.email || '-')}</td>
+            <td>${new Date(req.created_at).toLocaleString('ja-JP')}</td>
+            <td>
+                <button class="btn btn-success btn-sm" onclick="handleApproveBuildingRequest('${req.id}')">承認</button>
+                <button class="btn btn-danger btn-sm" onclick="handleRejectBuildingRequest('${req.id}')">却下</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+// ビル追加リクエストを承認
+async function handleApproveBuildingRequest(requestId) {
+    try {
+        await approveBuildingRequest(requestId);
+        showToast('ビル追加リクエストを承認しました', 'success');
+        await loadPendingBuildingRequests();
+    } catch (error) {
+        console.error('Failed to approve building request:', error);
+        showToast('承認に失敗しました', 'error');
+    }
+}
+
+// ビル追加リクエストを却下
+async function handleRejectBuildingRequest(requestId) {
+    if (!confirm('このリクエストを却下してもよろしいですか？')) return;
+
+    try {
+        await rejectBuildingRequest(requestId);
+        showToast('ビル追加リクエストを却下しました', 'success');
+        await loadPendingBuildingRequests();
+    } catch (error) {
+        console.error('Failed to reject building request:', error);
+        showToast('却下に失敗しました', 'error');
+    }
+}
+
+// グローバルに公開
+window.handleRemoveBuildingVendor = handleRemoveBuildingVendor;
+window.handleApproveBuildingRequest = handleApproveBuildingRequest;
+window.handleRejectBuildingRequest = handleRejectBuildingRequest;
 
 // ========================================
 // 起動

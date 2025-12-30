@@ -877,16 +877,44 @@
             <div class="admin-tabs">
                 <button class="admin-tab active" data-tab="approval">✅ 承認待ち</button>
                 <button class="admin-tab" data-tab="entries">📊 データ一覧</button>
+                <button class="admin-tab" data-tab="relationships">🔗 紐付け管理</button>
                 <button class="admin-tab" data-tab="master">📋 マスター管理</button>
                 <button class="admin-tab" data-tab="users">👥 ユーザー管理</button>
             </div>
 
             <!-- 承認待ちタブ -->
             <div class="tab-content active" id="tab-approval">
-                <div class="action-bar">
-                    <div>
-                        <span id="pendingCount">0</span>件の申請待ち
+                <!-- ビル追加リクエスト -->
+                <div style="margin-bottom: 2rem;">
+                    <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: #1e293b;">
+                        🏢 ビル追加リクエスト (<span id="pendingBuildingCount">0</span>件)
+                    </h3>
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>物件名</th>
+                                    <th>物件コード</th>
+                                    <th>メンテナンス会社</th>
+                                    <th>申請者</th>
+                                    <th>申請日時</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pendingBuildingsBody">
+                            </tbody>
+                        </table>
                     </div>
+                    <div class="empty-message" id="pendingBuildingsEmpty" style="display: none;">
+                        承認待ちのビル追加リクエストはありません
+                    </div>
+                </div>
+
+                <!-- データ承認待ち -->
+                <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: #1e293b;">
+                    📝 データ承認待ち (<span id="pendingCount">0</span>件)
+                </h3>
+                <div class="action-bar">
                     <div style="display: flex; gap: 0.5rem;">
                         <button class="btn btn-success btn-sm" id="approveAllBtn" disabled>✅ 一括承認</button>
                     </div>
@@ -976,6 +1004,20 @@
                 </div>
                 <div class="empty-message" id="entriesEmpty" style="display: none;">
                     データがありません
+                </div>
+            </div>
+
+            <!-- 紐付け管理タブ -->
+            <div class="tab-content" id="tab-relationships">
+                <div style="margin-bottom: 1.5rem;">
+                    <label for="filterVendor" style="font-weight: 600; margin-right: 0.5rem;">メンテナンス会社:</label>
+                    <select id="filterVendor" style="padding: 0.5rem; border-radius: 6px; border: 1px solid #e2e8f0;">
+                        <option value="">-- 選択してください --</option>
+                    </select>
+                </div>
+
+                <div id="relationshipsTableContainer">
+                    <p style="color: #64748b; text-align: center; padding: 2rem;">メンテナンス会社を選択してください</p>
                 </div>
             </div>
 
