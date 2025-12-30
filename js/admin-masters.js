@@ -215,10 +215,14 @@ export function renderVendors(masterData, filter = '') {
         const div = document.createElement('div');
         div.className = 'master-item';
         div.dataset.id = v.id;
+
+        const inspectionType = v.inspection_type || '-';
+
         div.innerHTML = `
-            <div class="master-item-info">
-                <div class="master-item-name">${escapeHtml(v.vendor_name)}</div>
-                <div class="master-item-sub">📞 ${escapeHtml(v.emergency_contact) || '連絡先未設定'}</div>
+            <div class="master-item-name">${escapeHtml(v.vendor_name)}</div>
+            <div class="master-item-details">
+                <span>📞 ${escapeHtml(v.emergency_contact) || '連絡先未設定'}</span>
+                <span>点検種別: ${escapeHtml(inspectionType)}</span>
             </div>
             <div class="master-item-actions">
                 <button class="btn btn-outline btn-sm" data-action="edit">編集</button>
@@ -257,12 +261,14 @@ export function renderInspections(masterData, filter = '') {
         const div = document.createElement('div');
         div.className = 'master-item';
         div.dataset.id = i.id;
-        const categoryBadge = i.category ? `<span style="background: #e0e7ff; color: #3730a3; padding: 0.125rem 0.5rem; border-radius: 4px; font-size: 0.75rem; margin-left: 0.5rem;">${escapeHtml(i.category)}</span>` : '';
+        const categoryBadge = i.category ? `<span style="background: #e0e7ff; color: #3730a3; padding: 0.25rem 0.625rem; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">${escapeHtml(i.category)}</span>` : '';
         const templateLabel = i.template_no ? (templateImages[i.template_no] || i.template_no) : '未設定';
+
         div.innerHTML = `
-            <div class="master-item-info">
-                <div class="master-item-name">${escapeHtml(i.inspection_name)}${categoryBadge}</div>
-                <div class="master-item-sub">画像: ${escapeHtml(templateLabel)}</div>
+            <div class="master-item-name">${escapeHtml(i.inspection_name)}</div>
+            <div class="master-item-details">
+                ${categoryBadge ? `<span>${categoryBadge}</span>` : '<span>-</span>'}
+                <span>画像: ${escapeHtml(templateLabel)}</span>
             </div>
             <div class="master-item-actions">
                 <button class="btn btn-outline btn-sm" data-action="edit">編集</button>
@@ -304,9 +310,9 @@ export function renderCategories(masterData, filter = '') {
         div.className = 'master-item';
         div.dataset.id = cat.id;
         div.innerHTML = `
-            <div class="master-item-info">
-                <div class="master-item-name">${escapeHtml(cat.category_name)}</div>
-                <div class="master-item-sub">表示順序: ${cat.sort_order || 0}</div>
+            <div class="master-item-name">${escapeHtml(cat.category_name)}</div>
+            <div class="master-item-details">
+                <span>表示順序: ${cat.sort_order || 0}</span>
             </div>
             <div class="master-item-actions">
                 <button class="btn btn-sm btn-outline" data-action="edit">編集</button>
