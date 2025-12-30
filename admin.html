@@ -460,12 +460,21 @@
             font-size: 0.875rem;
             color: #64748b;
             display: flex;
-            flex-direction: column;
-            gap: 0.25rem;
-            justify-content: center;
+            align-items: center;
+            gap: 1rem;
+            white-space: nowrap;
+            overflow: hidden;
         }
-        .master-item-details > span {
-            line-height: 1.4;
+        .master-item-details > span:first-child {
+            font-weight: 500;
+            color: #1e293b;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .master-item-details > span:last-child {
+            color: #94a3b8;
+            font-size: 0.8125rem;
+            flex-shrink: 0;
         }
         .master-item-actions {
             display: flex;

@@ -175,8 +175,8 @@ export function renderProperties(masterData, filter = '') {
         div.innerHTML = `
             <div class="master-item-name">${escapeHtml(p.property_code)}</div>
             <div class="master-item-details">
-                <span style="font-weight: 500; color: #1e293b;">${escapeHtml(p.property_name)}</span>
-                <span style="color: #94a3b8; font-size: 0.8125rem;">端末: ${escapeHtml(terminalDisplay)} (${terminals.length}台)</span>
+                <span>${escapeHtml(p.property_name)}</span>
+                <span>端末: ${escapeHtml(terminalDisplay)} (${terminals.length}台)</span>
             </div>
             <div class="master-item-actions">
                 <button class="btn btn-outline btn-sm" data-action="edit">編集</button>
