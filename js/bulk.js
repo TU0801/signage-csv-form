@@ -1,6 +1,6 @@
 // bulk.js - 一括入力画面のメインエントリーポイント
 
-import { getUser, getProfile, isAdmin, signOut, getAllMasterData, getSettings, getMasterVendors, getBuildingsByVendor } from './supabase-client.js';
+import { getUser, getProfile, isAdmin, signOut, getAllMasterData, getSettings, getMasterVendors, getBuildingsByVendor, addBuildingVendor } from './supabase-client.js';
 import { setMasterData, getMasterData, setCurrentUserId, setCurrentFilter, clearRows, getRows, setAppSettings } from './bulk-state.js';
 import {
     addRowWithCopy, duplicateSelectedRows, deleteSelectedRows,
@@ -91,6 +91,26 @@ async function init() {
             clearRows();
             updateStats();
             updateEmptyState();
+        });
+    } else {
+        // 一般ユーザーの場合は物件追加リクエストボタンを表示
+        const requestBtn = document.getElementById('requestBuildingBtn');
+        requestBtn.style.display = 'block';
+        requestBtn.addEventListener('click', async () => {
+            const propertyCode = prompt('追加したい物件コードを入力してください:');
+            if (!propertyCode) return;
+
+            try {
+                await addBuildingVendor(propertyCode);
+                showToast('物件追加リクエストを送信しました。管理者の承認をお待ちください。', 'success');
+            } catch (error) {
+                console.error('Failed to request building:', error);
+                if (error.message.includes('duplicate') || error.message.includes('unique')) {
+                    showToast('この物件は既にリクエスト済みです', 'error');
+                } else {
+                    showToast('リクエストに失敗しました: ' + error.message, 'error');
+                }
+            }
         });
     }
 
