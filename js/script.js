@@ -12,6 +12,9 @@ function escapeHtml(str) {
 // DBから読み込んだテンプレート画像を保持
 let dbTemplateImages = [];
 
+// 管理者用: 選択中のベンダーID（管理者が他社として入力する場合）
+let selectedVendorIdForAdmin = null;
+
 const templateImages = {
     "exchange_light_battery_2": "images/exchange_light_battery_2.png",
     "painting_water_pipe": "images/painting_water_pipe.png",
@@ -710,6 +713,48 @@ function hasTemplateImage(templateKey) {
         window.onVendorChange = onVendorChange;
         window.onCategoryChange = onCategoryChange;
         window.onInspectionTypeChange = onInspectionTypeChange;
+
+        // 管理者用: ベンダー選択変更時
+        async function onAdminVendorChange() {
+            const vendorSelect = document.getElementById('adminVendorSelect');
+            const vendorId = vendorSelect.value;
+
+            if (!vendorId) {
+                selectedVendorIdForAdmin = null;
+                // マスターデータを元に戻す（全データ）
+                const freshData = await window.getAllMasterDataCamelCase();
+                window.masterData = freshData;
+                populatePropertySelect();
+                return;
+            }
+
+            selectedVendorIdForAdmin = vendorId;
+
+            // 選択したベンダーの担当ビルのみを取得
+            const buildings = await window.getBuildingsByVendor(vendorId);
+
+            // masterData.propertiesを更新
+            const updatedProperties = [];
+            buildings.forEach(b => {
+                const terminals = Array.isArray(b.terminals) ? b.terminals : [];
+                terminals.forEach(t => {
+                    updatedProperties.push({
+                        propertyCode: b.property_code,
+                        propertyName: b.property_name,
+                        terminalId: t.terminalId || t.terminal_id || '',
+                        supplement: t.supplement || '',
+                        address: b.address || ''
+                    });
+                });
+            });
+
+            window.masterData.properties = updatedProperties;
+
+            // 物件選択を再描画
+            populatePropertySelect();
+            document.getElementById('property').value = '';
+            document.getElementById('terminal').innerHTML = '<option value="">選択してください</option>';
+        }
         window.onPosterTypeChange = onPosterTypeChange;
         window.clearForm = clearForm;
         window.addEntry = addEntry;
@@ -723,3 +768,4 @@ function hasTemplateImage(templateKey) {
         window.setPosition = setPosition;
         window.updatePreview = updatePreview;
         window.closeModal = closeModal;
+        window.onAdminVendorChange = onAdminVendorChange;

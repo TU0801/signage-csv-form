@@ -29,6 +29,17 @@
             <section class="form-section card">
                 <div class="card-header">📝 掲示内容入力</div>
                 <div class="card-body">
+                    <!-- 管理者専用: メンテナンス会社選択 -->
+                    <div id="adminVendorSelectGroup" class="form-group" style="display: none; margin-bottom: 1.5rem; padding: 1rem; background: #fff3cd; border-radius: 8px; border: 2px solid #ffc107;">
+                        <label style="font-weight: 700; color: #856404;">
+                            <span style="background: #ffc107; color: white; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; margin-right: 0.5rem;">管理者</span>
+                            入力するメンテナンス会社を選択
+                        </label>
+                        <select id="adminVendorSelect" onchange="onAdminVendorChange()" style="margin-top: 0.5rem;">
+                            <option value="">-- メンテナンス会社を選択 --</option>
+                        </select>
+                    </div>
+
                     <div class="form-grid">
                         <!-- 物件・端末 -->
                         <div class="form-group">
@@ -226,11 +237,13 @@
     </script>
     <script type="module">
         // 認証モジュール（ログイン必須）
-        import { getUser, getProfile, isAdmin, signOut, getSettings, createEntries, uploadPosterImage, getAllMasterDataCamelCase } from './js/supabase-client.js';
+        import { getUser, getProfile, isAdmin, signOut, getSettings, createEntries, uploadPosterImage, getAllMasterDataCamelCase, getMasterVendors, getBuildingsByVendor } from './js/supabase-client.js';
 
         // script.jsから使えるようにwindowに公開
         window.createEntriesToSupabase = createEntries;
         window.uploadPosterImage = uploadPosterImage;
+        window.getAllMasterDataCamelCase = getAllMasterDataCamelCase;
+        window.getBuildingsByVendor = getBuildingsByVendor;
 
         async function initAuth() {
             try {
@@ -288,10 +301,23 @@
                     }
                 }
 
-                // 管理者の場合は管理リンクを表示
+                // 管理者の場合は管理リンクとベンダー選択を表示
                 const admin = await isAdmin();
                 if (admin) {
                     document.getElementById('adminLink').style.display = 'block';
+
+                    // 管理者用ベンダー選択を表示
+                    document.getElementById('adminVendorSelectGroup').style.display = 'block';
+
+                    // ベンダー一覧を読み込み
+                    const vendors = await getMasterVendors();
+                    const vendorSelect = document.getElementById('adminVendorSelect');
+                    vendors.forEach(v => {
+                        const opt = document.createElement('option');
+                        opt.value = v.id;
+                        opt.textContent = v.vendor_name;
+                        vendorSelect.appendChild(opt);
+                    });
                 }
 
                 // ログアウトボタン
