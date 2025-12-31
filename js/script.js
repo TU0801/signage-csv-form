@@ -725,6 +725,12 @@ function hasTemplateImage(templateKey) {
                 const freshData = await window.getAllMasterDataCamelCase();
                 window.masterData = freshData;
                 populatePropertySelect();
+
+                // 受注先ドロップダウンのロックを解除
+                const vendorDropdown = document.getElementById('vendor');
+                vendorDropdown.disabled = false;
+                vendorDropdown.style.background = '';
+                vendorDropdown.value = '';
                 return;
             }
 
@@ -749,6 +755,17 @@ function hasTemplateImage(templateKey) {
             });
 
             window.masterData.properties = updatedProperties;
+
+            // 受注先ドロップダウンを自動選択＆ロック
+            const vendorDropdown = document.getElementById('vendor');
+            const vendorIndex = masterData.vendors.findIndex(v => v.vendorName === vendors.find(vv => vv.id === vendorId)?.vendor_name);
+            if (vendorIndex !== -1) {
+                vendorDropdown.value = vendorIndex;
+                vendorDropdown.disabled = true;
+                vendorDropdown.style.background = '#f0f0f0';
+                // 緊急連絡先も自動入力
+                onVendorChange();
+            }
 
             // 物件選択を再描画
             populatePropertySelect();
@@ -777,6 +794,14 @@ function hasTemplateImage(templateKey) {
             if (!propertyCode) return;
 
             try {
+                // 物件の存在確認
+                const allProperties = await window.getMasterProperties();
+                const exists = allProperties.some(p => String(p.property_code) === String(propertyCode));
+                if (!exists) {
+                    showToast('この物件コードは登録されていません。管理者にお問い合わせください。', 'error');
+                    return;
+                }
+
                 await window.addBuildingVendor(propertyCode);
                 showToast('物件追加リクエストを送信しました。管理者の承認をお待ちください。', 'success');
 

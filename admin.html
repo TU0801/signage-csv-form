@@ -24,8 +24,26 @@
             position: sticky;
             top: 0;
             height: calc(100vh - 4rem);
-            overflow-y: auto;
+            overflow-y: scroll;
             flex-shrink: 0;
+        }
+
+        .admin-sidebar::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .admin-sidebar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        .admin-sidebar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+        }
+
+        .admin-sidebar::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.5);
         }
 
         .admin-main {
@@ -429,6 +447,7 @@
             border-radius: 8px;
             border: 1px solid #e2e8f0;
             transition: all 0.15s ease;
+            overflow: hidden;
         }
         .master-item:hover {
             border-color: #667eea;
