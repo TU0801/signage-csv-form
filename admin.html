@@ -1229,7 +1229,22 @@
                     </select>
                 </div>
 
-                <div id="relationshipsTableContainer">
+                <!-- サブタブ: 物件 / 点検種別 -->
+                <div class="admin-tabs" id="relationshipSubTabs" style="display: none; border-bottom: none; margin-bottom: 1rem;">
+                    <button class="admin-tab active" data-rel-type="buildings">🏢 物件</button>
+                    <button class="admin-tab" data-rel-type="inspections">🔧 点検種別</button>
+                </div>
+
+                <!-- 物件紐付け -->
+                <div id="buildingRelationshipsContainer" style="display: none;">
+                </div>
+
+                <!-- 点検種別紐付け -->
+                <div id="inspectionRelationshipsContainer" style="display: none;">
+                </div>
+
+                <!-- 初期メッセージ -->
+                <div id="relationshipsInitialMessage">
                     <p style="color: #64748b; text-align: center; padding: 2rem;">メンテナンス会社を選択してください</p>
                 </div>
             </div>

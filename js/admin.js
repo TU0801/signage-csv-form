@@ -24,7 +24,11 @@ import {
     rejectBuildingRequest,
     removeBuildingVendor,
     addBuildingVendor,
-    getMasterVendors
+    getVendorInspections,
+    addVendorInspection,
+    removeVendorInspection,
+    getMasterVendors,
+    getMasterProperties
 } from './supabase-client.js';
 
 import {
@@ -73,6 +77,7 @@ let profiles = [];
 let pendingEntries = [];
 let pendingBuildingRequests = [];
 let selectedPendingIds = [];
+let currentRelationshipType = 'buildings'; // 'buildings' or 'inspections'
 
 // ユーザーIDからメールアドレスを取得
 function getUserEmail(userId) {
@@ -1270,31 +1275,89 @@ async function initRelationshipsTab() {
     filterVendor.addEventListener('change', async (e) => {
         const vendorId = e.target.value;
         if (!vendorId) {
-            document.getElementById('relationshipsTableContainer').innerHTML =
-                '<p style="color: #64748b; text-align: center; padding: 2rem;">メンテナンス会社を選択してください</p>';
+            document.getElementById('relationshipSubTabs').style.display = 'none';
+            document.getElementById('buildingRelationshipsContainer').style.display = 'none';
+            document.getElementById('inspectionRelationshipsContainer').style.display = 'none';
+            document.getElementById('relationshipsInitialMessage').style.display = 'block';
             return;
         }
-        await loadBuildingVendorRelationships(vendorId);
+
+        // サブタブを表示
+        document.getElementById('relationshipSubTabs').style.display = 'flex';
+        document.getElementById('relationshipsInitialMessage').style.display = 'none';
+
+        // 現在のタイプに応じてロード
+        await loadRelationships(vendorId, currentRelationshipType);
+    });
+
+    // サブタブ切り替え
+    document.querySelectorAll('[data-rel-type]').forEach(tab => {
+        tab.addEventListener('click', async () => {
+            const relType = tab.dataset.relType;
+            currentRelationshipType = relType;
+
+            // タブの active 切り替え
+            document.querySelectorAll('[data-rel-type]').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+
+            // コンテナの表示切り替え
+            const vendorId = filterVendor.value;
+            if (vendorId) {
+                await loadRelationships(vendorId, relType);
+            }
+        });
     });
 }
 
-// 特定ベンダーの紐付け一覧を表示
+// 紐付けを読み込み（物件 or 点検種別）
+async function loadRelationships(vendorId, type) {
+    if (type === 'buildings') {
+        document.getElementById('buildingRelationshipsContainer').style.display = 'block';
+        document.getElementById('inspectionRelationshipsContainer').style.display = 'none';
+        await loadBuildingVendorRelationships(vendorId);
+    } else {
+        document.getElementById('buildingRelationshipsContainer').style.display = 'none';
+        document.getElementById('inspectionRelationshipsContainer').style.display = 'block';
+        await loadVendorInspectionRelationships(vendorId);
+    }
+}
+
+// 特定ベンダーの物件紐付け一覧を表示
 async function loadBuildingVendorRelationships(vendorId) {
     try {
-        const relationships = await getBuildingVendors({ vendorId });
-        renderBuildingVendorRelationships(relationships);
+        const [relationships, properties] = await Promise.all([
+            getBuildingVendors({ vendorId }),
+            getMasterProperties()
+        ]);
+        renderBuildingVendorRelationships(relationships, properties, vendorId);
     } catch (error) {
         console.error('Failed to load building-vendor relationships:', error);
         showToast('紐付け情報の読み込みに失敗しました', 'error');
     }
 }
 
-// 紐付け一覧を描画
-function renderBuildingVendorRelationships(relationships) {
-    const container = document.getElementById('relationshipsTableContainer');
-    const vendorId = document.getElementById('filterVendor').value;
+// 特定ベンダーの点検種別紐付け一覧を表示
+async function loadVendorInspectionRelationships(vendorId) {
+    try {
+        const relationships = await getVendorInspections(vendorId);
+        renderVendorInspectionRelationships(relationships, vendorId);
+    } catch (error) {
+        console.error('Failed to load vendor-inspection relationships:', error);
+        showToast('点検種別紐付け情報の読み込みに失敗しました', 'error');
+    }
+}
+
+// 物件紐付け一覧を描画
+function renderBuildingVendorRelationships(relationships, properties, vendorId) {
+    const container = document.getElementById('buildingRelationshipsContainer');
 
     const activeRelationships = relationships.filter(r => r.status === 'active');
+
+    // 物件名を property_code から取得
+    const propertiesMap = {};
+    properties.forEach(p => {
+        propertiesMap[p.property_code] = p.property_name;
+    });
 
     container.innerHTML = `
         <div style="margin-bottom: 1rem;">
@@ -1309,6 +1372,7 @@ function renderBuildingVendorRelationships(relationships) {
                     <thead>
                         <tr>
                             <th>物件コード</th>
+                            <th>物件名</th>
                             <th>ステータス</th>
                             <th>登録日</th>
                             <th>操作</th>
@@ -1318,10 +1382,53 @@ function renderBuildingVendorRelationships(relationships) {
                         ${activeRelationships.map(r => `
                             <tr>
                                 <td>${escapeHtml(r.property_code)}</td>
+                                <td>${escapeHtml(propertiesMap[r.property_code] || '-')}</td>
                                 <td><span class="status-badge status-active">有効</span></td>
                                 <td>${new Date(r.created_at).toLocaleDateString('ja-JP')}</td>
                                 <td>
                                     <button class="btn btn-danger btn-sm" onclick="handleRemoveBuildingVendor('${r.id}')">削除</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>`
+        }
+    `;
+}
+
+// 点検種別紐付け一覧を描画
+function renderVendorInspectionRelationships(relationships, vendorId) {
+    const container = document.getElementById('inspectionRelationshipsContainer');
+
+    container.innerHTML = `
+        <div style="margin-bottom: 1rem;">
+            <p style="color: #64748b; font-size: 0.875rem; margin-bottom: 0.5rem;">
+                ${relationships.length}件の点検種別が紐付けられています
+            </p>
+        </div>
+        ${relationships.length === 0 ?
+            '<p style="color: #64748b; text-align: center; padding: 2rem;">紐付けがありません</p>' :
+            `<div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>点検種別</th>
+                            <th>カテゴリID</th>
+                            <th>ステータス</th>
+                            <th>登録日</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${relationships.map(r => `
+                            <tr>
+                                <td>${escapeHtml(r.signage_master_inspection_types?.inspection_name || '-')}</td>
+                                <td>${escapeHtml(r.signage_master_inspection_types?.category_id || '-')}</td>
+                                <td><span class="status-badge status-active">有効</span></td>
+                                <td>${new Date(r.created_at).toLocaleDateString('ja-JP')}</td>
+                                <td>
+                                    <button class="btn btn-danger btn-sm" onclick="handleRemoveVendorInspection('${r.id}')">削除</button>
                                 </td>
                             </tr>
                         `).join('')}
@@ -1367,6 +1474,24 @@ async function handleRemoveBuildingVendor(relationshipId) {
         }
     } catch (error) {
         console.error('Failed to remove building-vendor relationship:', error);
+        showToast('削除に失敗しました', 'error');
+    }
+}
+
+// 点検種別紐付けを削除
+async function handleRemoveVendorInspection(relationshipId) {
+    if (!confirm('この点検種別の紐付けを削除してもよろしいですか？')) return;
+
+    try {
+        await removeVendorInspection(relationshipId);
+        showToast('紐付けを削除しました', 'success');
+        // 再読み込み
+        const vendorId = document.getElementById('filterVendor').value;
+        if (vendorId) {
+            await loadVendorInspectionRelationships(vendorId);
+        }
+    } catch (error) {
+        console.error('Failed to remove vendor-inspection relationship:', error);
         showToast('削除に失敗しました', 'error');
     }
 }
@@ -1443,6 +1568,7 @@ async function handleRejectBuildingRequest(requestId) {
 
 // グローバルに公開
 window.handleRemoveBuildingVendor = handleRemoveBuildingVendor;
+window.handleRemoveVendorInspection = handleRemoveVendorInspection;
 window.openAddBuildingModal = openAddBuildingModal;
 window.handleApproveBuildingRequest = handleApproveBuildingRequest;
 window.handleRejectBuildingRequest = handleRejectBuildingRequest;

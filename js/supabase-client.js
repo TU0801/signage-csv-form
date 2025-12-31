@@ -371,10 +371,56 @@ export async function rejectBuildingRequest(buildingVendorId) {
 
 // ビル×ベンダー紐付けを削除（非表示化）
 export async function removeBuildingVendor(buildingVendorId) {
-  const { data, error } = await supabase
+  const { data, error} = await supabase
     .from('building_vendors')
     .update({ status: 'deleted' })
     .eq('id', buildingVendorId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+// ========================================
+// Vendor-Inspection Relationships（ベンダー×点検種別紐付け）
+// ========================================
+
+// ベンダーの点検種別紐付け一覧を取得
+export async function getVendorInspections(vendorId) {
+  const { data, error } = await supabase
+    .from('vendor_inspections')
+    .select('*, signage_master_inspection_types(inspection_name, category_id)')
+    .eq('vendor_id', vendorId)
+    .eq('status', 'active')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data;
+}
+
+// ベンダー×点検種別の紐付けを追加
+export async function addVendorInspection(vendorId, inspectionId) {
+  const { data, error } = await supabase
+    .from('vendor_inspections')
+    .insert({
+      vendor_id: vendorId,
+      inspection_id: inspectionId,
+      status: 'active'
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+// ベンダー×点検種別の紐付けを削除（非表示化）
+export async function removeVendorInspection(relationshipId) {
+  const { data, error } = await supabase
+    .from('vendor_inspections')
+    .update({ status: 'inactive' })
+    .eq('id', relationshipId)
     .select()
     .single();
 
