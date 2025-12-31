@@ -44,9 +44,14 @@
                         <!-- 物件・端末 -->
                         <div class="form-group">
                             <label>物件コード <span class="required">*</span></label>
-                            <select id="property" onchange="onPropertyChange()">
-                                <option value="">選択してください</option>
-                            </select>
+                            <div style="display: flex; gap: 0.5rem; align-items: flex-end;">
+                                <select id="property" onchange="onPropertyChange()" style="flex: 1;">
+                                    <option value="">選択してください</option>
+                                </select>
+                                <button type="button" id="requestBuildingBtn" class="btn btn-outline btn-sm" style="display: none; white-space: nowrap;" onclick="openBuildingRequestModal()">
+                                    + 物件追加リクエスト
+                                </button>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label>端末ID</label>
@@ -237,13 +242,14 @@
     </script>
     <script type="module">
         // 認証モジュール（ログイン必須）
-        import { getUser, getProfile, isAdmin, signOut, getSettings, createEntries, uploadPosterImage, getAllMasterDataCamelCase, getMasterVendors, getBuildingsByVendor } from './js/supabase-client.js';
+        import { getUser, getProfile, isAdmin, signOut, getSettings, createEntries, uploadPosterImage, getAllMasterDataCamelCase, getMasterVendors, getBuildingsByVendor, addBuildingVendor } from './js/supabase-client.js';
 
         // script.jsから使えるようにwindowに公開
         window.createEntriesToSupabase = createEntries;
         window.uploadPosterImage = uploadPosterImage;
         window.getAllMasterDataCamelCase = getAllMasterDataCamelCase;
         window.getBuildingsByVendor = getBuildingsByVendor;
+        window.addBuildingVendor = addBuildingVendor;
 
         async function initAuth() {
             try {
@@ -305,11 +311,8 @@
                 const admin = await isAdmin();
                 if (admin) {
                     document.getElementById('adminLink').style.display = 'block';
-
-                    // 管理者用ベンダー選択を表示
                     document.getElementById('adminVendorSelectGroup').style.display = 'block';
 
-                    // ベンダー一覧を読み込み
                     const vendors = await getMasterVendors();
                     const vendorSelect = document.getElementById('adminVendorSelect');
                     vendors.forEach(v => {
@@ -318,6 +321,9 @@
                         opt.textContent = v.vendor_name;
                         vendorSelect.appendChild(opt);
                     });
+                } else {
+                    // 一般ユーザーの場合は物件追加リクエストボタンを表示
+                    document.getElementById('requestBuildingBtn').style.display = 'block';
                 }
 
                 // ログアウトボタン

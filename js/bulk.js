@@ -1,7 +1,7 @@
 // bulk.js - 一括入力画面のメインエントリーポイント
 
-import { getUser, getProfile, isAdmin, signOut, getAllMasterData, getSettings } from './supabase-client.js';
-import { setMasterData, setCurrentUserId, setCurrentFilter, clearRows, getRows, setAppSettings } from './bulk-state.js';
+import { getUser, getProfile, isAdmin, signOut, getAllMasterData, getSettings, getMasterVendors, getBuildingsByVendor } from './supabase-client.js';
+import { setMasterData, getMasterData, setCurrentUserId, setCurrentFilter, clearRows, getRows, setAppSettings } from './bulk-state.js';
 import {
     addRowWithCopy, duplicateSelectedRows, deleteSelectedRows,
     updateSelectedCount, updateRowNumbers, renderRow, addRow
@@ -53,10 +53,45 @@ async function init() {
     const profile = await getProfile();
     document.getElementById('userEmail').textContent = profile?.email || user.email;
 
-    // 管理者の場合は管理リンクを表示
+    // 管理者の場合は管理リンクとベンダー選択を表示
     const admin = await isAdmin();
     if (admin) {
         document.getElementById('adminLink').style.display = 'block';
+        document.getElementById('adminVendorSelectGroup').style.display = 'block';
+
+        // ベンダー一覧を読み込み
+        const vendors = await getMasterVendors();
+        const vendorSelect = document.getElementById('adminVendorSelect');
+        vendors.forEach(v => {
+            const opt = document.createElement('option');
+            opt.value = v.id;
+            opt.textContent = v.vendor_name;
+            vendorSelect.appendChild(opt);
+        });
+
+        // ベンダー選択変更時
+        vendorSelect.addEventListener('change', async (e) => {
+            const vendorId = e.target.value;
+            if (!vendorId) {
+                // 全データに戻す
+                const freshData = await getAllMasterData();
+                setMasterData(freshData);
+                return;
+            }
+
+            // 選択したベンダーの担当ビルのみを取得
+            const buildings = await getBuildingsByVendor(vendorId);
+
+            // masterDataを更新
+            const currentMasterData = getMasterData();
+            currentMasterData.properties = buildings;
+            setMasterData(currentMasterData);
+
+            // テーブルをクリア（物件が変わったため）
+            clearRows();
+            updateStats();
+            updateEmptyState();
+        });
     }
 
     document.getElementById('logoutBtn').addEventListener('click', async () => {

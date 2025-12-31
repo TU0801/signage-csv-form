@@ -769,3 +769,29 @@ function hasTemplateImage(templateKey) {
         window.updatePreview = updatePreview;
         window.closeModal = closeModal;
         window.onAdminVendorChange = onAdminVendorChange;
+        window.openBuildingRequestModal = openBuildingRequestModal;
+
+        // 物件追加リクエストモーダル（一般ユーザー用）
+        async function openBuildingRequestModal() {
+            const propertyCode = prompt('追加したい物件コードを入力してください:');
+            if (!propertyCode) return;
+
+            try {
+                await window.addBuildingVendor(propertyCode);
+                showToast('物件追加リクエストを送信しました。管理者の承認をお待ちください。', 'success');
+
+                // マスターデータを再読み込み（承認後に表示されるように）
+                setTimeout(async () => {
+                    const freshData = await window.getAllMasterDataCamelCase();
+                    window.masterData = freshData;
+                    populatePropertySelect();
+                }, 1000);
+            } catch (error) {
+                console.error('Failed to request building:', error);
+                if (error.message.includes('duplicate') || error.message.includes('unique')) {
+                    showToast('この物件は既にリクエスト済みです', 'error');
+                } else {
+                    showToast('リクエストに失敗しました: ' + error.message, 'error');
+                }
+            }
+        }

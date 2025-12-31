@@ -26,6 +26,17 @@
 
     <div class="container">
         <div class="card">
+            <!-- 管理者専用: メンテナンス会社選択 -->
+            <div id="adminVendorSelectGroup" style="display: none; margin: 1rem 1rem 0 1rem; padding: 1rem; background: #fff3cd; border-radius: 8px; border: 2px solid #ffc107;">
+                <label style="font-weight: 700; color: #856404; display: block; margin-bottom: 0.5rem;">
+                    <span style="background: #ffc107; color: white; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; margin-right: 0.5rem;">管理者</span>
+                    入力するメンテナンス会社を選択
+                </label>
+                <select id="adminVendorSelect" style="width: 100%; padding: 0.5rem; border-radius: 6px; border: 1px solid #ffc107;">
+                    <option value="">-- メンテナンス会社を選択 --</option>
+                </select>
+            </div>
+
             <!-- メインツールバー -->
             <div class="bulk-toolbar">
                 <!-- 左: 行操作 -->
