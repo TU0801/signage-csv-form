@@ -28,7 +28,8 @@ import {
     addVendorInspection,
     removeVendorInspection,
     getMasterVendors,
-    getMasterProperties
+    getMasterProperties,
+    getMasterInspectionTypes
 } from './supabase-client.js';
 
 import {
@@ -1402,10 +1403,13 @@ function renderVendorInspectionRelationships(relationships, vendorId) {
     const container = document.getElementById('inspectionRelationshipsContainer');
 
     container.innerHTML = `
-        <div style="margin-bottom: 1rem;">
-            <p style="color: #64748b; font-size: 0.875rem; margin-bottom: 0.5rem;">
+        <div style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
+            <p style="color: #64748b; font-size: 0.875rem; margin: 0;">
                 ${relationships.length}件の点検種別が紐付けられています
             </p>
+            <button class="btn btn-primary btn-sm" onclick="openAddInspectionModal('${vendorId}')">
+                <span class="btn-icon">➕</span> 点検種別を追加
+            </button>
         </div>
         ${relationships.length === 0 ?
             '<p style="color: #64748b; text-align: center; padding: 2rem;">紐付けがありません</p>' :
@@ -1454,6 +1458,50 @@ async function openAddBuildingModal(vendorId) {
             showToast('この物件は既に追加されています', 'error');
         } else if (error.message.includes('foreign key') || error.message.includes('not found')) {
             showToast('物件コードが見つかりません', 'error');
+        } else {
+            showToast('追加に失敗しました: ' + error.message, 'error');
+        }
+    }
+}
+
+// 点検種別追加モーダルを開く
+async function openAddInspectionModal(vendorId) {
+    // 利用可能な点検種別を取得（まだ紐付けられていないもの）
+    try {
+        const [allInspections, linkedInspections] = await Promise.all([
+            getMasterInspectionTypes(),
+            getVendorInspections(vendorId)
+        ]);
+
+        const linkedIds = new Set(linkedInspections.map(r => r.inspection_id));
+        const availableInspections = allInspections.filter(i => !linkedIds.has(i.id));
+
+        if (availableInspections.length === 0) {
+            showToast('すべての点検種別が既に紐付けられています', 'info');
+            return;
+        }
+
+        // 選択肢を作成
+        const options = availableInspections.map(i => `${i.inspection_name}`).join('\n');
+        const selected = prompt(`追加する点検種別を選択してください:\n\n${options}\n\n点検種別名を入力:`);
+
+        if (!selected) return;
+
+        // 選択された点検種別を検索
+        const inspection = availableInspections.find(i => i.inspection_name === selected);
+        if (!inspection) {
+            showToast('点検種別が見つかりません', 'error');
+            return;
+        }
+
+        // 追加
+        await addVendorInspection(vendorId, inspection.id);
+        showToast('点検種別を追加しました', 'success');
+        await loadVendorInspectionRelationships(vendorId);
+    } catch (error) {
+        console.error('Failed to add vendor-inspection relationship:', error);
+        if (error.message.includes('duplicate') || error.message.includes('unique')) {
+            showToast('この点検種別は既に追加されています', 'error');
         } else {
             showToast('追加に失敗しました: ' + error.message, 'error');
         }
@@ -1570,6 +1618,7 @@ async function handleRejectBuildingRequest(requestId) {
 window.handleRemoveBuildingVendor = handleRemoveBuildingVendor;
 window.handleRemoveVendorInspection = handleRemoveVendorInspection;
 window.openAddBuildingModal = openAddBuildingModal;
+window.openAddInspectionModal = openAddInspectionModal;
 window.handleApproveBuildingRequest = handleApproveBuildingRequest;
 window.handleRejectBuildingRequest = handleRejectBuildingRequest;
 
