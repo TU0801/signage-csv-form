@@ -1578,7 +1578,7 @@ function renderPendingBuildingRequests() {
             <td>${escapeHtml(req.property_code)}</td>
             <td>${escapeHtml(req.property_code)}</td>
             <td>${escapeHtml(req.signage_master_vendors?.vendor_name || '-')}</td>
-            <td>${escapeHtml(req.requested_by_profile?.email || '-')}</td>
+            <td>${getUserEmail(req.requested_by)}</td>
             <td>${new Date(req.created_at).toLocaleString('ja-JP')}</td>
             <td>
                 <button class="btn btn-success btn-sm" onclick="handleApproveBuildingRequest('${req.id}')">承認</button>

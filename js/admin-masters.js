@@ -422,20 +422,28 @@ export function openMasterModal(type, masterData, data = null) {
     const modal = document.getElementById('masterModal');
     const title = document.getElementById('masterModalTitle');
 
-    // 全フィールドを非表示
-    document.getElementById('propertyFields').style.display = 'none';
-    document.getElementById('vendorFields').style.display = 'none';
-    document.getElementById('inspectionFields').style.display = 'none';
-    document.getElementById('categoryFields')?.style && (document.getElementById('categoryFields').style.display = 'none');
-    document.getElementById('templateImageFields')?.style && (document.getElementById('templateImageFields').style.display = 'none');
+    // 全フィールドを非表示＆無効化（required属性のバリデーションを回避）
+    const allSections = ['propertyFields', 'vendorFields', 'inspectionFields', 'categoryFields', 'templateImageFields'];
+    allSections.forEach(sectionId => {
+        const section = document.getElementById(sectionId);
+        if (section) {
+            section.style.display = 'none';
+            // セクション内のすべてのinput/select/textareaを無効化
+            section.querySelectorAll('input, select, textarea').forEach(el => {
+                el.disabled = true;
+            });
+        }
+    });
 
     // タイプを設定
     document.getElementById('masterType').value = type;
     document.getElementById('masterId').value = data?.id || '';
 
-    // タイプに応じてフィールドを表示
+    // タイプに応じてフィールドを表示＆有効化
     if (type === 'property') {
-        document.getElementById('propertyFields').style.display = 'block';
+        const section = document.getElementById('propertyFields');
+        section.style.display = 'block';
+        section.querySelectorAll('input, select, textarea').forEach(el => el.disabled = false);
         title.textContent = data ? '物件を編集' : '物件を追加';
 
         // 端末リストを初期化
@@ -469,7 +477,9 @@ export function openMasterModal(type, masterData, data = null) {
             addTerminalField();
         }
     } else if (type === 'vendor') {
-        document.getElementById('vendorFields').style.display = 'block';
+        const section = document.getElementById('vendorFields');
+        section.style.display = 'block';
+        section.querySelectorAll('input, select, textarea').forEach(el => el.disabled = false);
         title.textContent = data ? '受注先を編集' : '受注先を追加';
         if (data) {
             document.getElementById('vendorName').value = data.vendor_name || '';
@@ -481,7 +491,9 @@ export function openMasterModal(type, masterData, data = null) {
             document.getElementById('vendorCategory').value = '点検';
         }
     } else if (type === 'inspection') {
-        document.getElementById('inspectionFields').style.display = 'block';
+        const section = document.getElementById('inspectionFields');
+        section.style.display = 'block';
+        section.querySelectorAll('input, select, textarea').forEach(el => el.disabled = false);
         title.textContent = data ? '点検種別を編集' : '点検種別を追加';
 
         // カテゴリドロップダウンを構築
@@ -564,7 +576,9 @@ export function openMasterModal(type, masterData, data = null) {
             updateTemplatePreviewWithMasterData(templateSelect, masterData);
         }
     } else if (type === 'category') {
-        document.getElementById('categoryFields').style.display = 'block';
+        const section = document.getElementById('categoryFields');
+        section.style.display = 'block';
+        section.querySelectorAll('input, select, textarea').forEach(el => el.disabled = false);
         title.textContent = data ? 'カテゴリを編集' : 'カテゴリを追加';
         if (data) {
             document.getElementById('categoryName').value = data.category_name || '';
@@ -574,7 +588,9 @@ export function openMasterModal(type, masterData, data = null) {
             document.getElementById('categorySortOrder').value = 0;
         }
     } else if (type === 'templateImage') {
-        document.getElementById('templateImageFields').style.display = 'block';
+        const section = document.getElementById('templateImageFields');
+        section.style.display = 'block';
+        section.querySelectorAll('input, select, textarea').forEach(el => el.disabled = false);
         title.textContent = data ? 'テンプレート画像を編集' : 'テンプレート画像を追加';
 
         const fileInput = document.getElementById('templateImageFile');

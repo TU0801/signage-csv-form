@@ -301,11 +301,7 @@ export async function getBuildingVendors(filters = {}) {
 export async function getPendingBuildingRequests() {
   const { data, error } = await supabase
     .from('building_vendors')
-    .select(`
-      *,
-      signage_master_vendors(vendor_name),
-      requested_by_profile:signage_profiles!building_vendors_requested_by_fkey(email)
-    `)
+    .select('*, signage_master_vendors(vendor_name)')
     .eq('status', 'pending')
     .order('created_at', { ascending: false });
 
