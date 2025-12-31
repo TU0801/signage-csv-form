@@ -1,169 +1,235 @@
-# Claude Code プロジェクト設定
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## プロジェクト概要
+
+マンション共用部サイネージ向けの点検案内CSV作成ツール。メンテナンス会社ごとに担当ビルを管理し、デジタルサイネージ用のCSVを生成する。
+
+**URL**: https://github.com/TU0801/signage-csv-form
+**デプロイ**: GitHub Pages
+**バックエンド**: Supabase (PostgreSQL + Storage + Auth)
 
 ## 基本設定
-- 言語: 日本語でやりとりする
-- コミット時は必ずバージョンを更新する（js/version.js）
-- プッシュ前に必ず全テストを実行して通過を確認
 
-## AskUserQuestion ツールの活用（必須）
+- **言語**: 日本語でやりとりする
+- **バージョン管理**: コミット時は必ず `js/version.js` を更新
+- **テスト**: プッシュ前に全テスト実行必須
 
-### 使用すべき場面
-- **複数の選択肢がある時**: 実装方法、優先順位、機能選択など
-- **曖昧な指示を受けた時**: 確認したい点を選択肢形式で提示
-- **作業の優先順位を決める時**: どの順番で進めるか確認
+## 開発コマンド
 
-### 使い方のルール
-1. **選択肢はテキスト列挙ではなくAskUserQuestionで提示**
-2. **オプションは2-4個**（多すぎると選びにくい）
-3. **推奨オプションは先頭に配置**（ラベルに「(推奨)」追加）
-4. **複数選択可能な場合は `multiSelect: true`**
+```bash
+# ローカルサーバー起動
+npm run serve
+# → http://localhost:8080
 
-### 例
+# テスト実行
+npm test                    # 全テスト
+npm run test:headed         # ブラウザ表示あり
+npm run test:debug          # デバッグモード
+npm run test:report         # レポート表示
+
+# 単一テストファイル実行
+npx playwright test tests/data-entry.spec.js
+```
+
+## アーキテクチャ
+
+### マルチテナント構造（v1.13.0+）
+
+```
+ユーザー (signage_profiles)
+  └─ vendor_id → メンテナンス会社 (signage_master_vendors)
+       ├─ building_vendors → 担当ビル
+       └─ signage_vendor_inspections → 対応点検種別
+```
+
+**権限フィルター**:
+- 一般ユーザー: 自分のvendor_idに紐づくビルのみ表示
+- 管理者: 全ビル表示
+
+### 3画面構成
+
+| 画面 | ファイル | 主な機能 | モジュール |
+|------|---------|---------|-----------|
+| 1件入力 | index.html | 個別データ作成 | js/script.js (1ファイル) |
+| 一括入力 | bulk.html | Excel貼り付け、複数編集 | js/bulk-*.js (5モジュール) |
+| 管理画面 | admin.html | マスター管理、承認、紐付け | js/admin*.js (3ファイル) |
+
+### データフロー
+
+```
+[入力画面]
+  ↓ createEntries()
+[signage_entries] status='draft'
+  ↓ 管理者が承認
+[signage_entries] status='submitted'
+  ↓ CSVエクスポート
+[デジタルサイネージシステム]
+```
+
+### モジュール分割（一括入力）
+
+`bulk.html` は5つのモジュールに分割:
+
+- **bulk.js**: エントリーポイント、初期化
+- **bulk-state.js**: グローバル状態管理
+- **bulk-table.js**: テーブル描画、バリデーション
+- **bulk-data.js**: CRUD操作、CSV生成
+- **bulk-modals.js**: モーダル管理
+
+すべて ES Modules (`type="module"`) で連携。
+
+### Supabase API層（supabase-client.js）
+
+**主要API**:
+- `getAllMasterData()` - 権限フィルター付きマスター取得
+- `getAssignedBuildings()` - ユーザーの担当ビル
+- `createEntries()` - 複数データ一括作成
+- `getBuildingVendors()` - 物件紐付け管理
+- `getVendorInspections()` - 点検種別紐付け管理
+
+**認証**:
+- `getProfile()` - vendor_id, role取得
+- `isAdmin()` - 管理者判定
+
+## 重要な実装パターン
+
+### 1. 物件データ構造
+
+Supabaseから取得時は**グループ化済み**:
 ```javascript
 {
-  "questions": [{
-    "question": "どの機能を優先しますか？",
-    "header": "優先度",
-    "options": [
-      {"label": "認証機能 (推奨)", "description": "ログイン必須化"},
-      {"label": "テスト追加", "description": "E2Eテストの拡充"},
-      {"label": "UI改善", "description": "レスポンシブ対応"}
-    ],
-    "multiSelect": true
-  }]
+  property_code: "2010",
+  property_name: "エンクレスト",
+  terminals: [
+    { terminal_id: "h0001A00", supplement: "" },
+    { terminal_id: "h0001A01", supplement: "" }
+  ]
 }
 ```
 
-### やってはいけないこと
-- 選択肢をテキストで列挙するだけ
-- 「どれにしますか？」と聞いて入力させる
-- オプション5個以上
+**注意**: `renderProperties()` で再グループ化しない！
 
-## サブエージェント活用（Task Tool）
+### 2. テーブル命名規則
 
-### 使用すべき場面
-- **テスト作成**: 複数のテストファイルを同時に作成する場合
-- **コード調査**: 複数ファイルの調査を並列で実行
-- **複雑なタスク**: 独立した作業を分割して並列処理
+すべてのテーブルに `signage_` プレフィックス:
+- ✅ `signage_profiles`
+- ✅ `signage_vendor_inspections`
+- ❌ `vendor_inspections` (古い命名)
 
-### サブエージェントタイプ
-| タイプ | 用途 |
-|--------|------|
-| `general-purpose` | テスト作成、複雑な実装、調査 |
-| `Explore` | コードベース探索、ファイル検索 |
-| `Plan` | 実装計画の設計 |
+### 3. 認証モック（テスト）
 
-### 並列実行の例
-```
-ユーザー: テストを追加して
-↓
-サブエージェント1: 画像アップロードテスト作成
-サブエージェント2: バリデーションテスト作成
-サブエージェント3: エラーハンドリングテスト作成
-（同時に実行）
+```javascript
+import { setupAuthMockWithMasterData } from './test-helpers.js';
+
+test.beforeEach(async ({ page }) => {
+  await setupAuthMockWithMasterData(page, { isAdmin: true });
+});
 ```
 
-## 並列化方針
-- **必ず並列化**: 独立したテストファイル作成、調査タスク
-- **単一メッセージで複数Task**: `run_in_background` 不要で自動並列
-- **依存関係がある場合のみ直列**: 前のタスクの結果が必要な場合
+### 4. CSS Grid（マスター一覧）
 
-## Agent Skills（自動発動）
-
-`.claude/skills/` に以下のスキルを配置。**状況に応じて自動的に参照すること。**
-
-### スキル一覧と発動条件
-
-| スキル | 発動条件 | 内容 |
-|--------|----------|------|
-| **feature-development** | 「〇〇を作って」 | **新機能開発のフェーズ管理（最重要）** |
-| **communication** | 常時適用 | コミュニケーションルール、報告形式 |
-| **ask-user-question** | 選択肢を提示する時 | AskUserQuestionツールの使い方 |
-| **testing** | コード変更後、プッシュ前 | Playwrightテストの実行方法 |
-| **version-release** | 「プッシュして」 | バージョン管理とリリース手順 |
-| **self-improvement** | タスク完了時、エラー時 | 実行記録・評価のSupabase保存 |
-| **supabase** | DB操作時 | Supabase接続・API呼び出し方法 |
-| **bulk-module** | 一括入力画面の変更時 | ES Modulesの構成と修正方法 |
-| **admin-improvements** | 管理画面の改善時 | 管理画面の改善課題一覧 |
-| **file-structure** | ファイル探索時 | プロジェクト構成と各ファイルの役割 |
-
-### スキル参照の例
-```
-ユーザー: 管理画面にフィルター追加して
-↓
-1. admin-improvementsスキルを参照（改善課題確認）
-2. file-structureスキルを参照（対象ファイル確認）
-3. 実装
-4. testingスキルを参照（テスト実行）
-5. version-releaseスキルを参照（プッシュ時）
+```css
+.master-item {
+  display: grid;
+  grid-template-columns: minmax(180px, 2fr) minmax(350px, 5fr) auto;
+  gap: 2rem;
+}
 ```
 
-## テスト方針
-- 変更後は必ずテストを実行
-- `setupAuthMockWithMasterData` を使用して認証をモック
-- 全テスト通過を確認してからコミット
-- 新機能追加時はサブエージェントでテスト作成を並列化
+3列: 名前 | 詳細情報 | 操作ボタン
 
-## Supabaseスキーマ注意点
-- ステータス値: `'draft'`（承認待ち）、`'submitted'`（承認済み）
-- カラム名: `inspection_start`, `inspection_end`, `display_duration`, `announcement`, `poster_position`
-- 古いカラム名は使用禁止: `start_date`, `end_date`, `display_time`, `notice_text`, `position`
+## Supabaseスキーマ
+
+### 主要テーブル
+
+| テーブル | 説明 | 主要カラム |
+|---------|------|-----------|
+| signage_profiles | ユーザー | vendor_id, role, status |
+| signage_entries | 点検データ | property_code, vendor_name, status |
+| building_vendors | 物件紐付け | property_code, vendor_id, status |
+| signage_vendor_inspections | 点検紐付け | vendor_id, inspection_id, status |
+| signage_master_properties | 物件 | property_code, terminals (JSONB) |
+| signage_master_vendors | 受注先 | vendor_name, inspection_type |
+| signage_master_inspection_types | 点検種別 | inspection_name, template_image |
+
+### RLSポリシー
+
+- 一般ユーザー: 自分のvendor_idのデータのみ
+- 管理者: 全データアクセス可能
+- status='inactive'のユーザーはデータ操作不可
+
+## スキル活用
+
+`.claude/skills/` に10個のスキル定義。**状況に応じて自動参照**:
+
+| スキル | 発動条件 |
+|--------|----------|
+| **feature-development** | 「〇〇を作って」と言われた時 |
+| **testing** | コード変更後、プッシュ前 |
+| **version-release** | 「プッシュして」と言われた時 |
+| **supabase** | DB操作時 |
+| **admin-improvements** | 管理画面改善時 |
+| **file-structure** | ファイル探索時 |
+
+## 開発ワークフロー
+
+### 新機能追加
+
+1. **調査**: AskUserQuestionで要件確認
+2. **設計**: TodoWriteでタスク分割
+3. **実装**: 段階的コミット
+4. **テスト**: 全テスト実行
+5. **バージョン更新**: js/version.js
+6. **プッシュ**: git push
+
+### コミットルール
+
+- `feat:` - 新機能
+- `fix:` - バグ修正
+- `refactor:` - リファクタリング
+- `chore:` - 環境整備
+- `docs:` - ドキュメント
+
+**必須**: Co-Authored-By: Claude を含める
 
 ## コード品質
-- 型比較は `String()` で統一
-- エラーハンドリングは防御的に（null返却など）
-- トーストには必ず `.show` クラスを付与
-- エラーメッセージは「申請に失敗しました」で統一
 
-## 新機能開発フロー（必須）
+- **型比較**: `String()` で統一
+- **エラーハンドリング**: null返却で防御的に
+- **トースト通知**: `.show` クラス必須
+- **マスターデータ**: 既にグループ化済み（再グループ化禁止）
 
-### 「〇〇を作って」と言われたら
+## ドキュメント
 
-**絶対にすぐ実装を始めない。** 以下のフェーズを踏む:
+すべて `docs/` ディレクトリに集約:
+- `SPECIFICATION.md` - システム仕様書（800行）
+- `VENDOR_MULTITENANCY_IMPLEMENTATION.md` - マルチテナント実装ガイド
+- `BUGS.md` - 既知の問題
+- `TEST_CASES.md` - テストケース一覧
 
-```
-フェーズ1: 調査・仕様確認 ← AskUserQuestionで確認
-フェーズ2: 設計書作成 ← チェックリストを作成
-フェーズ3: 実装 ← コードを書く
-フェーズ4: テスト ← 動作確認
-```
+## Supabase操作
 
-### フェーズ1で確認すべき項目
+マイグレーションファイルは `supabase/` に配置:
+- `schema.sql` - 基本スキーマ
+- `migration-vendor-multitenancy.sql` - マルチテナント機能
+- `add-user-status.sql` - ユーザー論理削除
+- `add-vendor-inspection-relationships.sql` - 点検種別紐付け
 
-1. **Supabase関連**
-   - 使用するテーブルは？
-   - RLSポリシーの現状は？
-   - 認証設定（メール確認等）は？
+**実行**: Supabase Dashboard → SQL Editor で実行
 
-2. **既存パターン**
-   - 似た機能はあるか？
-   - UIは既存のものを参考にするか？
-   - IDの重複はないか？
+## トラブルシューティング
 
-3. **要件詳細**
-   - 誰が使う機能か？
-   - 必須/任意項目は？
-   - エラー時の挙動は？
+### テスト失敗時
+- `test-helpers.js` の `setupAuthMockWithMasterData` を確認
+- vendor_id が設定されているか確認
 
-### ユーザーへのお願いテンプレート
+### マスターデータが表示されない
+- RLSポリシーを確認
+- `getAllMasterData()` が権限フィルター済みか確認
+- building_vendors テーブルに紐付けがあるか確認
 
-新機能を依頼する時、以下の情報があると効率的:
-
-```
-【機能概要】
-〇〇ができる機能
-
-【環境情報】
-- 使用テーブル: signage_xxx
-- RLSポリシー: SELECT/INSERT/UPDATE各1つ
-- 認証設定: メール確認は無効
-
-【参考にする既存機能】
-- UIは〇〇モーダルと同じスタイルで
-- 処理は〇〇関数を参考に
-
-【要件】
-- 必須項目: A, B, C
-- 任意項目: D, E
-- エラー時は〇〇を表示
-```
+### ビルが表示されない（一般ユーザー）
+- signage_profiles.vendor_id が設定されているか確認
+- building_vendors に紐付けレコードがあるか確認（status='active'）
