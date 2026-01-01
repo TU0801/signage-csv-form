@@ -18,14 +18,16 @@
 
         .admin-sidebar {
             width: 280px;
-            background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: white;
+            color: #1e293b;
             padding: 1.5rem;
             position: sticky;
             top: 0;
             height: calc(100vh - 4rem);
             overflow-y: scroll;
             flex-shrink: 0;
+            border-right: 1px solid #e2e8f0;
+            box-shadow: 2px 0 8px rgba(0,0,0,0.05);
         }
 
         .admin-sidebar::-webkit-scrollbar {
@@ -33,17 +35,17 @@
         }
 
         .admin-sidebar::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.1);
+            background: #f1f5f9;
             border-radius: 4px;
         }
 
         .admin-sidebar::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.3);
+            background: #cbd5e1;
             border-radius: 4px;
         }
 
         .admin-sidebar::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.5);
+            background: #94a3b8;
         }
 
         .admin-main {
@@ -59,12 +61,11 @@
         }
 
         .sidebar-stat {
-            background: rgba(255, 255, 255, 0.15);
-            backdrop-filter: blur(10px);
+            background: #f8fafc;
             border-radius: 12px;
             padding: 0.875rem 1rem;
             margin-bottom: 0.75rem;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            border: 1px solid #e2e8f0;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -72,13 +73,14 @@
 
         .sidebar-stat-label {
             font-size: 0.875rem;
-            opacity: 0.9;
+            color: #64748b;
             font-weight: 500;
         }
 
         .sidebar-stat-value {
             font-size: 1.5rem;
             font-weight: 700;
+            color: #2563eb;
         }
 
         /* サイドバーナビゲーション */
@@ -100,7 +102,8 @@
             border-radius: 10px;
             background: transparent;
             border: none;
-            color: rgba(255, 255, 255, 0.85);
+            border-left: 3px solid transparent;
+            color: #64748b;
             font-size: 0.9375rem;
             font-weight: 500;
             cursor: pointer;
@@ -110,14 +113,15 @@
         }
 
         .sidebar-nav-link:hover {
-            background: rgba(255, 255, 255, 0.15);
-            color: white;
+            background: #f1f5f9;
+            color: #1e293b;
         }
 
         .sidebar-nav-link.active {
-            background: rgba(255, 255, 255, 0.25);
-            color: white;
+            background: #dbeafe;
+            color: #2563eb;
             font-weight: 600;
+            border-left-color: #2563eb;
         }
 
         .sidebar-nav-icon {
