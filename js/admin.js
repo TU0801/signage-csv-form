@@ -126,6 +126,7 @@ async function init() {
     // 初期表示
     updateStats();
     populateFilters();
+    restoreFilters(); // フィルターを復元
     loadPendingEntries();
     loadPendingBuildingRequests();
     loadEntries();
@@ -565,11 +566,41 @@ function populateFilters() {
 // データ一覧
 // ========================================
 
+// フィルター保存
+function saveFilters() {
+    const filters = {
+        property: document.getElementById('filterProperty')?.value || '',
+        startDate: document.getElementById('filterStartDate')?.value || '',
+        endDate: document.getElementById('filterEndDate')?.value || '',
+        status: document.getElementById('filterStatus')?.value || ''
+    };
+    localStorage.setItem('admin_entry_filters', JSON.stringify(filters));
+}
+
+// フィルター復元
+function restoreFilters() {
+    try {
+        const saved = localStorage.getItem('admin_entry_filters');
+        if (saved) {
+            const filters = JSON.parse(saved);
+            if (document.getElementById('filterProperty')) document.getElementById('filterProperty').value = filters.property || '';
+            if (document.getElementById('filterStartDate')) document.getElementById('filterStartDate').value = filters.startDate || '';
+            if (document.getElementById('filterEndDate')) document.getElementById('filterEndDate').value = filters.endDate || '';
+            if (document.getElementById('filterStatus')) document.getElementById('filterStatus').value = filters.status || '';
+        }
+    } catch (error) {
+        console.error('Failed to restore filters:', error);
+    }
+}
+
 async function loadEntries() {
     const propertyCode = document.getElementById('filterProperty').value;
     const startDate = document.getElementById('filterStartDate').value;
     const endDate = document.getElementById('filterEndDate').value;
     const status = document.getElementById('filterStatus')?.value;
+
+    // フィルターを保存
+    saveFilters();
 
     try {
         entries = await getAllEntries({
