@@ -177,8 +177,9 @@
                         </div>
 
                         <!-- 追加ボタン -->
-                        <div class="action-row">
-                            <button class="btn btn-primary" onclick="addEntry()" style="width: 100%;">➕ データを追加</button>
+                        <div class="action-row" style="display: flex; gap: 0.5rem;">
+                            <button class="btn btn-primary" onclick="addEntry()" style="flex: 1;">➕ データを追加</button>
+                            <button class="btn btn-outline" onclick="duplicateLastEntry()" id="duplicateBtn" style="flex: 1;" disabled>📋 前回を複製</button>
                         </div>
                     </div>
                 </div>

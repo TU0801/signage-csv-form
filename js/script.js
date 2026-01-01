@@ -380,10 +380,55 @@ function hasTemplateImage(templateKey) {
             renderDataList();
         }
 
+        // 前回のデータを複製
+        function duplicateLastEntry() {
+            if (entries.length === 0) return;
+
+            const lastEntry = entries[entries.length - 1];
+
+            // フォームに前回のデータを設定
+            document.getElementById('property').value = lastEntry.propertyCode || '';
+            onPropertyChange();
+
+            setTimeout(() => {
+                document.getElementById('terminal').value = lastEntry.terminalId || '';
+
+                const vendorIdx = masterData.vendors.findIndex(v => v.vendorName === lastEntry.vendorName);
+                if (vendorIdx !== -1) {
+                    document.getElementById('vendor').value = vendorIdx;
+                    onVendorChange();
+                }
+
+                document.getElementById('inspectionCategory').value = lastEntry.category || '';
+                onCategoryChange();
+
+                const inspectionIdx = masterData.notices.findIndex(n => n.inspectionType === lastEntry.inspectionType);
+                if (inspectionIdx !== -1) {
+                    document.getElementById('inspectionType').value = inspectionIdx;
+                    onInspectionTypeChange();
+                }
+
+                document.getElementById('noticeText').value = lastEntry.noticeText || '';
+                document.getElementById('startDate').value = lastEntry.startDate || '';
+                document.getElementById('endDate').value = lastEntry.endDate || '';
+                document.getElementById('remarks').value = lastEntry.remarks || '';
+                document.getElementById('displayTime').value = lastEntry.displayTime || 6;
+
+                updatePreview();
+                showToast('前回のデータを複製しました', 'info');
+            }, 100);
+        }
+
         function renderDataList() {
             const container = document.getElementById('dataList');
             document.getElementById('dataCount').textContent = entries.length;
             document.getElementById('exportSection').style.display = entries.length > 0 ? 'flex' : 'none';
+
+            // 複製ボタンの有効/無効切り替え
+            const duplicateBtn = document.getElementById('duplicateBtn');
+            if (duplicateBtn) {
+                duplicateBtn.disabled = entries.length === 0;
+            }
 
             if (entries.length === 0) {
                 container.innerHTML = '<div class="empty-state">📭 データなし</div>';
@@ -797,6 +842,7 @@ function hasTemplateImage(templateKey) {
         window.onPosterTypeChange = onPosterTypeChange;
         window.clearForm = clearForm;
         window.addEntry = addEntry;
+        window.duplicateLastEntry = duplicateLastEntry;
         window.downloadCSV = downloadCSV;
         window.copyCSV = copyCSV;
         window.previewCSV = previewCSV;
