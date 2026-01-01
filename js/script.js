@@ -270,6 +270,14 @@ function hasTemplateImage(templateKey) {
             const posterType = document.querySelector('input[name="posterType"]:checked').value;
             const isCustomMode = posterType === 'custom';
 
+            // バリデーション: 日付の前後関係
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            if (startDate && endDate && startDate > endDate) {
+                showToast('終了日は開始日より後にしてください', 'error');
+                return;
+            }
+
             // カスタムモード: 物件・受注先・画像が必須
             // テンプレートモード: 物件・受注先・点検工事案内が必須
             if (!propertyCode || vendorIdx === '') {

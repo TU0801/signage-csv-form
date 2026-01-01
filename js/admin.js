@@ -213,8 +213,16 @@ function setupEventListeners() {
     document.getElementById('exportCsvBtn').addEventListener('click', exportCSV);
     document.getElementById('exportCopyBtn').addEventListener('click', copyCSV);
 
-    // データ一覧: 全選択・ステータス変更
-    document.getElementById('selectAllEntries')?.addEventListener('change', toggleSelectAllEntries);
+    // 一括削除
+    document.getElementById('bulkDeleteBtn').addEventListener('click', bulkDeleteEntries);
+
+    // 全選択チェックボックス
+    document.getElementById('selectAllEntries').addEventListener('change', (e) => {
+        document.querySelectorAll('.entry-checkbox').forEach(cb => {
+            cb.checked = e.target.checked;
+        });
+        updateBulkActionButtons();
+    });
     document.getElementById('markExportedBtn')?.addEventListener('click', () => updateEntriesStatus('exported'));
     document.getElementById('markSubmittedBtn')?.addEventListener('click', () => updateEntriesStatus('submitted'));
 
@@ -658,11 +666,12 @@ function renderEntries() {
         `;
         tr.querySelector('[data-action="detail"]').addEventListener('click', () => showEntryDetail(entry));
         tr.querySelector('[data-action="delete"]').addEventListener('click', () => deleteEntryById(entry.id));
-        tr.querySelector('.entry-checkbox').addEventListener('change', updateSelectedEntries);
+        tr.querySelector('.entry-checkbox').addEventListener('change', updateBulkActionButtons);
         tbody.appendChild(tr);
     });
 
     document.getElementById('entriesCount').textContent = entries.length;
+    updateBulkActionButtons();
 
     // 全選択チェックボックスをリセット
     const selectAll = document.getElementById('selectAllEntries');
@@ -729,6 +738,45 @@ async function updateEntriesStatus(status) {
     } catch (error) {
         console.error('Status update failed:', error);
         showToast('ステータスの更新に失敗しました', 'error');
+    }
+}
+
+// 一括削除
+async function bulkDeleteEntries() {
+    const ids = getSelectedEntryIds();
+    if (ids.length === 0) {
+        showToast('削除する項目を選択してください', 'error');
+        return;
+    }
+
+    if (!confirm(`選択した${ids.length}件のデータを完全に削除してもよろしいですか？\nこの操作は取り消せません。`)) return;
+
+    try {
+        await Promise.all(ids.map(id => deleteEntry(id)));
+        showToast(`${ids.length}件のデータを削除しました`, 'success');
+        await loadEntries();
+    } catch (error) {
+        console.error('Bulk delete failed:', error);
+        showToast('削除に失敗しました', 'error');
+    }
+}
+
+// 一括操作ボタンの有効/無効切り替え
+function updateBulkActionButtons() {
+    const checkedCount = document.querySelectorAll('.entry-checkbox:checked').length;
+    const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
+    const markExportedBtn = document.getElementById('markExportedBtn');
+    const markSubmittedBtn = document.getElementById('markSubmittedBtn');
+
+    const hasSelection = checkedCount > 0;
+    if (bulkDeleteBtn) bulkDeleteBtn.disabled = !hasSelection;
+    if (markExportedBtn) markExportedBtn.disabled = !hasSelection;
+    if (markSubmittedBtn) markSubmittedBtn.disabled = !hasSelection;
+
+    // 選択数表示
+    const selectedInfo = document.getElementById('selectedEntriesInfo');
+    if (selectedInfo) {
+        selectedInfo.textContent = hasSelection ? `${checkedCount}件選択中` : '';
     }
 }
 
