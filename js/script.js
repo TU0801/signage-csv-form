@@ -731,6 +731,11 @@ function hasTemplateImage(templateKey) {
                 vendorDropdown.disabled = false;
                 vendorDropdown.style.background = '';
                 vendorDropdown.value = '';
+
+                // 点検種別のロックも解除
+                const inspectionSelect = document.getElementById('inspectionType');
+                inspectionSelect.disabled = false;
+                inspectionSelect.style.background = '';
                 return;
             }
 
@@ -758,13 +763,30 @@ function hasTemplateImage(templateKey) {
 
             // 受注先ドロップダウンを自動選択＆ロック
             const vendorDropdown = document.getElementById('vendor');
-            const vendorIndex = masterData.vendors.findIndex(v => v.vendorName === vendors.find(vv => vv.id === vendorId)?.vendor_name);
+            const selectedVendorData = vendors.find(vv => vv.id === vendorId);
+            const vendorIndex = masterData.vendors.findIndex(v => v.vendorName === selectedVendorData?.vendor_name);
+
             if (vendorIndex !== -1) {
                 vendorDropdown.value = vendorIndex;
                 vendorDropdown.disabled = true;
                 vendorDropdown.style.background = '#f0f0f0';
                 // 緊急連絡先も自動入力
                 onVendorChange();
+
+                // 点検種別も自動設定（ベンダーのinspection_typeに基づく）
+                if (selectedVendorData?.inspection_type) {
+                    const inspectionSelect = document.getElementById('inspectionType');
+                    const inspectionOption = Array.from(inspectionSelect.options).find(
+                        opt => opt.textContent.includes(selectedVendorData.inspection_type)
+                    );
+                    if (inspectionOption) {
+                        inspectionSelect.value = inspectionOption.value;
+                        inspectionSelect.disabled = true;
+                        inspectionSelect.style.background = '#f0f0f0';
+                        // プレビュー更新
+                        onInspectionTypeChange();
+                    }
+                }
             }
 
             // 物件選択を再描画
