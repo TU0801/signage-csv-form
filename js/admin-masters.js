@@ -366,6 +366,7 @@ export function renderTemplateImages(masterData, filter = '') {
         card.dataset.id = ti.id;
         card.innerHTML = `
             <img src="${escapeHtml(ti.image_url)}" alt="${escapeHtml(ti.display_name)}"
+                 loading="lazy"
                  onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect fill=%22%23f1f5f9%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2250%22 text-anchor=%22middle%22 dy=%22.35em%22 fill=%22%2394a3b8%22 font-size=%2212%22>No Image</text></svg>'">
             <div class="template-image-card-body">
                 <div class="template-image-card-title">${escapeHtml(ti.display_name)}</div>
