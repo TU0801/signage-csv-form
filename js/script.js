@@ -690,6 +690,8 @@ function hasTemplateImage(templateKey) {
             submitBtn.disabled = true;
             submitBtn.textContent = '申請中...';
 
+            showLoading('データを申請しています...');
+
             try {
                 // カスタム画像をアップロード（並列処理）
                 const uploadPromises = entries.map(async (e) => {
@@ -744,6 +746,7 @@ function hasTemplateImage(templateKey) {
                 console.error('Submit failed:', error);
                 showToast('申請に失敗しました: ' + (error.message || ''), 'error');
             } finally {
+                hideLoading();
                 submitBtn.disabled = false;
                 submitBtn.textContent = '申請する';
             }

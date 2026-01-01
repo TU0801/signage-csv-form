@@ -342,5 +342,28 @@
 
         initAuth();
     </script>
+
+    <!-- ローディングオーバーレイ -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-spinner">
+            <div class="spinner"></div>
+            <div class="loading-message" id="loadingMessage">読み込み中...</div>
+        </div>
+    </div>
+
+    <script>
+        // ローディング表示/非表示
+        function showLoading(message = '読み込み中...') {
+            document.getElementById('loadingMessage').textContent = message;
+            document.getElementById('loadingOverlay').classList.add('active');
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingOverlay').classList.remove('active');
+        }
+
+        window.showLoading = showLoading;
+        window.hideLoading = hideLoading;
+    </script>
 </body>
 </html>
