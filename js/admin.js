@@ -1472,7 +1472,10 @@ function renderBuildingVendorRelationships(relationships, properties, vendorId) 
     });
 
     container.innerHTML = `
-        <div style="margin-bottom: 1rem;">
+        <div style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
+            <p style="color: #64748b; font-size: 0.875rem; margin: 0;">
+                ${activeRelationships.length}件の物件が紐付けられています
+            </p>
             <button class="btn btn-primary btn-sm" onclick="openAddBuildingModal('${vendorId}')">
                 <span class="btn-icon">➕</span> ビルを追加
             </button>

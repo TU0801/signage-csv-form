@@ -688,7 +688,11 @@
 
         .master-search-inline {
             flex: 1;
-            max-width: 400px;
+            max-width: 500px;
+        }
+
+        .master-add-btn {
+            margin-left: auto;
         }
 
         .master-search-inline input {
@@ -1181,13 +1185,11 @@
                 </div>
 
                 <!-- データ承認待ち -->
-                <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: #1e293b;">
-                    📝 データ承認待ち (<span id="pendingCount">0</span>件)
-                </h3>
-                <div class="action-bar">
-                    <div style="display: flex; gap: 0.5rem;">
-                        <button class="btn btn-success btn-sm" id="approveAllBtn" disabled>✅ 一括承認</button>
-                    </div>
+                <div style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
+                    <p style="color: #64748b; font-size: 0.875rem; margin: 0;">
+                        <span style="font-weight: 600; color: #1e293b;">📝 データ承認待ち</span> (<span id="pendingCount">0</span>件)
+                    </p>
+                    <button class="btn btn-success btn-sm" id="approveAllBtn" disabled>✅ 一括承認</button>
                 </div>
                 <div class="table-container">
                     <table class="data-table">
