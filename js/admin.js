@@ -296,7 +296,7 @@ function setupEventListeners() {
 
     // ユーザー追加
     document.getElementById('addUserBtn')?.addEventListener('click', openUserModal);
-    document.getElementById('userForm')?.addEventListener('submit', handleUserFormSubmit);
+    // userForm.onsubmit is set dynamically in openUserModal/openEditUserModal
     document.getElementById('userModal')?.addEventListener('click', (e) => {
         if (e.target.id === 'userModal') closeUserModal();
     });
