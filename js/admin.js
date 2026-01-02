@@ -630,6 +630,7 @@ async function loadEntries() {
         });
         renderEntries();
         updateSelectedEntries();
+        updateStats(); // 統計を更新
     } catch (error) {
         console.error('Failed to load entries:', error);
         showToast('データの取得に失敗しました', 'error');
