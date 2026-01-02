@@ -897,9 +897,10 @@ function generateCSV(data) {
 }
 
 function getFilteredExportEntries() {
-    const exportProperty = document.getElementById('exportProperty').value;
-    const exportStartDate = document.getElementById('exportStartDate').value;
-    const exportEndDate = document.getElementById('exportEndDate').value;
+    // 現在のフィルター値を使用（export専用フィルターは削除済み）
+    const exportProperty = document.getElementById('filterProperty')?.value || '';
+    const exportStartDate = document.getElementById('filterStartDate')?.value || '';
+    const exportEndDate = document.getElementById('filterEndDate')?.value || '';
 
     return entries.filter(entry => {
         if (exportProperty && String(entry.property_code) !== exportProperty) return false;
