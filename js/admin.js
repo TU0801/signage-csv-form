@@ -1194,8 +1194,8 @@ async function handleEditUserSubmit(userId) {
         const modalTitle = modal?.querySelector('.modal-header h3');
         if (modalTitle) modalTitle.textContent = 'ユーザー追加';
 
-        // ユーザー一覧を更新
-        profiles = await getAllProfiles();
+        // データを再読み込み（ベンダー情報も含む）
+        await loadAllData();
         loadUsers();
     } catch (error) {
         console.error('User update error:', error);
