@@ -1124,33 +1124,14 @@
 
             <!-- 承認待ちタブ -->
             <div class="tab-content active" id="tab-approval">
-                <!-- ビル追加リクエスト -->
-                <div style="margin-bottom: 2rem;">
-                    <h3 style="font-size: 1rem; font-weight: 600; margin-bottom: 1rem; color: #1e293b;">
-                        🏢 ビル追加リクエスト (<span id="pendingBuildingCount">0</span>件)
-                    </h3>
-                    <div class="table-container">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>物件名</th>
-                                    <th>物件コード</th>
-                                    <th>メンテナンス会社</th>
-                                    <th>申請者</th>
-                                    <th>申請日時</th>
-                                    <th>操作</th>
-                                </tr>
-                            </thead>
-                            <tbody id="pendingBuildingsBody">
-                            </tbody>
-                        </table>
-                    </div>
-                    <div class="empty-message" id="pendingBuildingsEmpty" style="display: none;">
-                        承認待ちのビル追加リクエストはありません
-                    </div>
+                <!-- サブタブ -->
+                <div class="admin-tabs" style="border-bottom: none; margin-bottom: 1rem;">
+                    <button class="admin-tab active" data-approval-type="data">📝 データ承認</button>
+                    <button class="admin-tab" data-approval-type="buildings">🏢 ビル追加</button>
                 </div>
 
                 <!-- データ承認待ち -->
+                <div id="approval-data" class="approval-section">
                 <div style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
                     <p style="color: #64748b; font-size: 0.875rem; margin: 0;">
                         <span style="font-weight: 600; color: #1e293b;">📝 データ承認待ち</span> (<span id="pendingCount">0</span>件)
@@ -1176,6 +1157,35 @@
                 </div>
                 <div class="empty-message" id="pendingEmpty" style="display: none;">
                     承認待ちのデータはありません
+                </div>
+                </div>
+
+                <!-- ビル追加リクエスト -->
+                <div id="approval-buildings" class="approval-section" style="display: none;">
+                    <div style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
+                        <p style="color: #64748b; font-size: 0.875rem; margin: 0;">
+                            <span style="font-weight: 600; color: #1e293b;">🏢 ビル追加リクエスト</span> (<span id="pendingBuildingCount">0</span>件)
+                        </p>
+                    </div>
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>物件コード</th>
+                                    <th>物件コード</th>
+                                    <th>メンテナンス会社</th>
+                                    <th>申請者</th>
+                                    <th>申請日時</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pendingBuildingsBody">
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="empty-message" id="pendingBuildingsEmpty" style="display: none;">
+                        承認待ちのビル追加リクエストはありません
+                    </div>
                 </div>
             </div>
 

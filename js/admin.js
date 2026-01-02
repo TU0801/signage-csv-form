@@ -206,6 +206,16 @@ function setupEventListeners() {
         });
     });
 
+    // 承認待ちサブタブ切り替え
+    document.querySelectorAll('.admin-tab[data-approval-type]').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.admin-tab[data-approval-type]').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.approval-section').forEach(c => c.style.display = 'none');
+            tab.classList.add('active');
+            document.getElementById(`approval-${tab.dataset.approvalType}`).style.display = 'block';
+        });
+    });
+
     // 検索
     document.getElementById('searchBtn').addEventListener('click', loadEntries);
 
