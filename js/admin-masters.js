@@ -355,6 +355,24 @@ export function renderTemplateImages(masterData, filter = '', categoryFilter = '
     const count = document.getElementById('templateImageCount');
     if (count) count.textContent = filtered.length;
 
+    // カテゴリーごとの件数を更新
+    const categoryCounts = {};
+    templateImages.forEach(ti => {
+        const cat = ti.category || 'その他';
+        categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+    });
+
+    // タブの件数を更新
+    Object.entries(categoryCounts).forEach(([cat, cnt]) => {
+        const tabId = cat === 'すべて' ? 'catAll' : `cat${cat}`;
+        const tabCountSpan = document.querySelector(`#${tabId} .cat-count`);
+        if (tabCountSpan) tabCountSpan.textContent = `(${cnt})`;
+    });
+
+    // "すべて"の件数
+    const allCount = document.querySelector('#catAll .cat-count');
+    if (allCount) allCount.textContent = `(${templateImages.length})`;
+
     if (filtered.length === 0) {
         list.innerHTML = `
             <div class="master-empty" style="grid-column: 1 / -1;">

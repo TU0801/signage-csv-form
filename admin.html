@@ -1341,12 +1341,25 @@
                         <button class="btn btn-primary master-add-btn" id="addTemplateImageBtn">+ 新規追加</button>
                     </div>
                     <!-- カテゴリータブ -->
-                    <div class="admin-tabs" style="border-bottom: none; margin-bottom: 1rem;">
-                        <button class="admin-tab active" data-template-category="">すべて</button>
-                        <button class="admin-tab" data-template-category="点検">点検</button>
-                        <button class="admin-tab" data-template-category="工事">工事</button>
-                        <button class="admin-tab" data-template-category="清掃">清掃</button>
-                        <button class="admin-tab" data-template-category="アンケート">アンケート</button>
+                    <div class="category-tabs" style="display: flex; gap: 1.5rem; margin-bottom: 1.5rem; padding-bottom: 0.75rem; border-bottom: 1px solid #e2e8f0;">
+                        <button class="category-tab active" data-template-category="" style="background: none; border: none; padding: 0; cursor: pointer; font-size: 0.9375rem; color: #64748b; transition: color 0.2s;" id="catAll">
+                            <span class="cat-label">すべて</span> <span class="cat-count">(60)</span>
+                        </button>
+                        <button class="category-tab" data-template-category="点検" style="background: none; border: none; padding: 0; cursor: pointer; font-size: 0.9375rem; color: #64748b; transition: color 0.2s;" id="cat点検">
+                            <span class="cat-label">点検</span> <span class="cat-count">(0)</span>
+                        </button>
+                        <button class="category-tab" data-template-category="工事" style="background: none; border: none; padding: 0; cursor: pointer; font-size: 0.9375rem; color: #64748b; transition: color 0.2s;" id="cat工事">
+                            <span class="cat-label">工事</span> <span class="cat-count">(0)</span>
+                        </button>
+                        <button class="category-tab" data-template-category="清掃" style="background: none; border: none; padding: 0; cursor: pointer; font-size: 0.9375rem; color: #64748b; transition: color 0.2s;" id="cat清掃">
+                            <span class="cat-label">清掃</span> <span class="cat-count">(0)</span>
+                        </button>
+                        <button class="category-tab" data-template-category="アンケート" style="background: none; border: none; padding: 0; cursor: pointer; font-size: 0.9375rem; color: #64748b; transition: color 0.2s;" id="catアンケート">
+                            <span class="cat-label">アンケート</span> <span class="cat-count">(0)</span>
+                        </button>
+                        <button class="category-tab" data-template-category="その他" style="background: none; border: none; padding: 0; cursor: pointer; font-size: 0.9375rem; color: #64748b; transition: color 0.2s;" id="catその他">
+                            <span class="cat-label">その他</span> <span class="cat-count">(0)</span>
+                        </button>
                     </div>
                     <div class="master-list template-image-grid" id="templateImagesList"></div>
                 </div>

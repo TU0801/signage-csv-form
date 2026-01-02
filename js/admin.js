@@ -217,9 +217,9 @@ function setupEventListeners() {
     });
 
     // テンプレート画像カテゴリータブ切り替え
-    document.querySelectorAll('.admin-tab[data-template-category]').forEach(tab => {
+    document.querySelectorAll('.category-tab[data-template-category]').forEach(tab => {
         tab.addEventListener('click', () => {
-            document.querySelectorAll('.admin-tab[data-template-category]').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.category-tab[data-template-category]').forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
             const category = tab.dataset.templateCategory;
             renderTemplateImages(masterData, '', category);
@@ -267,7 +267,7 @@ function setupEventListeners() {
         renderCategories(masterData, e.target.value);
     });
     document.getElementById('templateImageSearch')?.addEventListener('input', (e) => {
-        const activeTab = document.querySelector('.admin-tab[data-template-category].active');
+        const activeTab = document.querySelector('.category-tab[data-template-category].active');
         const category = activeTab?.dataset.templateCategory || '';
         renderTemplateImages(masterData, e.target.value, category);
     });
