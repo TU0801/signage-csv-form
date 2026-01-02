@@ -122,7 +122,6 @@ export function renderRow(row, callbacks) {
     ).values()];
 
     tr.innerHTML = `
-        <td class="col-drag-handle" title="ドラッグで順序変更">⋮⋮</td>
         <td class="col-checkbox">
             <input type="checkbox" class="row-checkbox" data-row-id="${row.id}">
         </td>
@@ -173,14 +172,6 @@ export function renderRow(row, callbacks) {
         </td>
         <td class="col-remarks">
             <input type="text" class="remarks-input" data-row-id="${row.id}" value="${row.remarks}" placeholder="任意入力" maxlength="125" title="1行25文字×5行まで">
-        </td>
-        <td class="col-time">
-            <input type="number" class="display-time" data-row-id="${row.id}" value="${row.displayTime}" min="1" max="30" title="表示秒数">
-        </td>
-        <td class="col-detail">
-            <button class="btn-detail" data-row-id="${row.id}" title="案内文・表示期間を設定">
-                ${row.noticeText || row.displayStartDate ? '✓' : '⋯'}
-            </button>
         </td>
         <td class="col-status">
             <span class="status-badge ok" data-row-id="${row.id}">OK</span>
