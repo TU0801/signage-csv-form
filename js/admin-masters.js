@@ -621,7 +621,7 @@ export function openMasterModal(type, masterData, data = null) {
             }
             templateSelect.value = templateKeyForSelect;
 
-            document.getElementById('noticeText').value = data.notice_text || '';
+            document.getElementById('noticeText').value = data.default_text || '';
             document.getElementById('showOnBoard').checked = data.show_on_board !== false;
             updateTemplatePreviewWithMasterData(templateSelect, masterData);
         } else {
@@ -824,7 +824,7 @@ export async function handleMasterFormSubmit(e, masterData, showToast, updateSta
                 inspection_name: document.getElementById('inspectionName').value,
                 category: document.getElementById('inspectionCategory').value,
                 template_no: document.getElementById('templateNo').value,
-                notice_text: document.getElementById('noticeText').value,
+                default_text: document.getElementById('noticeText').value,
                 show_on_board: document.getElementById('showOnBoard').checked,
             };
             if (id) {
