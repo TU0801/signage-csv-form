@@ -254,28 +254,50 @@ export async function getAssignedBuildings() {
     return []; // vendor_idが未設定の場合は空配列
   }
 
-  const { data, error } = await supabase
+  // Step 1: 紐付けを取得
+  const { data: relationships, error: relError } = await supabase
     .from('building_vendors')
-    .select('property_code, signage_master_properties(property_code, property_name, terminals)')
+    .select('property_code')
     .eq('vendor_id', profile.vendor_id)
     .eq('status', 'active');
 
-  if (error) throw error;
+  if (relError) throw relError;
+  if (!relationships || relationships.length === 0) return [];
 
-  // ネストされたデータを平坦化
-  return data.map(bv => bv.signage_master_properties).filter(Boolean);
+  // Step 2: 物件データを取得
+  const propertyCodes = relationships.map(r => r.property_code);
+  const { data: properties, error: propError } = await supabase
+    .from('signage_master_properties')
+    .select('*')
+    .in('property_code', propertyCodes);
+
+  if (propError) throw propError;
+
+  return properties || [];
 }
 
 // 特定ベンダーの担当ビルを取得（管理者用）
 export async function getBuildingsByVendor(vendorId) {
-  const { data, error } = await supabase
+  // Step 1: 紐付けを取得
+  const { data: relationships, error: relError } = await supabase
     .from('building_vendors')
-    .select('property_code, signage_master_properties(property_code, property_name, terminals)')
+    .select('property_code')
     .eq('vendor_id', vendorId)
     .eq('status', 'active');
 
-  if (error) throw error;
-  return data.map(bv => bv.signage_master_properties).filter(Boolean);
+  if (relError) throw relError;
+  if (!relationships || relationships.length === 0) return [];
+
+  // Step 2: 物件データを取得
+  const propertyCodes = relationships.map(r => r.property_code);
+  const { data: properties, error: propError } = await supabase
+    .from('signage_master_properties')
+    .select('*')
+    .in('property_code', propertyCodes);
+
+  if (propError) throw propError;
+
+  return properties || [];
 }
 
 // ビル×ベンダーの紐付け一覧を取得（管理者用）
