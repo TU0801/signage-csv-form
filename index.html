@@ -139,15 +139,15 @@
                             <input type="date" id="endDate" onchange="updatePreview()">
                         </div>
 
-                        <!-- 表示期間 -->
-                        <div class="form-group">
+                        <!-- 表示期間（管理者のみ） -->
+                        <div class="form-group admin-only">
                             <label>表示開始</label>
                             <div class="form-row">
                                 <input type="date" id="displayStartDate">
                                 <input type="time" id="displayStartTime">
                             </div>
                         </div>
-                        <div class="form-group">
+                        <div class="form-group admin-only">
                             <label>表示終了</label>
                             <div class="form-row">
                                 <input type="date" id="displayEndDate">
@@ -155,12 +155,14 @@
                             </div>
                         </div>
 
-                        <!-- 備考・表示設定 -->
+                        <!-- 備考 -->
                         <div class="form-group">
                             <label>掲示備考</label>
                             <textarea id="remarks" rows="2" placeholder="例：10:00〜12:00" oninput="updatePreview()"></textarea>
                         </div>
-                        <div class="form-group">
+
+                        <!-- 表示設定（管理者のみ） -->
+                        <div class="form-group admin-only">
                             <label>表示設定</label>
                             <div class="inline-group" style="padding-top: 0.25rem;">
                                 <label class="checkbox-item">
@@ -192,7 +194,7 @@
                     <div class="poster-preview" id="posterPreview">
                         <div class="poster-preview-placeholder">点検工事案内を選択</div>
                     </div>
-                    <div class="position-grid">
+                    <div class="position-grid admin-only">
                         <div class="position-cell" data-pos="1" onclick="setPosition(1)">①上左</div>
                         <div class="position-cell active" data-pos="2" onclick="setPosition(2)">②上中</div>
                         <div class="position-cell" data-pos="3" onclick="setPosition(3)">③上右</div>
@@ -211,9 +213,11 @@
                     </div>
                     <div class="export-buttons" id="exportSection" style="display: none;">
                         <button class="btn btn-primary btn-sm" id="submitBtn" onclick="submitEntries()">申請する</button>
-                        <button class="btn btn-success btn-sm" onclick="downloadCSV()">💾 DL</button>
-                        <button class="btn btn-outline btn-sm" onclick="previewCSV()">👁️ CSV</button>
-                        <button class="btn btn-outline btn-sm" onclick="copyCSV()">📋 コピー</button>
+                        <div class="admin-only" style="display: inline-flex; gap: 0.5rem;">
+                            <button class="btn btn-success btn-sm" onclick="downloadCSV()">💾 DL</button>
+                            <button class="btn btn-outline btn-sm" onclick="previewCSV()">👁️ CSV</button>
+                            <button class="btn btn-outline btn-sm" onclick="copyCSV()">📋 コピー</button>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -312,6 +316,7 @@
                 // 管理者の場合は管理リンクとベンダー選択を表示
                 const admin = await isAdmin();
                 if (admin) {
+                    document.body.classList.add('is-admin');
                     document.getElementById('adminLink').style.display = 'block';
                     document.getElementById('adminVendorSelectGroup').style.display = 'block';
 
@@ -324,8 +329,19 @@
                         vendorSelect.appendChild(opt);
                     });
                 } else {
-                    // 一般ユーザーの場合は物件追加リクエストボタンを表示
+                    // 一般ユーザーの場合
                     document.getElementById('requestBuildingBtn').style.display = 'block';
+
+                    // 保守会社と緊急連絡先を自動設定（最初の保守会社）
+                    const profile = await getProfile();
+                    if (profile && profile.vendor_id) {
+                        // 保守会社は自動選択（編集不可）
+                        const vendorSelect = document.getElementById('vendor');
+                        vendorSelect.value = '0'; // 自分の保守会社（インデックス0想定）
+                        vendorSelect.disabled = true;
+                        vendorSelect.style.background = '#f0f0f0';
+                        onVendorChange(); // 緊急連絡先を自動入力
+                    }
                 }
 
                 // ログアウトボタン

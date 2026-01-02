@@ -807,3 +807,16 @@ textarea:required {
 .category-tab:hover {
     color: #1e293b;
 }
+
+/* 管理者専用フィールド（デフォルト非表示） */
+.admin-only {
+    display: none !important;
+}
+
+body.is-admin .admin-only {
+    display: block !important;
+}
+
+body.is-admin .admin-only[style*="inline-flex"] {
+    display: inline-flex !important;
+}
