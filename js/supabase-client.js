@@ -693,10 +693,12 @@ export async function updateUserProfile(id, updates) {
     .from('signage_profiles')
     .update(updates)
     .eq('id', id)
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+    .select();
+  if (error) {
+    console.error('updateUserProfile error:', error);
+    throw error;
+  }
+  return data && data.length > 0 ? data[0] : data;
 }
 
 // ユーザーのステータス変更（管理者用）
