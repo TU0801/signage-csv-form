@@ -316,10 +316,42 @@ function updateStats() {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const monthEntries = entries.filter(e => new Date(e.created_at) >= monthStart);
-    document.getElementById('statMonth').textContent = monthEntries.length;
+    const statMonthElements = document.querySelectorAll('#statMonth');
+    statMonthElements.forEach(el => el.textContent = monthEntries.length);
 
     document.getElementById('statUsers').textContent = profiles.length;
     document.getElementById('statProperties').textContent = masterData.properties.length;
+
+    // アラートカード更新
+    updateAlertCards();
+}
+
+// アラートカード更新
+function updateAlertCards() {
+    // 要対応（承認待ち）
+    const criticalCount = pendingEntries.length + pendingBuildingRequests.length;
+    const alertCritical = document.getElementById('alertCritical');
+    const alertCriticalCount = document.getElementById('alertCriticalCount');
+
+    if (criticalCount > 0 && alertCritical) {
+        alertCritical.style.display = 'flex';
+        if (alertCriticalCount) alertCriticalCount.textContent = criticalCount;
+    } else if (alertCritical) {
+        alertCritical.style.display = 'none';
+    }
+
+    // 本日のタスク
+    const today = new Date().toDateString();
+    const todayCount = entries.filter(e => new Date(e.created_at).toDateString() === today).length;
+    const alertWarning = document.getElementById('alertWarning');
+    const alertWarningCount = document.getElementById('alertWarningCount');
+
+    if (todayCount > 0 && alertWarning) {
+        alertWarning.style.display = 'flex';
+        if (alertWarningCount) alertWarningCount.textContent = todayCount;
+    } else if (alertWarning) {
+        alertWarning.style.display = 'none';
+    }
 }
 
 // ========================================

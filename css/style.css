@@ -727,3 +727,68 @@ textarea:required {
 .data-table thead th:last-child {
     z-index: 3;
 }
+
+/* アラートカード */
+.alert-cards {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.alert-card {
+    flex: 1;
+    min-width: 200px;
+    padding: 1rem 1.25rem;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    border: 2px solid;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.alert-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.alert-critical {
+    background: #fef2f2;
+    border-color: #dc2626;
+    color: #991b1b;
+}
+
+.alert-warning {
+    background: #fff7ed;
+    border-color: #f59e0b;
+    color: #92400e;
+}
+
+.alert-success {
+    background: #f0fdf4;
+    border-color: #10b981;
+    color: #065f46;
+}
+
+.alert-icon {
+    font-size: 1.5rem;
+}
+
+.alert-content {
+    flex: 1;
+}
+
+.alert-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    opacity: 0.8;
+}
+
+.alert-count {
+    font-size: 1.75rem;
+    font-weight: 700;
+    display: block;
+}
