@@ -1113,40 +1113,6 @@
 
         <!-- メインコンテンツ -->
         <main class="admin-main">
-            <!-- アラートカード -->
-            <div class="alert-cards">
-                <div class="alert-card alert-critical" onclick="document.querySelector('[data-tab=\\'approval\\']').click()" id="alertCritical" style="display: none;">
-                    <span class="alert-icon">🚨</span>
-                    <div class="alert-content">
-                        <span class="alert-label">要対応</span>
-                        <span class="alert-count" id="alertCriticalCount">0</span>
-                    </div>
-                </div>
-                <div class="alert-card alert-warning" id="alertWarning" style="display: none;">
-                    <span class="alert-icon">⏰</span>
-                    <div class="alert-content">
-                        <span class="alert-label">本日のタスク</span>
-                        <span class="alert-count" id="alertWarningCount">0</span>
-                    </div>
-                </div>
-                <div class="alert-card alert-success">
-                    <span class="alert-icon">✅</span>
-                    <div class="alert-content">
-                        <span class="alert-label">今月完了</span>
-                        <span class="alert-count" id="statMonth">0</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- クイックアクションバー -->
-            <div class="quick-action-bar" style="background: white; padding: 1rem 1.5rem; border-radius: 12px; margin-bottom: 1.5rem; border: 1px solid #e2e8f0; display: flex; gap: 0.75rem; flex-wrap: wrap;">
-                <span style="font-weight: 600; color: #64748b; margin-right: auto;">よく使う操作:</span>
-                <a href="index.html" class="btn btn-primary btn-sm">📝 新規申請</a>
-                <button class="btn btn-success btn-sm" onclick="document.querySelector('[data-tab=\\'entries\\']').click(); setTimeout(() => document.getElementById('exportCsvBtn').click(), 100)">📥 CSV出力</button>
-                <button class="btn btn-outline btn-sm" onclick="document.querySelector('[data-tab=\\'approval\\']').click()">✅ 承認待ち確認</button>
-                <button class="btn btn-outline btn-sm" onclick="document.querySelector('[data-tab=\\'master\\']').click()">📋 マスター管理</button>
-            </div>
-
             <!-- 旧タブUI（非表示） -->
             <div class="admin-tabs" style="display: none;">
                 <button class="admin-tab active" data-tab="approval">✅ 承認待ち</button>
