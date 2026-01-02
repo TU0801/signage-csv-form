@@ -650,16 +650,7 @@ export function openMasterModal(type, masterData, data = null) {
         section.querySelectorAll('input, select, textarea').forEach(el => el.disabled = false);
         title.textContent = data ? 'テンプレート画像を編集' : 'テンプレート画像を追加';
 
-        // カテゴリードロップダウンを構築
-        const categorySelect = document.getElementById('templateImageCategory');
-        categorySelect.innerHTML = '<option value="">カテゴリを選択</option>';
-        (masterData.categories || []).forEach(cat => {
-            const option = document.createElement('option');
-            option.value = cat.category_name;
-            option.textContent = cat.category_name;
-            categorySelect.appendChild(option);
-        });
-
+        // 画像区分は固定値（HTMLで定義済み、カテゴリマスタとは無関係）
         const fileInput = document.getElementById('templateImageFile');
         const previewDiv = document.getElementById('templateImagePreview');
 
