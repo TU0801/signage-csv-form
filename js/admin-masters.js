@@ -124,6 +124,27 @@ function escapeHtml(str) {
         .replace(/'/g, '&#039;');
 }
 
+// カテゴリータブを作成
+function createCategoryTab(label, value, isActive = false) {
+    const tab = document.createElement('button');
+    tab.className = 'category-tab' + (isActive ? ' active' : '');
+    tab.dataset.templateCategory = value;
+    tab.style.cssText = 'background: none; border: none; padding: 0; cursor: pointer; font-size: 0.9375rem; color: #64748b; transition: color 0.2s;';
+
+    const labelSpan = document.createElement('span');
+    labelSpan.className = 'cat-label';
+    labelSpan.textContent = label;
+
+    const countSpan = document.createElement('span');
+    countSpan.className = 'cat-count';
+    countSpan.textContent = ' (0)';
+
+    tab.appendChild(labelSpan);
+    tab.appendChild(countSpan);
+
+    return tab;
+}
+
 // ========================================
 // マスターデータ描画
 // ========================================
@@ -341,6 +362,30 @@ export function renderTemplateImages(masterData, filter = '', categoryFilter = '
 
     const templateImages = masterData.templateImages || [];
     const categories = (masterData.categories || []).map(c => c.category_name);
+
+    // カテゴリータブを動的生成
+    const tabsContainer = document.getElementById('templateCategoryTabs');
+    if (tabsContainer && !tabsContainer.hasChildNodes()) {
+        // "すべて"タブ
+        const allTab = createCategoryTab('すべて', '', true);
+        tabsContainer.appendChild(allTab);
+
+        // カテゴリーマスターから動的生成
+        categories.forEach(cat => {
+            const tab = createCategoryTab(cat, cat, false);
+            tabsContainer.appendChild(tab);
+        });
+
+        // イベントリスナーを設定
+        tabsContainer.querySelectorAll('.category-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                tabsContainer.querySelectorAll('.category-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                const category = tab.dataset.templateCategory;
+                renderTemplateImages(masterData, '', category);
+            });
+        });
+    }
 
     let filtered = templateImages.filter(ti => {
         // カテゴリーフィルター

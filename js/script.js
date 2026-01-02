@@ -119,11 +119,25 @@ function hasTemplateImage(templateKey) {
         function init() {
             populatePropertySelect();
             populateVendorSelect();
+            populateCategorySelect();
             populateInspectionTypeSelect();
             const today = new Date().toISOString().split('T')[0];
             document.getElementById('startDate').value = today;
             document.getElementById('displayStartDate').value = today;
             updatePreview();
+        }
+
+        function populateCategorySelect() {
+            const select = document.getElementById('inspectionCategory');
+            select.innerHTML = '<option value="">全て</option>';
+            if (masterData.categories) {
+                masterData.categories.forEach(cat => {
+                    const opt = document.createElement('option');
+                    opt.value = cat;
+                    opt.textContent = cat;
+                    select.appendChild(opt);
+                });
+            }
         }
 
         function populatePropertySelect() {
