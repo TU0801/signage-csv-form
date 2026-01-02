@@ -320,7 +320,10 @@ function setupEventListeners() {
 // ========================================
 
 function updateStats() {
-    document.getElementById('statTotal').textContent = entries.length;
+    // 承認待ち数（データ承認 + ビル追加リクエスト）
+    const pendingCount = pendingEntries.length + pendingBuildingRequests.length;
+    const statPending = document.getElementById('statPending');
+    if (statPending) statPending.textContent = pendingCount;
 
     // 今月の登録数
     const now = new Date();
@@ -328,9 +331,6 @@ function updateStats() {
     const monthEntries = entries.filter(e => new Date(e.created_at) >= monthStart);
     const statMonthElements = document.querySelectorAll('#statMonth');
     statMonthElements.forEach(el => el.textContent = monthEntries.length);
-
-    document.getElementById('statUsers').textContent = profiles.length;
-    document.getElementById('statProperties').textContent = masterData.properties.length;
 }
 
 // ========================================
