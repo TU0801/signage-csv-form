@@ -334,7 +334,7 @@ export async function loadCategories(masterData) {
     }
 }
 
-export function renderTemplateImages(masterData, filter = '') {
+export function renderTemplateImages(masterData, filter = '', categoryFilter = '') {
     const list = document.getElementById('templateImagesList');
     if (!list) return;
     list.innerHTML = '';
@@ -342,7 +342,11 @@ export function renderTemplateImages(masterData, filter = '') {
     const templateImages = masterData.templateImages || [];
     const categories = (masterData.categories || []).map(c => c.category_name);
 
-    const filtered = templateImages.filter(ti => {
+    let filtered = templateImages.filter(ti => {
+        // カテゴリーフィルター
+        if (categoryFilter && ti.category !== categoryFilter) return false;
+
+        // 検索フィルター
         if (!filter) return true;
         const searchText = `${ti.image_key} ${ti.display_name} ${ti.category || ''}`.toLowerCase();
         return searchText.includes(filter.toLowerCase());

@@ -216,6 +216,16 @@ function setupEventListeners() {
         });
     });
 
+    // テンプレート画像カテゴリータブ切り替え
+    document.querySelectorAll('.admin-tab[data-template-category]').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.admin-tab[data-template-category]').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            const category = tab.dataset.templateCategory;
+            renderTemplateImages(masterData, '', category);
+        });
+    });
+
     // 検索
     document.getElementById('searchBtn').addEventListener('click', loadEntries);
 
@@ -257,7 +267,9 @@ function setupEventListeners() {
         renderCategories(masterData, e.target.value);
     });
     document.getElementById('templateImageSearch')?.addEventListener('input', (e) => {
-        renderTemplateImages(masterData, e.target.value);
+        const activeTab = document.querySelector('.admin-tab[data-template-category].active');
+        const category = activeTab?.dataset.templateCategory || '';
+        renderTemplateImages(masterData, e.target.value, category);
     });
 
     // 設定保存ボタン
