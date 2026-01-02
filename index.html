@@ -367,6 +367,16 @@
         </div>
     </div>
 
+    <!-- デバッグパネル（localhost時のみ表示） -->
+    <div id="debugPanel" style="position: fixed; bottom: 20px; right: 20px; background: white; padding: 1rem; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); z-index: 10000; display: none;">
+        <div style="font-weight: 700; margin-bottom: 0.5rem; color: #1e293b;">🐛 デバッグモード</div>
+        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+            <input type="checkbox" id="debugAdminToggle" onchange="toggleDebugAdmin()">
+            <span id="debugRoleLabel">一般ユーザー表示</span>
+        </label>
+        <small style="color: #64748b; font-size: 0.75rem; display: block; margin-top: 0.5rem;">※ UI確認用（localhost専用）</small>
+    </div>
+
     <script>
         // ローディング表示/非表示
         function showLoading(message = '読み込み中...') {
@@ -380,6 +390,27 @@
 
         window.showLoading = showLoading;
         window.hideLoading = hideLoading;
+
+        // デバッグ用：管理者/一般ユーザー切り替え
+        function toggleDebugAdmin() {
+            const checkbox = document.getElementById('debugAdminToggle');
+            const label = document.getElementById('debugRoleLabel');
+
+            if (checkbox.checked) {
+                document.body.classList.add('is-admin');
+                label.textContent = '管理者表示';
+            } else {
+                document.body.classList.remove('is-admin');
+                label.textContent = '一般ユーザー表示';
+            }
+        }
+
+        // localhost時のみデバッグパネル表示
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+            document.getElementById('debugPanel').style.display = 'block';
+        }
+
+        window.toggleDebugAdmin = toggleDebugAdmin;
     </script>
 </body>
 </html>
