@@ -405,12 +405,54 @@
             }
         }
 
-        // localhost時のみデバッグパネル表示
-        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        // 開発モード管理
+        function enableDevMode() {
+            localStorage.setItem('devMode', 'enabled');
+            document.getElementById('debugPanel').style.display = 'block';
+            console.log('✅ 開発モード有効化: デバッグパネルが表示されました');
+        }
+
+        function disableDevMode() {
+            localStorage.removeItem('devMode');
+            document.getElementById('debugPanel').style.display = 'none';
+            console.log('❌ 開発モード無効化');
+        }
+
+        // localhost or 開発モード有効時にデバッグパネル表示
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const isDevMode = localStorage.getItem('devMode') === 'enabled';
+
+        if (isLocalhost || isDevMode) {
             document.getElementById('debugPanel').style.display = 'block';
         }
 
+        // グローバルに公開（コンソールから呼び出し可能）
+        window.enableDevMode = enableDevMode;
+        window.disableDevMode = disableDevMode;
         window.toggleDebugAdmin = toggleDebugAdmin;
+
+        // バージョン表示をトリプルクリックで開発モード切り替え
+        let versionClickCount = 0;
+        let versionClickTimer = null;
+        document.getElementById('appVersion')?.addEventListener('click', () => {
+            versionClickCount++;
+            clearTimeout(versionClickTimer);
+
+            if (versionClickCount === 3) {
+                if (isDevMode) {
+                    disableDevMode();
+                    alert('開発モード: OFF');
+                } else {
+                    enableDevMode();
+                    alert('開発モード: ON\nデバッグパネルが表示されました');
+                }
+                versionClickCount = 0;
+            }
+
+            versionClickTimer = setTimeout(() => {
+                versionClickCount = 0;
+            }, 1000);
+        });
     </script>
 </body>
 </html>
