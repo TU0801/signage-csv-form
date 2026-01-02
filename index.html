@@ -61,13 +61,13 @@
                         </div>
 
                         <!-- 業者 -->
-                        <div class="form-group">
+                        <div class="form-group admin-only">
                             <label>保守会社 <span class="required">*</span></label>
                             <select id="vendor" onchange="onVendorChange()">
                                 <option value="">選択してください</option>
                             </select>
                         </div>
-                        <div class="form-group">
+                        <div class="form-group admin-only">
                             <label>緊急連絡先</label>
                             <input type="text" id="emergencyContact" readonly style="background: #f8fafc;">
                         </div>
@@ -127,9 +127,9 @@
                             <textarea id="noticeText" rows="2" oninput="updatePreview()"></textarea>
                         </div>
 
-                        <div class="section-divider">点検期間・表示設定</div>
+                        <div class="section-divider">点検期間</div>
 
-                        <!-- 点検期間（テンプレートモード時のみ表示） -->
+                        <!-- 点検期間 -->
                         <div class="form-group" id="startDateGroup">
                             <label>点検開始日</label>
                             <input type="date" id="startDate" onchange="updatePreview()">
