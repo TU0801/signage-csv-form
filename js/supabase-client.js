@@ -689,14 +689,18 @@ export async function updateProfileRole(id, role) {
 
 // ユーザープロファイル更新（管理者用）
 export async function updateUserProfile(id, updates) {
+  console.log('🔍 UPDATE開始:', { id, updates });
+
   // 更新実行（selectなし、RLS問題回避）
-  const { error } = await supabase
+  const { data: updateData, error } = await supabase
     .from('signage_profiles')
     .update(updates)
     .eq('id', id);
 
+  console.log('📝 UPDATE結果:', { updateData, error });
+
   if (error) {
-    console.error('updateUserProfile error:', error);
+    console.error('❌ updateUserProfile error:', error);
     throw error;
   }
 
@@ -706,6 +710,8 @@ export async function updateUserProfile(id, updates) {
     .select('*')
     .eq('id', id)
     .single();
+
+  console.log('📥 SELECT結果:', { profile, fetchError });
 
   if (fetchError) {
     console.error('Profile fetch error:', fetchError);
