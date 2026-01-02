@@ -214,7 +214,7 @@ export async function getAllMasterDataCamelCase() {
     categoryId: it.category_id || 0,
     showOnBoard: it.show_on_board !== false,
     templateNo: it.template_no || '',
-    noticeText: it.notice_text || '',
+    noticeText: it.default_text || '',
     frameNo: 2,
     image: '',
     daysBeforeStart: 30
