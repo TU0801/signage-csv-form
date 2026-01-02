@@ -703,3 +703,27 @@ textarea:required {
     padding: 0.625rem 1rem !important;
     gap: 1rem !important;
 }
+
+/* カラム固定（最初と最後のカラム） */
+.data-table th:first-child,
+.data-table td:first-child {
+    position: sticky;
+    left: 0;
+    background: white;
+    z-index: 2;
+    box-shadow: 2px 0 4px rgba(0,0,0,0.05);
+}
+
+.data-table th:last-child,
+.data-table td:last-child {
+    position: sticky;
+    right: 0;
+    background: white;
+    z-index: 2;
+    box-shadow: -2px 0 4px rgba(0,0,0,0.05);
+}
+
+.data-table thead th:first-child,
+.data-table thead th:last-child {
+    z-index: 3;
+}
