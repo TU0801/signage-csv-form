@@ -340,6 +340,8 @@ export function renderTemplateImages(masterData, filter = '') {
     list.innerHTML = '';
 
     const templateImages = masterData.templateImages || [];
+    const categories = (masterData.categories || []).map(c => c.category_name);
+
     const filtered = templateImages.filter(ti => {
         if (!filter) return true;
         const searchText = `${ti.image_key} ${ti.display_name} ${ti.category || ''}`.toLowerCase();
@@ -360,7 +362,38 @@ export function renderTemplateImages(masterData, filter = '') {
         return;
     }
 
+    // カテゴリー別にグループ化
+    const groupedByCategory = {};
+    categories.forEach(cat => { groupedByCategory[cat] = []; });
+    groupedByCategory['その他'] = [];
+
     filtered.forEach(ti => {
+        const category = ti.category || 'その他';
+        if (!groupedByCategory[category]) {
+            groupedByCategory[category] = [];
+        }
+        groupedByCategory[category].push(ti);
+    });
+
+    // カテゴリーごとに表示
+    Object.entries(groupedByCategory).forEach(([category, images]) => {
+        if (images.length === 0) return;
+
+        // カテゴリーヘッダー
+        const header = document.createElement('div');
+        header.style.gridColumn = '1 / -1';
+        header.style.fontSize = '1rem';
+        header.style.fontWeight = '700';
+        header.style.color = '#1e293b';
+        header.style.marginTop = '1.5rem';
+        header.style.marginBottom = '0.75rem';
+        header.style.borderBottom = '2px solid #e2e8f0';
+        header.style.paddingBottom = '0.5rem';
+        header.textContent = `${category} (${images.length}件)`;
+        list.appendChild(header);
+
+        // 画像カード
+        images.forEach(ti => {
         const card = document.createElement('div');
         card.className = 'template-image-card';
         card.dataset.id = ti.id;
@@ -387,6 +420,7 @@ export function renderTemplateImages(masterData, filter = '') {
             window.deleteMasterTemplateImage(ti.id);
         });
         list.appendChild(card);
+        });
     });
 }
 
@@ -593,6 +627,16 @@ export function openMasterModal(type, masterData, data = null) {
         section.style.display = 'block';
         section.querySelectorAll('input, select, textarea').forEach(el => el.disabled = false);
         title.textContent = data ? 'テンプレート画像を編集' : 'テンプレート画像を追加';
+
+        // カテゴリードロップダウンを構築
+        const categorySelect = document.getElementById('templateImageCategory');
+        categorySelect.innerHTML = '<option value="">カテゴリを選択</option>';
+        (masterData.categories || []).forEach(cat => {
+            const option = document.createElement('option');
+            option.value = cat.category_name;
+            option.textContent = cat.category_name;
+            categorySelect.appendChild(option);
+        });
 
         const fileInput = document.getElementById('templateImageFile');
         const previewDiv = document.getElementById('templateImagePreview');
