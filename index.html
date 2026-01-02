@@ -61,16 +61,9 @@
                         </div>
 
                         <!-- 業者 -->
-                        <div class="form-group admin-only">
-                            <label>保守会社 <span class="required">*</span></label>
-                            <select id="vendor" onchange="onVendorChange()">
-                                <option value="">選択してください</option>
-                            </select>
-                        </div>
-                        <div class="form-group admin-only">
-                            <label>緊急連絡先</label>
-                            <input type="text" id="emergencyContact" readonly style="background: #f8fafc;">
-                        </div>
+                        <!-- 保守会社は自動設定（非表示） -->
+                        <input type="hidden" id="vendor" value="0">
+                        <input type="hidden" id="emergencyContact" value="">
 
                         <!-- 点検内容 -->
                         <div class="form-group">
@@ -139,43 +132,18 @@
                             <input type="date" id="endDate" onchange="updatePreview()">
                         </div>
 
-                        <!-- 表示期間（管理者のみ） -->
-                        <div class="form-group admin-only">
-                            <label>表示開始</label>
-                            <div class="form-row">
-                                <input type="date" id="displayStartDate">
-                                <input type="time" id="displayStartTime">
-                            </div>
-                        </div>
-                        <div class="form-group admin-only">
-                            <label>表示終了</label>
-                            <div class="form-row">
-                                <input type="date" id="displayEndDate">
-                                <input type="time" id="displayEndTime">
-                            </div>
-                        </div>
+                        <!-- 表示設定はデフォルト値使用（非表示） -->
+                        <input type="hidden" id="displayStartDate" value="">
+                        <input type="hidden" id="displayStartTime" value="">
+                        <input type="hidden" id="displayEndDate" value="">
+                        <input type="hidden" id="displayEndTime" value="">
+                        <input type="hidden" id="displayTime" value="6">
+                        <input type="hidden" id="showOnBoard" value="true">
 
                         <!-- 備考 -->
                         <div class="form-group">
                             <label>掲示備考</label>
                             <textarea id="remarks" rows="2" placeholder="例：10:00〜12:00" oninput="updatePreview()"></textarea>
-                        </div>
-
-                        <!-- 表示設定（管理者のみ） -->
-                        <div class="form-group admin-only">
-                            <label>表示設定</label>
-                            <div class="inline-group" style="padding-top: 0.25rem;">
-                                <label class="checkbox-item">
-                                    <input type="checkbox" id="showOnBoard" checked>
-                                    掲示板に表示
-                                </label>
-                                <div class="spin-input">
-                                    <button class="spin-btn" onclick="adjustTime(-1)">−</button>
-                                    <input type="number" id="displayTime" value="6" min="1" max="30">
-                                    <button class="spin-btn" onclick="adjustTime(1)">+</button>
-                                    <span class="hint">秒</span>
-                                </div>
-                            </div>
                         </div>
 
                         <!-- 追加ボタン -->
@@ -194,13 +162,7 @@
                     <div class="poster-preview" id="posterPreview">
                         <div class="poster-preview-placeholder">点検工事案内を選択</div>
                     </div>
-                    <div class="position-grid admin-only">
-                        <div class="position-cell" data-pos="1" onclick="setPosition(1)">①上左</div>
-                        <div class="position-cell active" data-pos="2" onclick="setPosition(2)">②上中</div>
-                        <div class="position-cell" data-pos="3" onclick="setPosition(3)">③上右</div>
-                        <div class="position-cell" data-pos="4" onclick="setPosition(4)">④中央</div>
-                        <div class="position-cell wide" data-pos="0" onclick="setPosition(0)">⓪全体</div>
-                    </div>
+                    <!-- 位置はデフォルト値②上中を使用（非表示） -->
                 </div>
             </section>
 
@@ -213,11 +175,6 @@
                     </div>
                     <div class="export-buttons" id="exportSection" style="display: none;">
                         <button class="btn btn-primary btn-sm" id="submitBtn" onclick="submitEntries()">申請する</button>
-                        <div class="admin-only" style="display: inline-flex; gap: 0.5rem;">
-                            <button class="btn btn-success btn-sm" onclick="downloadCSV()">💾 DL</button>
-                            <button class="btn btn-outline btn-sm" onclick="previewCSV()">👁️ CSV</button>
-                            <button class="btn btn-outline btn-sm" onclick="copyCSV()">📋 コピー</button>
-                        </div>
                     </div>
                 </div>
             </section>
