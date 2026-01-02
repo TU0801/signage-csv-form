@@ -333,9 +333,7 @@ function hasTemplateImage(templateKey) {
                 errors.push(`案内文は${settings.notice_text_max_chars}文字以下にしてください`);
             }
 
-            // 日付の論理チェック
-            const startDate = document.getElementById('startDate').value;
-            const endDate = document.getElementById('endDate').value;
+            // 日付の論理チェック（既に上で宣言済みのstartDate, endDateを使用）
             if (startDate && endDate && startDate > endDate) {
                 errors.push('点検終了日は開始日以降にしてください');
             }
