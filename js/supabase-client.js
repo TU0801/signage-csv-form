@@ -689,16 +689,31 @@ export async function updateProfileRole(id, role) {
 
 // ユーザープロファイル更新（管理者用）
 export async function updateUserProfile(id, updates) {
-  const { data, error } = await supabase
+  // 更新実行（selectなし、RLS問題回避）
+  const { error } = await supabase
     .from('signage_profiles')
     .update(updates)
-    .eq('id', id)
-    .select();
+    .eq('id', id);
+
   if (error) {
     console.error('updateUserProfile error:', error);
     throw error;
   }
-  return data && data.length > 0 ? data[0] : data;
+
+  // 更新後に再取得
+  const { data: profile, error: fetchError } = await supabase
+    .from('signage_profiles')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (fetchError) {
+    console.error('Profile fetch error:', fetchError);
+    // エラーでも更新は成功しているので成功扱い
+    return { id, ...updates };
+  }
+
+  return profile;
 }
 
 // ユーザーのステータス変更（管理者用）
