@@ -44,14 +44,9 @@
                         <!-- 物件・端末 -->
                         <div class="form-group">
                             <label>物件コード <span class="required">*</span></label>
-                            <div style="display: flex; gap: 0.5rem; align-items: flex-end;">
-                                <select id="property" onchange="onPropertyChange()" style="flex: 1;">
-                                    <option value="">選択してください</option>
-                                </select>
-                                <button type="button" id="requestBuildingBtn" class="btn btn-outline btn-sm" style="display: none; white-space: nowrap;" onclick="openBuildingRequestModal()">
-                                    + 物件追加リクエスト
-                                </button>
-                            </div>
+                            <select id="property" onchange="onPropertyChange()">
+                                <option value="">選択してください</option>
+                            </select>
                         </div>
                         <div class="form-group">
                             <label>端末ID</label>
@@ -141,7 +136,7 @@
                         <input type="hidden" id="showOnBoard" value="true">
 
                         <!-- 備考 -->
-                        <div class="form-group">
+                        <div class="form-group full-width">
                             <label>掲示備考</label>
                             <textarea id="remarks" rows="2" placeholder="例：10:00〜12:00" oninput="updatePreview()"></textarea>
                         </div>
@@ -286,18 +281,10 @@
                         vendorSelect.appendChild(opt);
                     });
                 } else {
-                    // 一般ユーザーの場合
-                    document.getElementById('requestBuildingBtn').style.display = 'block';
-
-                    // 保守会社と緊急連絡先を自動設定（最初の保守会社）
+                    // 一般ユーザーの場合: 保守会社は自動設定
                     const profile = await getProfile();
                     if (profile && profile.vendor_id) {
-                        // 保守会社は自動選択（編集不可）
-                        const vendorSelect = document.getElementById('vendor');
-                        vendorSelect.value = '0'; // 自分の保守会社（インデックス0想定）
-                        vendorSelect.disabled = true;
-                        vendorSelect.style.background = '#f0f0f0';
-                        onVendorChange(); // 緊急連絡先を自動入力
+                        document.getElementById('vendor').value = '0';
                     }
                 }
 
