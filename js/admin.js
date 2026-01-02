@@ -1186,11 +1186,13 @@ async function handleEditUserSubmit(userId) {
 
         // フォームをリセット
         const form = document.getElementById('userForm');
+        const modal = document.getElementById('userModal');
         form.onsubmit = handleUserFormSubmit; // 元の処理に戻す
         document.getElementById('newUserEmail').disabled = false;
         document.getElementById('newUserPassword').required = true;
         document.getElementById('newUserPassword').placeholder = '6文字以上';
-        form.querySelector('.modal-header h3').textContent = 'ユーザー追加';
+        const modalTitle = modal?.querySelector('.modal-header h3');
+        if (modalTitle) modalTitle.textContent = 'ユーザー追加';
 
         // ユーザー一覧を更新
         profiles = await getAllProfiles();
