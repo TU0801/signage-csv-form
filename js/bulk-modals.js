@@ -188,7 +188,7 @@ export function createBulkEditModal(callbacks) {
                         </select>
                     </div>
                     <div class="form-group">
-                        <label>受注先</label>
+                        <label>保守会社</label>
                         <select id="bulkEditVendor" class="form-control">
                             <option value="">変更しない</option>
                             ${masterData.vendors.map(v =>
@@ -589,7 +589,7 @@ export function closePasteModal() {
 // テンプレートダウンロード
 export function downloadExcelTemplate() {
     // TSV形式でテンプレートを作成（Excelで開ける）
-    const header = ['物件コード', '端末ID', '受注先名', '点検種別', '開始日', '終了日', '備考'];
+    const header = ['物件コード', '端末ID', '保守会社名', '点検種別', '開始日', '終了日', '備考'];
     const example1 = ['120406', 'z1003A01', '山本クリーンシステム　有限会社', 'エレベーター定期点検', '2025/1/15', '2025/1/15', '午前中'];
     const example2 = ['2010', 'h0001A00', '(株)ビルメンテナンス', '消防設備点検', '2025/2/1', '2025/2/3', ''];
 
@@ -631,7 +631,7 @@ export function importFromPaste(callbacks) {
     const headerKeywords = [
         '物件コード', '物件', 'property',
         '端末id', '端末', 'terminal',
-        '受注先', '業者', 'vendor'
+        '保守会社', '業者', 'vendor'
     ];
     const isHeaderRow = headerKeywords.some(keyword =>
         firstColLower === keyword.toLowerCase() || secondColLower === keyword.toLowerCase()
@@ -651,7 +651,7 @@ export function importFromPaste(callbacks) {
         let rowData = {};
 
         // CSV出力と同じ列順（10列以上ある場合）
-        // 0: 点検CO(空), 1: 端末ID, 2: 物件コード, 3: 受注先名, 4: 緊急連絡先,
+        // 0: 点検CO(空), 1: 端末ID, 2: 物件コード, 3: 保守会社名, 4: 緊急連絡先,
         // 5: 点検種別, 6: 掲示板表示, 7: TPLNo, 8: 開始日, 9: 終了日,
         // 10: 備考, 11: 案内文, 12: frame_No(position), 13: 表示開始日,
         // 14: 表示開始時刻, 15: 表示終了日, 16: 表示終了時刻, 17: 貼紙区分, 18: 表示時間
@@ -674,7 +674,7 @@ export function importFromPaste(callbacks) {
                 showOnBoard: cols[6]?.trim().toLowerCase() !== 'false'
             };
         } else if (cols.length >= 7) {
-            // 端末ID付き形式（7-9列）: 物件コード, 端末ID, 受注先, 点検種別, 開始日, 終了日, 備考
+            // 端末ID付き形式（7-9列）: 物件コード, 端末ID, 保守会社, 点検種別, 開始日, 終了日, 備考
             rowData = {
                 propertyCode: cols[0]?.trim() || '',
                 terminalId: cols[1]?.trim() || '',
@@ -687,7 +687,7 @@ export function importFromPaste(callbacks) {
                 position: cols[8] ? parseInt(cols[8]) : 2
             };
         } else {
-            // シンプルな形式（6列以下）: 物件コード, 受注先, 点検種別, 開始日, 終了日, 備考
+            // シンプルな形式（6列以下）: 物件コード, 保守会社, 点検種別, 開始日, 終了日, 備考
             rowData = {
                 propertyCode: cols[0]?.trim() || '',
                 vendorName: cols[1]?.trim() || '',

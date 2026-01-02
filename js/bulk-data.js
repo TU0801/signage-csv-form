@@ -200,7 +200,7 @@ export function generateCSV() {
 
     // サンプルCSVに合わせた列順（1件入力と同じ）
     const headers = [
-        '点検CO', '端末ID', '物件コード', '受注先名', '緊急連絡先番号',
+        '点検CO', '端末ID', '物件コード', '保守会社名', '緊急連絡先番号',
         '点検工事案内', '掲示板に表示する', '点検案内TPLNo', '点検開始日',
         '点検完了日', '掲示備考', '掲示板用案内文', 'frame_No', '表示開始日',
         '表示終了日', '表示開始時刻', '表示終了時刻', '表示時間', '統合ポリシー',
@@ -246,7 +246,7 @@ export function generateCSV() {
             '',                                          // 点検CO
             row.terminalId || property?.terminal_id || '', // 端末ID
             row.propertyCode,                            // 物件コード
-            row.vendorName,                              // 受注先名
+            row.vendorName,                              // 保守会社名
             vendor?.emergency_contact || '',             // 緊急連絡先番号
             row.inspectionType,                          // 点検工事案内
             showOnBoard,                                 // 掲示板に表示する

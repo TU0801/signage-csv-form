@@ -204,8 +204,8 @@ export function renderVendors(masterData, filter = '') {
         vendorsList.innerHTML = `
             <div class="master-empty">
                 <div class="master-empty-icon">🏢</div>
-                <h4>${filter ? '検索結果がありません' : '受注先が登録されていません'}</h4>
-                <p>${filter ? '検索条件を変更してください' : '「新規追加」から受注先を追加してください'}</p>
+                <h4>${filter ? '検索結果がありません' : '保守会社が登録されていません'}</h4>
+                <p>${filter ? '検索条件を変更してください' : '「新規追加」から保守会社を追加してください'}</p>
             </div>
         `;
         return;
@@ -481,7 +481,7 @@ export function openMasterModal(type, masterData, data = null) {
         const section = document.getElementById('vendorFields');
         section.style.display = 'block';
         section.querySelectorAll('input, select, textarea').forEach(el => el.disabled = false);
-        title.textContent = data ? '受注先を編集' : '受注先を追加';
+        title.textContent = data ? '保守会社を編集' : '保守会社を追加';
         if (data) {
             document.getElementById('vendorName').value = data.vendor_name || '';
             document.getElementById('emergencyContact').value = data.emergency_contact || '';
@@ -757,10 +757,10 @@ export async function handleMasterFormSubmit(e, masterData, showToast, updateSta
             };
             if (id) {
                 await updateVendor(id, data);
-                showToast('受注先を更新しました', 'success');
+                showToast('保守会社を更新しました', 'success');
             } else {
                 await addVendor(data);
-                showToast('受注先を追加しました', 'success');
+                showToast('保守会社を追加しました', 'success');
             }
         } else if (type === 'inspection') {
             const data = {
@@ -884,10 +884,10 @@ export async function deleteMasterPropertyAction(id, masterData, entries, showTo
 }
 
 export async function deleteMasterVendorAction(id, masterData, showToast) {
-    if (!confirm('この受注先を削除しますか？')) return false;
+    if (!confirm('この保守会社を削除しますか？')) return false;
     try {
         await deleteVendor(id);
-        showToast('受注先を削除しました', 'success');
+        showToast('保守会社を削除しました', 'success');
         const newMasterData = await getAllMasterData();
         Object.assign(masterData, newMasterData);
         loadMasterData(masterData);

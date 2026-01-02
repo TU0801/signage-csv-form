@@ -278,8 +278,8 @@ function hasTemplateImage(templateKey) {
                 return;
             }
 
-            // カスタムモード: 物件・受注先・画像が必須
-            // テンプレートモード: 物件・受注先・点検工事案内が必須
+            // カスタムモード: 物件・保守会社・画像が必須
+            // テンプレートモード: 物件・保守会社・点検工事案内が必須
             if (!propertyCode || vendorIdx === '') {
                 showToast('必須項目を入力してください', 'error');
                 return;
@@ -622,7 +622,7 @@ function hasTemplateImage(templateKey) {
         }
 
         function generateCSV() {
-            const headers = ['点検CO','端末ID','物件コード','受注先名','緊急連絡先番号','点検工事案内','掲示板に表示する','点検案内TPLNo','点検開始日','点検完了日','掲示備考','掲示板用案内文','frame_No','表示開始日','表示終了日','表示開始時刻','表示終了時刻','表示時間','統合ポリシー','制御','変更日','変更時刻','最終エクスポート日時','ID','変更日時','点検日時','表示日時','貼紙区分'];
+            const headers = ['点検CO','端末ID','物件コード','保守会社名','緊急連絡先番号','点検工事案内','掲示板に表示する','点検案内TPLNo','点検開始日','点検完了日','掲示備考','掲示板用案内文','frame_No','表示開始日','表示終了日','表示開始時刻','表示終了時刻','表示時間','統合ポリシー','制御','変更日','変更時刻','最終エクスポート日時','ID','変更日時','点検日時','表示日時','貼紙区分'];
             const now = new Date();
             const dateStr = now.toISOString().split('T')[0].replace(/-/g, '/');
             const timeStr = now.toTimeString().substring(0, 8);
@@ -782,7 +782,7 @@ function hasTemplateImage(templateKey) {
                 window.masterData = freshData;
                 populatePropertySelect();
 
-                // 受注先ドロップダウンのロックを解除
+                // 保守会社ドロップダウンのロックを解除
                 const vendorDropdown = document.getElementById('vendor');
                 vendorDropdown.disabled = false;
                 vendorDropdown.style.background = '';
@@ -817,7 +817,7 @@ function hasTemplateImage(templateKey) {
 
             window.masterData.properties = updatedProperties;
 
-            // 受注先ドロップダウンを自動選択＆ロック
+            // 保守会社ドロップダウンを自動選択＆ロック
             const vendorDropdown = document.getElementById('vendor');
             const selectedVendorData = vendors.find(vv => vv.id === vendorId);
             const vendorIndex = masterData.vendors.findIndex(v => v.vendorName === selectedVendorData?.vendor_name);

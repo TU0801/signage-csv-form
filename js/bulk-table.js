@@ -145,9 +145,9 @@ export function renderRow(row, callbacks) {
         </td>
         <td class="col-vendor">
             <div class="searchable-select-container">
-                <input type="text" class="searchable-input vendor-search" placeholder="受注先名で検索..." data-row-id="${row.id}">
+                <input type="text" class="searchable-input vendor-search" placeholder="保守会社名で検索..." data-row-id="${row.id}">
                 <select class="vendor-select" data-row-id="${row.id}">
-                    <option value="">-- 受注先を選択 --</option>
+                    <option value="">-- 保守会社を選択 --</option>
                     ${masterData.vendors.map(v =>
                         `<option value="${v.vendor_name}" ${row.vendorName === v.vendor_name ? 'selected' : ''}>${v.vendor_name}</option>`
                     ).join('')}
@@ -471,7 +471,7 @@ export function validateRow(rowId, callbacks) {
 
     // 必須フィールドのチェック
     if (!row.propertyCode) row.errors.push('物件');
-    if (!row.vendorName) row.errors.push('受注先');
+    if (!row.vendorName) row.errors.push('保守会社');
     if (!row.inspectionType) row.errors.push('点検種別');
     if (row.propertyCode && !row.terminalId) row.errors.push('端末');
 

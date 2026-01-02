@@ -29,14 +29,14 @@
             <section class="form-section card">
                 <div class="card-header">📝 掲示内容入力</div>
                 <div class="card-body">
-                    <!-- 管理者専用: メンテナンス会社選択 -->
+                    <!-- 管理者専用: 保守会社選択 -->
                     <div id="adminVendorSelectGroup" class="form-group" style="display: none; margin-bottom: 1.5rem; padding: 1rem; background: #fff3cd; border-radius: 8px; border: 2px solid #ffc107;">
                         <label style="font-weight: 700; color: #856404;">
                             <span style="background: #ffc107; color: white; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; margin-right: 0.5rem;">管理者</span>
-                            入力するメンテナンス会社を選択
+                            入力する保守会社を選択
                         </label>
                         <select id="adminVendorSelect" onchange="onAdminVendorChange()" style="margin-top: 0.5rem;">
-                            <option value="">-- メンテナンス会社を選択 --</option>
+                            <option value="">-- 保守会社を選択 --</option>
                         </select>
                     </div>
 
@@ -62,7 +62,7 @@
 
                         <!-- 業者 -->
                         <div class="form-group">
-                            <label>受注先 <span class="required">*</span></label>
+                            <label>保守会社 <span class="required">*</span></label>
                             <select id="vendor" onchange="onVendorChange()">
                                 <option value="">選択してください</option>
                             </select>

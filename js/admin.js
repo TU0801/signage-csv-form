@@ -481,7 +481,7 @@ function showEntryDetail(entry) {
             <div class="detail-label">端末ID</div>
             <div class="detail-value">${escapeHtml(normalizeTerminalId(entry.terminal_id))}</div>
 
-            <div class="detail-label">受注先</div>
+            <div class="detail-label">保守会社</div>
             <div class="detail-value">${escapeHtml(entry.vendor_name)}</div>
 
             <div class="detail-label">緊急連絡先</div>
@@ -801,7 +801,7 @@ function generateCSV(data) {
 
     // script.js と bulk-data.js と同じ28列のヘッダー
     const headers = [
-        '点検CO', '端末ID', '物件コード', '受注先名', '緊急連絡先番号',
+        '点検CO', '端末ID', '物件コード', '保守会社名', '緊急連絡先番号',
         '点検工事案内', '掲示板に表示する', '点検案内TPLNo', '点検開始日',
         '点検完了日', '掲示備考', '掲示板用案内文', 'frame_No', '表示開始日',
         '表示終了日', '表示開始時刻', '表示終了時刻', '表示時間', '統合ポリシー',
@@ -859,7 +859,7 @@ function generateCSV(data) {
             '',                                          // 点検CO
             normalizeTerminalId(entry.terminal_id),      // 端末ID
             entry.property_code || '',                   // 物件コード
-            entry.vendor_name || '',                     // 受注先名
+            entry.vendor_name || '',                     // 保守会社名
             entry.emergency_contact || '',               // 緊急連絡先番号
             entry.inspection_type || '',                 // 点検工事案内
             showOnBoard,                                 // 掲示板に表示する
@@ -1069,7 +1069,7 @@ async function handleUserFormSubmit(e) {
     const submitBtn = document.getElementById('userSubmitBtn');
 
     if (!vendorId) {
-        showToast('メンテナンス会社を選択してください', 'error');
+        showToast('保守会社を選択してください', 'error');
         return;
     }
 
@@ -1155,7 +1155,7 @@ async function handleEditUserSubmit(userId) {
     const submitBtn = document.getElementById('userSubmitBtn');
 
     if (!vendorId) {
-        showToast('メンテナンス会社を選択してください', 'error');
+        showToast('保守会社を選択してください', 'error');
         return;
     }
 
