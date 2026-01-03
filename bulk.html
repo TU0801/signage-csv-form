@@ -156,8 +156,11 @@
                 <button class="modal-close" id="closePasteModal">&times;</button>
             </div>
             <div class="modal-body">
-                <p class="modal-description">Excelでコピーしたデータをそのまま貼り付けてください。<br>
-                <small style="color: #64748b;">ヘッダー行（「物件コード」等）がある場合は自動でスキップされます。</small></p>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                    <p class="modal-description" style="margin: 0;">Excelでコピーしたデータをそのまま貼り付けてください。<br>
+                    <small style="color: #64748b;">ヘッダー行（「物件コード」等）がある場合は自動でスキップされます。</small></p>
+                    <button class="btn btn-outline btn-sm" id="downloadTemplateBtn" title="Excelテンプレートをダウンロード">📥 テンプレート</button>
+                </div>
                 <textarea class="paste-textarea" id="pasteArea" placeholder="ここにExcelからコピーしたデータを貼り付け..."></textarea>
 
                 <details class="paste-help" style="margin-top: 0.75rem;">
@@ -174,21 +177,18 @@
                                 <th style="padding: 0.3rem; text-align: left; border: 1px solid #cbd5e1;">D列</th>
                                 <th style="padding: 0.3rem; text-align: left; border: 1px solid #cbd5e1;">E列</th>
                                 <th style="padding: 0.3rem; text-align: left; border: 1px solid #cbd5e1;">F列</th>
-                                <th style="padding: 0.3rem; text-align: left; border: 1px solid #cbd5e1;">G列</th>
                             </tr>
                             <tr>
-                                <td style="padding: 0.3rem; border: 1px solid #cbd5e1;">物件コード</td>
+                                <td style="padding: 0.3rem; border: 1px solid #cbd5e1;">物件名</td>
                                 <td style="padding: 0.3rem; border: 1px solid #cbd5e1;">端末ID</td>
-                                <td style="padding: 0.3rem; border: 1px solid #cbd5e1;">保守会社名</td>
                                 <td style="padding: 0.3rem; border: 1px solid #cbd5e1;">点検種別</td>
                                 <td style="padding: 0.3rem; border: 1px solid #cbd5e1;">開始日</td>
                                 <td style="padding: 0.3rem; border: 1px solid #cbd5e1;">終了日</td>
                                 <td style="padding: 0.3rem; border: 1px solid #cbd5e1;">備考</td>
                             </tr>
                             <tr style="color: #64748b;">
-                                <td style="padding: 0.3rem; border: 1px solid #cbd5e1;">120406</td>
+                                <td style="padding: 0.3rem; border: 1px solid #cbd5e1;">アソシアグロッツォ天神サウス</td>
                                 <td style="padding: 0.3rem; border: 1px solid #cbd5e1;">z1003A01</td>
-                                <td style="padding: 0.3rem; border: 1px solid #cbd5e1;">山本クリーン...</td>
                                 <td style="padding: 0.3rem; border: 1px solid #cbd5e1;">エレベーター...</td>
                                 <td style="padding: 0.3rem; border: 1px solid #cbd5e1;">2025/1/15</td>
                                 <td style="padding: 0.3rem; border: 1px solid #cbd5e1;">2025/1/15</td>
@@ -201,12 +201,9 @@
                     </div>
                 </details>
             </div>
-            <div class="modal-footer" style="justify-content: space-between;">
-                <button class="btn btn-outline btn-sm" id="downloadTemplateBtn" title="Excelテンプレートをダウンロード">📥 テンプレート</button>
-                <div style="display: flex; gap: 0.5rem;">
-                    <button class="btn btn-outline" id="cancelPasteBtn">キャンセル</button>
-                    <button class="btn btn-primary" id="importPasteBtn">取り込む</button>
-                </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" id="cancelPasteBtn">キャンセル</button>
+                <button class="btn btn-primary" id="importPasteBtn">取り込む</button>
             </div>
         </div>
     </div>
