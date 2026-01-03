@@ -281,18 +281,7 @@ export function setupRowEventListeners(tr, rowId, callbacks) {
         }
     });
 
-    tr.querySelector('.display-time').addEventListener('change', (e) => {
-        const row = getRowById(rowId);
-        if (row) {
-            row.displayTime = parseInt(e.target.value) || 6;
-            callbacks.triggerAutoSave();
-        }
-    });
-
-    tr.querySelector('.btn-detail').addEventListener('click', (e) => {
-        e.preventDefault();
-        callbacks.openRowDetailModal(rowId);
-    });
+    // 削除済み: display-time, btn-detail
 
     tr.querySelectorAll('input, select, textarea').forEach(el => {
         el.addEventListener('keydown', (e) => handleCellKeyDown(e, rowId, callbacks));
