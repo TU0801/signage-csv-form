@@ -531,9 +531,7 @@ export function updateSelectedCount(callbacks) {
     document.getElementById('selectedCount').textContent = count;
 
     const deleteBtn = document.getElementById('deleteSelectedBtn');
-    const bulkEditBtn = document.getElementById('bulkEditBtn');
     if (deleteBtn) deleteBtn.disabled = count === 0;
-    if (bulkEditBtn) bulkEditBtn.disabled = count === 0;
 }
 
 export function updateRowNumbers() {

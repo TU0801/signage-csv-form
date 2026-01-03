@@ -8,7 +8,6 @@ import {
 } from './bulk-table.js';
 import {
     createContextMenu, showContextMenu, hideContextMenu,
-    createBulkEditModal, openBulkEditModal, closeBulkEditModal,
     openRowDetailModal, closeRowDetailModal,
     openPasteModal, closePasteModal, importFromPaste, downloadExcelTemplate,
     openSaveTemplateModal, closeTemplateModal, saveTemplate,
@@ -160,7 +159,6 @@ async function init() {
     updateStats();
     updateEmptyState();
     createContextMenu(callbacks);
-    createBulkEditModal(callbacks);
 }
 
 // ========================================
@@ -216,12 +214,6 @@ function setupEventListeners() {
     const duplicateBtn = document.getElementById('duplicateBtn');
     if (duplicateBtn) {
         duplicateBtn.addEventListener('click', () => duplicateSelectedRows(callbacks));
-    }
-
-    // 一括編集
-    const bulkEditBtn = document.getElementById('bulkEditBtn');
-    if (bulkEditBtn) {
-        bulkEditBtn.addEventListener('click', () => openBulkEditModal(callbacks));
     }
 
     // フィルター
@@ -294,12 +286,6 @@ function handleGlobalKeyDown(e) {
         duplicateSelectedRows(callbacks);
     }
 
-    // Ctrl+E: 一括編集
-    if (e.ctrlKey && e.key === 'e') {
-        e.preventDefault();
-        openBulkEditModal(callbacks);
-    }
-
     // Delete: 選択削除
     if (e.key === 'Delete' && !e.target.matches('input, textarea, select')) {
         e.preventDefault();
@@ -310,7 +296,6 @@ function handleGlobalKeyDown(e) {
     if (e.key === 'Escape') {
         closePasteModal();
         closeTemplateModal();
-        closeBulkEditModal();
         closeRowDetailModal();
         hideContextMenu();
     }
