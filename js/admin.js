@@ -1765,8 +1765,9 @@ window.editEntry = async function(id, mode) {
     const modal = document.createElement('div');
     modal.className = 'modal-overlay';
     modal.id = 'editEntryModal';
+    modal.style.cssText = 'display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.7); z-index: 10000;';
     modal.innerHTML = `
-        <div class="modal-content" style="max-width: 600px;">
+        <div class="modal-content" style="max-width: 600px; background: white; border-radius: 12px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);">
             <div class="modal-header">
                 <h3>表示設定を編集</h3>
                 <button class="modal-close" onclick="closeEditModal()">&times;</button>
