@@ -175,6 +175,13 @@ async function loadAllData() {
     if (errors.length > 0) {
         showToast(`一部データの取得に失敗しました: ${errors.join(', ')}`, 'error');
     }
+
+    // 検索期間開始を今日の日付にデフォルト設定（全データ洗い替え運用のため）
+    const today = new Date().toISOString().split('T')[0];
+    const filterStartDate = document.getElementById('filterStartDate');
+    if (filterStartDate && !filterStartDate.value) {
+        filterStartDate.value = today;
+    }
 }
 
 // ========================================
