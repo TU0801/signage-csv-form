@@ -1761,52 +1761,102 @@ window.editEntry = async function(id, mode) {
         return;
     }
 
-    // 表示設定のみ編集
-    const displayStartDate = entry.display_start_date || '';
-    const displayStartTime = entry.display_start_time || '';
-    const displayEndDate = entry.display_end_date || '';
-    const displayEndTime = entry.display_end_time || '';
-    const displayDuration = entry.display_duration || 10;
-    const posterPosition = entry.poster_position || '4';
+    // 編集モーダルを作成
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.id = 'editEntryModal';
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3>表示設定を編集</h3>
+                <button class="modal-close" onclick="closeEditModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="editEntryForm">
+                    <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="form-group">
+                            <label>表示開始日</label>
+                            <input type="date" id="editDisplayStartDate" class="form-control" value="${entry.display_start_date || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label>表示開始時間</label>
+                            <input type="time" id="editDisplayStartTime" class="form-control" value="${entry.display_start_time || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label>表示終了日</label>
+                            <input type="date" id="editDisplayEndDate" class="form-control" value="${entry.display_end_date || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label>表示終了時間</label>
+                            <input type="time" id="editDisplayEndTime" class="form-control" value="${entry.display_end_time || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label>表示時間（秒）</label>
+                            <input type="number" id="editDisplayDuration" class="form-control" value="${entry.display_duration || 10}" min="1" max="60">
+                        </div>
+                        <div class="form-group">
+                            <label>表示位置（1-9）</label>
+                            <input type="number" id="editPosterPosition" class="form-control" value="${entry.poster_position || '4'}" min="1" max="9">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeEditModal()">キャンセル</button>
+                <button class="btn btn-primary" onclick="saveEditedEntry('${id}', '${mode}')">保存</button>
+            </div>
+        </div>
+    `;
 
-    const newDisplayStartDate = prompt('表示開始日 (YYYY-MM-DD):', displayStartDate);
-    if (newDisplayStartDate === null) return; // キャンセル
+    // 既存のモーダルがあれば削除
+    const existingModal = document.getElementById('editEntryModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
 
-    const newDisplayStartTime = prompt('表示開始時間 (HH:MM):', displayStartTime);
-    if (newDisplayStartTime === null) return;
+    document.body.appendChild(modal);
+    modal.classList.add('active');
 
-    const newDisplayEndDate = prompt('表示終了日 (YYYY-MM-DD):', displayEndDate);
-    if (newDisplayEndDate === null) return;
+    // 背景クリックで閉じる
+    modal.addEventListener('click', (e) => {
+        if (e.target.id === 'editEntryModal') {
+            closeEditModal();
+        }
+    });
+};
 
-    const newDisplayEndTime = prompt('表示終了時間 (HH:MM):', displayEndTime);
-    if (newDisplayEndTime === null) return;
+window.closeEditModal = function() {
+    const modal = document.getElementById('editEntryModal');
+    if (modal) {
+        modal.remove();
+    }
+};
 
-    const newDuration = prompt('表示時間（秒）:', displayDuration);
-    if (newDuration === null) return;
-
-    const newPosition = prompt('表示位置（1-9）:', posterPosition);
-    if (newPosition === null) return;
-
-    // 更新データ（表示設定のみ）
+window.saveEditedEntry = async function(id, mode) {
     const updatedEntry = {
-        display_start_date: newDisplayStartDate || null,
-        display_start_time: newDisplayStartTime || null,
-        display_end_date: newDisplayEndDate || null,
-        display_end_time: newDisplayEndTime || null,
-        display_duration: parseInt(newDuration) || 10,
-        poster_position: newPosition || '4'
+        display_start_date: document.getElementById('editDisplayStartDate').value || null,
+        display_start_time: document.getElementById('editDisplayStartTime').value || null,
+        display_end_date: document.getElementById('editDisplayEndDate').value || null,
+        display_end_time: document.getElementById('editDisplayEndTime').value || null,
+        display_duration: parseInt(document.getElementById('editDisplayDuration').value) || 10,
+        poster_position: document.getElementById('editPosterPosition').value || '4'
     };
 
     // ステータス判定
     if (mode === 'pending') {
         updatedEntry.status = 'ready'; // 承認待ち編集 → 即承認
-    } else if (entry.status === 'exported') {
-        updatedEntry.status = 'ready'; // 取込済み編集 → 未取込に戻す
+    } else {
+        // データ一覧からの編集の場合、元のstatusを確認
+        const entry = entries.find(e => e.id === id);
+        if (entry?.status === 'exported') {
+            updatedEntry.status = 'ready'; // 取込済み編集 → 未取込に戻す
+        }
     }
 
     try {
         await updateEntry(id, updatedEntry);
         showToast('編集しました', 'success');
+        closeEditModal();
         await loadPendingEntries();
         await loadEntries();
         renderPendingEntries();
