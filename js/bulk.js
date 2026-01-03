@@ -82,9 +82,24 @@ async function init() {
             // 選択したベンダーの担当ビルのみを取得
             const buildings = await getBuildingsByVendor(vendorId);
 
+            // buildingsをcamelCaseに変換（getBuildingsByVendorはsnake_caseを返す）
+            const buildingsCamelCase = [];
+            buildings.forEach(b => {
+                const terminals = Array.isArray(b.terminals) ? b.terminals : [];
+                terminals.forEach(t => {
+                    buildingsCamelCase.push({
+                        propertyCode: b.property_code,
+                        propertyName: b.property_name,
+                        terminalId: t.terminalId || t.terminal_id || '',
+                        supplement: t.supplement || '',
+                        address: b.address || ''
+                    });
+                });
+            });
+
             // masterDataを更新
             const currentMasterData = getMasterData();
-            currentMasterData.properties = buildings;
+            currentMasterData.properties = buildingsCamelCase;
             setMasterData(currentMasterData);
 
             // テーブルをクリア（物件が変わったため）
