@@ -87,6 +87,26 @@
 - **ファイル**: css/style.css:603
 - **失敗パターン**: #3-4 に該当
 
+#### バグ3: 一括入力で行追加エラー（水平展開で発見）
+- **報告**: 行追加ボタンでエラー
+- **エラー**: `TypeError: Cannot read properties of undefined (reading 'map')` (bulk-table.js:161)
+- **原因**: bulk-table.js で `inspectionTypes` → `notices` への変更漏れ
+- **修正**: `masterData.inspectionTypes` → `masterData.notices`、`i.inspection_name` → `i.inspectionType`
+- **ファイル**: js/bulk-table.js:161
+- **失敗パターン**: #8-1（局所的修正）に該当
+
+#### バグ4: 保守会社選択でエラー（根本修正の副作用）
+- **報告**: 一件入力で保守会社選択時にエラー
+- **エラー**: `ReferenceError: selectedVendorData is not defined` (script.js:831)
+- **原因**: 根本修正時に `selectedVendorData` を削除しすぎた
+- **修正**: `const selectedVendorData = masterData.vendors[vendorIndex];` を追加
+- **ファイル**: js/script.js:822
+
+#### バグ5: bulk-state.js の初期値不一致（水平展開で発見）
+- **原因**: `inspectionTypes` が残っていた
+- **修正**: `notices`, `categories`, `templateImages` を追加
+- **ファイル**: js/bulk-state.js:8
+
 ---
 
 ### 📚 重要な学び
