@@ -128,6 +128,11 @@ async function init() {
         setAppSettings(settings);
         console.log('Master data loaded:', masterData);
         console.log('App settings loaded:', settings);
+        console.log('🔍 Properties debug:', {
+            count: masterData.properties?.length,
+            first: masterData.properties?.[0],
+            sample: masterData.properties?.slice(0, 3)
+        });
     } catch (error) {
         console.error('Failed to load master data:', error);
         showToast('マスターデータの取得に失敗しました', 'error');

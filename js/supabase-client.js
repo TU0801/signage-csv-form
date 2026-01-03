@@ -183,8 +183,12 @@ export async function getAllMasterDataCamelCase() {
 
   // properties: グループ化された物件を1端末=1レコードにフラット化し、camelCaseに変換
   const properties = [];
+  console.log('🔍 propertiesRaw:', propertiesRaw?.slice(0, 2)); // デバッグ
   propertiesRaw.forEach(p => {
     const terminals = Array.isArray(p.terminals) ? p.terminals : [];
+    if (terminals.length === 0) {
+      console.warn('⚠️ No terminals for property:', p.property_code);
+    }
     terminals.forEach(t => {
       properties.push({
         propertyCode: p.property_code,
@@ -195,6 +199,7 @@ export async function getAllMasterDataCamelCase() {
       });
     });
   });
+  console.log('🔍 properties (camelCase):', properties?.slice(0, 2)); // デバッグ
 
   // vendors: vendor_name -> vendorName, emergency_contact -> emergencyContact
   const vendorsFormatted = vendors.map(v => ({
