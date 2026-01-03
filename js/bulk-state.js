@@ -54,6 +54,11 @@ export function removeRowFromState(id) {
 
 export function clearRows() {
     state.rows = [];
+    // DOM も削除（状態とDOMの同期）
+    const tableBody = document.getElementById('tableBody');
+    if (tableBody) {
+        tableBody.innerHTML = '';
+    }
 }
 
 export function getNextRowId() {
