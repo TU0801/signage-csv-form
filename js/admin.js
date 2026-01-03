@@ -390,10 +390,16 @@ function renderPendingEntries() {
             ? new Date(entry.inspection_start).toLocaleDateString('ja-JP')
             : '-';
 
+        // 物件名を取得
+        const property = masterData.properties.find(p => p.property_code === entry.property_code);
+        const propertyDisplay = property
+            ? `<div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(entry.property_code)} ${escapeHtml(property.property_name)}">${escapeHtml(entry.property_code)} ${escapeHtml(property.property_name)}</div>`
+            : escapeHtml(entry.property_code);
+
         tr.innerHTML = `
             <td><input type="checkbox" data-id="${escapeHtml(entry.id)}" onchange="updateSelectedPending()"></td>
             <td>${escapeHtml(getUserEmail(entry.user_id))}</td>
-            <td>${escapeHtml(entry.property_code)}</td>
+            <td>${propertyDisplay}</td>
             <td>${escapeHtml(entry.inspection_type)}</td>
             <td>${escapeHtml(startDate)}</td>
             <td>${escapeHtml(createdAt)}</td>
@@ -688,10 +694,16 @@ function renderEntries() {
                 ? '<span class="status-badge status-ready">未取込</span>'
             : '<span class="status-badge status-draft">承認待ち</span>';
 
+        // 物件名を取得
+        const propertyForList = masterData.properties.find(p => p.property_code === entry.property_code);
+        const propertyDisplayForList = propertyForList
+            ? `<div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(entry.property_code)} ${escapeHtml(propertyForList.property_name)}">${escapeHtml(entry.property_code)} ${escapeHtml(propertyForList.property_name)}</div>`
+            : escapeHtml(entry.property_code);
+
         tr.innerHTML = `
             <td><input type="checkbox" class="entry-checkbox" data-id="${entry.id}"></td>
             <td>${escapeHtml(getUserEmail(entry.user_id))}</td>
-            <td>${escapeHtml(entry.property_code)}</td>
+            <td>${propertyDisplayForList}</td>
             <td>${escapeHtml(entry.inspection_type)}</td>
             <td>${escapeHtml(inspectionStart)}</td>
             <td>${statusLabel}</td>
@@ -1803,13 +1815,27 @@ window.editEntry = async function(id, mode) {
                 <!-- 基本情報（読み取り専用） -->
                 <div style="background: #f1f5f9; border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
                     <h4 style="margin: 0 0 0.75rem; font-size: 0.875rem; font-weight: 700; color: #64748b;">📋 基本情報（参照のみ）</h4>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; font-size: 0.875rem;">
-                        <div><span style="color: #64748b;">物件：</span><span style="font-weight: 600; color: #1e293b;">${entry.property_code || '-'}</span></div>
-                        <div><span style="color: #64748b;">端末：</span><span style="font-weight: 600; color: #1e293b;">${entry.terminal_id || '-'}</span></div>
-                        <div><span style="color: #64748b;">保守会社：</span><span style="font-weight: 600; color: #1e293b;">${entry.vendor_name || '-'}</span></div>
-                        <div><span style="color: #64748b;">点検種別：</span><span style="font-weight: 600; color: #1e293b;">${entry.inspection_type || '-'}</span></div>
-                        <div><span style="color: #64748b;">点検開始：</span><span style="font-weight: 600; color: #1e293b;">${entry.inspection_start || '-'}</span></div>
-                        <div><span style="color: #64748b;">点検終了：</span><span style="font-weight: 600; color: #1e293b;">${entry.inspection_end || '-'}</span></div>
+                    <div style="display: grid; grid-template-columns: 1fr; gap: 0.75rem; font-size: 0.875rem;">
+                        <div style="display: flex; gap: 0.5rem;">
+                            <span style="color: #64748b; flex-shrink: 0;">物件：</span>
+                            <span style="font-weight: 600; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${entry.property_code || '-'} ${masterData.properties.find(p => p.property_code === entry.property_code)?.property_name || ''}">${entry.property_code || '-'} ${masterData.properties.find(p => p.property_code === entry.property_code)?.property_name || ''}</span>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <span style="color: #64748b; flex-shrink: 0;">端末：</span>
+                            <span style="font-weight: 600; color: #1e293b;">${entry.terminal_id || '-'}</span>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <span style="color: #64748b; flex-shrink: 0;">保守会社：</span>
+                            <span style="font-weight: 600; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${entry.vendor_name || '-'}">${entry.vendor_name || '-'}</span>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <span style="color: #64748b; flex-shrink: 0;">点検種別：</span>
+                            <span style="font-weight: 600; color: #1e293b;">${entry.inspection_type || '-'}</span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                            <div><span style="color: #64748b;">点検開始：</span><span style="font-weight: 600; color: #1e293b;">${entry.inspection_start || '-'}</span></div>
+                            <div><span style="color: #64748b;">点検終了：</span><span style="font-weight: 600; color: #1e293b;">${entry.inspection_end || '-'}</span></div>
+                        </div>
                     </div>
                 </div>
 
