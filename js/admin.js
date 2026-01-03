@@ -13,6 +13,7 @@ import {
     updateUserStatus,
     createUser,
     deleteEntry,
+    updateEntry,
     getPendingEntries,
     approveEntry,
     approveEntries,
@@ -1760,45 +1761,40 @@ window.editEntry = async function(id, mode) {
         return;
     }
 
-    // 簡易編集モーダル（主要フィールドのみ）
-    const property = entry.property_code;
-    const terminal = entry.terminal_id;
-    const vendor = entry.vendor_name;
-    const inspection = entry.inspection_type;
-    const startDate = entry.inspection_start || '';
-    const endDate = entry.inspection_end || '';
-    const remarks = entry.remarks || '';
+    // 表示設定のみ編集
+    const displayStartDate = entry.display_start_date || '';
+    const displayStartTime = entry.display_start_time || '';
+    const displayEndDate = entry.display_end_date || '';
+    const displayEndTime = entry.display_end_time || '';
+    const displayDuration = entry.display_duration || 10;
+    const posterPosition = entry.poster_position || '4';
 
-    const newProperty = prompt('物件コード:', property);
-    if (newProperty === null) return; // キャンセル
+    const newDisplayStartDate = prompt('表示開始日 (YYYY-MM-DD):', displayStartDate);
+    if (newDisplayStartDate === null) return; // キャンセル
 
-    const newTerminal = prompt('端末ID:', terminal);
-    if (newTerminal === null) return;
+    const newDisplayStartTime = prompt('表示開始時間 (HH:MM):', displayStartTime);
+    if (newDisplayStartTime === null) return;
 
-    const newVendor = prompt('保守会社:', vendor);
-    if (newVendor === null) return;
+    const newDisplayEndDate = prompt('表示終了日 (YYYY-MM-DD):', displayEndDate);
+    if (newDisplayEndDate === null) return;
 
-    const newInspection = prompt('点検種別:', inspection);
-    if (newInspection === null) return;
+    const newDisplayEndTime = prompt('表示終了時間 (HH:MM):', displayEndTime);
+    if (newDisplayEndTime === null) return;
 
-    const newStartDate = prompt('点検開始日 (YYYY-MM-DD):', startDate);
-    if (newStartDate === null) return;
+    const newDuration = prompt('表示時間（秒）:', displayDuration);
+    if (newDuration === null) return;
 
-    const newEndDate = prompt('点検終了日 (YYYY-MM-DD):', endDate);
-    if (newEndDate === null) return;
+    const newPosition = prompt('表示位置（1-9）:', posterPosition);
+    if (newPosition === null) return;
 
-    const newRemarks = prompt('備考:', remarks);
-    if (newRemarks === null) return;
-
-    // 更新データ
+    // 更新データ（表示設定のみ）
     const updatedEntry = {
-        property_code: newProperty,
-        terminal_id: newTerminal,
-        vendor_name: newVendor,
-        inspection_type: newInspection,
-        inspection_start: newStartDate || null,
-        inspection_end: newEndDate || null,
-        remarks: newRemarks
+        display_start_date: newDisplayStartDate || null,
+        display_start_time: newDisplayStartTime || null,
+        display_end_date: newDisplayEndDate || null,
+        display_end_time: newDisplayEndTime || null,
+        display_duration: parseInt(newDuration) || 10,
+        poster_position: newPosition || '4'
     };
 
     // ステータス判定

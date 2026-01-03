@@ -253,7 +253,6 @@ function hasTemplateImage(templateKey) {
                     <img src="${escapeHtml(imgUrl)}" alt="${escapeHtml(currentTemplateNo)}">
                     <div class="poster-overlay">
                         <div class="poster-notice-text">${escapeHtml(noticeText)}</div>
-                        <div class="poster-date-text">${escapeHtml(dateText)}</div>
                         <div class="poster-remarks-text">${escapeHtml(remarks)}</div>
                     </div>
                 `;
