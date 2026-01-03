@@ -857,7 +857,7 @@ export async function approveEntry(id) {
   const { data, error } = await supabase
     .from('signage_entries')
     .update({
-      status: 'submitted'
+      status: 'ready'
     })
     .eq('id', id)
     .select()
@@ -870,7 +870,7 @@ export async function approveEntries(ids) {
   const { data, error } = await supabase
     .from('signage_entries')
     .update({
-      status: 'submitted'
+      status: 'ready'
     })
     .in('id', ids)
     .select();

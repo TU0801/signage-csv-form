@@ -251,7 +251,7 @@ function setupEventListeners() {
         updateBulkActionButtons();
     });
     document.getElementById('markExportedBtn')?.addEventListener('click', () => updateEntriesStatus('exported'));
-    document.getElementById('markSubmittedBtn')?.addEventListener('click', () => updateEntriesStatus('submitted'));
+    document.getElementById('markSubmittedBtn')?.addEventListener('click', () => updateEntriesStatus('ready'));
 
     // マスター追加ボタン
     document.getElementById('addPropertyBtn').addEventListener('click', () => openMasterModal('property', masterData));
@@ -677,10 +677,13 @@ function renderEntries() {
             ? new Date(entry.inspection_start).toLocaleDateString('ja-JP')
             : '-';
 
-        // ステータス表示
-        const statusLabel = entry.status === 'exported'
-            ? '<span class="status-badge status-exported">✓ 取込済</span>'
-            : '<span class="status-badge status-submitted">未取込</span>';
+        // ステータス表示（3段階）
+        const statusLabel =
+            entry.status === 'exported'
+                ? '<span class="status-badge status-exported">✓ 取込済</span>'
+            : entry.status === 'ready'
+                ? '<span class="status-badge status-ready">未取込</span>'
+            : '<span class="status-badge status-draft">承認待ち</span>';
 
         tr.innerHTML = `
             <td><input type="checkbox" class="entry-checkbox" data-id="${entry.id}"></td>
@@ -759,7 +762,7 @@ async function updateEntriesStatus(status) {
     const ids = getSelectedEntryIds();
     if (ids.length === 0) return;
 
-    const statusLabel = status === 'exported' ? '取込済み' : '未取込';
+    const statusLabel = status === 'exported' ? '取込済み' : status === 'ready' ? '未取込' : '承認待ち';
     if (!confirm(`選択した${ids.length}件を「${statusLabel}」に変更しますか？`)) return;
 
     try {
