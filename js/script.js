@@ -716,7 +716,9 @@ function hasTemplateImage(templateKey) {
 
                 // 一括入力と同じデータ構造に変換
                 const supabaseEntries = entriesWithImages.map(e => {
-                    const displayStartDate = e.displayStartDate || e.startDate || null;
+                    // デフォルト値: 表示開始日=今日、表示終了日=点検終了日
+                    const today = new Date().toISOString().split('T')[0];
+                    const displayStartDate = e.displayStartDate || today;
                     const displayEndDate = e.displayEndDate || e.endDate || null;
 
                     return {

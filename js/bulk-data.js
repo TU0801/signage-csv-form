@@ -111,7 +111,9 @@ export async function saveAll(callbacks) {
             const vendor = masterData.vendors.find(v => v.vendorName === currentVendor.name);
             const inspection = masterData.notices?.find(i => i.inspectionType === row.inspectionType);
 
-            const displayStartDate = row.displayStartDate || row.startDate || null;
+            // デフォルト値: 表示開始日=今日、表示終了日=点検終了日
+            const today = new Date().toISOString().split('T')[0];
+            const displayStartDate = row.displayStartDate || today;
             const displayEndDate = row.displayEndDate || row.endDate || null;
 
             // terminal_idを正規化（JSON文字列やオブジェクトから端末ID文字列を抽出）

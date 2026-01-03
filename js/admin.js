@@ -1800,6 +1800,21 @@ window.editEntry = async function(id, mode) {
                 " onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">&times;</button>
             </div>
             <div style="padding: 2rem;">
+                <!-- 基本情報（読み取り専用） -->
+                <div style="background: #f1f5f9; border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
+                    <h4 style="margin: 0 0 0.75rem; font-size: 0.875rem; font-weight: 700; color: #64748b;">📋 基本情報（参照のみ）</h4>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; font-size: 0.875rem;">
+                        <div><span style="color: #64748b;">物件：</span><span style="font-weight: 600; color: #1e293b;">${entry.property_code || '-'}</span></div>
+                        <div><span style="color: #64748b;">端末：</span><span style="font-weight: 600; color: #1e293b;">${entry.terminal_id || '-'}</span></div>
+                        <div><span style="color: #64748b;">保守会社：</span><span style="font-weight: 600; color: #1e293b;">${entry.vendor_name || '-'}</span></div>
+                        <div><span style="color: #64748b;">点検種別：</span><span style="font-weight: 600; color: #1e293b;">${entry.inspection_type || '-'}</span></div>
+                        <div><span style="color: #64748b;">点検開始：</span><span style="font-weight: 600; color: #1e293b;">${entry.inspection_start || '-'}</span></div>
+                        <div><span style="color: #64748b;">点検終了：</span><span style="font-weight: 600; color: #1e293b;">${entry.inspection_end || '-'}</span></div>
+                    </div>
+                </div>
+
+                <!-- 表示設定（編集可能） -->
+                <h4 style="margin: 0 0 1rem; font-size: 0.875rem; font-weight: 700; color: #1e293b;">⚙️ 表示設定</h4>
                 <form id="editEntryForm">
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
                         <div>
