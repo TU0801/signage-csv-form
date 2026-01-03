@@ -3,7 +3,7 @@
 import {
     state, getMasterData, getRows, getRowById, addRowToState,
     removeRowFromState, getNextRowId, getDraggedRow, setDraggedRow,
-    getAppSettings
+    getAppSettings, getCurrentVendor
 } from './bulk-state.js';
 
 // ========================================
@@ -75,7 +75,7 @@ export function addRow(data = {}, callbacks) {
         id: rowId,
         propertyCode: data.propertyCode || '',
         terminalId: data.terminalId || '',
-        vendorName: data.vendorName || '',
+        vendorName: data.vendorName || getCurrentVendor().name || '',
         inspectionType: data.inspectionType || '',
         startDate: data.startDate || today,
         endDate: data.endDate || '',
@@ -142,17 +142,6 @@ export function renderRow(row, callbacks) {
                 <option value="">-- 端末 --</option>
             </select>
         </td>
-        <td class="col-vendor">
-            <div class="searchable-select-container">
-                <input type="text" class="searchable-input vendor-search" placeholder="保守会社名で検索..." data-row-id="${row.id}">
-                <select class="vendor-select" data-row-id="${row.id}">
-                    <option value="">-- 保守会社を選択 --</option>
-                    ${masterData.vendors.map(v =>
-                        `<option value="${v.vendorName}" ${row.vendorName === v.vendorName ? 'selected' : ''}>${v.vendorName}</option>`
-                    ).join('')}
-                </select>
-            </div>
-        </td>
         <td class="col-inspection">
             <div class="searchable-select-container">
                 <input type="text" class="searchable-input inspection-search" placeholder="点検種別で検索..." data-row-id="${row.id}">
@@ -206,10 +195,6 @@ export function setupRowEventListeners(tr, rowId, callbacks) {
     const propertySelect = tr.querySelector('.property-select');
     setupSearchableSelect(propertySearch, propertySelect);
 
-    const vendorSearch = tr.querySelector('.vendor-search');
-    const vendorSelect = tr.querySelector('.vendor-select');
-    setupSearchableSelect(vendorSearch, vendorSelect);
-
     const inspectionSearch = tr.querySelector('.inspection-search');
     const inspectionSelect = tr.querySelector('.inspection-select');
     setupSearchableSelect(inspectionSearch, inspectionSelect);
@@ -228,15 +213,6 @@ export function setupRowEventListeners(tr, rowId, callbacks) {
         const row = getRowById(rowId);
         if (row) {
             row.terminalId = e.target.value;
-            validateRow(rowId, callbacks);
-            callbacks.triggerAutoSave();
-        }
-    });
-
-    vendorSelect.addEventListener('change', (e) => {
-        const row = getRowById(rowId);
-        if (row) {
-            row.vendorName = e.target.value;
             validateRow(rowId, callbacks);
             callbacks.triggerAutoSave();
         }
@@ -451,9 +427,9 @@ export function validateRow(rowId, callbacks) {
 
     // 必須フィールドのチェック
     if (!row.propertyCode) row.errors.push('物件');
-    if (!row.vendorName) row.errors.push('保守会社');
     if (!row.inspectionType) row.errors.push('点検種別');
     if (row.propertyCode && !row.terminalId) row.errors.push('端末');
+    // 保守会社は画面上部で設定済みのためチェック不要
 
     // 日付の論理チェック
     if (row.startDate && row.endDate && row.startDate > row.endDate) {

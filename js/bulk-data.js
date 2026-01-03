@@ -3,7 +3,7 @@
 import { createEntries } from './supabase-client.js';
 import {
     state, getMasterData, getRows, getCurrentUserId,
-    getAutoSaveTimer, setAutoSaveTimer, setRowIdCounter, clearRows
+    getAutoSaveTimer, setAutoSaveTimer, setRowIdCounter, clearRows, getCurrentVendor
 } from './bulk-state.js';
 import { addRow, validateRow } from './bulk-table.js';
 
@@ -103,10 +103,12 @@ export async function saveAll(callbacks) {
 
     try {
         const masterData = getMasterData();
+        const currentVendor = getCurrentVendor();
         const entries = validRows.map(row => {
             // 型を揃えて比較
             const property = masterData.properties.find(p => String(p.propertyCode) === String(row.propertyCode));
-            const vendor = masterData.vendors.find(v => v.vendorName === row.vendorName);
+            // 保守会社は画面上部で設定済み（currentVendor）
+            const vendor = masterData.vendors.find(v => v.vendorName === currentVendor.name);
             const inspection = masterData.notices?.find(i => i.inspectionType === row.inspectionType);
 
             const displayStartDate = row.displayStartDate || row.startDate || null;
@@ -136,7 +138,7 @@ export async function saveAll(callbacks) {
             return {
                 property_code: String(row.propertyCode),
                 terminal_id: normalizeTerminalId(row.terminalId) || property?.terminal_id || '',
-                vendor_name: row.vendorName,
+                vendor_name: currentVendor.name,
                 emergency_contact: vendor?.emergencyContact || '',
                 inspection_type: row.inspectionType,
                 template_no: inspection?.templateNo || '',
@@ -215,10 +217,12 @@ export function generateCSV() {
 
     const csvRows = [headers.join(',')];
 
+    const currentVendor = getCurrentVendor();
     validRows.forEach(row => {
         // 型を揃えて比較
         const property = masterData.properties.find(p => String(p.propertyCode) === String(row.propertyCode));
-        const vendor = masterData.vendors.find(v => v.vendorName === row.vendorName);
+        // 保守会社は画面上部で設定済み
+        const vendor = masterData.vendors.find(v => v.vendorName === currentVendor.name);
         const inspection = masterData.notices?.find(i => i.inspectionType === row.inspectionType);
 
         const formatDate = (d) => d ? d.replace(/-/g, '/') : '';

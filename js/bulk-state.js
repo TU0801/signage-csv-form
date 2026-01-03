@@ -10,6 +10,8 @@ export const state = {
     rowIdCounter: 0,
     currentFilter: 'all', // 'all', 'valid', 'error'
     currentUserId: null,
+    currentVendorId: null, // 管理者：選択したベンダーID、一般ユーザー：固定
+    currentVendorName: null, // 全行に適用する保守会社名
     draggedRow: null,
     autoSaveTimer: null,
     currentDetailRowId: null,
@@ -83,6 +85,18 @@ export function getCurrentUserId() {
 
 export function setCurrentUserId(id) {
     state.currentUserId = id;
+}
+
+export function getCurrentVendor() {
+    return {
+        id: state.currentVendorId,
+        name: state.currentVendorName
+    };
+}
+
+export function setCurrentVendor(id, name) {
+    state.currentVendorId = id;
+    state.currentVendorName = name;
 }
 
 export function getDraggedRow() {

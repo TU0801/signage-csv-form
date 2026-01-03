@@ -2,7 +2,7 @@
 
 import {
     getMasterData, getRows, getRowById,
-    getCurrentDetailRowId, setCurrentDetailRowId
+    getCurrentDetailRowId, setCurrentDetailRowId, getCurrentVendor
 } from './bulk-state.js';
 import { addRow, updateTerminals, validateRow, insertRowAt, getSelectedRowIds } from './bulk-table.js';
 
@@ -66,7 +66,7 @@ function handleContextMenuAction(action, rowId, callbacks) {
                 addRow({
                     propertyCode: row.propertyCode,
                     terminalId: row.terminalId,
-                    vendorName: row.vendorName,
+                    // vendorName は getCurrentVendor() から自動設定される
                     inspectionType: row.inspectionType,
                     startDate: row.startDate,
                     endDate: row.endDate,
@@ -104,7 +104,7 @@ function handleContextMenuAction(action, rowId, callbacks) {
                 addRow({
                     propertyCode: copiedRowData.propertyCode,
                     terminalId: copiedRowData.terminalId,
-                    vendorName: copiedRowData.vendorName,
+                    // vendorName は getCurrentVendor() から自動設定される
                     inspectionType: copiedRowData.inspectionType,
                     startDate: copiedRowData.startDate,
                     endDate: copiedRowData.endDate,
@@ -423,7 +423,7 @@ export function importFromPaste(callbacks) {
             rowData = {
                 terminalId: cols[1]?.trim() || '',
                 propertyCode: cols[2]?.trim() || '',
-                vendorName: cols[3]?.trim() || '',
+                // vendorName: cols[3] - 削除（getCurrentVendor()から自動設定）
                 inspectionType: cols[5]?.trim() || '',
                 startDate: formatDateForInput(cols[8]?.trim() || ''),
                 endDate: formatDateForInput(cols[9]?.trim() || ''),
@@ -442,7 +442,7 @@ export function importFromPaste(callbacks) {
             rowData = {
                 propertyCode: cols[0]?.trim() || '',
                 terminalId: cols[1]?.trim() || '',
-                vendorName: cols[2]?.trim() || '',
+                // vendorName: cols[2] - 削除（getCurrentVendor()から自動設定）
                 inspectionType: cols[3]?.trim() || '',
                 startDate: formatDateForInput(cols[4]?.trim() || ''),
                 endDate: formatDateForInput(cols[5]?.trim() || ''),
@@ -454,7 +454,7 @@ export function importFromPaste(callbacks) {
             // シンプルな形式（6列以下）: 物件コード, 保守会社, 点検種別, 開始日, 終了日, 備考
             rowData = {
                 propertyCode: cols[0]?.trim() || '',
-                vendorName: cols[1]?.trim() || '',
+                // vendorName: cols[1] - 削除（getCurrentVendor()から自動設定）
                 inspectionType: cols[2]?.trim() || '',
                 startDate: formatDateForInput(cols[3]?.trim() || ''),
                 endDate: formatDateForInput(cols[4]?.trim() || ''),
@@ -463,7 +463,7 @@ export function importFromPaste(callbacks) {
         }
 
         // 物件コードまたは何かしらのデータがあれば取り込む
-        const hasData = rowData.propertyCode || rowData.vendorName || rowData.inspectionType;
+        const hasData = rowData.propertyCode || rowData.inspectionType;
 
         if (hasData) {
             addRow(rowData, callbacks);
@@ -534,7 +534,7 @@ export function saveTemplate(callbacks) {
         rows: rows.map(r => ({
             propertyCode: r.propertyCode,
             terminalId: r.terminalId,
-            vendorName: r.vendorName,
+            // vendorName は保存しない（適用時に getCurrentVendor() を使用）
             inspectionType: r.inspectionType,
             displayTime: r.displayTime,
             noticeText: r.noticeText,

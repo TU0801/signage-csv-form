@@ -1,7 +1,7 @@
 // bulk.js - 一括入力画面のメインエントリーポイント
 
 import { getUser, getProfile, isAdmin, signOut, getAllMasterDataCamelCase, getSettings, getMasterVendors, getBuildingsByVendor, addBuildingVendor } from './supabase-client.js';
-import { setMasterData, getMasterData, setCurrentUserId, setCurrentFilter, clearRows, getRows, setAppSettings } from './bulk-state.js';
+import { setMasterData, getMasterData, setCurrentUserId, setCurrentFilter, clearRows, getRows, setAppSettings, setCurrentVendor, getCurrentVendor } from './bulk-state.js';
 import {
     addRowWithCopy, duplicateSelectedRows, deleteSelectedRows,
     updateSelectedCount, updateRowNumbers, renderRow, addRow
@@ -75,8 +75,13 @@ async function init() {
                 // 全データに戻す
                 const freshData = await getAllMasterDataCamelCase();
                 setMasterData(freshData);
+                setCurrentVendor(null, null);
                 return;
             }
+
+            // 選択したベンダー名を取得して設定
+            const selectedVendor = vendors.find(v => v.id === vendorId);
+            setCurrentVendor(vendorId, selectedVendor?.vendor_name || null);
 
             // 選択したベンダーの担当ビルのみを取得
             const buildings = await getBuildingsByVendor(vendorId);
@@ -107,7 +112,12 @@ async function init() {
             updateEmptyState();
         });
     } else {
-        // 一般ユーザーの場合は物件追加リクエストボタンを表示
+        // 一般ユーザー：プロファイルから保守会社を取得して固定
+        if (profile.vendor_id) {
+            // マスターデータ取得後に vendor_name を検索するため、後で設定
+        }
+
+        // 物件追加リクエストボタンを表示
         const requestBtn = document.getElementById('requestBuildingBtn');
         requestBtn.style.display = 'block';
         requestBtn.addEventListener('click', async () => {
@@ -140,6 +150,13 @@ async function init() {
         ]);
         setMasterData(masterData);
         setAppSettings(settings);
+
+        // 一般ユーザーの場合、プロファイルから保守会社を設定
+        if (!admin && profile.vendor_id) {
+            const vendor = masterData.vendors.find(v => v.id === profile.vendor_id);
+            setCurrentVendor(profile.vendor_id, vendor?.vendorName || null);
+        }
+
         console.log('Master data loaded:', masterData);
         console.log('App settings loaded:', settings);
         console.log('🔍 Properties debug:', {
