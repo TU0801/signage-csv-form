@@ -352,20 +352,20 @@ export function closePasteModal() {
 
 // テンプレートダウンロード
 export function downloadExcelTemplate() {
-    // TSV形式でテンプレートを作成（Excelで開ける）
-    const header = ['物件コード', '端末ID', '保守会社名', '点検種別', '開始日', '終了日', '備考'];
-    const example1 = ['120406', 'z1003A01', '山本クリーンシステム　有限会社', 'エレベーター定期点検', '2025/1/15', '2025/1/15', '午前中'];
-    const example2 = ['2010', 'h0001A00', '(株)ビルメンテナンス', '消防設備点検', '2025/2/1', '2025/2/3', ''];
+    // Excel形式でテンプレートを作成（保守会社列なし、物件名で指定）
+    const header = ['物件名', '端末ID', '点検種別', '開始日', '終了日', '備考'];
+    const example1 = ['アソシアグロッツォ天神サウス', 'z1003A01', 'エレベーター定期点検', '2025/1/15', '2025/1/15', '午前中'];
+    const example2 = ['アソシアグロッツォタイムズスイート博多', 'h0001A00', '消防設備点検', '2025/2/1', '2025/2/3', ''];
 
-    const content = [header, example1, example2].map(row => row.join('\t')).join('\n');
+    const content = [header, example1, example2].map(row => row.join(',')).join('\n');
 
     // BOM付きUTF-8でダウンロード（Excelで文字化けしない）
     const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
-    const blob = new Blob([bom, content], { type: 'text/tab-separated-values;charset=utf-8' });
+    const blob = new Blob([bom, content], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = '一括入力テンプレート.tsv';
+    a.download = '一括入力テンプレート.csv';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -414,51 +414,61 @@ export function importFromPaste(callbacks) {
 
         let rowData = {};
 
-        // CSV出力と同じ列順（10列以上ある場合）
-        // 0: 点検CO(空), 1: 端末ID, 2: 物件コード, 3: 保守会社名, 4: 緊急連絡先,
-        // 5: 点検種別, 6: 掲示板表示, 7: TPLNo, 8: 開始日, 9: 終了日,
-        // 10: 備考, 11: 案内文, 12: frame_No(position), 13: 表示開始日,
-        // 14: 表示開始時刻, 15: 表示終了日, 16: 表示終了時刻, 17: 貼紙区分, 18: 表示時間
+        // 新形式: 保守会社列なし、物件名で取込
+        // 0: 点検CO(空), 1: 端末ID, 2: 物件名, 3: 緊急連絡先,
+        // 4: 点検種別, 5: 掲示板表示, 6: TPLNo, 7: 開始日, 8: 終了日,
+        // 9: 備考, 10: 案内文, 11: frame_No(position), 12: 表示開始日,
+        // 13: 表示開始時刻, 14: 表示終了日, 15: 表示終了時刻, 16: 貼紙区分, 17: 表示時間
         if (cols.length >= 10) {
+            const masterData = getMasterData();
+            const propertyName = cols[2]?.trim() || '';
+            // 物件名から物件コードを検索
+            const property = masterData.properties.find(p => p.propertyName === propertyName);
+
             rowData = {
                 terminalId: cols[1]?.trim() || '',
-                propertyCode: cols[2]?.trim() || '',
-                // vendorName: cols[3] - 削除（getCurrentVendor()から自動設定）
-                inspectionType: cols[5]?.trim() || '',
-                startDate: formatDateForInput(cols[8]?.trim() || ''),
-                endDate: formatDateForInput(cols[9]?.trim() || ''),
-                remarks: cols[10]?.trim() || '',
-                noticeText: cols[11]?.trim() || '',
-                position: cols[12] ? parseInt(cols[12]) : 2,
-                displayStartDate: formatDateForInput(cols[13]?.trim() || ''),
-                displayStartTime: cols[14]?.trim() || '',
-                displayEndDate: formatDateForInput(cols[15]?.trim() || ''),
-                displayEndTime: cols[16]?.trim() || '',
-                displayTime: cols[18] ? parseDisplayTime(cols[18].trim()) : 6,
-                showOnBoard: cols[6]?.trim().toLowerCase() !== 'false'
+                propertyCode: property?.propertyCode || propertyName, // 見つからない場合はそのまま
+                inspectionType: cols[4]?.trim() || '',
+                startDate: formatDateForInput(cols[7]?.trim() || ''),
+                endDate: formatDateForInput(cols[8]?.trim() || ''),
+                remarks: cols[9]?.trim() || '',
+                noticeText: cols[10]?.trim() || '',
+                position: cols[11] ? parseInt(cols[11]) : 2,
+                displayStartDate: formatDateForInput(cols[12]?.trim() || ''),
+                displayStartTime: cols[13]?.trim() || '',
+                displayEndDate: formatDateForInput(cols[14]?.trim() || ''),
+                displayEndTime: cols[15]?.trim() || '',
+                displayTime: cols[17] ? parseDisplayTime(cols[17].trim()) : 6,
+                showOnBoard: cols[5]?.trim().toLowerCase() !== 'false'
             };
-        } else if (cols.length >= 7) {
-            // 端末ID付き形式（7-9列）: 物件コード, 端末ID, 保守会社, 点検種別, 開始日, 終了日, 備考
+        } else if (cols.length >= 6) {
+            // シンプルな形式（6列以上）: 物件名, 端末ID, 点検種別, 開始日, 終了日, 備考
+            const masterData = getMasterData();
+            const propertyName = cols[0]?.trim() || '';
+            const property = masterData.properties.find(p => p.propertyName === propertyName);
+
             rowData = {
-                propertyCode: cols[0]?.trim() || '',
+                propertyCode: property?.propertyCode || propertyName,
                 terminalId: cols[1]?.trim() || '',
-                // vendorName: cols[2] - 削除（getCurrentVendor()から自動設定）
-                inspectionType: cols[3]?.trim() || '',
-                startDate: formatDateForInput(cols[4]?.trim() || ''),
-                endDate: formatDateForInput(cols[5]?.trim() || ''),
-                remarks: cols[6]?.trim() || '',
-                noticeText: cols[7]?.trim() || '',
-                position: cols[8] ? parseInt(cols[8]) : 2
-            };
-        } else {
-            // シンプルな形式（6列以下）: 物件コード, 保守会社, 点検種別, 開始日, 終了日, 備考
-            rowData = {
-                propertyCode: cols[0]?.trim() || '',
-                // vendorName: cols[1] - 削除（getCurrentVendor()から自動設定）
                 inspectionType: cols[2]?.trim() || '',
                 startDate: formatDateForInput(cols[3]?.trim() || ''),
                 endDate: formatDateForInput(cols[4]?.trim() || ''),
-                remarks: cols[5]?.trim() || ''
+                remarks: cols[5]?.trim() || '',
+                noticeText: cols[6]?.trim() || '',
+                position: cols[7] ? parseInt(cols[7]) : 2
+            };
+        } else {
+            // 最小形式（5列以下）: 物件名, 点検種別, 開始日, 終了日, 備考
+            const masterData = getMasterData();
+            const propertyName = cols[0]?.trim() || '';
+            const property = masterData.properties.find(p => p.propertyName === propertyName);
+
+            rowData = {
+                propertyCode: property?.propertyCode || propertyName,
+                inspectionType: cols[1]?.trim() || '',
+                startDate: formatDateForInput(cols[2]?.trim() || ''),
+                endDate: formatDateForInput(cols[3]?.trim() || ''),
+                remarks: cols[4]?.trim() || ''
             };
         }
 
