@@ -581,21 +581,18 @@ export function updateTerminals(rowId, propertyCode, preserveSelection = false) 
 
     // 型を揃えて比較（文字列同士で比較）
     const propCodeStr = String(propertyCode);
-    const property = masterData.properties.find(p => String(p.propertyCode) === propCodeStr);
 
-    if (property) {
-        // terminalsはJSON配列形式（文字列または配列）
-        let terminals = property.terminals;
-        if (typeof terminals === 'string') {
-            try {
-                terminals = JSON.parse(terminals);
-            } catch (e) {
-                terminals = [];
-            }
-        }
-        if (!Array.isArray(terminals)) {
-            terminals = [];
-        }
+    // getAllMasterDataCamelCase() はフラット化されているため、
+    // 同じpropertyCodeの全レコードを取得してterminals配列を再構築
+    const propertiesForCode = masterData.properties.filter(p => String(p.propertyCode) === propCodeStr);
+
+    if (propertiesForCode.length > 0) {
+        // フラット化されたレコードから terminals を構築
+        const terminals = propertiesForCode.map(p => ({
+            terminalId: p.terminalId,
+            terminal_id: p.terminalId, // 互換性
+            supplement: p.supplement
+        }));
 
         if (terminals.length > 0) {
             // 端末IDを文字列に正規化する関数
