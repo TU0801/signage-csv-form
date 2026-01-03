@@ -116,26 +116,6 @@ async function init() {
         if (profile.vendor_id) {
             // マスターデータ取得後に vendor_name を検索するため、後で設定
         }
-
-        // 物件追加リクエストボタンを表示
-        const requestBtn = document.getElementById('requestBuildingBtn');
-        requestBtn.style.display = 'block';
-        requestBtn.addEventListener('click', async () => {
-            const propertyCode = prompt('追加したい物件コードを入力してください:');
-            if (!propertyCode) return;
-
-            try {
-                await addBuildingVendor(propertyCode);
-                showToast('物件追加リクエストを送信しました。管理者の承認をお待ちください。', 'success');
-            } catch (error) {
-                console.error('Failed to request building:', error);
-                if (error.message.includes('duplicate') || error.message.includes('unique')) {
-                    showToast('この物件は既にリクエスト済みです', 'error');
-                } else {
-                    showToast('リクエストに失敗しました: ' + error.message, 'error');
-                }
-            }
-        });
     }
 
     document.getElementById('logoutBtn').addEventListener('click', async () => {
