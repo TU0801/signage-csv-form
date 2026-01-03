@@ -398,11 +398,13 @@ function renderPendingEntries() {
             <td>${escapeHtml(createdAt)}</td>
             <td>
                 <button class="btn btn-outline btn-sm" data-action="detail" data-id="${escapeHtml(entry.id)}">📋</button>
+                <button class="btn btn-primary btn-sm" data-action="edit" data-id="${escapeHtml(entry.id)}">✏️</button>
                 <button class="btn btn-success btn-sm" data-action="approve" data-id="${escapeHtml(entry.id)}">✅</button>
                 <button class="btn btn-outline btn-sm" data-action="reject" data-id="${escapeHtml(entry.id)}">❌</button>
             </td>
         `;
         tr.querySelector('[data-action="detail"]').addEventListener('click', () => showEntryDetail(entry));
+        tr.querySelector('[data-action="edit"]').addEventListener('click', () => editEntry(entry.id, 'pending'));
         tr.querySelector('[data-action="approve"]').addEventListener('click', () => approveSingle(entry.id));
         tr.querySelector('[data-action="reject"]').addEventListener('click', () => rejectSingle(entry.id));
         tbody.appendChild(tr);
@@ -695,10 +697,12 @@ function renderEntries() {
             <td>${escapeHtml(createdAt)}</td>
             <td>
                 <button class="btn btn-outline btn-sm" data-action="detail" data-id="${escapeHtml(entry.id)}">📋</button>
+                <button class="btn btn-primary btn-sm" data-action="edit" data-id="${escapeHtml(entry.id)}">✏️</button>
                 <button class="btn btn-outline btn-sm" data-action="delete" data-id="${escapeHtml(entry.id)}">🗑️</button>
             </td>
         `;
         tr.querySelector('[data-action="detail"]').addEventListener('click', () => showEntryDetail(entry));
+        tr.querySelector('[data-action="edit"]').addEventListener('click', () => editEntry(entry.id, 'list'));
         tr.querySelector('[data-action="delete"]').addEventListener('click', () => deleteEntryById(entry.id));
         tr.querySelector('.entry-checkbox').addEventListener('change', updateBulkActionButtons);
         tbody.appendChild(tr);
@@ -1741,6 +1745,81 @@ async function handleRejectBuildingRequest(requestId) {
         showToast('却下に失敗しました', 'error');
     }
 }
+
+// ========================================
+// エントリ編集機能
+// ========================================
+
+window.editEntry = async function(id, mode) {
+    const entry = mode === 'pending'
+        ? pendingEntries.find(e => e.id === id)
+        : entries.find(e => e.id === id);
+
+    if (!entry) {
+        showToast('エントリが見つかりません', 'error');
+        return;
+    }
+
+    // 簡易編集モーダル（主要フィールドのみ）
+    const property = entry.property_code;
+    const terminal = entry.terminal_id;
+    const vendor = entry.vendor_name;
+    const inspection = entry.inspection_type;
+    const startDate = entry.inspection_start || '';
+    const endDate = entry.inspection_end || '';
+    const remarks = entry.remarks || '';
+
+    const newProperty = prompt('物件コード:', property);
+    if (newProperty === null) return; // キャンセル
+
+    const newTerminal = prompt('端末ID:', terminal);
+    if (newTerminal === null) return;
+
+    const newVendor = prompt('保守会社:', vendor);
+    if (newVendor === null) return;
+
+    const newInspection = prompt('点検種別:', inspection);
+    if (newInspection === null) return;
+
+    const newStartDate = prompt('点検開始日 (YYYY-MM-DD):', startDate);
+    if (newStartDate === null) return;
+
+    const newEndDate = prompt('点検終了日 (YYYY-MM-DD):', endDate);
+    if (newEndDate === null) return;
+
+    const newRemarks = prompt('備考:', remarks);
+    if (newRemarks === null) return;
+
+    // 更新データ
+    const updatedEntry = {
+        property_code: newProperty,
+        terminal_id: newTerminal,
+        vendor_name: newVendor,
+        inspection_type: newInspection,
+        inspection_start: newStartDate || null,
+        inspection_end: newEndDate || null,
+        remarks: newRemarks
+    };
+
+    // ステータス判定
+    if (mode === 'pending') {
+        updatedEntry.status = 'ready'; // 承認待ち編集 → 即承認
+    } else if (entry.status === 'exported') {
+        updatedEntry.status = 'ready'; // 取込済み編集 → 未取込に戻す
+    }
+
+    try {
+        await updateEntry(id, updatedEntry);
+        showToast('編集しました', 'success');
+        await loadPendingEntries();
+        await loadEntries();
+        renderPendingEntries();
+        renderEntries();
+    } catch (error) {
+        console.error('Failed to update entry:', error);
+        showToast('編集に失敗しました: ' + error.message, 'error');
+    }
+};
 
 // グローバルに公開
 window.handleRemoveBuildingVendor = handleRemoveBuildingVendor;
