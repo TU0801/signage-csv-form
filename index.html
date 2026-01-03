@@ -154,8 +154,13 @@
             <section class="preview-section card">
                 <div class="card-header">🖼️ 貼紙プレビュー</div>
                 <div class="card-body" style="display: flex; flex-direction: column;">
-                    <div class="poster-preview" id="posterPreview">
-                        <div class="poster-preview-placeholder">点検工事案内を選択</div>
+                    <div class="preview-image-container">
+                        <div class="poster-preview" id="posterPreview">
+                            <div class="poster-preview-placeholder">点検工事案内を選択</div>
+                        </div>
+                        <div id="inspectionPeriodOverlay" class="inspection-period-overlay">
+                            <span id="overlayPeriod"></span>
+                        </div>
                     </div>
                     <!-- 位置はデフォルト値②上中を使用（非表示） -->
                 </div>

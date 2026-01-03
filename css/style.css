@@ -838,3 +838,28 @@ body.is-admin .position-grid.admin-only {
 body.is-admin div.admin-only[style*="inline-flex"] {
     display: inline-flex !important;
 }
+
+/* 点検期間オーバーレイ（プレビュー用） */
+.preview-image-container {
+    position: relative;
+    display: inline-block;
+}
+
+.inspection-period-overlay {
+    position: absolute;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 18px;
+    font-weight: 600;
+    white-space: nowrap;
+    display: none;
+}
+
+.inspection-period-overlay.active {
+    display: block;
+}

@@ -260,6 +260,39 @@ function hasTemplateImage(templateKey) {
             } else {
                 container.innerHTML = '<div class="poster-preview-placeholder">点検工事案内を選択</div>';
             }
+
+            // 点検期間オーバーレイ更新
+            updateInspectionPeriodOverlay(startDate, endDate);
+        }
+
+        function updateInspectionPeriodOverlay(startDate, endDate) {
+            const overlay = document.getElementById('inspectionPeriodOverlay');
+            const periodSpan = document.getElementById('overlayPeriod');
+
+            if (!overlay || !periodSpan) return;
+
+            if (startDate || endDate) {
+                const formatDate = (dateStr) => {
+                    if (!dateStr) return '';
+                    const date = new Date(dateStr);
+                    return `${date.getMonth() + 1}/${date.getDate()}`;
+                };
+
+                const start = formatDate(startDate);
+                const end = formatDate(endDate);
+
+                if (start && end) {
+                    periodSpan.textContent = `点検期間: ${start} 〜 ${end}`;
+                } else if (start) {
+                    periodSpan.textContent = `点検開始: ${start}`;
+                } else if (end) {
+                    periodSpan.textContent = `点検終了: ${end}`;
+                }
+
+                overlay.classList.add('active');
+            } else {
+                overlay.classList.remove('active');
+            }
         }
 
         function addEntry() {
