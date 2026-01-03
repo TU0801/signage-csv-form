@@ -1773,30 +1773,30 @@ window.editEntry = async function(id, mode) {
             </div>
             <div class="modal-body">
                 <form id="editEntryForm">
-                    <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 1rem;">
-                        <div class="form-group">
-                            <label>表示開始日</label>
-                            <input type="date" id="editDisplayStartDate" class="form-control" value="${entry.display_start_date || ''}">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div style="margin-bottom: 1rem;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #1e293b;">表示開始日</label>
+                            <input type="date" id="editDisplayStartDate" class="form-control" value="${entry.display_start_date || ''}" style="width: 100%;">
                         </div>
-                        <div class="form-group">
-                            <label>表示開始時間</label>
-                            <input type="time" id="editDisplayStartTime" class="form-control" value="${entry.display_start_time || ''}">
+                        <div style="margin-bottom: 1rem;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #1e293b;">表示開始時間</label>
+                            <input type="time" id="editDisplayStartTime" class="form-control" value="${entry.display_start_time || ''}" style="width: 100%;">
                         </div>
-                        <div class="form-group">
-                            <label>表示終了日</label>
-                            <input type="date" id="editDisplayEndDate" class="form-control" value="${entry.display_end_date || ''}">
+                        <div style="margin-bottom: 1rem;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #1e293b;">表示終了日</label>
+                            <input type="date" id="editDisplayEndDate" class="form-control" value="${entry.display_end_date || ''}" style="width: 100%;">
                         </div>
-                        <div class="form-group">
-                            <label>表示終了時間</label>
-                            <input type="time" id="editDisplayEndTime" class="form-control" value="${entry.display_end_time || ''}">
+                        <div style="margin-bottom: 1rem;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #1e293b;">表示終了時間</label>
+                            <input type="time" id="editDisplayEndTime" class="form-control" value="${entry.display_end_time || ''}" style="width: 100%;">
                         </div>
-                        <div class="form-group">
-                            <label>表示時間（秒）</label>
-                            <input type="number" id="editDisplayDuration" class="form-control" value="${entry.display_duration || 10}" min="1" max="60">
+                        <div style="margin-bottom: 1rem;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #1e293b;">表示時間（秒）</label>
+                            <input type="number" id="editDisplayDuration" class="form-control" value="${entry.display_duration || 10}" min="1" max="60" style="width: 100%;">
                         </div>
-                        <div class="form-group">
-                            <label>表示位置（1-9）</label>
-                            <input type="number" id="editPosterPosition" class="form-control" value="${entry.poster_position || '4'}" min="1" max="9">
+                        <div style="margin-bottom: 1rem;">
+                            <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; color: #1e293b;">表示位置（1-9）</label>
+                            <input type="number" id="editPosterPosition" class="form-control" value="${entry.poster_position || '4'}" min="1" max="9" style="width: 100%;">
                         </div>
                     </div>
                 </form>
