@@ -819,6 +819,7 @@ function hasTemplateImage(templateKey) {
             const vendorDropdown = document.getElementById('vendor');
             // キャッシュされた masterData.vendors から検索（個別取得を避ける）
             const vendorIndex = masterData.vendors.findIndex(v => v.id === vendorId);
+            const selectedVendorData = masterData.vendors[vendorIndex];
 
             if (vendorIndex !== -1) {
                 vendorDropdown.value = vendorIndex;
@@ -827,11 +828,11 @@ function hasTemplateImage(templateKey) {
                 // 緊急連絡先も自動入力
                 onVendorChange();
 
-                // 点検種別も自動設定（ベンダーのinspection_typeに基づく）
-                if (selectedVendorData?.inspection_type) {
+                // 点検種別も自動設定（ベンダーのinspectionTypeに基づく）
+                if (selectedVendorData?.inspectionType) {
                     const inspectionSelect = document.getElementById('inspectionType');
                     const inspectionOption = Array.from(inspectionSelect.options).find(
-                        opt => opt.textContent.includes(selectedVendorData.inspection_type)
+                        opt => opt.textContent.includes(selectedVendorData.inspectionType)
                     );
                     if (inspectionOption) {
                         inspectionSelect.value = inspectionOption.value;

@@ -5,7 +5,7 @@
 // ========================================
 
 export const state = {
-    masterData: { properties: [], vendors: [], inspectionTypes: [] },
+    masterData: { properties: [], vendors: [], notices: [], categories: [], templateImages: {} },
     rows: [],
     rowIdCounter: 0,
     currentFilter: 'all', // 'all', 'valid', 'error'

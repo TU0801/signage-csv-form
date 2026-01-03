@@ -158,8 +158,8 @@ export function renderRow(row, callbacks) {
                 <input type="text" class="searchable-input inspection-search" placeholder="点検種別で検索..." data-row-id="${row.id}">
                 <select class="inspection-select" data-row-id="${row.id}">
                     <option value="">-- 点検種別を選択 --</option>
-                    ${masterData.inspectionTypes.map(i =>
-                        `<option value="${i.inspection_name}" ${row.inspectionType === i.inspection_name ? 'selected' : ''}>${i.inspection_name}</option>`
+                    ${(masterData.notices || []).map(i =>
+                        `<option value="${i.inspectionType}" ${row.inspectionType === i.inspectionType ? 'selected' : ''}>${i.inspectionType}</option>`
                     ).join('')}
                 </select>
             </div>
