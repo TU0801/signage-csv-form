@@ -441,8 +441,8 @@ export function importFromPaste(callbacks) {
                 displayTime: cols[17] ? parseDisplayTime(cols[17].trim()) : 6,
                 showOnBoard: cols[5]?.trim().toLowerCase() !== 'false'
             };
-        } else if (cols.length >= 5) {
-            // シンプルな形式（5列以上）: 物件名, 端末ID, 点検種別, 開始日, 終了日, 備考
+        } else {
+            // シンプルな形式（10列未満）: 物件名, 端末ID, 点検種別, 開始日, 終了日, 備考（任意）
             const masterData = getMasterData();
             const propertyName = cols[0]?.trim() || '';
             const property = masterData.properties.find(p => p.propertyName === propertyName);
@@ -464,22 +464,9 @@ export function importFromPaste(callbacks) {
                 inspectionType: cols[2]?.trim() || '',
                 startDate: formatDateForInput(cols[3]?.trim() || ''),
                 endDate: formatDateForInput(cols[4]?.trim() || ''),
-                remarks: cols[5]?.trim() || '',
+                remarks: cols[5]?.trim() || '', // 空でもOK
                 noticeText: cols[6]?.trim() || '',
                 position: cols[7] ? parseInt(cols[7]) : 2
-            };
-        } else {
-            // 最小形式（5列以下）: 物件名, 点検種別, 開始日, 終了日, 備考
-            const masterData = getMasterData();
-            const propertyName = cols[0]?.trim() || '';
-            const property = masterData.properties.find(p => p.propertyName === propertyName);
-
-            rowData = {
-                propertyCode: property?.propertyCode || propertyName,
-                inspectionType: cols[1]?.trim() || '',
-                startDate: formatDateForInput(cols[2]?.trim() || ''),
-                endDate: formatDateForInput(cols[3]?.trim() || ''),
-                remarks: cols[4]?.trim() || ''
             };
         }
 
