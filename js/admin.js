@@ -1878,8 +1878,8 @@ window.editEntry = async function(id, mode) {
                             " onfocus="this.style.borderColor='#667eea'; this.style.background='white'" onblur="this.style.borderColor='#e2e8f0'; this.style.background='#f8fafc'">
                         </div>
                         <div>
-                            <label style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; font-weight: 600; color: #475569;">表示位置（1-9）</label>
-                            <input type="number" id="editPosterPosition" value="${entry.poster_position || '4'}" min="1" max="9" style="
+                            <label style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; font-weight: 600; color: #475569;">表示位置</label>
+                            <select id="editPosterPosition" style="
                                 width: 100%;
                                 padding: 0.625rem 0.875rem;
                                 border: 2px solid #e2e8f0;
@@ -1887,7 +1887,18 @@ window.editEntry = async function(id, mode) {
                                 font-size: 0.9375rem;
                                 transition: all 0.2s;
                                 background: #f8fafc;
+                                cursor: pointer;
                             " onfocus="this.style.borderColor='#667eea'; this.style.background='white'" onblur="this.style.borderColor='#e2e8f0'; this.style.background='#f8fafc'">
+                                <option value="1" ${entry.poster_position === '1' ? 'selected' : ''}>①左上</option>
+                                <option value="2" ${entry.poster_position === '2' ? 'selected' : ''}>②上中</option>
+                                <option value="3" ${entry.poster_position === '3' ? 'selected' : ''}>③右上</option>
+                                <option value="4" ${entry.poster_position === '4' || !entry.poster_position ? 'selected' : ''}>④左中</option>
+                                <option value="5" ${entry.poster_position === '5' ? 'selected' : ''}>⑤中央</option>
+                                <option value="6" ${entry.poster_position === '6' ? 'selected' : ''}>⑥右中</option>
+                                <option value="7" ${entry.poster_position === '7' ? 'selected' : ''}>⑦左下</option>
+                                <option value="8" ${entry.poster_position === '8' ? 'selected' : ''}>⑧下中</option>
+                                <option value="9" ${entry.poster_position === '9' ? 'selected' : ''}>⑨右下</option>
+                            </select>
                         </div>
                     </div>
                 </form>
