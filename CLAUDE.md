@@ -954,3 +954,144 @@ WHERE role = 'admin';
 - **ユーザー満足度**: 90%以上
 
 **次のセッションでこれらを達成する。**
+
+---
+
+## 🔄 継続的改善の実行（必須）
+
+### セッション開始時（必ず実行）
+
+```bash
+# 1. 前回の振り返り
+cat docs/NEXT_SESSION_TODO.txt
+
+# 2. メトリクス確認
+cat docs/METRICS.md | head -50
+
+# 3. 失敗パターン確認
+cat docs/FAILURE_PATTERNS.md | grep "⭐️"
+
+# 4. 今回の目標設定
+echo "今回の目標:"
+echo "- fix率: <15%"
+echo "- 往復数: <2回"
+echo "- テスト実施率: 100%"
+```
+
+### 実装中（チェックリスト実行）
+
+#### 要素削除時
+```bash
+# 削除前に必ず実行
+grep -r "削除する要素名" js/ css/ *.html
+
+# 全ての参照を確認してから削除
+```
+
+#### RLS操作時
+```bash
+# 実装前に必ず確認
+# Supabase Dashboard → Authentication → Policies
+# 対象テーブルのポリシーを全て確認
+```
+
+#### DB操作時
+```bash
+# フィールド名を確認
+psql -c "\\d signage_profiles" 
+
+# または
+grep -r "CREATE TABLE" supabase/schema.sql
+```
+
+### セッション終了時（必ず実行）
+
+```bash
+# 1. メトリクス更新
+# docs/METRICS.mdに今回のデータ追加
+
+# 2. 失敗パターン追加（新しい失敗があれば）
+# docs/FAILURE_PATTERNS.mdに追記
+
+# 3. 次回TODO作成
+cat > docs/NEXT_SESSION_TODO.txt << 'NEXT'
+次回セッション開始時:
+1. [ ] メトリクス確認
+2. [ ] 失敗パターン確認
+3. [ ] 目標設定
+4. [ ] 前回の反省確認
+NEXT
+```
+
+---
+
+## 📚 改善ドキュメント参照
+
+### 必読ドキュメント（毎回）
+1. **docs/METRICS.md** - 前回の成績確認
+2. **docs/FAILURE_PATTERNS.md** - 同じミス防止
+3. **docs/NEXT_SESSION_TODO.txt** - 開始時チェックリスト
+
+### 参考ドキュメント（必要時）
+4. **docs/COMPREHENSIVE_PROJECT_ANALYSIS.md** - 全体傾向
+5. **docs/DEVELOPMENT_COMMITMENT.md** - コミットメント
+6. **docs/CONTINUOUS_IMPROVEMENT_SYSTEM.md** - 改善の仕組み
+7. **docs/EXTERNAL_MEMORY_SYSTEMS.md** - 高度な改善策
+
+---
+
+## ⚠️ 絶対に忘れないこと
+
+### 実装時
+```
+□ FAILURE_PATTERNS.mdを確認（同じミス防止）
+□ RLSポリシー確認（Supabaseで）
+□ スキーマ確認（schema.sql）
+□ 既存コードパターン確認（grep）
+```
+
+### コミット前
+```
+□ ローカルテスト実施
+□ コンソールエラー0確認
+□ DBデータ確認
+□ 既存機能確認
+```
+
+### セッション終了時
+```
+□ METRICS.md更新（必須）
+□ FAILURE_PATTERNS.md更新（新規失敗があれば）
+□ NEXT_SESSION_TODO.txt作成（必須）
+```
+
+**これらを実行しないままセッション終了は禁止。**
+
+---
+
+## 🎯 改善の測定
+
+毎セッション終了時に記録:
+
+```markdown
+## YYYY-MM-DD セッション
+
+- コミット数: XX
+- fix数: XX (XX%)
+- 往復数: XX
+- テスト実施率: XX%
+- ユーザー発見バグ: XX件
+- 評価: ⭐⭐⭐⭐☆
+
+改善度:
+- 前回比 fix率: -XX%
+- 前回比 往復数: -XX回
+```
+
+**トレンドを見て、改善していることを確認する。**
+**改善していなければ、プロセスを見直す。**
+
+---
+
+**改善システムは「作る」だけでなく「使う」ことが重要。**
+**次回から確実に実行します。**
