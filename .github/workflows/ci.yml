@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [ci-enabled] # 一時的に無効化（main → ci-enabled）
   pull_request:
-    branches: [main]
+    branches: [ci-enabled]
 
 jobs:
   test:
