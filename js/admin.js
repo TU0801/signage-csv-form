@@ -1889,15 +1889,11 @@ window.editEntry = async function(id, mode) {
                                 background: #f8fafc;
                                 cursor: pointer;
                             " onfocus="this.style.borderColor='#667eea'; this.style.background='white'" onblur="this.style.borderColor='#e2e8f0'; this.style.background='#f8fafc'">
-                                <option value="1" ${entry.poster_position === '1' ? 'selected' : ''}>①左上</option>
+                                <option value="1" ${entry.poster_position === '1' ? 'selected' : ''}>①上左</option>
                                 <option value="2" ${entry.poster_position === '2' ? 'selected' : ''}>②上中</option>
-                                <option value="3" ${entry.poster_position === '3' ? 'selected' : ''}>③右上</option>
-                                <option value="4" ${entry.poster_position === '4' || !entry.poster_position ? 'selected' : ''}>④左中</option>
-                                <option value="5" ${entry.poster_position === '5' ? 'selected' : ''}>⑤中央</option>
-                                <option value="6" ${entry.poster_position === '6' ? 'selected' : ''}>⑥右中</option>
-                                <option value="7" ${entry.poster_position === '7' ? 'selected' : ''}>⑦左下</option>
-                                <option value="8" ${entry.poster_position === '8' ? 'selected' : ''}>⑧下中</option>
-                                <option value="9" ${entry.poster_position === '9' ? 'selected' : ''}>⑨右下</option>
+                                <option value="3" ${entry.poster_position === '3' ? 'selected' : ''}>③上右</option>
+                                <option value="4" ${entry.poster_position === '4' || !entry.poster_position ? 'selected' : ''}>④中央</option>
+                                <option value="0" ${entry.poster_position === '0' ? 'selected' : ''}>⑤全体</option>
                             </select>
                         </div>
                     </div>
