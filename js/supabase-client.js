@@ -198,6 +198,7 @@ export async function getAllMasterDataCamelCase() {
 
   // vendors: vendor_name -> vendorName, emergency_contact -> emergencyContact
   const vendorsFormatted = vendors.map(v => ({
+    id: v.id,  // ID を含める（個別取得を避けるため）
     vendorName: v.vendor_name,
     emergencyContact: v.emergency_contact || '',
     category: v.category || '',

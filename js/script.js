@@ -804,8 +804,8 @@ function hasTemplateImage(templateKey) {
                 const terminals = Array.isArray(b.terminals) ? b.terminals : [];
                 terminals.forEach(t => {
                     updatedProperties.push({
-                        propertyCode: b.property_code,
-                        propertyName: b.property_name,
+                        propertyCode: b.property_code, // getBuildingsByVendor returns snake_case
+                        propertyName: b.property_name,  // getBuildingsByVendor returns snake_case
                         terminalId: t.terminalId || t.terminal_id || '',
                         supplement: t.supplement || '',
                         address: b.address || ''
@@ -817,8 +817,8 @@ function hasTemplateImage(templateKey) {
 
             // 保守会社ドロップダウンを自動選択＆ロック
             const vendorDropdown = document.getElementById('vendor');
-            const selectedVendorData = vendors.find(vv => vv.id === vendorId);
-            const vendorIndex = masterData.vendors.findIndex(v => v.vendorName === selectedVendorData?.vendor_name);
+            // キャッシュされた masterData.vendors から検索（個別取得を避ける）
+            const vendorIndex = masterData.vendors.findIndex(v => v.id === vendorId);
 
             if (vendorIndex !== -1) {
                 vendorDropdown.value = vendorIndex;

@@ -118,7 +118,7 @@ export function renderRow(row, callbacks) {
     tr.draggable = true;
 
     const uniqueProperties = [...new Map(
-        masterData.properties.map(p => [p.property_code, p])
+        masterData.properties.map(p => [p.propertyCode, p])
     ).values()];
 
     tr.innerHTML = `
@@ -132,7 +132,7 @@ export function renderRow(row, callbacks) {
                 <select class="property-select" data-row-id="${row.id}">
                     <option value="">-- 物件を選択 --</option>
                     ${uniqueProperties.map(p =>
-                        `<option value="${p.property_code}" ${String(row.propertyCode) === String(p.property_code) ? 'selected' : ''}>${p.property_code} ${p.property_name}</option>`
+                        `<option value="${p.propertyCode}" ${String(row.propertyCode) === String(p.propertyCode) ? 'selected' : ''}>${p.propertyCode} ${p.propertyName}</option>`
                     ).join('')}
                 </select>
             </div>
@@ -148,7 +148,7 @@ export function renderRow(row, callbacks) {
                 <select class="vendor-select" data-row-id="${row.id}">
                     <option value="">-- 保守会社を選択 --</option>
                     ${masterData.vendors.map(v =>
-                        `<option value="${v.vendor_name}" ${row.vendorName === v.vendor_name ? 'selected' : ''}>${v.vendor_name}</option>`
+                        `<option value="${v.vendorName}" ${row.vendorName === v.vendorName ? 'selected' : ''}>${v.vendorName}</option>`
                     ).join('')}
                 </select>
             </div>
@@ -581,7 +581,7 @@ export function updateTerminals(rowId, propertyCode, preserveSelection = false) 
 
     // 型を揃えて比較（文字列同士で比較）
     const propCodeStr = String(propertyCode);
-    const property = masterData.properties.find(p => String(p.property_code) === propCodeStr);
+    const property = masterData.properties.find(p => String(p.propertyCode) === propCodeStr);
 
     if (property) {
         // terminalsはJSON配列形式（文字列または配列）

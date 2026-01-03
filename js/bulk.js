@@ -1,6 +1,6 @@
 // bulk.js - 一括入力画面のメインエントリーポイント
 
-import { getUser, getProfile, isAdmin, signOut, getAllMasterData, getSettings, getMasterVendors, getBuildingsByVendor, addBuildingVendor } from './supabase-client.js';
+import { getUser, getProfile, isAdmin, signOut, getAllMasterDataCamelCase, getSettings, getMasterVendors, getBuildingsByVendor, addBuildingVendor } from './supabase-client.js';
 import { setMasterData, getMasterData, setCurrentUserId, setCurrentFilter, clearRows, getRows, setAppSettings } from './bulk-state.js';
 import {
     addRowWithCopy, duplicateSelectedRows, deleteSelectedRows,
@@ -65,7 +65,7 @@ async function init() {
         vendors.forEach(v => {
             const opt = document.createElement('option');
             opt.value = v.id;
-            opt.textContent = v.vendor_name;
+            opt.textContent = v.vendor_name; // getMasterVendors() returns snake_case
             vendorSelect.appendChild(opt);
         });
 
@@ -74,7 +74,7 @@ async function init() {
             const vendorId = e.target.value;
             if (!vendorId) {
                 // 全データに戻す
-                const freshData = await getAllMasterData();
+                const freshData = await getAllMasterDataCamelCase();
                 setMasterData(freshData);
                 return;
             }
@@ -121,7 +121,7 @@ async function init() {
 
     try {
         const [masterData, settings] = await Promise.all([
-            getAllMasterData(),
+            getAllMasterDataCamelCase(),
             getSettings()
         ]);
         setMasterData(masterData);

@@ -192,7 +192,7 @@ export function createBulkEditModal(callbacks) {
                         <select id="bulkEditVendor" class="form-control">
                             <option value="">変更しない</option>
                             ${masterData.vendors.map(v =>
-                                `<option value="${v.vendor_name}">${v.vendor_name}</option>`
+                                `<option value="${v.vendorName}">${v.vendorName}</option>`
                             ).join('')}
                         </select>
                     </div>
@@ -210,8 +210,8 @@ export function createBulkEditModal(callbacks) {
                         <label>点検種別</label>
                         <select id="bulkEditInspection" class="form-control">
                             <option value="">変更しない</option>
-                            ${masterData.inspectionTypes.map(i =>
-                                `<option value="${i.inspection_name}">${i.inspection_name}</option>`
+                            ${(masterData.notices || []).map(i =>
+                                `<option value="${i.inspectionType}">${i.inspectionType}</option>`
                             ).join('')}
                         </select>
                     </div>
@@ -306,11 +306,11 @@ function filterBulkEditInspectionTypes() {
     const masterData = getMasterData();
 
     select.innerHTML = '<option value="">変更しない</option>';
-    masterData.inspectionTypes.forEach(i => {
-        if (!category || i.inspection_name.includes(category)) {
+    (masterData.notices || []).forEach(i => {
+        if (!category || i.inspectionType.includes(category)) {
             const opt = document.createElement('option');
-            opt.value = i.inspection_name;
-            opt.textContent = i.inspection_name;
+            opt.value = i.inspectionType;
+            opt.textContent = i.inspectionType;
             select.appendChild(opt);
         }
     });
@@ -508,9 +508,9 @@ export function openRowDetailModal(rowId, callbacks) {
     let noticeText = row.noticeText || '';
     if (!noticeText && row.inspectionType) {
         const masterData = getMasterData();
-        const inspection = masterData.inspectionTypes.find(i => i.inspection_name === row.inspectionType);
-        if (inspection && inspection.default_text) {
-            noticeText = inspection.default_text;
+        const inspection = masterData.notices?.find(i => i.inspectionType === row.inspectionType);
+        if (inspection && inspection.noticeText) {
+            noticeText = inspection.noticeText;
         }
     }
     document.getElementById('detailNoticeText').value = noticeText;

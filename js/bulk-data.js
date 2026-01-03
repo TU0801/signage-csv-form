@@ -105,9 +105,9 @@ export async function saveAll(callbacks) {
         const masterData = getMasterData();
         const entries = validRows.map(row => {
             // 型を揃えて比較
-            const property = masterData.properties.find(p => String(p.property_code) === String(row.propertyCode));
-            const vendor = masterData.vendors.find(v => v.vendor_name === row.vendorName);
-            const inspection = masterData.inspectionTypes.find(i => i.inspection_name === row.inspectionType);
+            const property = masterData.properties.find(p => String(p.propertyCode) === String(row.propertyCode));
+            const vendor = masterData.vendors.find(v => v.vendorName === row.vendorName);
+            const inspection = masterData.notices?.find(i => i.inspectionType === row.inspectionType);
 
             const displayStartDate = row.displayStartDate || row.startDate || null;
             const displayEndDate = row.displayEndDate || row.endDate || null;
@@ -137,13 +137,13 @@ export async function saveAll(callbacks) {
                 property_code: String(row.propertyCode),
                 terminal_id: normalizeTerminalId(row.terminalId) || property?.terminal_id || '',
                 vendor_name: row.vendorName,
-                emergency_contact: vendor?.emergency_contact || '',
+                emergency_contact: vendor?.emergencyContact || '',
                 inspection_type: row.inspectionType,
-                template_no: inspection?.template_no || '',
+                template_no: inspection?.templateNo || '',
                 inspection_start: row.startDate || null,
                 inspection_end: row.endDate || null,
                 remarks: row.remarks || '',
-                announcement: row.noticeText || inspection?.default_text || '',
+                announcement: row.noticeText || inspection?.noticeText || '',
                 display_start_date: displayStartDate,
                 display_start_time: row.displayStartTime || null,
                 display_end_date: displayEndDate,
@@ -217,9 +217,9 @@ export function generateCSV() {
 
     validRows.forEach(row => {
         // 型を揃えて比較
-        const property = masterData.properties.find(p => String(p.property_code) === String(row.propertyCode));
-        const vendor = masterData.vendors.find(v => v.vendor_name === row.vendorName);
-        const inspection = masterData.inspectionTypes.find(i => i.inspection_name === row.inspectionType);
+        const property = masterData.properties.find(p => String(p.propertyCode) === String(row.propertyCode));
+        const vendor = masterData.vendors.find(v => v.vendorName === row.vendorName);
+        const inspection = masterData.notices?.find(i => i.inspectionType === row.inspectionType);
 
         const formatDate = (d) => d ? d.replace(/-/g, '/') : '';
         const displayTimeFormatted = `0:00:${String(row.displayTime || 6).padStart(2, '0')}`;
@@ -235,7 +235,7 @@ export function generateCSV() {
 
         // 改行を\r\nに変換（1件入力と同じ）
         const remarksText = (row.remarks || '').replace(/\n/g, '\r\n');
-        const noticeText = (row.noticeText || inspection?.default_text || '').replace(/\n/g, '\r\n');
+        const noticeText = (row.noticeText || inspection?.noticeText || '').replace(/\n/g, '\r\n');
 
         // TRUE/False（Excelマクロと同じ）
         const showOnBoard = row.showOnBoard !== false ? 'TRUE' : 'False';
