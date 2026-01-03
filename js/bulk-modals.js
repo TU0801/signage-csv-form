@@ -441,11 +441,22 @@ export function importFromPaste(callbacks) {
                 displayTime: cols[17] ? parseDisplayTime(cols[17].trim()) : 6,
                 showOnBoard: cols[5]?.trim().toLowerCase() !== 'false'
             };
-        } else if (cols.length >= 6) {
-            // シンプルな形式（6列以上）: 物件名, 端末ID, 点検種別, 開始日, 終了日, 備考
+        } else if (cols.length >= 5) {
+            // シンプルな形式（5列以上）: 物件名, 端末ID, 点検種別, 開始日, 終了日, 備考
             const masterData = getMasterData();
             const propertyName = cols[0]?.trim() || '';
             const property = masterData.properties.find(p => p.propertyName === propertyName);
+
+            console.log('🔍 Import row:', {
+                cols: cols,
+                propertyName: propertyName,
+                property: property?.propertyCode,
+                terminalId: cols[1],
+                inspectionType: cols[2],
+                startDate: cols[3],
+                endDate: cols[4],
+                remarks: cols[5]
+            });
 
             rowData = {
                 propertyCode: property?.propertyCode || propertyName,
