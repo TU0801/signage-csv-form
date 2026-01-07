@@ -101,6 +101,8 @@ CREATE TABLE signage_master_inspection_types (
   template_no TEXT NOT NULL,
   template_image TEXT,
   default_text TEXT,
+  category TEXT,
+  show_on_board BOOLEAN DEFAULT true,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
