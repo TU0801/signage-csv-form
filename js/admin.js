@@ -124,6 +124,9 @@ async function init() {
     // イベントリスナー設定
     setupEventListeners();
 
+    // #8-1: サイドバー開閉機能
+    initSidebarToggle();
+
     // 初期表示
     updateStats();
     populateFilters();
@@ -183,6 +186,30 @@ async function loadAllData() {
     if (filterStartDate && !filterStartDate.value) {
         filterStartDate.value = today;
     }
+}
+
+// ========================================
+// #8-1: サイドバー開閉機能
+// ========================================
+
+function initSidebarToggle() {
+    const sidebar = document.querySelector('.admin-sidebar');
+    const toggle = document.getElementById('sidebarToggle');
+    if (!sidebar || !toggle) return;
+
+    // LocalStorageから状態を復元
+    const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+    if (isCollapsed) {
+        sidebar.classList.add('collapsed');
+        toggle.textContent = '▶';
+    }
+
+    toggle.addEventListener('click', () => {
+        sidebar.classList.toggle('collapsed');
+        const collapsed = sidebar.classList.contains('collapsed');
+        toggle.textContent = collapsed ? '▶' : '◀';
+        localStorage.setItem('sidebarCollapsed', collapsed);
+    });
 }
 
 // ========================================
