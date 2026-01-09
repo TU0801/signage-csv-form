@@ -123,11 +123,23 @@ function hasTemplateImage(templateKey) {
             const today = new Date().toISOString().split('T')[0];
             document.getElementById('startDate').value = today;
             document.getElementById('displayStartDate').value = today;
+
+            // #10: 点検開始日入力時に終了日へ自動入力
+            document.getElementById('startDate').addEventListener('change', function() {
+                const endDate = document.getElementById('endDate');
+                if (!endDate.value) {
+                    endDate.value = this.value;
+                    updatePreview();
+                }
+            });
+
             updatePreview();
         }
 
         function populatePropertySelect() {
             const select = document.getElementById('property');
+            // #4: 既存optionをクリアしてから追加（フィルター時の重複防止）
+            select.innerHTML = '<option value="">選択してください</option>';
             const seen = new Set();
             masterData.properties.forEach(p => {
                 if (!seen.has(p.propertyCode)) {
@@ -360,7 +372,7 @@ function hasTemplateImage(templateKey) {
                 emergencyContact: vendor.emergencyContact,
                 inspectionType: isCustomMode ? '追加画像' : notice.inspectionType,
                 showOnBoard: document.getElementById('showOnBoard').checked,
-                templateNo: isCustomMode ? '' : notice.templateNo,
+                templateNo: isCustomMode ? (window.customImageFile?.name || '') : notice.templateNo,
                 startDate: isCustomMode ? '' : document.getElementById('startDate').value,
                 endDate: isCustomMode ? '' : document.getElementById('endDate').value,
                 remarks: remarks,
@@ -539,6 +551,14 @@ function hasTemplateImage(templateKey) {
             document.getElementById('displayStartTime').disabled = isCustom;
             document.getElementById('displayEndDate').disabled = isCustom;
             document.getElementById('displayEndTime').disabled = isCustom;
+
+            // #6: 追加モードの場合: 掲示板案内文・掲示備考を非活性化＋背景グレー
+            const noticeText = document.getElementById('noticeText');
+            const remarks = document.getElementById('remarks');
+            noticeText.disabled = isCustom;
+            remarks.disabled = isCustom;
+            noticeText.style.backgroundColor = isCustom ? '#e5e7eb' : '';
+            remarks.style.backgroundColor = isCustom ? '#e5e7eb' : '';
 
             // プレビューを更新
             if (isCustom && window.customImageData) {
@@ -820,10 +840,13 @@ function hasTemplateImage(templateKey) {
             // 保守会社ドロップダウンを自動選択＆ロック
             const vendorDropdown = document.getElementById('vendor');
             // キャッシュされた masterData.vendors から検索（個別取得を避ける）
-            const vendorIndex = masterData.vendors.findIndex(v => v.id === vendorId);
+            // #2: 型を統一して比較（UUID文字列の比較）
+            const vendorIndex = masterData.vendors.findIndex(v => String(v.id) === String(vendorId));
             const selectedVendorData = masterData.vendors[vendorIndex];
 
             if (vendorIndex !== -1) {
+                // #2: hidden input でも確実に値を設定
+                document.getElementById('vendor').value = vendorIndex;
                 vendorDropdown.value = vendorIndex;
                 vendorDropdown.disabled = true;
                 vendorDropdown.style.background = '#f0f0f0';
