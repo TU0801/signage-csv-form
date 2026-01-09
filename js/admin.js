@@ -2237,16 +2237,27 @@ window.handleRejectBuildingRequest = handleRejectBuildingRequest;
 
 let currentEquipmentPropertyCode = null;
 
+// フォームリセット
+function resetEquipmentForm() {
+    ['equipmentType', 'equipmentVendor', 'equipmentRemarks', 'equipmentRemarks2'].forEach(id => {
+        document.getElementById(id).value = '';
+    });
+    document.querySelectorAll('#monthCheckboxes input').forEach(cb => cb.checked = false);
+}
+
 // モーダルを開く
 window.openEquipmentModal = async function(propertyCode, propertyName) {
     currentEquipmentPropertyCode = propertyCode;
     document.getElementById('equipmentModalTitle').textContent = `設備情報 - ${propertyName}`;
     document.getElementById('equipmentModal').classList.add('active');
 
-    // セレクトボックスを初期化
-    await populateEquipmentSelects();
+    // セレクトボックス初期化
+    document.getElementById('equipmentType').innerHTML = '<option value="">選択...</option>' +
+        masterData.inspectionTypes.filter(t => t.category === '点検')
+            .map(t => `<option value="${t.id}">${escapeHtml(t.inspection_name)}</option>`).join('');
+    document.getElementById('equipmentVendor').innerHTML = '<option value="">なし</option>' +
+        masterData.vendors.map(v => `<option value="${v.id}">${escapeHtml(v.vendor_name)}</option>`).join('');
 
-    // 設備一覧を読み込み
     await loadEquipmentList();
 };
 
@@ -2254,118 +2265,60 @@ window.openEquipmentModal = async function(propertyCode, propertyName) {
 window.closeEquipmentModal = function() {
     document.getElementById('equipmentModal').classList.remove('active');
     currentEquipmentPropertyCode = null;
-    // フォームをリセット
-    document.getElementById('equipmentType').value = '';
-    document.getElementById('equipmentVendor').value = '';
-    document.getElementById('equipmentRemarks').value = '';
-    document.getElementById('equipmentRemarks2').value = '';
-    document.querySelectorAll('#monthCheckboxes input').forEach(cb => cb.checked = false);
+    resetEquipmentForm();
 };
-
-// セレクトボックスを初期化
-async function populateEquipmentSelects() {
-    // 設備種類（点検カテゴリのみ）
-    const typeSelect = document.getElementById('equipmentType');
-    typeSelect.innerHTML = '<option value="">選択...</option>';
-    const inspectionTypes = masterData.inspectionTypes.filter(t => t.category === '点検');
-    inspectionTypes.forEach(t => {
-        const option = document.createElement('option');
-        option.value = t.id;
-        option.textContent = t.inspection_name;
-        typeSelect.appendChild(option);
-    });
-
-    // 保守会社
-    const vendorSelect = document.getElementById('equipmentVendor');
-    vendorSelect.innerHTML = '<option value="">なし</option>';
-    masterData.vendors.forEach(v => {
-        const option = document.createElement('option');
-        option.value = v.id;
-        option.textContent = v.vendor_name;
-        vendorSelect.appendChild(option);
-    });
-}
 
 // 設備一覧を読み込み
 async function loadEquipmentList() {
     try {
         const equipment = await getBuildingEquipment(currentEquipmentPropertyCode);
-        renderEquipmentTable(equipment);
+        const tbody = document.getElementById('equipmentTableBody');
+        const emptyMsg = document.getElementById('equipmentEmptyMessage');
+
+        if (!equipment?.length) {
+            tbody.innerHTML = '';
+            emptyMsg.style.display = 'block';
+            return;
+        }
+
+        emptyMsg.style.display = 'none';
+        tbody.innerHTML = equipment.map(eq => `
+            <tr>
+                <td>${escapeHtml(eq.inspection_type?.inspection_name || '-')}</td>
+                <td>${escapeHtml(eq.vendor?.vendor_name || '-')}</td>
+                <td>${eq.inspection_months?.length ? eq.inspection_months.map(m => `${m}月`).join(', ') : '-'}</td>
+                <td>${escapeHtml(eq.remarks || '')}</td>
+                <td>${escapeHtml(eq.remarks2 || '')}</td>
+                <td><button class="btn btn-danger btn-sm" onclick="deleteEquipmentRow('${eq.id}')">削除</button></td>
+            </tr>
+        `).join('');
     } catch (error) {
         console.error('Failed to load equipment:', error);
         showToast('設備情報の読み込みに失敗しました', 'error');
     }
 }
 
-// 設備テーブルを描画
-function renderEquipmentTable(equipment) {
-    const tbody = document.getElementById('equipmentTableBody');
-    const emptyMsg = document.getElementById('equipmentEmptyMessage');
-
-    if (!equipment || equipment.length === 0) {
-        tbody.innerHTML = '';
-        emptyMsg.style.display = 'block';
-        return;
-    }
-
-    emptyMsg.style.display = 'none';
-    tbody.innerHTML = equipment.map(eq => `
-        <tr data-id="${eq.id}">
-            <td>${escapeHtml(eq.inspection_type?.inspection_name || '-')}</td>
-            <td>${escapeHtml(eq.vendor?.vendor_name || '-')}</td>
-            <td>${formatInspectionMonths(eq.inspection_months)}</td>
-            <td>${escapeHtml(eq.remarks || '')}</td>
-            <td>${escapeHtml(eq.remarks2 || '')}</td>
-            <td>
-                <button class="btn btn-danger btn-sm" onclick="deleteEquipmentRow('${eq.id}')">削除</button>
-            </td>
-        </tr>
-    `).join('');
-}
-
-// 点検月フォーマット
-function formatInspectionMonths(months) {
-    if (!months || months.length === 0) return '-';
-    return months.map(m => `${m}月`).join(', ');
-}
-
 // 設備を追加
 window.addEquipment = async function() {
     const typeId = document.getElementById('equipmentType').value;
-    const vendorId = document.getElementById('equipmentVendor').value || null;
-    const remarks = document.getElementById('equipmentRemarks').value;
-    const remarks2 = document.getElementById('equipmentRemarks2').value;
-
     if (!typeId) {
         showToast('設備種類を選択してください', 'error');
         return;
     }
 
-    // 選択された点検月を取得
-    const months = [];
-    document.querySelectorAll('#monthCheckboxes input:checked').forEach(cb => {
-        months.push(parseInt(cb.value));
-    });
+    const months = [...document.querySelectorAll('#monthCheckboxes input:checked')].map(cb => parseInt(cb.value));
 
     try {
         await addBuildingEquipment({
             property_code: currentEquipmentPropertyCode,
             inspection_type_id: typeId,
-            vendor_id: vendorId,
+            vendor_id: document.getElementById('equipmentVendor').value || null,
             inspection_months: months,
-            remarks: remarks,
-            remarks2: remarks2
+            remarks: document.getElementById('equipmentRemarks').value,
+            remarks2: document.getElementById('equipmentRemarks2').value
         });
         showToast('設備を追加しました', 'success');
-
-        // フォームをリセット
-        document.getElementById('equipmentType').value = '';
-        document.getElementById('equipmentVendor').value = '';
-        document.getElementById('equipmentRemarks').value = '';
-        document.getElementById('equipmentRemarks2').value = '';
-        document.querySelectorAll('#monthCheckboxes input').forEach(cb => cb.checked = false);
-
-        // 一覧を再読み込み
+        resetEquipmentForm();
         await loadEquipmentList();
     } catch (error) {
         console.error('Failed to add equipment:', error);
@@ -2376,7 +2329,6 @@ window.addEquipment = async function() {
 // 設備を削除
 window.deleteEquipmentRow = async function(id) {
     if (!confirm('この設備を削除してもよろしいですか？')) return;
-
     try {
         await deleteBuildingEquipment(id);
         showToast('設備を削除しました', 'success');
@@ -2386,14 +2338,6 @@ window.deleteEquipmentRow = async function(id) {
         showToast('設備の削除に失敗しました', 'error');
     }
 };
-
-// イベントリスナー（追加ボタン）
-document.addEventListener('DOMContentLoaded', function() {
-    const addBtn = document.getElementById('addEquipmentBtn');
-    if (addBtn) {
-        addBtn.addEventListener('click', addEquipment);
-    }
-});
 
 // ========================================
 // 起動
