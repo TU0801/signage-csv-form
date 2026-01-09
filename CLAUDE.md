@@ -61,6 +61,7 @@ grep -i "キーワード" docs/FAILURE_PATTERNS.md
 - [ ] DBデータ確認
 - [ ] コンソールエラー0
 - [ ] 既存機能OK
+- [ ] **UI変更時はテストも更新**
 
 ---
 
