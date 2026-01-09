@@ -127,6 +127,9 @@ async function init() {
     // #8-1: サイドバー開閉機能
     initSidebarToggle();
 
+    // #8-6: テーブルソート機能
+    initTableSort();
+
     // 初期表示
     updateStats();
     populateFilters();
@@ -186,6 +189,87 @@ async function loadAllData() {
     if (filterStartDate && !filterStartDate.value) {
         filterStartDate.value = today;
     }
+}
+
+// ========================================
+// #8-6: テーブルソート機能
+// ========================================
+
+let currentSort = {
+    column: 'created_at',
+    ascending: false
+};
+
+function initTableSort() {
+    // LocalStorageから復元
+    const saved = localStorage.getItem('entriesSort');
+    if (saved) {
+        try {
+            currentSort = JSON.parse(saved);
+        } catch (e) {
+            // 無効なデータは無視
+        }
+    }
+
+    // ヘッダーにイベントリスナー追加
+    document.querySelectorAll('#tab-entries .sortable').forEach(th => {
+        th.addEventListener('click', () => {
+            const column = th.dataset.sort;
+            if (currentSort.column === column) {
+                currentSort.ascending = !currentSort.ascending;
+            } else {
+                currentSort.column = column;
+                currentSort.ascending = true;
+            }
+            localStorage.setItem('entriesSort', JSON.stringify(currentSort));
+            updateSortIndicators();
+            renderEntries();
+        });
+    });
+
+    updateSortIndicators();
+}
+
+function updateSortIndicators() {
+    document.querySelectorAll('#tab-entries .sortable').forEach(th => {
+        const indicator = th.querySelector('.sort-indicator');
+        if (!indicator) return;
+        if (th.dataset.sort === currentSort.column) {
+            th.classList.add('sorted');
+            indicator.textContent = currentSort.ascending ? '▲' : '▼';
+        } else {
+            th.classList.remove('sorted');
+            indicator.textContent = '▼';
+        }
+    });
+}
+
+function sortEntries(entriesArray) {
+    return [...entriesArray].sort((a, b) => {
+        let aVal = a[currentSort.column] || '';
+        let bVal = b[currentSort.column] || '';
+
+        // 物件名は特別処理（masterDataから取得）
+        if (currentSort.column === 'property_name') {
+            const propA = masterData.properties.find(p => p.property_code === a.property_code);
+            const propB = masterData.properties.find(p => p.property_code === b.property_code);
+            aVal = propA?.property_name || '';
+            bVal = propB?.property_name || '';
+        }
+
+        // 日付の場合は数値に変換
+        if (currentSort.column.includes('_at') || currentSort.column.includes('_start') || currentSort.column.includes('_end')) {
+            aVal = aVal ? new Date(aVal).getTime() : 0;
+            bVal = bVal ? new Date(bVal).getTime() : 0;
+        }
+
+        // 文字列の場合は小文字に統一
+        if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+        if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+
+        const comparison = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+        return currentSort.ascending ? comparison : -comparison;
+    });
 }
 
 // ========================================
@@ -717,7 +801,10 @@ function renderEntries() {
 
     emptyMsg.style.display = 'none';
 
-    entries.forEach(entry => {
+    // #8-6: ソートを適用
+    const sortedEntriesList = sortEntries(entries);
+
+    sortedEntriesList.forEach(entry => {
         const tr = document.createElement('tr');
         const createdAt = new Date(entry.created_at).toLocaleString('ja-JP');
         const inspectionStart = entry.inspection_start
