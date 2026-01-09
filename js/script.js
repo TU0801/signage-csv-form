@@ -123,6 +123,16 @@ function hasTemplateImage(templateKey) {
             const today = new Date().toISOString().split('T')[0];
             document.getElementById('startDate').value = today;
             document.getElementById('displayStartDate').value = today;
+
+            // #10: 点検開始日入力時に終了日へ自動入力
+            document.getElementById('startDate').addEventListener('change', function() {
+                const endDate = document.getElementById('endDate');
+                if (!endDate.value) {
+                    endDate.value = this.value;
+                    updatePreview();
+                }
+            });
+
             updatePreview();
         }
 
@@ -360,7 +370,7 @@ function hasTemplateImage(templateKey) {
                 emergencyContact: vendor.emergencyContact,
                 inspectionType: isCustomMode ? '追加画像' : notice.inspectionType,
                 showOnBoard: document.getElementById('showOnBoard').checked,
-                templateNo: isCustomMode ? '' : notice.templateNo,
+                templateNo: isCustomMode ? (window.customImageFile?.name || '') : notice.templateNo,
                 startDate: isCustomMode ? '' : document.getElementById('startDate').value,
                 endDate: isCustomMode ? '' : document.getElementById('endDate').value,
                 remarks: remarks,
@@ -539,6 +549,14 @@ function hasTemplateImage(templateKey) {
             document.getElementById('displayStartTime').disabled = isCustom;
             document.getElementById('displayEndDate').disabled = isCustom;
             document.getElementById('displayEndTime').disabled = isCustom;
+
+            // #6: 追加モードの場合: 掲示板案内文・掲示備考を非活性化＋背景グレー
+            const noticeText = document.getElementById('noticeText');
+            const remarks = document.getElementById('remarks');
+            noticeText.disabled = isCustom;
+            remarks.disabled = isCustom;
+            noticeText.style.backgroundColor = isCustom ? '#e5e7eb' : '';
+            remarks.style.backgroundColor = isCustom ? '#e5e7eb' : '';
 
             // プレビューを更新
             if (isCustom && window.customImageData) {
