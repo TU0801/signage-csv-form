@@ -554,6 +554,10 @@ export async function getAllEntries(filters = {}) {
   if (filters.status) {
     query = query.eq('status', filters.status);
   }
+  // #8-2: 保守会社フィルター
+  if (filters.vendorName) {
+    query = query.eq('vendor_name', filters.vendorName);
+  }
 
   const { data, error } = await query;
   if (error) throw error;

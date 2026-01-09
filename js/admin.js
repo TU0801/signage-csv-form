@@ -560,12 +560,12 @@ function showEntryDetail(entry) {
         </div>
 
         <div class="detail-section">
-            <div class="detail-section-title">案内文・備考</div>
+            <div class="detail-section-title">案内文・作業時間 及び 備考</div>
             <div class="detail-grid">
                 <div class="detail-label">案内文</div>
                 <div class="detail-value" style="white-space: pre-wrap;">${escapeHtml(entry.announcement || '-')}</div>
 
-                <div class="detail-label">備考</div>
+                <div class="detail-label">作業時間 及び 備考</div>
                 <div class="detail-value" style="white-space: pre-wrap;">${escapeHtml(entry.remarks || '-')}</div>
             </div>
         </div>
@@ -607,6 +607,17 @@ function populateFilters() {
         opt.textContent = `${p.property_code} ${p.property_name}`;
         filterProperty.appendChild(opt);
     });
+
+    // #8-2: 保守会社フィルター初期化
+    const filterVendor = document.getElementById('filterVendor');
+    if (filterVendor) {
+        masterData.vendors.forEach(v => {
+            const opt = document.createElement('option');
+            opt.value = v.vendor_name;
+            opt.textContent = v.vendor_name;
+            filterVendor.appendChild(opt);
+        });
+    }
 }
 
 // ========================================
@@ -619,7 +630,7 @@ function saveFilters() {
         property: document.getElementById('filterProperty')?.value || '',
         startDate: document.getElementById('filterStartDate')?.value || '',
         endDate: document.getElementById('filterEndDate')?.value || '',
-        status: document.getElementById('filterStatus')?.value || ''
+        vendor: document.getElementById('filterVendor')?.value || ''  // #8-2: status→vendor
     };
     localStorage.setItem('admin_entry_filters', JSON.stringify(filters));
 }
@@ -633,7 +644,7 @@ function restoreFilters() {
             if (document.getElementById('filterProperty')) document.getElementById('filterProperty').value = filters.property || '';
             if (document.getElementById('filterStartDate')) document.getElementById('filterStartDate').value = filters.startDate || '';
             if (document.getElementById('filterEndDate')) document.getElementById('filterEndDate').value = filters.endDate || '';
-            if (document.getElementById('filterStatus')) document.getElementById('filterStatus').value = filters.status || '';
+            if (document.getElementById('filterVendor')) document.getElementById('filterVendor').value = filters.vendor || '';  // #8-2
         }
     } catch (error) {
         console.error('Failed to restore filters:', error);
@@ -644,7 +655,7 @@ async function loadEntries() {
     const propertyCode = document.getElementById('filterProperty').value;
     const startDate = document.getElementById('filterStartDate').value;
     const endDate = document.getElementById('filterEndDate').value;
-    const status = document.getElementById('filterStatus')?.value;
+    const vendorName = document.getElementById('filterVendor')?.value;  // #8-2: status→vendor
 
     // フィルターを保存
     saveFilters();
@@ -654,7 +665,7 @@ async function loadEntries() {
             propertyCode: propertyCode || undefined,
             startDate: startDate || undefined,
             endDate: endDate || undefined,
-            status: status || undefined
+            vendorName: vendorName || undefined  // #8-2: status→vendorName
         });
         renderEntries();
         updateSelectedEntries();
@@ -722,11 +733,14 @@ function renderEntries() {
     });
 
     document.getElementById('entriesCount').textContent = entries.length;
-    updateBulkActionButtons();
 
-    // 全選択チェックボックスをリセット
+    // #8-5: 全選択チェックボックスをデフォルトで選択状態に
     const selectAll = document.getElementById('selectAllEntries');
-    if (selectAll) selectAll.checked = false;
+    if (selectAll) {
+        selectAll.checked = true;
+        document.querySelectorAll('.entry-checkbox').forEach(cb => cb.checked = true);
+    }
+    updateBulkActionButtons();
 }
 
 window.deleteEntryById = async function(id) {
