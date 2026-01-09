@@ -697,28 +697,31 @@ function renderEntries() {
             ? new Date(entry.inspection_start).toLocaleDateString('ja-JP')
             : '-';
 
-        // ステータス表示（3段階）
-        const statusLabel =
-            entry.status === 'exported'
-                ? '<span class="status-badge status-exported">✓ 取込済</span>'
-            : entry.status === 'ready'
-                ? '<span class="status-badge status-ready">未取込</span>'
-            : '<span class="status-badge status-draft">承認待ち</span>';
-
+        // #8-4: テーブル列変更（11列）
         // 物件名を取得
         const propertyForList = masterData.properties.find(p => p.property_code === entry.property_code);
-        const propertyDisplayForList = propertyForList
-            ? `<div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(entry.property_code)} ${escapeHtml(propertyForList.property_name)}">${escapeHtml(entry.property_code)} ${escapeHtml(propertyForList.property_name)}</div>`
-            : escapeHtml(entry.property_code);
+
+        // 点検終了日のフォーマット
+        const inspectionEnd = entry.inspection_end
+            ? new Date(entry.inspection_end).toLocaleDateString('ja-JP')
+            : '-';
+
+        // 備考（長い場合は省略）
+        const remarksDisplay = entry.remarks
+            ? `<div style="max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(entry.remarks)}">${escapeHtml(entry.remarks)}</div>`
+            : '-';
 
         tr.innerHTML = `
             <td><input type="checkbox" class="entry-checkbox" data-id="${entry.id}"></td>
-            <td>${escapeHtml(getUserEmail(entry.user_id))}</td>
-            <td>${propertyDisplayForList}</td>
+            <td>${escapeHtml(entry.property_code)}</td>
+            <td>${escapeHtml(propertyForList?.property_name || '-')}</td>
             <td>${escapeHtml(entry.inspection_type)}</td>
             <td>${escapeHtml(inspectionStart)}</td>
-            <td>${statusLabel}</td>
+            <td>${escapeHtml(inspectionEnd)}</td>
+            <td>${remarksDisplay}</td>
+            <td>${escapeHtml(entry.vendor_name || '-')}</td>
             <td>${escapeHtml(createdAt)}</td>
+            <td>${escapeHtml(getUserEmail(entry.user_id))}</td>
             <td>
                 <button class="btn btn-outline btn-sm" data-action="detail" data-id="${escapeHtml(entry.id)}">📋</button>
                 <button class="btn btn-primary btn-sm" data-action="edit" data-id="${escapeHtml(entry.id)}">✏️</button>
