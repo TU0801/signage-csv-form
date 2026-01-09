@@ -348,6 +348,9 @@ function setupEventListeners() {
     // 検索
     document.getElementById('searchBtn').addEventListener('click', loadEntries);
 
+    // #8-3: 点検レポート出力
+    document.getElementById('exportReportBtn').addEventListener('click', exportInspectionReport);
+
     // CSVエクスポート
     document.getElementById('exportCsvBtn').addEventListener('click', exportCSV);
     document.getElementById('exportCopyBtn').addEventListener('click', copyCSV);
@@ -1079,6 +1082,72 @@ function getFilteredExportEntries() {
         if (exportEndDate && entry.inspection_start > exportEndDate) return false;
         return true;
     });
+}
+
+// ========================================
+// #8-3: 点検レポート出力（Excel）
+// ========================================
+
+function exportInspectionReport() {
+    const selectedIds = getSelectedEntryIds();
+    if (selectedIds.length === 0) {
+        showToast('レポート対象を選択してください', 'error');
+        return;
+    }
+
+    const selectedEntries = entries.filter(e => selectedIds.includes(e.id));
+
+    // ヘッダー行
+    const headers = ['物件コード', '物件名', '点検種別', '点検開始日', '点検終了日', '作業時間及び備考', '保守会社', '登録日時'];
+
+    // データ行
+    const data = selectedEntries.map(entry => {
+        const prop = masterData.properties.find(p => p.property_code === entry.property_code);
+        return [
+            entry.property_code || '',
+            prop?.property_name || '',
+            entry.inspection_type || '',
+            entry.inspection_start ? new Date(entry.inspection_start).toLocaleDateString('ja-JP') : '',
+            entry.inspection_end ? new Date(entry.inspection_end).toLocaleDateString('ja-JP') : '',
+            entry.remarks || '',
+            entry.vendor_name || '',
+            entry.created_at ? new Date(entry.created_at).toLocaleString('ja-JP') : ''
+        ];
+    });
+
+    // タイトル行と印刷日時
+    const now = new Date().toLocaleString('ja-JP');
+    const titleRows = [
+        ['点検レポート'],
+        [`出力日時: ${now}`],
+        [`対象件数: ${selectedEntries.length}件`],
+        []  // 空行
+    ];
+
+    // シートデータ作成
+    const sheetData = [...titleRows, headers, ...data];
+    const ws = XLSX.utils.aoa_to_sheet(sheetData);
+
+    // 列幅設定
+    ws['!cols'] = [
+        { wch: 12 }, // 物件コード
+        { wch: 20 }, // 物件名
+        { wch: 15 }, // 点検種別
+        { wch: 12 }, // 開始日
+        { wch: 12 }, // 終了日
+        { wch: 30 }, // 備考
+        { wch: 15 }, // 保守会社
+        { wch: 18 }  // 登録日時
+    ];
+
+    // ワークブック作成とダウンロード
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '点検レポート');
+
+    const timestamp = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15);
+    XLSX.writeFile(wb, `inspection-report-${timestamp}.xlsx`);
+
+    showToast('点検レポートをダウンロードしました', 'success');
 }
 
 function exportCSV() {

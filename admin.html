@@ -1281,6 +1281,7 @@
                         <button class="btn btn-danger btn-sm" id="bulkDeleteBtn" disabled>🗑️ 一括削除</button>
                         <button class="btn btn-outline btn-sm" id="markExportedBtn" disabled>✓ 取込済みにする</button>
                         <button class="btn btn-outline btn-sm" id="markSubmittedBtn" disabled>↩ 未取込に戻す</button>
+                        <button class="btn btn-danger btn-sm" id="exportReportBtn">📊 点検レポート</button>
                         <button class="btn btn-success btn-sm" id="exportCsvBtn">📥 CSV</button>
                         <button class="btn btn-outline btn-sm" id="exportCopyBtn">📋 コピー</button>
                     </div>
@@ -1704,6 +1705,8 @@
             }
         });
     </script>
+    <!-- #8-3: SheetJS for Excel export -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <script type="module" src="js/admin.js"></script>
 </body>
 </html>
