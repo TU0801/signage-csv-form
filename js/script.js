@@ -138,6 +138,8 @@ function hasTemplateImage(templateKey) {
 
         function populatePropertySelect() {
             const select = document.getElementById('property');
+            // #4: 既存optionをクリアしてから追加（フィルター時の重複防止）
+            select.innerHTML = '<option value="">選択してください</option>';
             const seen = new Set();
             masterData.properties.forEach(p => {
                 if (!seen.has(p.propertyCode)) {
