@@ -838,10 +838,13 @@ function hasTemplateImage(templateKey) {
             // 保守会社ドロップダウンを自動選択＆ロック
             const vendorDropdown = document.getElementById('vendor');
             // キャッシュされた masterData.vendors から検索（個別取得を避ける）
-            const vendorIndex = masterData.vendors.findIndex(v => v.id === vendorId);
+            // #2: 型を統一して比較（UUID文字列の比較）
+            const vendorIndex = masterData.vendors.findIndex(v => String(v.id) === String(vendorId));
             const selectedVendorData = masterData.vendors[vendorIndex];
 
             if (vendorIndex !== -1) {
+                // #2: hidden input でも確実に値を設定
+                document.getElementById('vendor').value = vendorIndex;
                 vendorDropdown.value = vendorIndex;
                 vendorDropdown.disabled = true;
                 vendorDropdown.style.background = '#f0f0f0';
