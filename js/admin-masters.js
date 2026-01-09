@@ -235,6 +235,9 @@ export function renderVendors(masterData, filter = '') {
     });
 }
 
+// #13: ドラッグ&ドロップ用の状態管理
+let draggedInspection = null;
+
 export function renderInspections(masterData, filter = '') {
     const inspectionsList = document.getElementById('inspectionsList');
     inspectionsList.innerHTML = '';
@@ -261,10 +264,15 @@ export function renderInspections(masterData, filter = '') {
         const div = document.createElement('div');
         div.className = 'master-item';
         div.dataset.id = i.id;
+        // #13: ドラッグ可能にする（フィルター中は無効）
+        if (!filter) {
+            div.draggable = true;
+        }
         const categoryBadge = i.category ? `<span style="background: #e0e7ff; color: #3730a3; padding: 0.25rem 0.625rem; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">${escapeHtml(i.category)}</span>` : '';
         const templateLabel = i.template_no ? (templateImages[i.template_no] || i.template_no) : '未設定';
 
         div.innerHTML = `
+            ${!filter ? '<div class="drag-handle">☰</div>' : ''}
             <div class="master-item-name">${escapeHtml(i.inspection_name)}</div>
             <div class="master-item-details">
                 ${categoryBadge ? `<span>${categoryBadge}</span>` : '<span>-</span>'}
@@ -277,8 +285,89 @@ export function renderInspections(masterData, filter = '') {
         `;
         div.querySelector('[data-action="edit"]').addEventListener('click', () => window.editInspection(i.id));
         div.querySelector('[data-action="delete"]').addEventListener('click', () => window.deleteMasterInspection(i.id));
+
+        // #13: ドラッグ&ドロップイベント（フィルター中は無効）
+        if (!filter) {
+            div.addEventListener('dragstart', handleInspectionDragStart);
+            div.addEventListener('dragend', handleInspectionDragEnd);
+            div.addEventListener('dragover', handleInspectionDragOver);
+            div.addEventListener('drop', (e) => handleInspectionDrop(e, masterData));
+        }
+
         inspectionsList.appendChild(div);
     });
+}
+
+// #13: ドラッグ&ドロップハンドラー
+function handleInspectionDragStart(e) {
+    draggedInspection = e.target.closest('.master-item');
+    draggedInspection.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+}
+
+function handleInspectionDragEnd(e) {
+    if (draggedInspection) {
+        draggedInspection.classList.remove('dragging');
+        draggedInspection = null;
+    }
+    document.querySelectorAll('#inspectionsList .master-item').forEach(item => {
+        item.classList.remove('drag-over');
+    });
+}
+
+function handleInspectionDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const item = e.target.closest('.master-item');
+    if (item && item !== draggedInspection) {
+        document.querySelectorAll('#inspectionsList .master-item').forEach(i => {
+            i.classList.remove('drag-over');
+        });
+        item.classList.add('drag-over');
+    }
+}
+
+async function handleInspectionDrop(e, masterData) {
+    e.preventDefault();
+    const targetItem = e.target.closest('.master-item');
+    if (!targetItem || targetItem === draggedInspection) return;
+
+    const list = document.getElementById('inspectionsList');
+    const allItems = Array.from(list.querySelectorAll('.master-item'));
+    const draggedIndex = allItems.indexOf(draggedInspection);
+    const targetIndex = allItems.indexOf(targetItem);
+
+    // DOM上で位置を入れ替え
+    if (draggedIndex < targetIndex) {
+        targetItem.after(draggedInspection);
+    } else {
+        targetItem.before(draggedInspection);
+    }
+
+    // sort_orderを更新
+    await updateInspectionSortOrders(masterData);
+}
+
+async function updateInspectionSortOrders(masterData) {
+    const list = document.getElementById('inspectionsList');
+    const items = list.querySelectorAll('.master-item');
+
+    try {
+        for (let i = 0; i < items.length; i++) {
+            const id = items[i].dataset.id;
+            await updateInspectionType(id, { sort_order: i });
+
+            // masterDataも更新
+            const inspection = masterData.inspectionTypes.find(t => t.id === id);
+            if (inspection) {
+                inspection.sort_order = i;
+            }
+        }
+        showToast('並び順を更新しました', 'success');
+    } catch (error) {
+        console.error('Sort order update failed:', error);
+        showToast('並び順の更新に失敗しました', 'error');
+    }
 }
 
 export function renderCategories(masterData, filter = '') {

@@ -91,6 +91,35 @@
             opacity: 1;
         }
 
+        /* #13: ドラッグ&ドロップ */
+        .master-item.dragging {
+            opacity: 0.5;
+        }
+
+        .master-item.drag-over {
+            border-top: 2px solid #667eea;
+        }
+
+        .drag-handle {
+            cursor: grab;
+            padding: 0 0.5rem;
+            color: #94a3b8;
+            font-size: 1rem;
+        }
+
+        .drag-handle:active {
+            cursor: grabbing;
+        }
+
+        .master-item[draggable="true"] {
+            display: flex;
+            align-items: center;
+        }
+
+        .master-item[draggable="true"] .master-item-name {
+            flex: 1;
+        }
+
         .admin-sidebar::-webkit-scrollbar {
             width: 8px;
         }

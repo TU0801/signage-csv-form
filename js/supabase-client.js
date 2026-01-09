@@ -95,6 +95,7 @@ export async function getMasterInspectionTypes() {
   const { data, error } = await supabase
     .from('signage_master_inspection_types')
     .select('*')
+    .order('sort_order')
     .order('template_no');
   if (error) throw error;
   return data;
