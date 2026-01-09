@@ -249,7 +249,7 @@ export function generateCSV() {
         const positionValue = row.position !== undefined ? String(row.position) : '2';
 
         const values = [
-            '',                                          // 点検CO
+            '',                                          // 点検CO (#11: DB保存後に自動採番)
             row.terminalId || property?.terminal_id || '', // 端末ID
             row.propertyCode,                            // 物件コード
             row.vendorName,                              // 保守会社名

@@ -895,7 +895,7 @@ function generateCSV(data) {
         };
 
         const values = [
-            '',                                          // 点検CO
+            entry.inspection_co || '',                   // 点検CO (#11: 自動採番)
             normalizeTerminalId(entry.terminal_id),      // 端末ID
             entry.property_code || '',                   // 物件コード
             entry.vendor_name || '',                     // 保守会社名

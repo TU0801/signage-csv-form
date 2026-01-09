@@ -34,6 +34,7 @@ CREATE TRIGGER on_auth_user_created
 -- ========================================
 CREATE TABLE signage_entries (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  inspection_co SERIAL,  -- #11: 点検CO自動採番
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   property_code TEXT NOT NULL,
   terminal_id TEXT NOT NULL,
