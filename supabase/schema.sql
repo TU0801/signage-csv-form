@@ -122,6 +122,25 @@ CREATE TABLE signage_master_template_images (
 );
 
 -- ========================================
+-- signage_building_equipment: 建物設備マスター
+-- ========================================
+CREATE TABLE signage_building_equipment (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  property_code TEXT NOT NULL,
+  inspection_type_id UUID NOT NULL,
+  vendor_id UUID,
+  inspection_months JSONB DEFAULT '[]',
+  remarks TEXT,
+  remarks2 TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TRIGGER update_building_equipment_updated_at
+  BEFORE UPDATE ON signage_building_equipment
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- ========================================
 -- Row Level Security (RLS) 設定
 -- ========================================
 
@@ -196,6 +215,7 @@ ALTER TABLE signage_master_properties ENABLE ROW LEVEL SECURITY;
 ALTER TABLE signage_master_vendors ENABLE ROW LEVEL SECURITY;
 ALTER TABLE signage_master_inspection_types ENABLE ROW LEVEL SECURITY;
 ALTER TABLE signage_master_template_images ENABLE ROW LEVEL SECURITY;
+ALTER TABLE signage_building_equipment ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Anyone can read properties"
   ON signage_master_properties FOR SELECT
@@ -211,6 +231,10 @@ CREATE POLICY "Anyone can read inspection_types"
 
 CREATE POLICY "Anyone can read template_images"
   ON signage_master_template_images FOR SELECT
+  USING (true);
+
+CREATE POLICY "Anyone can read building_equipment"
+  ON signage_building_equipment FOR SELECT
   USING (true);
 
 -- 管理者のみマスターデータ更新可能
@@ -243,6 +267,15 @@ CREATE POLICY "Admins can manage inspection_types"
 
 CREATE POLICY "Admins can manage template_images"
   ON signage_master_template_images FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM signage_profiles
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+CREATE POLICY "Admins can manage building_equipment"
+  ON signage_building_equipment FOR ALL
   USING (
     EXISTS (
       SELECT 1 FROM signage_profiles

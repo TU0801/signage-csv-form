@@ -1189,3 +1189,54 @@ export async function deletePosterImage(imageUrl) {
     console.error('Storage delete error:', error);
   }
 }
+
+// ========================================
+// 建物設備管理
+// ========================================
+
+// 設備情報取得（物件コード指定）
+export async function getBuildingEquipment(propertyCode) {
+  const { data, error } = await supabase
+    .from('signage_building_equipment')
+    .select(`
+      *,
+      inspection_type:signage_master_inspection_types(*),
+      vendor:signage_master_vendors(*)
+    `)
+    .eq('property_code', propertyCode)
+    .order('created_at');
+  if (error) throw error;
+  return data || [];
+}
+
+// 設備情報追加
+export async function addBuildingEquipment(equipment) {
+  const { data, error } = await supabase
+    .from('signage_building_equipment')
+    .insert(equipment)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+// 設備情報更新
+export async function updateBuildingEquipment(id, updates) {
+  const { data, error } = await supabase
+    .from('signage_building_equipment')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+// 設備情報削除
+export async function deleteBuildingEquipment(id) {
+  const { error } = await supabase
+    .from('signage_building_equipment')
+    .delete()
+    .eq('id', id);
+  if (error) throw error;
+}

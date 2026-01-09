@@ -30,7 +30,10 @@ import {
     removeVendorInspection,
     getMasterVendors,
     getMasterProperties,
-    getMasterInspectionTypes
+    getMasterInspectionTypes,
+    getBuildingEquipment,
+    addBuildingEquipment,
+    deleteBuildingEquipment
 } from './supabase-client.js';
 
 import {
@@ -1731,7 +1734,8 @@ function renderBuildingVendorRelationships(relationships, properties, vendorId) 
                                 <td>${escapeHtml(propertiesMap[r.property_code] || '-')}</td>
                                 <td><span class="status-badge status-active">有効</span></td>
                                 <td>${new Date(r.created_at).toLocaleDateString('ja-JP')}</td>
-                                <td>
+                                <td style="display: flex; gap: 0.5rem;">
+                                    <button class="btn btn-outline btn-sm btn-equipment" onclick="openEquipmentModal('${r.property_code}', '${escapeHtml(propertiesMap[r.property_code] || r.property_code)}')">🔧 設備</button>
                                     <button class="btn btn-danger btn-sm" onclick="handleRemoveBuildingVendor('${r.id}')">削除</button>
                                 </td>
                             </tr>
@@ -2226,6 +2230,170 @@ window.openAddBuildingModal = openAddBuildingModal;
 window.openAddInspectionModal = openAddInspectionModal;
 window.handleApproveBuildingRequest = handleApproveBuildingRequest;
 window.handleRejectBuildingRequest = handleRejectBuildingRequest;
+
+// ========================================
+// 建物設備管理 (#9)
+// ========================================
+
+let currentEquipmentPropertyCode = null;
+
+// モーダルを開く
+window.openEquipmentModal = async function(propertyCode, propertyName) {
+    currentEquipmentPropertyCode = propertyCode;
+    document.getElementById('equipmentModalTitle').textContent = `設備情報 - ${propertyName}`;
+    document.getElementById('equipmentModal').classList.add('active');
+
+    // セレクトボックスを初期化
+    await populateEquipmentSelects();
+
+    // 設備一覧を読み込み
+    await loadEquipmentList();
+};
+
+// モーダルを閉じる
+window.closeEquipmentModal = function() {
+    document.getElementById('equipmentModal').classList.remove('active');
+    currentEquipmentPropertyCode = null;
+    // フォームをリセット
+    document.getElementById('equipmentType').value = '';
+    document.getElementById('equipmentVendor').value = '';
+    document.getElementById('equipmentRemarks').value = '';
+    document.getElementById('equipmentRemarks2').value = '';
+    document.querySelectorAll('#monthCheckboxes input').forEach(cb => cb.checked = false);
+};
+
+// セレクトボックスを初期化
+async function populateEquipmentSelects() {
+    // 設備種類（点検カテゴリのみ）
+    const typeSelect = document.getElementById('equipmentType');
+    typeSelect.innerHTML = '<option value="">選択...</option>';
+    const inspectionTypes = masterData.inspectionTypes.filter(t => t.category === '点検');
+    inspectionTypes.forEach(t => {
+        const option = document.createElement('option');
+        option.value = t.id;
+        option.textContent = t.inspection_name;
+        typeSelect.appendChild(option);
+    });
+
+    // 保守会社
+    const vendorSelect = document.getElementById('equipmentVendor');
+    vendorSelect.innerHTML = '<option value="">なし</option>';
+    masterData.vendors.forEach(v => {
+        const option = document.createElement('option');
+        option.value = v.id;
+        option.textContent = v.vendor_name;
+        vendorSelect.appendChild(option);
+    });
+}
+
+// 設備一覧を読み込み
+async function loadEquipmentList() {
+    try {
+        const equipment = await getBuildingEquipment(currentEquipmentPropertyCode);
+        renderEquipmentTable(equipment);
+    } catch (error) {
+        console.error('Failed to load equipment:', error);
+        showToast('設備情報の読み込みに失敗しました', 'error');
+    }
+}
+
+// 設備テーブルを描画
+function renderEquipmentTable(equipment) {
+    const tbody = document.getElementById('equipmentTableBody');
+    const emptyMsg = document.getElementById('equipmentEmptyMessage');
+
+    if (!equipment || equipment.length === 0) {
+        tbody.innerHTML = '';
+        emptyMsg.style.display = 'block';
+        return;
+    }
+
+    emptyMsg.style.display = 'none';
+    tbody.innerHTML = equipment.map(eq => `
+        <tr data-id="${eq.id}">
+            <td>${escapeHtml(eq.inspection_type?.inspection_name || '-')}</td>
+            <td>${escapeHtml(eq.vendor?.vendor_name || '-')}</td>
+            <td>${formatInspectionMonths(eq.inspection_months)}</td>
+            <td>${escapeHtml(eq.remarks || '')}</td>
+            <td>${escapeHtml(eq.remarks2 || '')}</td>
+            <td>
+                <button class="btn btn-danger btn-sm" onclick="deleteEquipmentRow('${eq.id}')">削除</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+// 点検月フォーマット
+function formatInspectionMonths(months) {
+    if (!months || months.length === 0) return '-';
+    return months.map(m => `${m}月`).join(', ');
+}
+
+// 設備を追加
+window.addEquipment = async function() {
+    const typeId = document.getElementById('equipmentType').value;
+    const vendorId = document.getElementById('equipmentVendor').value || null;
+    const remarks = document.getElementById('equipmentRemarks').value;
+    const remarks2 = document.getElementById('equipmentRemarks2').value;
+
+    if (!typeId) {
+        showToast('設備種類を選択してください', 'error');
+        return;
+    }
+
+    // 選択された点検月を取得
+    const months = [];
+    document.querySelectorAll('#monthCheckboxes input:checked').forEach(cb => {
+        months.push(parseInt(cb.value));
+    });
+
+    try {
+        await addBuildingEquipment({
+            property_code: currentEquipmentPropertyCode,
+            inspection_type_id: typeId,
+            vendor_id: vendorId,
+            inspection_months: months,
+            remarks: remarks,
+            remarks2: remarks2
+        });
+        showToast('設備を追加しました', 'success');
+
+        // フォームをリセット
+        document.getElementById('equipmentType').value = '';
+        document.getElementById('equipmentVendor').value = '';
+        document.getElementById('equipmentRemarks').value = '';
+        document.getElementById('equipmentRemarks2').value = '';
+        document.querySelectorAll('#monthCheckboxes input').forEach(cb => cb.checked = false);
+
+        // 一覧を再読み込み
+        await loadEquipmentList();
+    } catch (error) {
+        console.error('Failed to add equipment:', error);
+        showToast('設備の追加に失敗しました: ' + error.message, 'error');
+    }
+};
+
+// 設備を削除
+window.deleteEquipmentRow = async function(id) {
+    if (!confirm('この設備を削除してもよろしいですか？')) return;
+
+    try {
+        await deleteBuildingEquipment(id);
+        showToast('設備を削除しました', 'success');
+        await loadEquipmentList();
+    } catch (error) {
+        console.error('Failed to delete equipment:', error);
+        showToast('設備の削除に失敗しました', 'error');
+    }
+};
+
+// イベントリスナー（追加ボタン）
+document.addEventListener('DOMContentLoaded', function() {
+    const addBtn = document.getElementById('addEquipmentBtn');
+    if (addBtn) {
+        addBtn.addEventListener('click', addEquipment);
+    }
+});
 
 // ========================================
 // 起動
