@@ -854,6 +854,13 @@ export async function handleMasterFormSubmit(e, masterData, showToast, updateSta
             const fileInput = document.getElementById('templateImageFile');
             const file = fileInput.files[0];
 
+            // #12: image_keyのバリデーション（スネークケース強制）
+            const snakeCasePattern = /^[a-z0-9_]+$/;
+            if (!snakeCasePattern.test(imageKey)) {
+                showToast('画像キーは小文字英数字とアンダースコアのみ使用できます（例: building_inspection）', 'error');
+                return false;
+            }
+
             let imageUrl = null;
 
             // 新規追加時はファイル必須
