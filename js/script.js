@@ -116,7 +116,7 @@ function hasTemplateImage(templateKey) {
         let currentPosition = 2;
         let currentTemplateNo = '';
 
-        function init() {
+        async function init() {
             populatePropertySelect();
             populateVendorSelect();
             populateInspectionTypeSelect();
@@ -134,6 +134,9 @@ function hasTemplateImage(templateKey) {
             });
 
             updatePreview();
+
+            // #7: 申請済みデータを初期表示
+            await renderDataList();
         }
 
         function populatePropertySelect() {
@@ -437,10 +440,27 @@ function hasTemplateImage(templateKey) {
             }, 100);
         }
 
-        function renderDataList() {
+        // #7: 日付フォーマット（YYYY-MM-DD HH:MM形式）
+        function formatDateTime(dateString) {
+            if (!dateString) return '-';
+            const d = new Date(dateString);
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            const hour = String(d.getHours()).padStart(2, '0');
+            const min = String(d.getMinutes()).padStart(2, '0');
+            return `${year}/${month}/${day} ${hour}:${min}`;
+        }
+
+        async function renderDataList() {
             const container = document.getElementById('dataList');
-            document.getElementById('dataCount').textContent = entries.length;
-            document.getElementById('exportSection').style.display = entries.length > 0 ? 'flex' : 'none';
+            const dataCountEl = document.getElementById('dataCount');
+            const submittedCountEl = document.getElementById('submittedCount');
+            const exportSection = document.getElementById('exportSection');
+
+            // 未申請データのカウント
+            dataCountEl.textContent = entries.length;
+            exportSection.style.display = entries.length > 0 ? 'flex' : 'none';
 
             // 複製ボタンの有効/無効切り替え
             const duplicateBtn = document.getElementById('duplicateBtn');
@@ -448,16 +468,33 @@ function hasTemplateImage(templateKey) {
                 duplicateBtn.disabled = entries.length === 0;
             }
 
-            if (entries.length === 0) {
-                container.innerHTML = '<div class="empty-state">📭 データなし</div>';
-                return;
+            // #7: 申請済みデータを取得（当月以降）
+            let submittedEntries = [];
+            try {
+                if (window.getUserEntriesCurrentMonth) {
+                    submittedEntries = await window.getUserEntriesCurrentMonth();
+                }
+            } catch (err) {
+                console.error('Failed to load submitted entries:', err);
             }
 
-            container.innerHTML = entries.map((e, i) => `
-                <div class="data-item">
+            // 申請済みカウント表示
+            if (submittedCountEl) {
+                submittedCountEl.textContent = `申請済: ${submittedEntries.length}`;
+            }
+
+            // 未申請データ（編集・削除可能）
+            const pendingHtml = entries.map((e, i) => `
+                <div class="data-item pending">
                     <div class="data-item-info">
-                        <div class="data-item-title">${escapeHtml(e.inspectionType)}</div>
-                        <div class="data-item-sub">${escapeHtml(e.propertyCode)} | ${escapeHtml(e.startDate) || '-'}</div>
+                        <div class="data-item-row">
+                            <span>${escapeHtml(e.propertyCode)}</span>
+                            <span>${escapeHtml(e.propertyName || '')}</span>
+                            <span>${escapeHtml(e.inspectionType)}</span>
+                        </div>
+                        <div class="data-item-sub">
+                            ${escapeHtml(e.startDate) || '-'} ～ ${escapeHtml(e.endDate) || '-'}
+                        </div>
                     </div>
                     <span class="badge badge-success">${e.showOnBoard ? '表示' : '非表示'}</span>
                     <div class="data-item-actions">
@@ -466,7 +503,32 @@ function hasTemplateImage(templateKey) {
                     </div>
                 </div>
             `).join('');
-            // イベントリスナーを追加
+
+            // #7: 申請済みデータ（読み取り専用）
+            const submittedHtml = submittedEntries.map(e => `
+                <div class="data-item submitted">
+                    <div class="data-item-info">
+                        <div class="data-item-row">
+                            <span>${escapeHtml(e.property_code)}</span>
+                            <span>-</span>
+                            <span>${escapeHtml(e.inspection_type)}</span>
+                        </div>
+                        <div class="data-item-sub">
+                            ${e.inspection_start || '-'} ～ ${e.inspection_end || '-'} | 登録: ${formatDateTime(e.created_at)}
+                        </div>
+                    </div>
+                    <span class="badge badge-submitted">申請済</span>
+                </div>
+            `).join('');
+
+            // 表示内容の生成
+            if (entries.length === 0 && submittedEntries.length === 0) {
+                container.innerHTML = '<div class="empty-state">📭 データなし</div>';
+            } else {
+                container.innerHTML = pendingHtml + submittedHtml;
+            }
+
+            // イベントリスナーを追加（未申請データのみ）
             container.querySelectorAll('[data-action="edit"]').forEach(btn => {
                 btn.addEventListener('click', () => editEntry(parseInt(btn.dataset.index)));
             });
@@ -705,18 +767,18 @@ function hasTemplateImage(templateKey) {
 
         document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
-        // Supabaseへの申請
+        // Supabaseへの確定 (#7: 申請→確定に名称変更)
         async function submitEntries() {
             if (entries.length === 0) {
-                showToast('申請するデータがありません', 'error');
+                showToast('確定するデータがありません', 'error');
                 return;
             }
 
             const submitBtn = document.getElementById('submitBtn');
             submitBtn.disabled = true;
-            submitBtn.textContent = '申請中...';
+            submitBtn.textContent = '確定中...';
 
-            showLoading('データを申請しています...');
+            showLoading('データを確定しています...');
 
             try {
                 // カスタム画像をアップロード（並列処理）
@@ -765,18 +827,18 @@ function hasTemplateImage(templateKey) {
                 });
 
                 await window.createEntriesToSupabase(supabaseEntries);
-                showToast(`${entries.length}件のデータを申請しました`, 'success');
+                showToast(`${entries.length}件のデータを確定しました`, 'success');
 
                 // データをクリア
                 entries.length = 0;
-                renderDataList();
+                await renderDataList();  // #7: 申請済みデータを再取得して表示
             } catch (error) {
                 console.error('Submit failed:', error);
-                showToast('申請に失敗しました: ' + (error.message || ''), 'error');
+                showToast('確定に失敗しました: ' + (error.message || ''), 'error');
             } finally {
                 hideLoading();
                 submitBtn.disabled = false;
-                submitBtn.textContent = '申請する';
+                submitBtn.textContent = '確定する';  // #7: ボタン名変更
             }
         }
 

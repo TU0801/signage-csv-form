@@ -409,6 +409,16 @@
         .data-item-sub { color: var(--text-muted); font-size: 0.65rem; }
         .data-item-actions { display: flex; gap: 0.2rem; flex-shrink: 0; }
 
+        /* 申請済みデータのスタイル (#7) */
+        .data-item.submitted {
+            background-color: #f8fafc;
+            border-left: 3px solid #10b981;
+            opacity: 0.85;
+        }
+        .data-item.submitted .data-item-actions { display: none; }
+        .data-item-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+        .data-item-row span { white-space: nowrap; }
+
         .badge {
             display: inline-block;
             padding: 0.1rem 0.3rem;
@@ -420,6 +430,7 @@
 
         .badge-success { background: #d1fae5; color: #065f46; }
         .badge-count { background: var(--primary); color: white; margin-left: 0.4rem; }
+        .badge-submitted { background: #e0f2fe; color: #0369a1; }
 
         .empty-state {
             text-align: center;

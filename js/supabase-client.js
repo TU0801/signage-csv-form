@@ -465,6 +465,30 @@ export async function getEntries() {
   return data;
 }
 
+// #7: 当月以降のユーザーエントリを取得（作成データセクション用）
+export async function getUserEntriesCurrentMonth() {
+  const user = await getUser();
+  if (!user) return [];
+
+  // 当月の初日を計算
+  const now = new Date();
+  const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    .toISOString().split('T')[0];
+
+  const { data, error } = await supabase
+    .from('signage_entries')
+    .select('*')
+    .eq('user_id', user.id)
+    .gte('created_at', firstOfMonth)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching user entries:', error);
+    return [];
+  }
+  return data || [];
+}
+
 export async function createEntry(entry) {
   const user = await getUser();
   if (!user) throw new Error('ログインが必要です');
