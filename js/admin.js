@@ -438,6 +438,9 @@ function setupEventListeners() {
             if (document.getElementById('entryDetailModal')?.classList.contains('active')) {
                 closeEntryDetailModal();
             }
+            if (document.getElementById('equipmentModal')?.classList.contains('active')) {
+                closeEquipmentModal();
+            }
         }
     });
 

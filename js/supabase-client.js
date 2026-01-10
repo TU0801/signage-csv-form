@@ -1220,18 +1220,6 @@ export async function addBuildingEquipment(equipment) {
   return data;
 }
 
-// 設備情報更新
-export async function updateBuildingEquipment(id, updates) {
-  const { data, error } = await supabase
-    .from('signage_building_equipment')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
-}
-
 // 設備情報削除
 export async function deleteBuildingEquipment(id) {
   const { error } = await supabase
