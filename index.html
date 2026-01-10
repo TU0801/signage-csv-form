@@ -256,6 +256,10 @@
                     if (window.masterData) {
                         window.masterData = freshMasterData;
                     }
+                    // script.jsのdbTemplateImagesを設定
+                    if (typeof dbTemplateImages !== 'undefined') {
+                        dbTemplateImages = freshMasterData.templateImages || [];
+                    }
                     console.log('Master data loaded from Supabase:', freshMasterData);
 
                     // マスターデータのロード後にscript.jsの初期化を実行

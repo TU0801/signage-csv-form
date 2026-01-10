@@ -227,18 +227,12 @@ export async function getAllMasterDataCamelCase() {
     daysBeforeStart: 30
   }));
 
-  // templateImages: image_key -> imageUrl のマップを作成
-  const templateImagesMap = {};
-  (templateImages || []).forEach(ti => {
-    templateImagesMap[ti.image_key] = ti.image_url;
-  });
-
   return {
     properties,
     vendors: vendorsFormatted,
     categories: categoriesFormatted,
     notices,
-    templateImages: templateImagesMap
+    templateImages: templateImages || []
   };
 }
 
