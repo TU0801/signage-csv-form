@@ -1605,7 +1605,7 @@ window.closeEntryDetailModal = closeEntryDetailModal;
 
 // 紐付け管理タブの初期化
 async function initRelationshipsTab() {
-    const filterVendor = document.getElementById('filterVendor');
+    const filterVendor = document.getElementById('relationshipVendorSelect');
 
     // ベンダー選択肢を読み込む
     try {
@@ -1866,7 +1866,7 @@ async function handleRemoveBuildingVendor(relationshipId) {
         await removeBuildingVendor(relationshipId);
         showToast('紐付けを削除しました', 'success');
         // 再読み込み
-        const vendorId = document.getElementById('filterVendor').value;
+        const vendorId = document.getElementById('relationshipVendorSelect').value;
         if (vendorId) {
             await loadBuildingVendorRelationships(vendorId);
         }
@@ -1884,7 +1884,7 @@ async function handleRemoveVendorInspection(relationshipId) {
         await removeVendorInspection(relationshipId);
         showToast('紐付けを削除しました', 'success');
         // 再読み込み
-        const vendorId = document.getElementById('filterVendor').value;
+        const vendorId = document.getElementById('relationshipVendorSelect').value;
         if (vendorId) {
             await loadVendorInspectionRelationships(vendorId);
         }
