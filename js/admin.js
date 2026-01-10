@@ -465,10 +465,10 @@ function updateSidebarCounts() {
     const navPending = document.getElementById('navPendingCount');
     if (navPending) navPending.textContent = pendingCount || '';
 
-    // 承認済み件数（status = 'ready' or 'exported'）
-    const approvedCount = entries.filter(e => e.status === 'ready' || e.status === 'exported').length;
+    // 全件数
+    const allCount = entries.length;
     const navApproved = document.getElementById('navApprovedCount');
-    if (navApproved) navApproved.textContent = approvedCount || '';
+    if (navApproved) navApproved.textContent = allCount || '';
 }
 
 // ========================================
