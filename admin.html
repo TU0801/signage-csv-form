@@ -37,7 +37,6 @@
             padding: 1rem 0.5rem;
         }
 
-        .admin-sidebar.collapsed .sidebar-stats,
         .admin-sidebar.collapsed .sidebar-nav-item span:not(.sidebar-nav-icon) {
             display: none;
         }
@@ -291,34 +290,6 @@
             background: #f8fafc;
         }
 
-        /* サイドバー統計カード */
-        .sidebar-stats {
-            margin-bottom: 2rem;
-        }
-
-        .sidebar-stat {
-            background: #f8fafc;
-            border-radius: 12px;
-            padding: 0.875rem 1rem;
-            margin-bottom: 0.75rem;
-            border: 1px solid #e2e8f0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .sidebar-stat-label {
-            font-size: 0.875rem;
-            color: #64748b;
-            font-weight: 500;
-        }
-
-        .sidebar-stat-value {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: #2563eb;
-        }
-
         /* サイドバーナビゲーション */
         .sidebar-nav {
             list-style: none;
@@ -362,6 +333,22 @@
 
         .sidebar-nav-icon {
             font-size: 1.125rem;
+        }
+        .sidebar-nav-count {
+            background: #667eea;
+            color: white;
+            font-size: 0.7rem;
+            padding: 0.125rem 0.5rem;
+            border-radius: 10px;
+            margin-left: auto;
+            min-width: 1.5rem;
+            text-align: center;
+        }
+        .sidebar-nav-count:empty {
+            display: none;
+        }
+        .admin-sidebar.collapsed .sidebar-nav-count {
+            display: none;
         }
 
         /* タブナビゲーション（旧スタイル - 非表示） */
@@ -1294,30 +1281,21 @@
         <aside class="admin-sidebar">
             <!-- #8-1: サイドバー開閉ボタン -->
             <button class="sidebar-toggle" id="sidebarToggle" title="サイドバーを開閉">◀</button>
-            <!-- 統計 -->
-            <div class="sidebar-stats">
-                <div class="sidebar-stat">
-                    <div class="sidebar-stat-label">承認待ち</div>
-                    <div class="sidebar-stat-value" id="statPending">-</div>
-                </div>
-                <div class="sidebar-stat">
-                    <div class="sidebar-stat-label">今月の登録</div>
-                    <div class="sidebar-stat-value" id="statMonth">-</div>
-                </div>
-            </div>
 
             <!-- ナビゲーション -->
             <nav class="sidebar-nav">
                 <li class="sidebar-nav-item">
                     <button class="sidebar-nav-link active" data-tab="approval">
-                        <span class="sidebar-nav-icon">✅</span>
+                        <span class="sidebar-nav-icon">⏳</span>
                         <span>承認待ち</span>
+                        <span class="sidebar-nav-count" id="navPendingCount"></span>
                     </button>
                 </li>
                 <li class="sidebar-nav-item">
                     <button class="sidebar-nav-link" data-tab="entries">
-                        <span class="sidebar-nav-icon">📊</span>
-                        <span>データ一覧</span>
+                        <span class="sidebar-nav-icon">✅</span>
+                        <span>承認済み</span>
+                        <span class="sidebar-nav-count" id="navApprovedCount"></span>
                     </button>
                 </li>
                 <li class="sidebar-nav-item">

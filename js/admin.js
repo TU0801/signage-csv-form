@@ -134,7 +134,7 @@ async function init() {
     initTableSort();
 
     // 初期表示
-    updateStats();
+    updateSidebarCounts();
     populateFilters();
     restoreFilters(); // フィルターを復元
     loadPendingEntries();
@@ -456,21 +456,19 @@ function setupEventListeners() {
 }
 
 // ========================================
-// 統計
+// サイドバー件数
 // ========================================
 
-function updateStats() {
-    // 承認待ち数（データ承認 + ビル追加リクエスト）
+function updateSidebarCounts() {
+    // 承認待ち件数（データ承認 + ビル追加リクエスト）
     const pendingCount = pendingEntries.length + pendingBuildingRequests.length;
-    const statPending = document.getElementById('statPending');
-    if (statPending) statPending.textContent = pendingCount;
+    const navPending = document.getElementById('navPendingCount');
+    if (navPending) navPending.textContent = pendingCount || '';
 
-    // 今月の登録数
-    const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthEntries = entries.filter(e => new Date(e.created_at) >= monthStart);
-    const statMonthElements = document.querySelectorAll('#statMonth');
-    statMonthElements.forEach(el => el.textContent = monthEntries.length);
+    // 承認済み件数（status = 'ready' or 'exported'）
+    const approvedCount = entries.filter(e => e.status === 'ready' || e.status === 'exported').length;
+    const navApproved = document.getElementById('navApprovedCount');
+    if (navApproved) navApproved.textContent = approvedCount || '';
 }
 
 // ========================================
@@ -559,7 +557,7 @@ async function approveSelected() {
         showToast(`${selectedPendingIds.length}件を承認しました`, 'success');
         await loadPendingEntries();
         await loadAllData();
-        updateStats();
+        updateSidebarCounts();
     } catch (error) {
         console.error('Failed to approve entries:', error);
         showToast('承認に失敗しました', 'error');
@@ -576,7 +574,7 @@ window.approveSingle = async function(id) {
         showToast('承認しました', 'success');
         await loadPendingEntries();
         await loadAllData();
-        updateStats();
+        updateSidebarCounts();
     } catch (error) {
         console.error('Failed to approve entry:', error);
         showToast('承認に失敗しました', 'error');
@@ -592,7 +590,7 @@ window.rejectSingle = async function(id) {
         showToast('却下しました', 'success');
         await loadPendingEntries();
         await loadAllData();
-        updateStats();
+        updateSidebarCounts();
     } catch (error) {
         console.error('Failed to reject entry:', error);
         showToast('却下に失敗しました', 'error');
@@ -789,7 +787,7 @@ async function loadEntries() {
         });
         renderEntries();
         updateSelectedEntries();
-        updateStats(); // 統計を更新
+        updateSidebarCounts(); // 統計を更新
     } catch (error) {
         console.error('Failed to load entries:', error);
         showToast('データの取得に失敗しました', 'error');
@@ -1544,7 +1542,7 @@ window.deletePropertyByCode = async function(propertyCode) {
         const newMasterData = await getAllMasterData();
         Object.assign(masterData, newMasterData);
         loadMasterData(masterData);
-        updateStats();
+        updateSidebarCounts();
         return true;
     } catch (error) {
         console.error('Failed to delete property:', error);
