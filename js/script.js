@@ -38,6 +38,7 @@ const templateImages = {
     "mechanical_parking": "images/mechanical_parking.png",
     "planting_management": "images/planting_management.png",
     "construction_outer_wall": "images/construction_outer_wall.png",
+    "construction_outer wall": "images/construction_outer_wall.png",
     "construction_jcom_cable": "images/construction_jcom_cable.png",
     "simple_dedicated_water_supply": "images/simple_dedicated_water_supply.png",
     "surveillance_camera_installation_work": "images/surveillance_camera_installation_work.png",
@@ -49,6 +50,7 @@ const templateImages = {
     "delivery_box": "images/delivery_box.png",
     "disinfection": "images/disinfection.png",
     "Questionnaire_conducted01": "images/Questionnaire_conducted01.png",
+    "questionnaire_conducted01": "images/Questionnaire_conducted01.png",
     "protect_balcony_from_birds": "images/protect_balcony_from_birds.png",
     "elevator_mat_replacement": "images/elevator_mat_replacement.png",
     "construction_roller_paint": "images/construction_roller_paint.png",
@@ -59,10 +61,12 @@ const templateImages = {
     "protect_balcony_from_birds_2": "images/protect_balcony_from_birds_2.png",
     "construction_spanner": "images/construction_spanner.png",
     "fire_construction": "images/fire_construction.png",
+    "fire_inspection": "images/fire_inspection.png",
     "surveillance_camera": "images/surveillance_camera.png",
     "vending_machine_construction_2": "images/vending_machine_construction_2.png",
     "shared_area_drain_pipe_inspection": "images/shared_area_drain_pipe_inspection.png",
     "Construction_without_sound": "images/Construction_without_sound.png",
+    "construction_without_sound": "images/Construction_without_sound.png",
     "card_reader": "images/card_reader.png",
     "water_supply_pump_construction": "images/water_supply_pump_construction.png",
     "electrical_measurement": "images/electrical_measurement.png",
@@ -75,6 +79,7 @@ const templateImages = {
     "fire_exchange": "images/fire_exchange.png",
     "construction_mobile_antenna": "images/construction_mobile_antenna.png",
     "Questionnaire_conducted02": "images/Questionnaire_conducted02.png",
+    "questionnaire_conducted02": "images/Questionnaire_conducted02.png",
     "vending_machine_construction": "images/vending_machine_construction.png"
 };
 
