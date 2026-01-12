@@ -409,7 +409,7 @@ export async function removeBuildingVendor(buildingVendorId) {
 export async function getVendorInspections(vendorId) {
   const { data, error } = await supabase
     .from('signage_vendor_inspections')
-    .select('*, signage_master_inspection_types(inspection_name, category_id)')
+    .select('*, signage_master_inspection_types(inspection_name, category)')
     .eq('vendor_id', vendorId)
     .eq('status', 'active')
     .order('created_at', { ascending: false });

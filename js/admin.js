@@ -1778,7 +1778,7 @@ function renderVendorInspectionRelationships(relationships, vendorId) {
                         ${relationships.map(r => `
                             <tr>
                                 <td>${escapeHtml(r.signage_master_inspection_types?.inspection_name || '-')}</td>
-                                <td>${escapeHtml(r.signage_master_inspection_types?.category_id || '-')}</td>
+                                <td>${escapeHtml(r.signage_master_inspection_types?.category || '-')}</td>
                                 <td><span class="status-badge status-active">有効</span></td>
                                 <td>${new Date(r.created_at).toLocaleDateString('ja-JP')}</td>
                                 <td>
