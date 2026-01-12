@@ -774,10 +774,10 @@ function restoreFilters() {
 }
 
 async function loadEntries() {
-    const propertyCode = document.getElementById('filterProperty').value;
-    const startDate = document.getElementById('filterStartDate').value;
-    const endDate = document.getElementById('filterEndDate').value;
-    const vendorName = document.getElementById('filterVendor')?.value;  // #8-2: status→vendor
+    const propertyCode = document.getElementById('filterProperty')?.value || '';
+    const startDate = document.getElementById('filterStartDate')?.value || '';
+    const endDate = document.getElementById('filterEndDate')?.value || '';
+    const vendorName = document.getElementById('filterVendor')?.value || '';  // #8-2: status→vendor
 
     // フィルターを保存
     saveFilters();

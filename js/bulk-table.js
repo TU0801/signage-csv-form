@@ -395,11 +395,14 @@ function handleDrop(e, callbacks) {
     }
 
     const rows = getRows();
-    const draggedRowId = parseInt(draggedRow.dataset.rowId);
+    const draggedRowId = parseInt(draggedRow.dataset.rowId, 10);
+    if (isNaN(draggedRowId)) return;
     const rowData = rows.find(r => r.id === draggedRowId);
+    if (!rowData) return;
     const filteredRows = rows.filter(r => r.id !== draggedRowId);
 
-    const targetRowId = parseInt(targetTr.dataset.rowId);
+    const targetRowId = parseInt(targetTr.dataset.rowId, 10);
+    if (isNaN(targetRowId)) return;
     const targetDataIndex = filteredRows.findIndex(r => r.id === targetRowId);
 
     if (draggedIndex < targetIndex) {

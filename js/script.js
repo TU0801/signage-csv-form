@@ -260,11 +260,15 @@ function hasTemplateImage(templateKey) {
             let dateText = '';
             if (startDate) {
                 const d = new Date(startDate);
-                const days = ['日', '月', '火', '水', '木', '金', '土'];
-                dateText = `${d.getMonth() + 1}月${d.getDate()}日(${days[d.getDay()]})`;
-                if (endDate && endDate !== startDate) {
-                    const ed = new Date(endDate);
-                    dateText += `〜${ed.getMonth() + 1}月${ed.getDate()}日(${days[ed.getDay()]})`;
+                if (!isNaN(d.getTime())) {
+                    const days = ['日', '月', '火', '水', '木', '金', '土'];
+                    dateText = `${d.getMonth() + 1}月${d.getDate()}日(${days[d.getDay()]})`;
+                    if (endDate && endDate !== startDate) {
+                        const ed = new Date(endDate);
+                        if (!isNaN(ed.getTime())) {
+                            dateText += `〜${ed.getMonth() + 1}月${ed.getDate()}日(${days[ed.getDay()]})`;
+                        }
+                    }
                 }
             }
 
@@ -603,7 +607,8 @@ function hasTemplateImage(templateKey) {
 
         // 貼紙タイプ切り替え（テンプレート/追加）
         function onPosterTypeChange() {
-            const posterType = document.querySelector('input[name="posterType"]:checked').value;
+            const checkedPoster = document.querySelector('input[name="posterType"]:checked');
+            const posterType = checkedPoster ? checkedPoster.value : 'template';
             const isCustom = posterType === 'custom';
 
             // 追加モードの場合: 画像アップロードを表示、点検関連フィールドを非表示
