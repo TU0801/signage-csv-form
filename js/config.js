@@ -1,5 +1,5 @@
 // config.js - Supabase設定
-// このファイルはgitにコミットしないでください（.gitignoreに追加済み）
+// anon (public) キーは公開されても問題ないためgitにコミットしています
 
 window.SUPABASE_URL = 'https://rzfbmmmtrbxwkxtsvypi.supabase.co';
 
