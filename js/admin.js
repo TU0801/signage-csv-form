@@ -117,8 +117,13 @@ async function init() {
 
     // ログアウトボタン
     document.getElementById('logoutBtn').addEventListener('click', async () => {
-        await signOut();
-        window.location.href = 'login.html';
+        try {
+            await signOut();
+            window.location.href = 'login.html';
+        } catch (error) {
+            console.error('Logout failed:', error);
+            showToast('ログアウトに失敗しました', 'error');
+        }
     });
 
     // データ読み込み
@@ -1641,7 +1646,12 @@ async function initRelationshipsTab() {
         document.getElementById('relationshipsInitialMessage').style.display = 'none';
 
         // 現在のタイプに応じてロード
-        await loadRelationships(vendorId, currentRelationshipType);
+        try {
+            await loadRelationships(vendorId, currentRelationshipType);
+        } catch (error) {
+            console.error('Failed to load relationships:', error);
+            showToast('紐付けデータの取得に失敗しました', 'error');
+        }
     });
 
     // サブタブ切り替え
@@ -1657,7 +1667,12 @@ async function initRelationshipsTab() {
             // コンテナの表示切り替え
             const vendorId = filterVendor.value;
             if (vendorId) {
-                await loadRelationships(vendorId, relType);
+                try {
+                    await loadRelationships(vendorId, relType);
+                } catch (error) {
+                    console.error('Failed to load relationships:', error);
+                    showToast('紐付けデータの取得に失敗しました', 'error');
+                }
             }
         });
     });

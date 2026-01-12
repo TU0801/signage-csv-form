@@ -70,46 +70,51 @@ async function init() {
 
         // ベンダー選択変更時
         vendorSelect.addEventListener('change', async (e) => {
-            const vendorId = e.target.value;
-            if (!vendorId) {
-                // 全データに戻す
-                const freshData = await getAllMasterDataCamelCase();
-                setMasterData(freshData);
-                setCurrentVendor(null, null);
-                return;
-            }
+            try {
+                const vendorId = e.target.value;
+                if (!vendorId) {
+                    // 全データに戻す
+                    const freshData = await getAllMasterDataCamelCase();
+                    setMasterData(freshData);
+                    setCurrentVendor(null, null);
+                    return;
+                }
 
-            // 選択したベンダー名を取得して設定
-            const selectedVendor = vendors.find(v => v.id === vendorId);
-            setCurrentVendor(vendorId, selectedVendor?.vendor_name || null);
+                // 選択したベンダー名を取得して設定
+                const selectedVendor = vendors.find(v => v.id === vendorId);
+                setCurrentVendor(vendorId, selectedVendor?.vendor_name || null);
 
-            // 選択したベンダーの担当ビルのみを取得
-            const buildings = await getBuildingsByVendor(vendorId);
+                // 選択したベンダーの担当ビルのみを取得
+                const buildings = await getBuildingsByVendor(vendorId);
 
-            // buildingsをcamelCaseに変換（getBuildingsByVendorはsnake_caseを返す）
-            const buildingsCamelCase = [];
-            buildings.forEach(b => {
-                const terminals = Array.isArray(b.terminals) ? b.terminals : [];
-                terminals.forEach(t => {
-                    buildingsCamelCase.push({
-                        propertyCode: b.property_code,
-                        propertyName: b.property_name,
-                        terminalId: t.terminalId || t.terminal_id || '',
-                        supplement: t.supplement || '',
-                        address: b.address || ''
+                // buildingsをcamelCaseに変換（getBuildingsByVendorはsnake_caseを返す）
+                const buildingsCamelCase = [];
+                buildings.forEach(b => {
+                    const terminals = Array.isArray(b.terminals) ? b.terminals : [];
+                    terminals.forEach(t => {
+                        buildingsCamelCase.push({
+                            propertyCode: b.property_code,
+                            propertyName: b.property_name,
+                            terminalId: t.terminalId || t.terminal_id || '',
+                            supplement: t.supplement || '',
+                            address: b.address || ''
+                        });
                     });
                 });
-            });
 
-            // masterDataを更新
-            const currentMasterData = getMasterData();
-            currentMasterData.properties = buildingsCamelCase;
-            setMasterData(currentMasterData);
+                // masterDataを更新
+                const currentMasterData = getMasterData();
+                currentMasterData.properties = buildingsCamelCase;
+                setMasterData(currentMasterData);
 
-            // テーブルをクリア（物件が変わったため）
-            clearRows();
-            updateStats();
-            updateEmptyState();
+                // テーブルをクリア（物件が変わったため）
+                clearRows();
+                updateStats();
+                updateEmptyState();
+            } catch (error) {
+                console.error('Failed to load vendor data:', error);
+                showToast('保守会社データの取得に失敗しました', 'error');
+            }
         });
     } else {
         // 一般ユーザー：プロファイルから保守会社を取得して固定
@@ -119,8 +124,13 @@ async function init() {
     }
 
     document.getElementById('logoutBtn').addEventListener('click', async () => {
-        await signOut();
-        window.location.href = 'login.html';
+        try {
+            await signOut();
+            window.location.href = 'login.html';
+        } catch (error) {
+            console.error('Logout failed:', error);
+            showToast('ログアウトに失敗しました', 'error');
+        }
     });
 
     try {
