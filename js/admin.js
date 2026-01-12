@@ -133,17 +133,21 @@ async function init() {
     // #8-6: テーブルソート機能
     initTableSort();
 
-    // 初期表示
+    // 初期表示（非同期処理を並列実行）
+    await Promise.all([
+        loadPendingEntries(),
+        loadPendingBuildingRequests(),
+        loadEntries(),
+        loadUsers(),
+        loadAppSettings(),
+        initRelationshipsTab()
+    ]);
+
+    // マスターデータ読み込み後にUI更新
+    loadMasterData(masterData);
     updateSidebarCounts();
     populateFilters();
     restoreFilters(); // フィルターを復元
-    loadPendingEntries();
-    loadPendingBuildingRequests();
-    loadEntries();
-    loadMasterData(masterData);
-    loadUsers();
-    loadAppSettings();
-    initRelationshipsTab();
 }
 
 async function loadAllData() {
@@ -873,7 +877,7 @@ window.deleteEntryById = async function(id) {
     try {
         await deleteEntry(id);
         showToast('削除しました', 'success');
-        loadEntries();
+        await loadEntries();
     } catch (error) {
         showToast('削除に失敗しました', 'error');
     }
@@ -923,7 +927,7 @@ async function updateEntriesStatus(status) {
     try {
         await updateEntriesStatusBulk(ids, status);
         showToast(`${ids.length}件を「${statusLabel}」に変更しました`, 'success');
-        loadEntries();
+        await loadEntries();
     } catch (error) {
         console.error('Status update failed:', error);
         showToast('ステータスの更新に失敗しました', 'error');
@@ -1258,7 +1262,7 @@ async function loadUsers() {
                 await updateProfileRole(userId, newRole);
                 showToast('権限を更新しました', 'success');
                 profiles = await getAllProfiles();
-                loadUsers();
+                await loadUsers();
             } catch (error) {
                 showToast('権限の更新に失敗しました', 'error');
                 const profile = profiles.find(p => p.id === userId);
@@ -1291,10 +1295,11 @@ async function openUserModal() {
     // ベンダー選択肢を読み込み
     try {
         const vendors = await getMasterVendors();
-        vendorSelect.innerHTML = '<option value="">-- 選択してください --</option>';
+        const options = ['<option value="">-- 選択してください --</option>'];
         vendors.forEach(v => {
-            vendorSelect.innerHTML += `<option value="${v.id}">${escapeHtml(v.vendor_name)}</option>`;
+            options.push(`<option value="${v.id}">${escapeHtml(v.vendor_name)}</option>`);
         });
+        vendorSelect.innerHTML = options.join('');
     } catch (error) {
         console.error('Failed to load vendors:', error);
     }
@@ -1336,7 +1341,7 @@ async function handleUserFormSubmit(e) {
 
         // ユーザー一覧を更新
         profiles = await getAllProfiles();
-        loadUsers();
+        await loadUsers();
     } catch (error) {
         console.error('User creation error:', error);
         if (error.message.includes('既に登録')) {
@@ -1373,11 +1378,12 @@ async function openEditUserModal(userId) {
     // ベンダー選択肢を読み込み
     try {
         const vendors = await getMasterVendors();
-        vendorSelect.innerHTML = '<option value="">-- 選択なし（管理者の場合） --</option>';
+        const options = ['<option value="">-- 選択なし（管理者の場合） --</option>'];
         vendors.forEach(v => {
             const selected = v.id === profile.vendor_id ? 'selected' : '';
-            vendorSelect.innerHTML += `<option value="${v.id}" ${selected}>${escapeHtml(v.vendor_name)}</option>`;
+            options.push(`<option value="${v.id}" ${selected}>${escapeHtml(v.vendor_name)}</option>`);
         });
+        vendorSelect.innerHTML = options.join('');
     } catch (error) {
         console.error('Failed to load vendors:', error);
     }
@@ -1436,7 +1442,7 @@ async function handleEditUserSubmit(userId) {
 
         // データを再読み込み（ベンダー情報も含む）
         await loadAllData();
-        loadUsers();
+        await loadUsers();
     } catch (error) {
         console.error('User update error:', error);
         showToast('更新に失敗しました: ' + error.message, 'error');
@@ -1454,7 +1460,7 @@ async function handleDeactivateUser(userId) {
         await updateUserStatus(userId, 'inactive');
         showToast('ユーザーを無効化しました', 'success');
         profiles = await getAllProfiles();
-        loadUsers();
+        await loadUsers();
     } catch (error) {
         console.error('Failed to deactivate user:', error);
         showToast('無効化に失敗しました', 'error');
@@ -1467,7 +1473,7 @@ async function handleActivateUser(userId) {
         await updateUserStatus(userId, 'active');
         showToast('ユーザーを有効化しました', 'success');
         profiles = await getAllProfiles();
-        loadUsers();
+        await loadUsers();
     } catch (error) {
         console.error('Failed to activate user:', error);
         showToast('有効化に失敗しました', 'error');
@@ -1610,10 +1616,11 @@ async function initRelationshipsTab() {
     // ベンダー選択肢を読み込む
     try {
         const vendors = await getMasterVendors();
-        filterVendor.innerHTML = '<option value="">-- 選択してください --</option>';
+        const options = ['<option value="">-- 選択してください --</option>'];
         vendors.forEach(v => {
-            filterVendor.innerHTML += `<option value="${v.id}">${escapeHtml(v.vendor_name)}</option>`;
+            options.push(`<option value="${v.id}">${escapeHtml(v.vendor_name)}</option>`);
         });
+        filterVendor.innerHTML = options.join('');
     } catch (error) {
         console.error('Failed to load vendors:', error);
     }
