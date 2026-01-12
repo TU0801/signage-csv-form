@@ -291,7 +291,8 @@ function hasTemplateImage(templateKey) {
             const terminalId = document.getElementById('terminal').value;
             const vendorIdx = document.getElementById('vendor').value;
             const inspectionIdx = document.getElementById('inspectionType').value;
-            const posterType = document.querySelector('input[name="posterType"]:checked').value;
+            const posterTypeEl = document.querySelector('input[name="posterType"]:checked');
+            const posterType = posterTypeEl ? posterTypeEl.value : 'template';
             const isCustomMode = posterType === 'custom';
 
             // バリデーション: 日付の前後関係
@@ -567,7 +568,8 @@ function hasTemplateImage(templateKey) {
             document.getElementById('displayEndTime').value = e.displayEndTime;
             document.getElementById('displayTime').value = e.displayTime;
             setPosition(e.frameNo);
-            document.querySelector(`input[name="posterType"][value="${e.posterType}"]`).checked = true;
+            const posterTypeRadio = document.querySelector(`input[name="posterType"][value="${e.posterType}"]`);
+            if (posterTypeRadio) posterTypeRadio.checked = true;
             updatePreview();
         }
 

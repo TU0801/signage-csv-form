@@ -137,6 +137,10 @@ function handleContextMenuAction(action, rowId, callbacks) {
             break;
 
         case 'delete':
+            if (rowIndex === -1) {
+                console.warn('Row not found for deletion:', rowId);
+                break;
+            }
             if (confirm('この行を削除しますか？')) {
                 const tr = document.querySelector(`tr[data-row-id="${rowId}"]`);
                 if (tr) tr.remove();
