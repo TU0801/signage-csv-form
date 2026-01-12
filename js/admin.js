@@ -1930,10 +1930,13 @@ function renderPendingBuildingRequests() {
     }
 
     emptyMsg.style.display = 'none';
-    tbody.innerHTML = pendingBuildingRequests.map(req => `
+    tbody.innerHTML = pendingBuildingRequests.map(req => {
+        const property = masterData.properties.find(p => String(p.property_code) === String(req.property_code));
+        const propertyName = property?.property_name || '-';
+        return `
         <tr>
             <td>${escapeHtml(req.property_code)}</td>
-            <td>${escapeHtml(req.property_code)}</td>
+            <td>${escapeHtml(propertyName)}</td>
             <td>${escapeHtml(req.signage_master_vendors?.vendor_name || '-')}</td>
             <td>${getUserEmail(req.requested_by)}</td>
             <td>${new Date(req.created_at).toLocaleString('ja-JP')}</td>
@@ -1942,7 +1945,7 @@ function renderPendingBuildingRequests() {
                 <button class="btn btn-danger btn-sm" onclick="handleRejectBuildingRequest('${req.id}')">却下</button>
             </td>
         </tr>
-    `).join('');
+    `;}).join('');
 }
 
 // ビル追加リクエストを承認
