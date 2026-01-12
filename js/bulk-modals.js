@@ -447,17 +447,6 @@ export function importFromPaste(callbacks) {
             const propertyName = cols[0]?.trim() || '';
             const property = masterData.properties.find(p => p.propertyName === propertyName);
 
-            console.log('🔍 Import row:', {
-                cols: cols,
-                propertyName: propertyName,
-                property: property?.propertyCode,
-                terminalId: cols[1],
-                inspectionType: cols[2],
-                startDate: cols[3],
-                endDate: cols[4],
-                remarks: cols[5]
-            });
-
             rowData = {
                 propertyCode: property?.propertyCode || propertyName,
                 terminalId: cols[1]?.trim() || '',

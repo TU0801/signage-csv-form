@@ -136,14 +136,6 @@ async function init() {
             const vendor = masterData.vendors.find(v => v.id === profile.vendor_id);
             setCurrentVendor(profile.vendor_id, vendor?.vendorName || null);
         }
-
-        console.log('Master data loaded:', masterData);
-        console.log('App settings loaded:', settings);
-        console.log('🔍 Properties debug:', {
-            count: masterData.properties?.length,
-            first: masterData.properties?.[0],
-            sample: masterData.properties?.slice(0, 3)
-        });
     } catch (error) {
         console.error('Failed to load master data:', error);
         showToast('マスターデータの取得に失敗しました', 'error');

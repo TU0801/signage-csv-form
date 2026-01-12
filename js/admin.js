@@ -1220,13 +1220,8 @@ async function loadUsers() {
         // ベンダー名を取得
         let vendorName = '-';
         if (profile.vendor_id) {
-            console.log('Looking for vendor:', profile.vendor_id);
-            console.log('Available vendors:', masterData.vendors.map(v => ({ id: v.id, name: v.vendor_name })));
             const vendor = masterData.vendors.find(v => String(v.id) === String(profile.vendor_id));
             vendorName = vendor ? vendor.vendor_name : 'Unknown (ID:' + profile.vendor_id + ')';
-            if (!vendor) {
-                console.warn('Vendor not found for ID:', profile.vendor_id);
-            }
         }
 
         tr.innerHTML = `
@@ -1417,15 +1412,11 @@ async function handleEditUserSubmit(userId) {
     submitBtn.textContent = '更新中...';
 
     try {
-        console.log('Updating user:', userId, 'with vendor:', vendorId);
-
         // プロファイル更新
-        const updated = await updateUserProfile(userId, {
+        await updateUserProfile(userId, {
             role: role,
             vendor_id: vendorId
         });
-
-        console.log('Update result:', updated);
 
         showToast('ユーザー情報を更新しました', 'success');
         closeUserModal();
@@ -1517,7 +1508,6 @@ window.editPropertyByCode = function(propertyCode) {
         terminals: property.terminals || []
     };
 
-    console.log('Opening property modal with data:', propertyData);
     openMasterModal('property', masterData, propertyData);
 };
 

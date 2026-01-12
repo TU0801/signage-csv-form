@@ -184,7 +184,6 @@ export async function getAllMasterDataCamelCase() {
 
   // properties: グループ化された物件を1端末=1レコードにフラット化し、camelCaseに変換
   const properties = [];
-  console.log('🔍 propertiesRaw:', propertiesRaw?.slice(0, 2)); // デバッグ
   propertiesRaw.forEach(p => {
     const terminals = Array.isArray(p.terminals) ? p.terminals : [];
     if (terminals.length === 0) {
@@ -200,7 +199,6 @@ export async function getAllMasterDataCamelCase() {
       });
     });
   });
-  console.log('🔍 properties (camelCase):', properties?.slice(0, 2)); // デバッグ
 
   // vendors: vendor_name -> vendorName, emergency_contact -> emergencyContact
   const vendorsFormatted = vendors.map(v => ({
@@ -740,18 +738,14 @@ export async function updateProfileRole(id, role) {
 
 // ユーザープロファイル更新（管理者用）
 export async function updateUserProfile(id, updates) {
-  console.log('🔍 UPDATE開始:', { id, updates });
-
   // 更新実行（selectなし、RLS問題回避）
   const { data: updateData, error } = await supabase
     .from('signage_profiles')
     .update(updates)
     .eq('id', id);
 
-  console.log('📝 UPDATE結果:', { updateData, error });
-
   if (error) {
-    console.error('❌ updateUserProfile error:', error);
+    console.error('updateUserProfile error:', error);
     throw error;
   }
 
@@ -761,8 +755,6 @@ export async function updateUserProfile(id, updates) {
     .select('*')
     .eq('id', id)
     .single();
-
-  console.log('📥 SELECT結果:', { profile, fetchError });
 
   if (fetchError) {
     console.error('Profile fetch error:', fetchError);
@@ -790,8 +782,6 @@ export async function createUser(email, password, companyName, role, vendorId = 
   // 現在のセッションを保存
   const { data: { session: currentSession } } = await supabase.auth.getSession();
 
-  console.log('Creating user:', email, 'with vendor:', vendorId);
-
   // 1. ユーザー作成
   const { data: authData, error: authError } = await supabase.auth.signUp({
     email,
@@ -804,8 +794,6 @@ export async function createUser(email, password, companyName, role, vendorId = 
     }
   });
 
-  console.log('SignUp result:', { authData, authError });
-
   if (authError) throw authError;
 
   // signUpが成功しても、既存ユーザーの場合はidentitiesが空
@@ -817,7 +805,6 @@ export async function createUser(email, password, companyName, role, vendorId = 
 
   // メール確認が必要かチェック
   const needsEmailConfirmation = !authData.session;
-  console.log('Needs email confirmation:', needsEmailConfirmation);
 
   // 2. プロファイルテーブルにも追加
   const profileData = {
@@ -836,8 +823,6 @@ export async function createUser(email, password, companyName, role, vendorId = 
     .from('signage_profiles')
     .upsert(profileData, { onConflict: 'id' })
     .select();
-
-  console.log('Profile upsert result:', { profile, profileError });
 
   if (profileError) {
     console.error('Profile creation failed:', profileError);
