@@ -310,18 +310,20 @@ export function downloadCSV(callbacks) {
     callbacks.showToast('CSVをダウンロードしました', 'success');
 }
 
-export function copyCSV(callbacks) {
+export async function copyCSV(callbacks) {
     const csv = generateCSV();
     if (!csv) {
         callbacks.showToast('コピーするデータがありません', 'error');
         return;
     }
 
-    navigator.clipboard.writeText(csv).then(() => {
+    try {
+        await navigator.clipboard.writeText(csv);
         callbacks.showToast('CSVをクリップボードにコピーしました', 'success');
-    }).catch(() => {
+    } catch (error) {
+        console.error('Clipboard write failed:', error);
         callbacks.showToast('コピーに失敗しました', 'error');
-    });
+    }
 }
 
 // ========================================

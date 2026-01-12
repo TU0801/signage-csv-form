@@ -977,9 +977,13 @@ function hasTemplateImage(templateKey) {
 
                 // マスターデータを再読み込み（承認後に表示されるように）
                 setTimeout(async () => {
-                    const freshData = await window.getAllMasterDataCamelCase();
-                    window.masterData = freshData;
-                    populatePropertySelect();
+                    try {
+                        const freshData = await window.getAllMasterDataCamelCase();
+                        window.masterData = freshData;
+                        populatePropertySelect();
+                    } catch (error) {
+                        console.error('Failed to refresh master data:', error);
+                    }
                 }, 1000);
             } catch (error) {
                 console.error('Failed to request building:', error);
