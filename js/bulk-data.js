@@ -160,6 +160,7 @@ export async function saveAll(callbacks) {
             };
         });
 
+        console.log('Sending entries:', entries);
         await createEntries(entries);
 
         localStorage.removeItem(getAutoSaveKey());
@@ -179,6 +180,9 @@ export async function saveAll(callbacks) {
         }
         if (error.details) {
             errorMsg += ' (' + error.details + ')';
+        }
+        if (error.hint) {
+            console.log('Hint:', error.hint);
         }
         callbacks.showToast(errorMsg, 'error');
     } finally {
