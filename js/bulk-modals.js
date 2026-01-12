@@ -8,6 +8,16 @@ import { addRow, updateTerminals, validateRow, insertRowAt, getSelectedRowIds } 
 
 let copiedRowData = null;
 
+// LocalStorageから安全にテンプレートを読み込む
+function getStoredTemplates() {
+    try {
+        return getStoredTemplates();
+    } catch (e) {
+        console.warn('Failed to parse bulk_templates from localStorage:', e);
+        return {};
+    }
+}
+
 // ========================================
 // 右クリックメニュー
 // ========================================
@@ -540,7 +550,7 @@ export function saveTemplate(callbacks) {
         return;
     }
 
-    const templates = JSON.parse(localStorage.getItem('bulk_templates') || '{}');
+    const templates = getStoredTemplates();
     templates[name] = {
         createdAt: Date.now(),
         rows: rows.map(r => ({
@@ -566,7 +576,7 @@ export function saveTemplate(callbacks) {
 }
 
 export function loadTemplates() {
-    const templates = JSON.parse(localStorage.getItem('bulk_templates') || '{}');
+    const templates = getStoredTemplates();
     const select = document.getElementById('templateSelect');
     select.innerHTML = '<option value="">テンプレート</option>';
 
@@ -579,7 +589,7 @@ export function loadTemplates() {
 }
 
 export function applyTemplate(name, callbacks) {
-    const templates = JSON.parse(localStorage.getItem('bulk_templates') || '{}');
+    const templates = getStoredTemplates();
     const template = templates[name];
     if (!template) return;
 

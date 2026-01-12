@@ -607,7 +607,15 @@ export function openMasterModal(type, masterData, data = null) {
             document.getElementById('address').value = data.address || '';
 
             // 端末リストを表示
-            const terminals = typeof data.terminals === 'string' ? JSON.parse(data.terminals) : data.terminals || [];
+            let terminals = data.terminals || [];
+            if (typeof data.terminals === 'string') {
+                try {
+                    terminals = JSON.parse(data.terminals);
+                } catch (e) {
+                    console.warn('Failed to parse terminals JSON:', e);
+                    terminals = [];
+                }
+            }
             if (terminals.length > 0) {
                 terminals.forEach(terminal => addTerminalField(terminal));
             } else {
