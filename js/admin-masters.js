@@ -889,8 +889,15 @@ export async function handleMasterFormSubmit(e, masterData, showToast, updateSta
                 supplement: item.querySelector('.terminal-supplement').value || ''
             }));
 
+            const propertyCodeValue = document.getElementById('propertyCode').value;
+            const propertyCode = parseInt(propertyCodeValue);
+            if (!propertyCodeValue || isNaN(propertyCode)) {
+                showToast('物件コードは数値で入力してください', 'error');
+                return;
+            }
+
             const data = {
-                property_code: parseInt(document.getElementById('propertyCode').value),
+                property_code: propertyCode,
                 property_name: document.getElementById('propertyName').value,
                 terminals: terminals,
                 supplement: document.getElementById('supplement').value,

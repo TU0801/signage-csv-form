@@ -47,6 +47,7 @@ export function createContextMenu(callbacks) {
 
         const action = item.dataset.action;
         const rowId = parseInt(menu.dataset.rowId);
+        if (isNaN(rowId)) return;
         handleContextMenuAction(action, rowId, callbacks);
         hideContextMenu();
     });
