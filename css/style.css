@@ -404,21 +404,65 @@
         }
 
         .data-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0.4rem;
             border-bottom: 1px solid var(--border);
             font-size: 0.7rem;
-            gap: 0.4rem;
         }
 
         .data-item:last-child { border-bottom: none; }
 
-        .data-item-info { flex: 1; min-width: 0; }
-        .data-item-title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .data-item-sub { color: var(--text-muted); font-size: 0.65rem; }
-        .data-item-actions { display: flex; gap: 0.2rem; flex-shrink: 0; }
+        .data-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem;
+            cursor: pointer;
+            gap: 0.4rem;
+        }
+        .data-item-header:hover { background: #f8fafc; }
+
+        .data-item-toggle {
+            font-size: 0.6rem;
+            color: var(--text-muted);
+            transition: transform 0.2s;
+        }
+        .data-item.expanded .data-item-toggle { transform: rotate(90deg); }
+
+        .data-item-summary {
+            flex: 1;
+            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .data-item-summary strong { font-weight: 600; }
+
+        .data-item-details {
+            display: none;
+            padding: 0.5rem;
+            padding-top: 0;
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            background: #fafafa;
+            border-radius: 0 0 4px 4px;
+        }
+        .data-item.expanded .data-item-details { display: block; }
+
+        .data-item-detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.2rem 0;
+            border-bottom: 1px dashed #e5e7eb;
+        }
+        .data-item-detail-row:last-child { border-bottom: none; }
+        .data-item-detail-label { color: #64748b; }
+        .data-item-detail-value { font-weight: 500; color: #1e293b; }
+
+        .data-item-actions {
+            display: flex;
+            gap: 0.3rem;
+            margin-top: 0.5rem;
+            justify-content: flex-end;
+        }
 
         /* 申請済みデータのスタイル (#7) */
         .data-item.submitted {
@@ -427,8 +471,6 @@
             opacity: 0.85;
         }
         .data-item.submitted .data-item-actions { display: none; }
-        .data-item-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-        .data-item-row span { white-space: nowrap; }
 
         .badge {
             display: inline-block;

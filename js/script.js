@@ -506,41 +506,69 @@ function hasTemplateImage(templateKey) {
                 submittedCountEl.textContent = `申請済: ${submittedEntries.length}`;
             }
 
-            // 未申請データ（編集・削除可能）
+            // 未申請データ（編集・削除可能）- アコーディオン形式
             const pendingHtml = entries.map((e, i) => `
-                <div class="data-item pending">
-                    <div class="data-item-info">
-                        <div class="data-item-row">
-                            <span>${escapeHtml(e.propertyCode)}</span>
-                            <span>${escapeHtml(e.propertyName || '')}</span>
-                            <span>${escapeHtml(e.inspectionType)}</span>
+                <div class="data-item pending" data-index="${i}">
+                    <div class="data-item-header">
+                        <span class="data-item-toggle">▶</span>
+                        <div class="data-item-summary">
+                            <strong>${escapeHtml(e.propertyCode)}</strong> ${escapeHtml(e.propertyName || '')}
                         </div>
-                        <div class="data-item-sub">
-                            ${escapeHtml(e.startDate) || '-'} ～ ${escapeHtml(e.endDate) || '-'}
-                        </div>
+                        <span class="badge badge-success">${e.showOnBoard ? '表示' : '非表示'}</span>
                     </div>
-                    <span class="badge badge-success">${e.showOnBoard ? '表示' : '非表示'}</span>
-                    <div class="data-item-actions">
-                        <button class="btn btn-sm btn-outline" data-action="edit" data-index="${i}">編集</button>
-                        <button class="btn btn-sm btn-danger" data-action="delete" data-index="${i}">削除</button>
+                    <div class="data-item-details">
+                        <div class="data-item-detail-row">
+                            <span class="data-item-detail-label">点検種別</span>
+                            <span class="data-item-detail-value">${escapeHtml(e.inspectionType)}</span>
+                        </div>
+                        <div class="data-item-detail-row">
+                            <span class="data-item-detail-label">点検開始日</span>
+                            <span class="data-item-detail-value">${escapeHtml(e.startDate) || '-'}</span>
+                        </div>
+                        <div class="data-item-detail-row">
+                            <span class="data-item-detail-label">点検終了日</span>
+                            <span class="data-item-detail-value">${escapeHtml(e.endDate) || '-'}</span>
+                        </div>
+                        <div class="data-item-detail-row">
+                            <span class="data-item-detail-label">登録日</span>
+                            <span class="data-item-detail-value">未申請</span>
+                        </div>
+                        <div class="data-item-actions">
+                            <button class="btn btn-sm btn-outline" data-action="edit" data-index="${i}">編集</button>
+                            <button class="btn btn-sm btn-danger" data-action="delete" data-index="${i}">削除</button>
+                        </div>
                     </div>
                 </div>
             `).join('');
 
-            // #7: 申請済みデータ（読み取り専用）
-            const submittedHtml = submittedEntries.map(e => `
-                <div class="data-item submitted">
-                    <div class="data-item-info">
-                        <div class="data-item-row">
-                            <span>${escapeHtml(e.property_code)}</span>
-                            <span>-</span>
-                            <span>${escapeHtml(e.inspection_type)}</span>
+            // #7: 申請済みデータ（読み取り専用）- アコーディオン形式
+            const submittedHtml = submittedEntries.map((e, i) => `
+                <div class="data-item submitted" data-submitted-index="${i}">
+                    <div class="data-item-header">
+                        <span class="data-item-toggle">▶</span>
+                        <div class="data-item-summary">
+                            <strong>${escapeHtml(e.property_code)}</strong>
                         </div>
-                        <div class="data-item-sub">
-                            ${e.inspection_start || '-'} ～ ${e.inspection_end || '-'} | 登録: ${formatDateTime(e.created_at)}
+                        <span class="badge badge-submitted">申請済</span>
+                    </div>
+                    <div class="data-item-details">
+                        <div class="data-item-detail-row">
+                            <span class="data-item-detail-label">点検種別</span>
+                            <span class="data-item-detail-value">${escapeHtml(e.inspection_type)}</span>
+                        </div>
+                        <div class="data-item-detail-row">
+                            <span class="data-item-detail-label">点検開始日</span>
+                            <span class="data-item-detail-value">${e.inspection_start || '-'}</span>
+                        </div>
+                        <div class="data-item-detail-row">
+                            <span class="data-item-detail-label">点検終了日</span>
+                            <span class="data-item-detail-value">${e.inspection_end || '-'}</span>
+                        </div>
+                        <div class="data-item-detail-row">
+                            <span class="data-item-detail-label">登録日</span>
+                            <span class="data-item-detail-value">${formatDateTime(e.created_at)}</span>
                         </div>
                     </div>
-                    <span class="badge badge-submitted">申請済</span>
                 </div>
             `).join('');
 
@@ -551,12 +579,28 @@ function hasTemplateImage(templateKey) {
                 container.innerHTML = pendingHtml + submittedHtml;
             }
 
+            // アコーディオン展開/折りたたみ
+            container.querySelectorAll('.data-item-header').forEach(header => {
+                header.addEventListener('click', (e) => {
+                    // 編集・削除ボタンのクリックは除外
+                    if (e.target.closest('[data-action]')) return;
+                    const item = header.closest('.data-item');
+                    item.classList.toggle('expanded');
+                });
+            });
+
             // イベントリスナーを追加（未申請データのみ）
             container.querySelectorAll('[data-action="edit"]').forEach(btn => {
-                btn.addEventListener('click', () => editEntry(parseInt(btn.dataset.index)));
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    editEntry(parseInt(btn.dataset.index));
+                });
             });
             container.querySelectorAll('[data-action="delete"]').forEach(btn => {
-                btn.addEventListener('click', () => deleteEntry(parseInt(btn.dataset.index)));
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    deleteEntry(parseInt(btn.dataset.index));
+                });
             });
         }
 
