@@ -163,17 +163,19 @@
 
             <!-- データ一覧 -->
             <section class="data-section card">
-                <div class="card-header">
-                    📊 作成データ
-                    <span class="badge badge-count" id="dataCount">0</span>
-                    <span class="badge badge-submitted" id="submittedCount" style="margin-left: 0.5rem;">申請済: 0</span>
+                <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        📊 作成データ
+                        <span class="badge badge-count" id="dataCount">0</span>
+                        <span class="badge badge-submitted" id="submittedCount" style="margin-left: 0.5rem;">申請済: 0</span>
+                    </div>
+                    <div class="export-buttons" id="exportSection" style="display: none;">
+                        <button class="btn btn-primary btn-sm" id="submitBtn" onclick="submitEntries()">確定する</button>
+                    </div>
                 </div>
                 <div class="card-body">
                     <div class="data-list" id="dataList">
                         <div class="empty-state">📭 データなし</div>
-                    </div>
-                    <div class="export-buttons" id="exportSection" style="display: none;">
-                        <button class="btn btn-primary btn-sm" id="submitBtn" onclick="submitEntries()">確定する</button>
                     </div>
                 </div>
             </section>

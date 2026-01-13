@@ -257,6 +257,15 @@ function hasTemplateImage(templateKey) {
             const endDate = document.getElementById('endDate').value;
             const remarks = document.getElementById('remarks').value;
 
+            // 保守会社情報を取得
+            const vendorIdx = document.getElementById('vendor').value;
+            let vendorName = '';
+            let emergencyContact = '';
+            if (vendorIdx !== '' && masterData.vendors && masterData.vendors[vendorIdx]) {
+                vendorName = masterData.vendors[vendorIdx].vendorName || '';
+                emergencyContact = masterData.vendors[vendorIdx].emergencyContact || '';
+            }
+
             let dateText = '';
             if (startDate) {
                 const d = new Date(startDate);
@@ -279,6 +288,10 @@ function hasTemplateImage(templateKey) {
                         <div class="poster-notice-text">${escapeHtml(noticeText)}</div>
                         <div class="poster-date-text">${escapeHtml(dateText)}</div>
                         <div class="poster-remarks-text">${escapeHtml(remarks)}</div>
+                        <div class="poster-vendor-text">
+                            <span>${escapeHtml(vendorName)}</span>
+                            <span>${escapeHtml(emergencyContact)}</span>
+                        </div>
                     </div>
                 `;
             } else {
