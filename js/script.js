@@ -542,12 +542,16 @@ function hasTemplateImage(templateKey) {
             `).join('');
 
             // #7: 申請済みデータ（読み取り専用）- アコーディオン形式
-            const submittedHtml = submittedEntries.map((e, i) => `
+            const submittedHtml = submittedEntries.map((e, i) => {
+                // masterDataから物件名を取得
+                const prop = masterData.properties.find(p => String(p.propertyCode) === String(e.property_code));
+                const propertyName = prop ? prop.propertyName : '';
+                return `
                 <div class="data-item submitted" data-submitted-index="${i}">
                     <div class="data-item-header">
                         <span class="data-item-toggle">▶</span>
                         <div class="data-item-summary">
-                            <strong>${escapeHtml(e.property_code)}</strong>
+                            <strong>${escapeHtml(e.property_code)}</strong> ${escapeHtml(propertyName)}
                         </div>
                         <span class="badge badge-submitted">申請済</span>
                     </div>
@@ -570,7 +574,7 @@ function hasTemplateImage(templateKey) {
                         </div>
                     </div>
                 </div>
-            `).join('');
+            `}).join('');
 
             // 表示内容の生成
             if (entries.length === 0 && submittedEntries.length === 0) {
