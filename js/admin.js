@@ -1510,6 +1510,9 @@ function showToast(message, type = 'info') {
     }, 2500);
 }
 
+// showToastをグローバルスコープに公開（admin-masters.js等で使用）
+window.showToast = showToast;
+
 // ========================================
 // グローバルスコープに公開（マスター編集・削除）
 // ========================================

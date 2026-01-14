@@ -363,10 +363,10 @@ async function updateInspectionSortOrders(masterData) {
                 inspection.sort_order = i;
             }
         }
-        showToast('並び順を更新しました', 'success');
+        window.showToast('並び順を更新しました', 'success');
     } catch (error) {
         console.error('Sort order update failed:', error);
-        showToast('並び順の更新に失敗しました', 'error');
+        window.showToast('並び順の更新に失敗しました', 'error');
     }
 }
 
