@@ -411,6 +411,7 @@ function setupEventListeners() {
 
     // マスターフォーム送信
     document.getElementById('masterForm').addEventListener('submit', (e) => {
+        e.preventDefault();
         handleMasterFormSubmit(e, masterData, showToast, updateStats);
     });
 
