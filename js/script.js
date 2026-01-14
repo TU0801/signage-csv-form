@@ -506,103 +506,72 @@ function hasTemplateImage(templateKey) {
                 submittedCountEl.textContent = `申請済: ${submittedEntries.length}`;
             }
 
-            // 未申請データ（編集・削除可能）- アコーディオン形式
-            const pendingHtml = entries.map((e, i) => `
-                <div class="data-item pending" data-index="${i}">
-                    <div class="data-item-header">
-                        <span class="data-item-toggle">▶</span>
-                        <div class="data-item-summary">
-                            <strong>${escapeHtml(e.propertyCode)}</strong> ${escapeHtml(e.propertyName || '')}
-                        </div>
-                        <span class="badge badge-success">${e.showOnBoard ? '表示' : '非表示'}</span>
-                    </div>
-                    <div class="data-item-details">
-                        <div class="data-item-detail-row">
-                            <span class="data-item-detail-label">点検種別</span>
-                            <span class="data-item-detail-value">${escapeHtml(e.inspectionType)}</span>
-                        </div>
-                        <div class="data-item-detail-row">
-                            <span class="data-item-detail-label">点検開始日</span>
-                            <span class="data-item-detail-value">${escapeHtml(e.startDate) || '-'}</span>
-                        </div>
-                        <div class="data-item-detail-row">
-                            <span class="data-item-detail-label">点検終了日</span>
-                            <span class="data-item-detail-value">${escapeHtml(e.endDate) || '-'}</span>
-                        </div>
-                        <div class="data-item-detail-row">
-                            <span class="data-item-detail-label">登録日</span>
-                            <span class="data-item-detail-value">未申請</span>
-                        </div>
-                        <div class="data-item-actions">
-                            <button class="btn btn-sm btn-outline" data-action="edit" data-index="${i}">編集</button>
-                            <button class="btn btn-sm btn-danger" data-action="delete" data-index="${i}">削除</button>
-                        </div>
-                    </div>
-                </div>
+            // 未申請データ（編集・削除可能）- テーブル行
+            const pendingRows = entries.map((e, i) => `
+                <tr class="pending" data-index="${i}">
+                    <td>${escapeHtml(e.propertyCode)}</td>
+                    <td>${escapeHtml(e.propertyName || '')}</td>
+                    <td>${escapeHtml(e.inspectionType)}</td>
+                    <td>${escapeHtml(e.startDate) || '-'}</td>
+                    <td>${escapeHtml(e.endDate) || '-'}</td>
+                    <td>-</td>
+                    <td class="actions">
+                        <button class="btn btn-sm btn-outline" data-action="edit" data-index="${i}">編集</button>
+                        <button class="btn btn-sm btn-danger" data-action="delete" data-index="${i}">削除</button>
+                    </td>
+                </tr>
             `).join('');
 
-            // #7: 申請済みデータ（読み取り専用）- アコーディオン形式
-            const submittedHtml = submittedEntries.map((e, i) => {
+            // #7: 申請済みデータ（読み取り専用）- テーブル行
+            const submittedRows = submittedEntries.map((e, i) => {
                 // masterDataから物件名を取得
                 const prop = masterData.properties.find(p => String(p.propertyCode) === String(e.property_code));
                 const propertyName = prop ? prop.propertyName : '';
                 return `
-                <div class="data-item submitted" data-submitted-index="${i}">
-                    <div class="data-item-header">
-                        <span class="data-item-toggle">▶</span>
-                        <div class="data-item-summary">
-                            <strong>${escapeHtml(e.property_code)}</strong> ${escapeHtml(propertyName)}
-                        </div>
-                        <span class="badge badge-submitted">申請済</span>
-                    </div>
-                    <div class="data-item-details">
-                        <div class="data-item-detail-row">
-                            <span class="data-item-detail-label">点検種別</span>
-                            <span class="data-item-detail-value">${escapeHtml(e.inspection_type)}</span>
-                        </div>
-                        <div class="data-item-detail-row">
-                            <span class="data-item-detail-label">点検開始日</span>
-                            <span class="data-item-detail-value">${e.inspection_start || '-'}</span>
-                        </div>
-                        <div class="data-item-detail-row">
-                            <span class="data-item-detail-label">点検終了日</span>
-                            <span class="data-item-detail-value">${e.inspection_end || '-'}</span>
-                        </div>
-                        <div class="data-item-detail-row">
-                            <span class="data-item-detail-label">登録日</span>
-                            <span class="data-item-detail-value">${formatDateTime(e.created_at)}</span>
-                        </div>
-                    </div>
-                </div>
+                <tr class="submitted" data-submitted-index="${i}">
+                    <td>${escapeHtml(e.property_code)}</td>
+                    <td>${escapeHtml(propertyName)}</td>
+                    <td>${escapeHtml(e.inspection_type)}</td>
+                    <td>${e.inspection_start || '-'}</td>
+                    <td>${e.inspection_end || '-'}</td>
+                    <td>${formatDateTime(e.created_at)}</td>
+                    <td><span class="badge badge-submitted">申請済</span></td>
+                </tr>
             `}).join('');
 
             // 表示内容の生成
             if (entries.length === 0 && submittedEntries.length === 0) {
                 container.innerHTML = '<div class="empty-state">📭 データなし</div>';
             } else {
-                container.innerHTML = pendingHtml + submittedHtml;
+                container.innerHTML = `
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>物件コード</th>
+                                <th>建物名</th>
+                                <th>点検種別</th>
+                                <th>開始日</th>
+                                <th>終了日</th>
+                                <th>登録日</th>
+                                <th>ステータス</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${pendingRows}
+                            ${submittedRows}
+                        </tbody>
+                    </table>
+                `;
             }
-
-            // アコーディオン展開/折りたたみ
-            container.querySelectorAll('.data-item-header').forEach(header => {
-                header.addEventListener('click', (e) => {
-                    // 編集・削除ボタンのクリックは除外
-                    if (e.target.closest('[data-action]')) return;
-                    const item = header.closest('.data-item');
-                    item.classList.toggle('expanded');
-                });
-            });
 
             // イベントリスナーを追加（未申請データのみ）
             container.querySelectorAll('[data-action="edit"]').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
+                btn.addEventListener('click', () => {
                     editEntry(parseInt(btn.dataset.index));
                 });
             });
             container.querySelectorAll('[data-action="delete"]').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
+                btn.addEventListener('click', () => {
                     deleteEntry(parseInt(btn.dataset.index));
                 });
             });

@@ -404,68 +404,55 @@
 
         .data-list {
             flex: 1;
+            overflow-x: auto;
             overflow-y: auto;
             min-height: 100px;
         }
 
-        .data-item {
-            border-bottom: 1px solid var(--border);
-            font-size: 0.7rem;
+        /* データ一覧テーブル */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.75rem;
         }
 
-        .data-item:last-child { border-bottom: none; }
-
-        .data-item-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0.5rem;
-            cursor: pointer;
-            gap: 0.4rem;
+        .data-table thead {
+            background: #f8fafc;
+            position: sticky;
+            top: 0;
+            z-index: 1;
         }
-        .data-item-header:hover { background: #f8fafc; }
 
-        .data-item-toggle {
-            font-size: 0.6rem;
+        .data-table th {
+            padding: 0.5rem 0.75rem;
+            text-align: left;
+            font-weight: 600;
             color: var(--text-muted);
-            transition: transform 0.2s;
-        }
-        .data-item.expanded .data-item-toggle { transform: rotate(90deg); }
-
-        .data-item-summary {
-            flex: 1;
-            min-width: 0;
+            border-bottom: 2px solid var(--border);
             white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
         }
-        .data-item-summary strong { font-weight: 600; }
 
-        .data-item-details {
-            display: none;
-            padding: 0.5rem;
-            padding-top: 0;
-            font-size: 0.65rem;
-            color: var(--text-muted);
-            background: #fafafa;
-            border-radius: 0 0 4px 4px;
+        .data-table td {
+            padding: 0.4rem 0.75rem;
+            border-bottom: 1px solid var(--border);
+            vertical-align: middle;
         }
-        .data-item.expanded .data-item-details { display: block; }
 
-        .data-item-detail-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 0.2rem 0;
-            border-bottom: 1px dashed #e5e7eb;
+        .data-table tbody tr:hover {
+            background: #f8fafc;
         }
-        .data-item-detail-row:last-child { border-bottom: none; }
-        .data-item-detail-label { color: #64748b; }
-        .data-item-detail-value { font-weight: 500; color: #1e293b; }
 
-        .data-item-actions {
+        .data-table tbody tr.submitted {
+            background: #f0fdf4;
+        }
+
+        .data-table tbody tr.submitted:hover {
+            background: #dcfce7;
+        }
+
+        .data-table .actions {
             display: flex;
             gap: 0.3rem;
-            margin-top: 0.5rem;
             justify-content: flex-end;
         }
 
