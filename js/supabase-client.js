@@ -1192,11 +1192,7 @@ export async function deletePosterImage(imageUrl) {
 export async function getBuildingEquipment(propertyCode) {
   const { data, error } = await supabase
     .from('signage_building_equipment')
-    .select(`
-      *,
-      inspection_type:signage_master_inspection_types(*),
-      vendor:signage_master_vendors(*)
-    `)
+    .select('*')
     .eq('property_code', propertyCode)
     .order('created_at');
   if (error) throw error;

@@ -2308,16 +2308,19 @@ async function loadEquipmentList() {
         }
 
         emptyMsg.style.display = 'none';
-        tbody.innerHTML = equipment.map(eq => `
+        tbody.innerHTML = equipment.map(eq => {
+            const inspType = masterData.inspectionTypes.find(t => t.id === eq.inspection_type_id);
+            const vendor = masterData.vendors.find(v => v.id === eq.vendor_id);
+            return `
             <tr>
-                <td>${escapeHtml(eq.inspection_type?.inspection_name || '-')}</td>
-                <td>${escapeHtml(eq.vendor?.vendor_name || '-')}</td>
+                <td>${escapeHtml(inspType?.inspection_name || '-')}</td>
+                <td>${escapeHtml(vendor?.vendor_name || '-')}</td>
                 <td>${eq.inspection_months?.length ? eq.inspection_months.map(m => `${m}月`).join(', ') : '-'}</td>
                 <td>${escapeHtml(eq.remarks || '')}</td>
                 <td>${escapeHtml(eq.remarks2 || '')}</td>
                 <td><button class="btn btn-danger btn-sm" onclick="deleteEquipmentRow('${eq.id}')">削除</button></td>
             </tr>
-        `).join('');
+        `}).join('');
     } catch (error) {
         console.error('Failed to load equipment:', error);
         showToast('設備情報の読み込みに失敗しました', 'error');
