@@ -84,6 +84,11 @@ let pendingBuildingRequests = [];
 let selectedPendingIds = [];
 let currentRelationshipType = 'buildings'; // 'buildings' or 'inspections'
 
+// updateStats エイリアス（handleMasterFormSubmit等で使用）
+function updateStats() {
+    updateSidebarCounts();
+}
+
 // ユーザーIDからメールアドレスを取得
 function getUserEmail(userId) {
     if (!userId) return '-';
