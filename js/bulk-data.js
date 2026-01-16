@@ -3,7 +3,8 @@
 import { createEntries } from './supabase-client.js';
 import {
     state, getMasterData, getRows, getCurrentUserId,
-    getAutoSaveTimer, setAutoSaveTimer, setRowIdCounter, clearRows, getCurrentVendor
+    getAutoSaveTimer, setAutoSaveTimer, setRowIdCounter, clearRows, getCurrentVendor,
+    getAppSettings
 } from './bulk-state.js';
 import { addRow, validateRow } from './bulk-table.js';
 
@@ -152,7 +153,7 @@ export async function saveAll(callbacks) {
                 display_start_time: row.displayStartTime || null,
                 display_end_date: displayEndDate,
                 display_end_time: row.displayEndTime || null,
-                display_duration: row.displayTime || 6,
+                display_duration: row.displayTime || getAppSettings().display_time_default || 6,
                 poster_type: row.showOnBoard !== false ? 'template' : 'custom',
                 poster_image: null,
                 poster_position: row.position !== undefined ? String(row.position) : '2',
@@ -228,7 +229,7 @@ export function generateCSV() {
         const inspection = masterData.notices?.find(i => i.inspectionType === row.inspectionType);
 
         const formatDate = (d) => d ? d.replace(/-/g, '/') : '';
-        const displayTimeFormatted = `0:00:${String(row.displayTime || 6).padStart(2, '0')}`;
+        const displayTimeFormatted = `0:00:${String(row.displayTime || getAppSettings().display_time_default || 6).padStart(2, '0')}`;
 
         const sd = formatDate(row.startDate);
         const ed = formatDate(row.endDate) || sd;

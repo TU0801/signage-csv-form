@@ -55,7 +55,8 @@ import {
 
 import {
     loadAppSettings,
-    saveSettings
+    saveSettings,
+    getAppSettings
 } from './admin-settings.js';
 
 // ========================================
@@ -676,7 +677,7 @@ function showEntryDetail(entry) {
                 <div class="detail-value">${formatDate(entry.display_end_date)} ${entry.display_end_time || ''}</div>
 
                 <div class="detail-label">表示時間</div>
-                <div class="detail-value">${entry.display_duration || 6}秒</div>
+                <div class="detail-value">${entry.display_duration || getAppSettings().display_time_default || 6}秒</div>
 
                 <div class="detail-label">表示位置</div>
                 <div class="detail-value">${entry.poster_position || '-'}</div>
@@ -1010,7 +1011,8 @@ function generateCSV(data) {
 
     data.forEach(entry => {
         const formatDate = (d) => d ? d.replace(/-/g, '/') : '';
-        const displayTime = entry.display_duration || 6;
+        const defaultTime = getAppSettings().display_time_default || 6;
+        const displayTime = entry.display_duration || defaultTime;
         const displayTimeFormatted = `0:00:${String(displayTime).padStart(2, '0')}`;
 
         const sd = formatDate(entry.inspection_start);
@@ -2132,7 +2134,7 @@ window.editEntry = async function(id, mode) {
                         </div>
                         <div>
                             <label style="display: block; margin-bottom: 0.5rem; font-size: 0.875rem; font-weight: 600; color: #475569;">表示時間（秒）</label>
-                            <input type="number" id="editDisplayDuration" value="${entry.display_duration || 10}" min="1" max="60" style="
+                            <input type="number" id="editDisplayDuration" value="${entry.display_duration || getAppSettings().display_time_default || 6}" min="1" max="60" style="
                                 width: 100%;
                                 padding: 0.625rem 0.875rem;
                                 border: 2px solid #e2e8f0;
@@ -2229,7 +2231,7 @@ window.saveEditedEntry = async function(id, mode) {
         display_start_time: document.getElementById('editDisplayStartTime').value || null,
         display_end_date: document.getElementById('editDisplayEndDate').value || null,
         display_end_time: document.getElementById('editDisplayEndTime').value || null,
-        display_duration: parseInt(document.getElementById('editDisplayDuration').value) || 10,
+        display_duration: parseInt(document.getElementById('editDisplayDuration').value) || getAppSettings().display_time_default || 6,
         poster_position: document.getElementById('editPosterPosition').value || '4'
     };
 

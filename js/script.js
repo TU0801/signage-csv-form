@@ -237,7 +237,8 @@ function hasTemplateImage(templateKey) {
 
         function adjustTime(delta) {
             const input = document.getElementById('displayTime');
-            let val = parseInt(input.value) || 6;
+            const defaultTime = (window.appSettings && window.appSettings.display_time_default) || 6;
+            let val = parseInt(input.value) || defaultTime;
             const maxTime = (window.appSettings && window.appSettings.display_time_max) || 30;
             input.value = Math.max(1, Math.min(maxTime, val + delta));
         }
@@ -349,7 +350,8 @@ function hasTemplateImage(templateKey) {
             };
             const errors = [];
 
-            const displayTime = parseInt(document.getElementById('displayTime').value) || 6;
+            const defaultTime = settings.display_time_default || 6;
+            const displayTime = parseInt(document.getElementById('displayTime').value) || defaultTime;
             if (displayTime > settings.display_time_max) {
                 errors.push(`表示時間は${settings.display_time_max}秒以下にしてください`);
             }
@@ -456,7 +458,8 @@ function hasTemplateImage(templateKey) {
                 document.getElementById('startDate').value = lastEntry.startDate || '';
                 document.getElementById('endDate').value = lastEntry.endDate || '';
                 document.getElementById('remarks').value = lastEntry.remarks || '';
-                document.getElementById('displayTime').value = lastEntry.displayTime || 6;
+                const defaultTime = (window.appSettings && window.appSettings.display_time_default) || 6;
+                document.getElementById('displayTime').value = lastEntry.displayTime || defaultTime;
 
                 updatePreview();
                 showToast('前回のデータを複製しました', 'info');
@@ -622,7 +625,7 @@ function hasTemplateImage(templateKey) {
             document.getElementById('noticeText').value = '';
             document.getElementById('displayStartTime').value = '';
             document.getElementById('displayEndTime').value = '';
-            document.getElementById('displayTime').value = 6;
+            document.getElementById('displayTime').value = (window.appSettings && window.appSettings.display_time_default) || 6;
             document.getElementById('endDate').value = '';
             document.getElementById('displayEndDate').value = '';
             currentTemplateNo = '';
@@ -860,7 +863,7 @@ function hasTemplateImage(templateKey) {
                         display_start_time: e.displayStartTime || null,
                         display_end_date: displayEndDate,
                         display_end_time: e.displayEndTime || null,
-                        display_duration: e.displayTime || 6,
+                        display_duration: e.displayTime || ((window.appSettings && window.appSettings.display_time_default) || 6),
                         poster_type: e.posterType === 'template' ? 'template' : 'custom',
                         poster_image: e.posterImageUrl || null,
                         poster_position: e.frameNo !== undefined ? String(e.frameNo) : '2',

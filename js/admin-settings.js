@@ -22,11 +22,13 @@ export async function loadAppSettings() {
 
         // フォームに反映
         const displayTimeMax = document.getElementById('settingDisplayTimeMax');
+        const displayTimeDefault = document.getElementById('settingDisplayTimeDefault');
         const remarksCharsPerLine = document.getElementById('settingRemarksCharsPerLine');
         const remarksMaxLines = document.getElementById('settingRemarksMaxLines');
         const noticeTextMaxChars = document.getElementById('settingNoticeTextMaxChars');
 
         if (displayTimeMax) displayTimeMax.value = appSettings.display_time_max || 30;
+        if (displayTimeDefault) displayTimeDefault.value = appSettings.display_time_default || 6;
         if (remarksCharsPerLine) remarksCharsPerLine.value = appSettings.remarks_chars_per_line || 25;
         if (remarksMaxLines) remarksMaxLines.value = appSettings.remarks_max_lines || 5;
         if (noticeTextMaxChars) noticeTextMaxChars.value = appSettings.notice_text_max_chars || 200;
@@ -42,6 +44,7 @@ export async function saveSettings(showToast) {
     try {
         const settings = {
             display_time_max: document.getElementById('settingDisplayTimeMax').value,
+            display_time_default: document.getElementById('settingDisplayTimeDefault').value,
             remarks_chars_per_line: document.getElementById('settingRemarksCharsPerLine').value,
             remarks_max_lines: document.getElementById('settingRemarksMaxLines').value,
             notice_text_max_chars: document.getElementById('settingNoticeTextMaxChars').value

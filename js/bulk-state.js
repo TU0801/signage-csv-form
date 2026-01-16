@@ -17,6 +17,7 @@ export const state = {
     currentDetailRowId: null,
     appSettings: {
         display_time_max: 30,
+        display_time_default: 6,
         remarks_chars_per_line: 25,
         remarks_max_lines: 5,
         notice_text_max_chars: 200
