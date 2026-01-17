@@ -372,6 +372,7 @@ function setupEventListeners() {
     // CSVエクスポート
     document.getElementById('exportCsvBtn').addEventListener('click', exportCSV);
     document.getElementById('exportCopyBtn').addEventListener('click', copyCSV);
+    document.getElementById('downloadCustomImagesBtn')?.addEventListener('click', downloadCustomImages);
 
     // 一括削除
     document.getElementById('bulkDeleteBtn').addEventListener('click', bulkDeleteEntries);
@@ -1217,6 +1218,54 @@ function copyCSV() {
     }).catch(() => {
         showToast('コピーに失敗しました', 'error');
     });
+}
+
+async function downloadCustomImages() {
+    // カスタム画像を持つエントリをフィルタ
+    const customImageEntries = entries.filter(e =>
+        e.poster_type === 'custom' && e.poster_image
+    );
+
+    if (customImageEntries.length === 0) {
+        showToast('ダウンロード対象の追加画像がありません', 'info');
+        return;
+    }
+
+    showToast(`${customImageEntries.length}件の画像をダウンロード中...`, 'info');
+
+    try {
+        // JSZipインスタンス作成
+        const zip = new JSZip();
+
+        // 各画像をfetchしてZIPに追加
+        for (const entry of customImageEntries) {
+            try {
+                const response = await fetch(entry.poster_image);
+                const blob = await response.blob();
+                // ファイル名: 物件コード_点検種別_ID先頭8文字.jpg
+                const safePropertyCode = (entry.property_code || 'unknown').replace(/[\/\\:*?"<>|]/g, '_');
+                const safeInspectionType = (entry.inspection_type || 'unknown').replace(/[\/\\:*?"<>|]/g, '_');
+                const filename = `${safePropertyCode}_${safeInspectionType}_${entry.id.slice(0, 8)}.jpg`;
+                zip.file(filename, blob);
+            } catch (err) {
+                console.error(`Failed to fetch image for entry ${entry.id}:`, err);
+            }
+        }
+
+        // ZIP生成・ダウンロード
+        const content = await zip.generateAsync({ type: 'blob' });
+        const url = URL.createObjectURL(content);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `custom_images_${new Date().toISOString().slice(0, 10)}.zip`;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        showToast(`${customImageEntries.length}件の画像をダウンロードしました`, 'success');
+    } catch (error) {
+        console.error('Failed to download images:', error);
+        showToast('画像のダウンロードに失敗しました', 'error');
+    }
 }
 
 // ========================================
