@@ -520,23 +520,34 @@ function renderPendingEntries() {
     pendingEntries.forEach(entry => {
         const tr = document.createElement('tr');
         const createdAt = new Date(entry.created_at).toLocaleString('ja-JP');
-        const startDate = entry.inspection_start
+        const inspectionStart = entry.inspection_start
             ? new Date(entry.inspection_start).toLocaleDateString('ja-JP')
             : '-';
 
         // 物件名を取得
         const property = masterData.properties.find(p => p.property_code === entry.property_code);
-        const propertyDisplay = property
-            ? `<div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(entry.property_code)} ${escapeHtml(property.property_name)}">${escapeHtml(entry.property_code)} ${escapeHtml(property.property_name)}</div>`
-            : escapeHtml(entry.property_code);
+
+        // 点検終了日のフォーマット
+        const inspectionEnd = entry.inspection_end
+            ? new Date(entry.inspection_end).toLocaleDateString('ja-JP')
+            : '-';
+
+        // 備考（長い場合は省略）
+        const remarksDisplay = entry.remarks
+            ? `<div style="max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(entry.remarks)}">${escapeHtml(entry.remarks)}</div>`
+            : '-';
 
         tr.innerHTML = `
             <td><input type="checkbox" data-id="${escapeHtml(entry.id)}" onchange="updateSelectedPending()"></td>
-            <td>${escapeHtml(getUserEmail(entry.user_id))}</td>
-            <td>${propertyDisplay}</td>
+            <td>${escapeHtml(entry.property_code)}</td>
+            <td>${escapeHtml(property?.property_name || '-')}</td>
             <td>${escapeHtml(entry.inspection_type)}</td>
-            <td>${escapeHtml(startDate)}</td>
+            <td>${escapeHtml(inspectionStart)}</td>
+            <td>${escapeHtml(inspectionEnd)}</td>
+            <td>${remarksDisplay}</td>
+            <td>${escapeHtml(entry.vendor_name || '-')}</td>
             <td>${escapeHtml(createdAt)}</td>
+            <td>${escapeHtml(getUserEmail(entry.user_id))}</td>
             <td>
                 <button class="btn btn-outline btn-sm" data-action="detail" data-id="${escapeHtml(entry.id)}">📋</button>
                 <button class="btn btn-primary btn-sm" data-action="edit" data-id="${escapeHtml(entry.id)}">✏️</button>
