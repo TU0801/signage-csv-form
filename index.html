@@ -127,12 +127,51 @@
                             <input type="date" id="endDate" onchange="updatePreview()">
                         </div>
 
-                        <!-- 表示設定はデフォルト値使用（非表示） -->
-                        <input type="hidden" id="displayStartDate" value="">
-                        <input type="hidden" id="displayStartTime" value="">
-                        <input type="hidden" id="displayEndDate" value="">
-                        <input type="hidden" id="displayEndTime" value="">
-                        <input type="hidden" id="displayTime" value="6">
+                        <!-- 表示設定（アコーディオン形式） -->
+                        <div class="accordion-section full-width">
+                            <button type="button" class="accordion-header" onclick="toggleDisplaySettings()">
+                                <span class="accordion-icon">▶</span>
+                                <span>表示設定（オプション）</span>
+                            </button>
+                            <div class="accordion-content" id="displaySettingsSection" style="display: none;">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>表示開始日</label>
+                                        <input type="date" id="displayStartDate">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>表示開始時間</label>
+                                        <input type="time" id="displayStartTime">
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>表示終了日</label>
+                                        <input type="date" id="displayEndDate">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>表示終了時間</label>
+                                        <input type="time" id="displayEndTime">
+                                    </div>
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>表示時間（秒）</label>
+                                        <input type="number" id="displayTime" value="6" min="1" max="60">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>表示位置</label>
+                                        <div class="position-options">
+                                            <label><input type="radio" name="displayPosition" value="1" onchange="onPositionChange(this.value)"><span>①上左</span></label>
+                                            <label><input type="radio" name="displayPosition" value="2" checked onchange="onPositionChange(this.value)"><span>②上中</span></label>
+                                            <label><input type="radio" name="displayPosition" value="3" onchange="onPositionChange(this.value)"><span>③上右</span></label>
+                                            <label><input type="radio" name="displayPosition" value="4" onchange="onPositionChange(this.value)"><span>④中央</span></label>
+                                            <label><input type="radio" name="displayPosition" value="0" onchange="onPositionChange(this.value)"><span>⓪全体</span></label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                         <input type="hidden" id="showOnBoard" value="true">
 
                         <!-- 備考 -->

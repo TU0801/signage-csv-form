@@ -245,9 +245,31 @@ function hasTemplateImage(templateKey) {
 
         function setPosition(pos) {
             currentPosition = pos;
+            // ラジオボタン形式の表示位置を更新
+            const radio = document.querySelector(`input[name="displayPosition"][value="${pos}"]`);
+            if (radio) radio.checked = true;
+            // 旧形式のposition-cellがあれば更新（後方互換性）
             document.querySelectorAll('.position-cell').forEach(cell => {
                 cell.classList.toggle('active', parseInt(cell.dataset.pos) === pos);
             });
+        }
+
+        // 表示設定アコーディオンのトグル
+        function toggleDisplaySettings() {
+            const content = document.getElementById('displaySettingsSection');
+            const icon = document.querySelector('.accordion-header .accordion-icon');
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                if (icon) icon.textContent = '▼';
+            } else {
+                content.style.display = 'none';
+                if (icon) icon.textContent = '▶';
+            }
+        }
+
+        // 表示位置ラジオボタンの変更イベント
+        function onPositionChange(pos) {
+            currentPosition = parseInt(pos);
         }
 
         function updatePreview() {

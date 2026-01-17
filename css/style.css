@@ -894,3 +894,109 @@ body.is-admin .position-grid.admin-only {
 body.is-admin div.admin-only[style*="inline-flex"] {
     display: inline-flex !important;
 }
+
+/* アコーディオン形式の表示設定 */
+.accordion-section {
+    margin-top: 1rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.accordion-header {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: #f8fafc;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #475569;
+    transition: background 0.2s;
+}
+
+.accordion-header:hover {
+    background: #f1f5f9;
+}
+
+.accordion-header .accordion-icon {
+    transition: transform 0.2s;
+}
+
+.accordion-header.open .accordion-icon {
+    transform: rotate(90deg);
+}
+
+.accordion-content {
+    padding: 1rem;
+    background: #fff;
+    border-top: 1px solid #e2e8f0;
+}
+
+.accordion-content .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.accordion-content .form-row:last-child {
+    margin-bottom: 0;
+}
+
+.accordion-content .form-group {
+    margin-bottom: 0;
+}
+
+.accordion-content label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #64748b;
+    margin-bottom: 0.25rem;
+}
+
+.accordion-content input,
+.accordion-content select {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 0.875rem;
+}
+
+.position-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.position-options label {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.375rem 0.75rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: all 0.2s;
+}
+
+.position-options label:hover {
+    background: #f1f5f9;
+}
+
+.position-options input[type="radio"] {
+    width: auto;
+    margin: 0;
+}
+
+.position-options input[type="radio"]:checked + span {
+    color: #667eea;
+    font-weight: 600;
+}

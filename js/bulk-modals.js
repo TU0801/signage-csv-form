@@ -214,6 +214,12 @@ export function createRowDetailModal(callbacks) {
                             </div>
                         </div>
                     </div>
+                    <div class="form-row-inline" style="margin-top: 0.75rem;">
+                        <div class="form-group">
+                            <label>表示時間（秒）</label>
+                            <input type="number" id="detailDisplayTime" class="form-control" min="1" max="60" style="width: 100px;">
+                        </div>
+                    </div>
                 </div>
 
                 <div class="detail-section">
@@ -303,6 +309,10 @@ export function openRowDetailModal(rowId, callbacks) {
     document.getElementById('detailDisplayEndDate').value = row.displayEndDate || row.endDate || '';
     document.getElementById('detailDisplayEndTime').value = row.displayEndTime || '';
 
+    // 表示時間（秒）- デフォルトは設定値または6秒
+    const defaultDisplayTime = (window.appSettings && window.appSettings.display_time_default) || 6;
+    document.getElementById('detailDisplayTime').value = row.displayTime || defaultDisplayTime;
+
     document.getElementById('detailShowOnBoard').checked = row.showOnBoard !== false;
 
     // 貼紙表示位置を設定（デフォルトは②上中=2）
@@ -331,6 +341,7 @@ function applyRowDetail(callbacks) {
     row.displayStartTime = document.getElementById('detailDisplayStartTime').value;
     row.displayEndDate = document.getElementById('detailDisplayEndDate').value;
     row.displayEndTime = document.getElementById('detailDisplayEndTime').value;
+    row.displayTime = parseInt(document.getElementById('detailDisplayTime').value) || 6;
     row.showOnBoard = document.getElementById('detailShowOnBoard').checked;
 
     // 貼紙表示位置
