@@ -1000,3 +1000,29 @@ body.is-admin div.admin-only[style*="inline-flex"] {
     color: #667eea;
     font-weight: 600;
 }
+
+/* 一括入力の詳細ボタン */
+.col-detail {
+    width: 50px;
+    text-align: center;
+}
+
+.btn-detail {
+    padding: 0.25rem 0.5rem;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    transition: all 0.2s;
+}
+
+.btn-detail:hover {
+    background: #e2e8f0;
+}
+
+.btn-detail.has-data {
+    background: #dbeafe;
+    border-color: #93c5fd;
+    color: #1d4ed8;
+}

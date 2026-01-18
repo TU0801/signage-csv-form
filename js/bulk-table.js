@@ -162,6 +162,9 @@ export function renderRow(row, callbacks) {
         <td class="col-remarks">
             <input type="text" class="remarks-input" data-row-id="${row.id}" value="${row.remarks}" placeholder="任意入力" maxlength="125" title="1行25文字×5行まで">
         </td>
+        <td class="col-detail">
+            <button class="btn-detail" data-row-id="${row.id}" title="詳細設定">${row.noticeText || row.displayStartDate ? '✓' : '⋯'}</button>
+        </td>
         <td class="col-status">
             <span class="status-badge ok" data-row-id="${row.id}">OK</span>
         </td>
@@ -257,7 +260,10 @@ export function setupRowEventListeners(tr, rowId, callbacks) {
         }
     });
 
-    // 削除済み: display-time, btn-detail
+    // 詳細ボタン
+    tr.querySelector('.btn-detail').addEventListener('click', () => {
+        callbacks.openRowDetailModal(rowId);
+    });
 
     tr.querySelectorAll('input, select, textarea').forEach(el => {
         el.addEventListener('keydown', (e) => handleCellKeyDown(e, rowId, callbacks));
