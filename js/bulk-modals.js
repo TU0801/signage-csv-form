@@ -223,14 +223,6 @@ export function createRowDetailModal(callbacks) {
                 </div>
 
                 <div class="detail-section">
-                    <h4>その他の設定</h4>
-                    <label class="checkbox-item">
-                        <input type="checkbox" id="detailShowOnBoard" checked>
-                        掲示板に表示する
-                    </label>
-                </div>
-
-                <div class="detail-section">
                     <h4>貼紙表示位置</h4>
                     <div class="position-select-grid">
                         <label class="position-option">
@@ -313,8 +305,6 @@ export function openRowDetailModal(rowId, callbacks) {
     const defaultDisplayTime = (window.appSettings && window.appSettings.display_time_default) || 6;
     document.getElementById('detailDisplayTime').value = row.displayTime || defaultDisplayTime;
 
-    document.getElementById('detailShowOnBoard').checked = row.showOnBoard !== false;
-
     // 貼紙表示位置を設定（デフォルトは②上中=2）
     const positionValue = row.position !== undefined ? String(row.position) : '2';
     const positionRadio = document.querySelector(`input[name="detailPosition"][value="${positionValue}"]`);
@@ -342,7 +332,6 @@ function applyRowDetail(callbacks) {
     row.displayEndDate = document.getElementById('detailDisplayEndDate').value;
     row.displayEndTime = document.getElementById('detailDisplayEndTime').value;
     row.displayTime = parseInt(document.getElementById('detailDisplayTime').value) || 6;
-    row.showOnBoard = document.getElementById('detailShowOnBoard').checked;
 
     // 貼紙表示位置
     const positionRadio = document.querySelector('input[name="detailPosition"]:checked');

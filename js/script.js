@@ -254,16 +254,24 @@ function hasTemplateImage(templateKey) {
             });
         }
 
-        // 表示設定アコーディオンのトグル
-        function toggleDisplaySettings() {
-            const content = document.getElementById('displaySettingsSection');
-            const icon = document.querySelector('.accordion-header .accordion-icon');
-            if (content.style.display === 'none') {
-                content.style.display = 'block';
-                if (icon) icon.textContent = '▼';
+        // 表示設定/プレビュー タブ切り替え
+        function switchSettingsTab(tabName) {
+            const previewTab = document.getElementById('previewTab');
+            const settingsTab = document.getElementById('settingsTab');
+            const tabBtns = document.querySelectorAll('.settings-preview-tabs .tab-btn');
+
+            // タブボタンのアクティブ状態を更新
+            tabBtns.forEach(btn => {
+                btn.classList.toggle('active', btn.textContent.includes(tabName === 'preview' ? 'プレビュー' : '表示設定'));
+            });
+
+            // タブコンテンツの表示切り替え
+            if (tabName === 'preview') {
+                previewTab.classList.add('active');
+                settingsTab.classList.remove('active');
             } else {
-                content.style.display = 'none';
-                if (icon) icon.textContent = '▶';
+                previewTab.classList.remove('active');
+                settingsTab.classList.add('active');
             }
         }
 

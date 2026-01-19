@@ -144,13 +144,22 @@
                 </div>
             </section>
 
-            <!-- 表示設定（アコーディオン形式） -->
-            <section class="accordion-section card">
-                <button type="button" class="accordion-header" onclick="toggleDisplaySettings()">
-                    <span class="accordion-icon">▶</span>
-                    <span>表示設定（オプション）</span>
-                </button>
-                <div class="accordion-content" id="displaySettingsSection" style="display: none;">
+            <!-- 表示設定/プレビュー タブ -->
+            <section class="settings-preview-tabs card">
+                <div class="tab-header">
+                    <button type="button" class="tab-btn active" onclick="switchSettingsTab('preview')">🖼️ 貼紙プレビュー</button>
+                    <button type="button" class="tab-btn" onclick="switchSettingsTab('settings')">⚙️ 表示設定</button>
+                </div>
+
+                <!-- プレビュータブ -->
+                <div class="tab-content active" id="previewTab">
+                    <div class="poster-preview" id="posterPreview">
+                        <div class="poster-preview-placeholder">点検工事案内を選択</div>
+                    </div>
+                </div>
+
+                <!-- 表示設定タブ -->
+                <div class="tab-content" id="settingsTab">
                     <div class="form-row">
                         <div class="form-group">
                             <label>表示開始日</label>
@@ -187,17 +196,6 @@
                             </div>
                         </div>
                     </div>
-                </div>
-            </section>
-
-            <!-- プレビュー -->
-            <section class="preview-section card">
-                <div class="card-header">🖼️ 貼紙プレビュー</div>
-                <div class="card-body" style="display: flex; flex-direction: column;">
-                    <div class="poster-preview" id="posterPreview">
-                        <div class="poster-preview-placeholder">点検工事案内を選択</div>
-                    </div>
-                    <!-- 位置はデフォルト値②上中を使用（非表示） -->
                 </div>
             </section>
 
