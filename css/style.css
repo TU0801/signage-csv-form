@@ -1043,7 +1043,9 @@ body.is-admin div.admin-only[style*="inline-flex"] {
 
 /* 表示設定/プレビュー タブ */
 .settings-preview-tabs {
-    margin-top: 1rem;
+    margin-top: 0;
+    display: flex;
+    flex-direction: column;
 }
 
 .tab-header {
@@ -1094,7 +1096,9 @@ body.is-admin div.admin-only[style*="inline-flex"] {
 }
 
 .tab-content.active {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
 }
 
 .tab-content .form-row {
