@@ -912,6 +912,41 @@ export async function rejectEntry(id, reason = '') {
   return { id, reason };
 }
 
+// 申請処理（pending → draft）
+export async function submitEntry(id) {
+  const { data, error } = await supabase
+    .from('signage_entries')
+    .update({ status: 'draft' })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+// 複数件の申請処理
+export async function submitEntries(ids) {
+  const { data, error } = await supabase
+    .from('signage_entries')
+    .update({ status: 'draft' })
+    .in('id', ids)
+    .select();
+  if (error) throw error;
+  return data;
+}
+
+// 未申請に戻す（管理者用）
+export async function revertToPending(id) {
+  const { data, error } = await supabase
+    .from('signage_entries')
+    .update({ status: 'pending' })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 // ========================================
 // 設定管理
 // ========================================

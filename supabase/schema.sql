@@ -55,7 +55,7 @@ CREATE TABLE signage_entries (
   poster_type TEXT DEFAULT 'template' CHECK (poster_type IN ('template', 'custom')),
   poster_position TEXT DEFAULT '4',
   frame_no TEXT DEFAULT '1',
-  status TEXT DEFAULT 'draft' CHECK (status IN ('draft', 'ready', 'exported')),
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'draft', 'ready', 'exported')),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

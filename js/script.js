@@ -555,20 +555,32 @@ function hasTemplateImage(templateKey) {
                 </tr>
             `).join('');
 
-            // #7: 申請済みデータ（読み取り専用）- テーブル行
+            // #7: DBからのデータ - ステータスに応じた表示
             const submittedRows = submittedEntries.map((e, i) => {
                 // masterDataから物件名を取得
                 const prop = masterData.properties.find(p => String(p.propertyCode) === String(e.property_code));
                 const propertyName = prop ? prop.propertyName : '';
+                // ステータスに応じたバッジと操作
+                let statusBadge, actionButtons;
+                if (e.status === 'pending') {
+                    statusBadge = '<span class="badge badge-pending">未申請</span>';
+                    actionButtons = `<button class="btn btn-sm btn-primary" data-action="submit" data-id="${e.id}">申請</button>`;
+                } else if (e.status === 'draft') {
+                    statusBadge = '<span class="badge badge-submitted">申請済み</span>';
+                    actionButtons = '';
+                } else {
+                    statusBadge = '<span class="badge badge-approved">承認済み</span>';
+                    actionButtons = '';
+                }
                 return `
-                <tr class="submitted" data-submitted-index="${i}">
+                <tr class="submitted" data-submitted-index="${i}" data-status="${e.status}">
                     <td>${escapeHtml(e.property_code)}</td>
                     <td>${escapeHtml(propertyName)}</td>
                     <td>${escapeHtml(e.inspection_type)}</td>
                     <td>${e.inspection_start || '-'}</td>
                     <td>${e.inspection_end || '-'}</td>
                     <td>${formatDateTime(e.created_at)}</td>
-                    <td><span class="badge badge-submitted">申請済</span></td>
+                    <td>${statusBadge} ${actionButtons}</td>
                 </tr>
             `}).join('');
 
@@ -597,7 +609,7 @@ function hasTemplateImage(templateKey) {
                 `;
             }
 
-            // イベントリスナーを追加（未申請データのみ）
+            // イベントリスナーを追加（ローカルデータの編集・削除）
             container.querySelectorAll('[data-action="edit"]').forEach(btn => {
                 btn.addEventListener('click', () => {
                     editEntry(parseInt(btn.dataset.index));
@@ -606,6 +618,20 @@ function hasTemplateImage(templateKey) {
             container.querySelectorAll('[data-action="delete"]').forEach(btn => {
                 btn.addEventListener('click', () => {
                     deleteEntry(parseInt(btn.dataset.index));
+                });
+            });
+            // 申請ボタン（未申請→申請済み）
+            container.querySelectorAll('[data-action="submit"]').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const id = btn.dataset.id;
+                    try {
+                        await window.submitEntry(id);
+                        showToast('申請しました', 'success');
+                        await renderDataList();
+                    } catch (err) {
+                        console.error('Submit failed:', err);
+                        showToast('申請に失敗しました', 'error');
+                    }
                 });
             });
         }
@@ -897,7 +923,7 @@ function hasTemplateImage(templateKey) {
                         poster_type: e.posterType === 'template' ? 'template' : 'custom',
                         poster_image: e.posterImageUrl || null,
                         poster_position: e.frameNo !== undefined ? String(e.frameNo) : '2',
-                        status: 'draft'
+                        status: 'pending'
                     };
                 });
 

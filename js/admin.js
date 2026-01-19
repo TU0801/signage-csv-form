@@ -386,6 +386,7 @@ function setupEventListeners() {
     });
     document.getElementById('markExportedBtn')?.addEventListener('click', () => updateEntriesStatus('exported'));
     document.getElementById('markSubmittedBtn')?.addEventListener('click', () => updateEntriesStatus('ready'));
+    document.getElementById('revertToPendingBtn')?.addEventListener('click', () => updateEntriesStatus('pending'));
 
     // マスター追加ボタン
     document.getElementById('addPropertyBtn').addEventListener('click', () => openMasterModal('property', masterData));
@@ -914,15 +915,18 @@ function updateSelectedEntries() {
     const selectedInfo = document.getElementById('selectedEntriesInfo');
     const markExportedBtn = document.getElementById('markExportedBtn');
     const markSubmittedBtn = document.getElementById('markSubmittedBtn');
+    const revertToPendingBtn = document.getElementById('revertToPendingBtn');
 
     if (selectedCount > 0) {
         selectedInfo.textContent = `(${selectedCount}件選択中)`;
         markExportedBtn.disabled = false;
         markSubmittedBtn.disabled = false;
+        if (revertToPendingBtn) revertToPendingBtn.disabled = false;
     } else {
         selectedInfo.textContent = '';
         markExportedBtn.disabled = true;
         markSubmittedBtn.disabled = true;
+        if (revertToPendingBtn) revertToPendingBtn.disabled = true;
     }
 }
 
@@ -945,7 +949,7 @@ async function updateEntriesStatus(status) {
     const ids = getSelectedEntryIds();
     if (ids.length === 0) return;
 
-    const statusLabel = status === 'exported' ? '取込済み' : status === 'ready' ? '未取込' : '承認待ち';
+    const statusLabel = status === 'exported' ? '取込済み' : status === 'ready' ? '未取込' : status === 'pending' ? '未申請' : '申請済み';
     if (!confirm(`選択した${ids.length}件を「${statusLabel}」に変更しますか？`)) return;
 
     try {
@@ -984,11 +988,13 @@ function updateBulkActionButtons() {
     const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
     const markExportedBtn = document.getElementById('markExportedBtn');
     const markSubmittedBtn = document.getElementById('markSubmittedBtn');
+    const revertToPendingBtn = document.getElementById('revertToPendingBtn');
 
     const hasSelection = checkedCount > 0;
     if (bulkDeleteBtn) bulkDeleteBtn.disabled = !hasSelection;
     if (markExportedBtn) markExportedBtn.disabled = !hasSelection;
     if (markSubmittedBtn) markSubmittedBtn.disabled = !hasSelection;
+    if (revertToPendingBtn) revertToPendingBtn.disabled = !hasSelection;
 
     // 選択数表示
     const selectedInfo = document.getElementById('selectedEntriesInfo');
