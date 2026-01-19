@@ -794,7 +794,7 @@ textarea:required {
 .data-table th:nth-child(5),
 .data-table td:nth-child(5),
 .data-table th:nth-child(6),
-.data-table td:nth-child(6) { width: 85px; }  /* 日付列 */
+.data-table td:nth-child(6) { width: 95px; }  /* 日付列 */
 
 /* アラートカード */
 .alert-cards {
