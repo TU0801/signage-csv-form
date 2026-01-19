@@ -785,6 +785,17 @@ textarea:required {
     z-index: 3;
 }
 
+/* データ一覧カラム幅 */
+.data-table th:nth-child(1),
+.data-table td:nth-child(1) { width: 80px; }  /* 物件コード */
+
+.data-table th:nth-child(4),
+.data-table td:nth-child(4),
+.data-table th:nth-child(5),
+.data-table td:nth-child(5),
+.data-table th:nth-child(6),
+.data-table td:nth-child(6) { width: 85px; }  /* 日付列 */
+
 /* アラートカード */
 .alert-cards {
     display: flex;
