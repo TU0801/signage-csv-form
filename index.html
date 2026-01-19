@@ -243,7 +243,7 @@
     </script>
     <script type="module">
         // 認証モジュール（ログイン必須）
-        import { getUser, getProfile, isAdmin, signOut, getSettings, createEntries, uploadPosterImage, getAllMasterDataCamelCase, getMasterVendors, getBuildingsByVendor, addBuildingVendor, getMasterProperties, getUserEntriesCurrentMonth } from './js/supabase-client.js';
+        import { getUser, getProfile, isAdmin, signOut, getSettings, createEntries, uploadPosterImage, getAllMasterDataCamelCase, getMasterVendors, getBuildingsByVendor, addBuildingVendor, getMasterProperties, getUserEntriesCurrentMonth, submitEntry } from './js/supabase-client.js';
 
         // script.jsから使えるようにwindowに公開
         window.createEntriesToSupabase = createEntries;
@@ -253,6 +253,7 @@
         window.addBuildingVendor = addBuildingVendor;
         window.getMasterProperties = getMasterProperties;
         window.getUserEntriesCurrentMonth = getUserEntriesCurrentMonth;  // #7: 申請済みデータ取得
+        window.submitEntry = submitEntry;  // 申請処理（pending → draft）
 
         async function initAuth() {
             try {
