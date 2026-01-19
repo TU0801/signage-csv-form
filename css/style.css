@@ -1048,16 +1048,17 @@ body.is-admin div.admin-only[style*="inline-flex"] {
 
 .tab-header {
     display: flex;
-    border-bottom: 2px solid #e2e8f0;
+    background: #f8fafc;
+    border-bottom: 1px solid var(--border);
 }
 
 .tab-btn {
-    padding: 0.75rem 1.5rem;
+    padding: 0.5rem 1rem;
     background: transparent;
     border: none;
     cursor: pointer;
-    font-size: 0.875rem;
-    font-weight: 500;
+    font-size: 0.8rem;
+    font-weight: 600;
     color: #64748b;
     position: relative;
     transition: color 0.2s;
@@ -1065,16 +1066,18 @@ body.is-admin div.admin-only[style*="inline-flex"] {
 
 .tab-btn:hover {
     color: #475569;
+    background: #f1f5f9;
 }
 
 .tab-btn.active {
     color: #667eea;
+    background: #fff;
 }
 
 .tab-btn.active::after {
     content: '';
     position: absolute;
-    bottom: -2px;
+    bottom: -1px;
     left: 0;
     right: 0;
     height: 2px;
