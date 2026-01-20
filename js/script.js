@@ -561,9 +561,11 @@ function hasTemplateImage(templateKey) {
                 const prop = masterData.properties.find(p => String(p.propertyCode) === String(e.property_code));
                 const propertyName = prop ? prop.propertyName : '';
                 // ステータスに応じたバッジ
-                const statusBadge = (e.status === 'ready' || e.status === 'exported')
-                    ? '<span class="badge badge-approved">承認済み</span>'
-                    : '<span class="badge badge-submitted">申請済み</span>';
+                const statusBadge = e.status === 'pending'
+                    ? '<span class="badge badge-pending">未申請</span>'
+                    : (e.status === 'ready' || e.status === 'exported')
+                        ? '<span class="badge badge-approved">承認済み</span>'
+                        : '<span class="badge badge-submitted">申請済み</span>';
                 return `
                 <tr class="submitted" data-submitted-index="${i}" data-status="${e.status}">
                     <td>${escapeHtml(e.property_code)}</td>
