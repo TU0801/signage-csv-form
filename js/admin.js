@@ -812,7 +812,8 @@ async function loadEntries() {
             propertyCode: propertyCode || undefined,
             startDate: startDate || undefined,
             endDate: endDate || undefined,
-            vendorName: vendorName || undefined  // #8-2: status→vendorName
+            vendorName: vendorName || undefined,  // #8-2: status→vendorName
+            statusArray: ['ready', 'exported']  // 承認済みのみ表示
         });
         renderEntries();
         updateSelectedEntries();
