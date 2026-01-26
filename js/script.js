@@ -431,8 +431,8 @@ function hasTemplateImage(templateKey) {
                 inspectionType: isCustomMode ? '追加画像' : notice.inspectionType,
                 showOnBoard: document.getElementById('showOnBoard').checked,
                 templateNo: isCustomMode ? (window.customImageFile?.name || '') : notice.templateNo,
-                startDate: isCustomMode ? '' : document.getElementById('startDate').value,
-                endDate: isCustomMode ? '' : document.getElementById('endDate').value,
+                startDate: document.getElementById('startDate').value,
+                endDate: document.getElementById('endDate').value,
                 remarks: remarks,
                 noticeText: noticeText,
                 frameNo: currentPosition,
@@ -685,8 +685,9 @@ function hasTemplateImage(templateKey) {
             // 追加モードの場合: 画像アップロードを表示、点検関連フィールドを非表示
             document.getElementById('customImageGroup').style.display = isCustom ? 'block' : 'none';
             document.getElementById('inspectionTypeGroup').style.display = isCustom ? 'none' : 'block';
-            document.getElementById('startDateGroup').style.display = isCustom ? 'none' : 'block';
-            document.getElementById('endDateGroup').style.display = isCustom ? 'none' : 'block';
+            // 点検開始日・終了日は追加モードでも入力可能
+            document.getElementById('startDateGroup').style.display = 'block';
+            document.getElementById('endDateGroup').style.display = 'block';
             document.getElementById('noticeTextGroup').style.display = isCustom ? 'none' : 'block';
 
             // 追加モードの場合: 掲示板内の表示開始日/終了日を非活性化
