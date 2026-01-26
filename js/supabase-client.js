@@ -1,7 +1,7 @@
 // supabase-client.js
 // Supabase連携モジュール
 
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.47.0';
 
 // 環境変数から取得（本番環境では適切に設定）
 const SUPABASE_URL = window.SUPABASE_URL || 'YOUR_SUPABASE_URL';
