@@ -284,9 +284,10 @@
             position: relative;
             background: #f8fafc;
             border-radius: 6px;
-            overflow: hidden;
+            overflow: auto;
             flex: 1;
             min-height: 200px;
+            max-height: 500px;
         }
 
         .poster-preview img {
