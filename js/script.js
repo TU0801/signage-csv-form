@@ -138,6 +138,11 @@ function hasTemplateImage(templateKey) {
                 }
             });
 
+            // 点検終了日入力時に表示終了日へ自動入力（常に上書き）
+            document.getElementById('endDate').addEventListener('change', function() {
+                document.getElementById('displayEndDate').value = this.value;
+            });
+
             updatePreview();
 
             // #7: 申請済みデータを初期表示

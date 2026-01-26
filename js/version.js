@@ -1,5 +1,5 @@
 // version.js - バージョン管理
 // プッシュ時に自動更新
 
-window.APP_VERSION = 'v1.21.5';
+window.APP_VERSION = 'v1.21.6';
 window.APP_BUILD_DATE = '2026-01-26';
