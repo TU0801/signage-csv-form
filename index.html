@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>点検CSV作成フォーム</title>
+    <title>点検日入力フォーム</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -12,7 +12,7 @@
 <body>
 <header class="header">
         <div class="header-content">
-            <h1>📋 点検CSV作成 <span id="appVersion" class="version-badge"></span></h1>
+            <h1>📋 点検日入力 <span id="appVersion" class="version-badge"></span></h1>
             <div style="display: flex; gap: 0.75rem; align-items: center;">
                 <a href="bulk.html" class="btn-header">一括入力</a>
                 <a href="admin.html" class="btn-header" id="adminLink" style="display: none;">管理</a>
@@ -202,13 +202,13 @@
             <!-- データ一覧 -->
             <section class="data-section card">
                 <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div class="export-buttons" id="exportSection" style="display: none;">
+                        <button class="btn btn-success btn-sm" id="submitBtn" onclick="submitEntries()">申請する</button>
+                    </div>
                     <div>
                         📊 作成データ
                         <span class="badge badge-count" id="dataCount">0</span>
                         <span class="badge badge-submitted" id="submittedCount" style="margin-left: 0.5rem;">申請済: 0</span>
-                    </div>
-                    <div class="export-buttons" id="exportSection" style="display: none;">
-                        <button class="btn btn-primary btn-sm" id="submitBtn" onclick="submitEntries()">確定する</button>
                     </div>
                 </div>
                 <div class="card-body">

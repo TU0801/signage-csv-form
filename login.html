@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ログイン - 点検CSV作成フォーム</title>
+    <title>ログイン - 点検日入力フォーム</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -116,7 +116,7 @@
     <div class="login-container">
         <div class="login-card">
             <div class="login-header">
-                <h1>📋 点検CSV作成フォーム</h1>
+                <h1>📋 点検日入力フォーム</h1>
                 <p>アカウントにログインしてください</p>
                 <span id="appVersion" class="version-badge" style="background: #e2e8f0; color: #64748b; margin-top: 0.5rem; display: inline-block;"></span>
             </div>
@@ -153,13 +153,14 @@
         });
     </script>
     <script type="module">
-        import { signIn, getUser } from './js/supabase-client.js';
+        import { signIn, getUser, isAdmin } from './js/supabase-client.js';
 
         // 既にログイン済みの場合はリダイレクト
         async function checkAuth() {
             const user = await getUser();
             if (user) {
-                window.location.href = 'index.html';
+                const admin = await isAdmin();
+                window.location.href = admin ? 'admin.html' : 'index.html';
             }
         }
         checkAuth();
@@ -179,7 +180,8 @@
 
             try {
                 await signIn(email, password);
-                window.location.href = 'index.html';
+                const admin = await isAdmin();
+                window.location.href = admin ? 'admin.html' : 'index.html';
             } catch (error) {
                 errorMessage.textContent = 'ログインに失敗しました。メールアドレスとパスワードを確認してください。';
                 errorMessage.classList.add('show');

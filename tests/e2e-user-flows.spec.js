@@ -17,8 +17,8 @@ async function loginAsUser(page, email = 'a@a', password = 'aaaaaa') {
   await page.fill('input[type="password"]', password);
   await page.click('button[type="submit"]');
 
-  // ログイン成功を待機
-  await page.waitForURL('**/index.html', { timeout: 10000 });
+  // ログイン成功を待機（管理者はadmin.html、一般ユーザーはindex.htmlへリダイレクト）
+  await page.waitForURL(url => !url.toString().includes('login.html'), { timeout: 10000 });
 
   // マスターデータの読み込みを待機
   await page.waitForTimeout(2000);
@@ -49,7 +49,7 @@ test.describe('ログイン・認証', () => {
 
   test('正しい認証情報でログインできる', async ({ page }) => {
     await loginAsUser(page);
-    expect(page.url()).toContain('index.html');
+    expect(page.url()).not.toContain('login.html');
   });
 
   test('ログイン後はログアウトボタンが表示される', async ({ page }) => {

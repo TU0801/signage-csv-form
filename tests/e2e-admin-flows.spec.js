@@ -19,7 +19,7 @@ async function loginAsUser(page) {
   await page.fill('input[type="email"]', 'a@a');
   await page.fill('input[type="password"]', 'aaaaaa');
   await page.click('button[type="submit"]');
-  await page.waitForURL('**/index.html', { timeout: 10000 });
+  await page.waitForURL(url => !url.toString().includes('login.html'), { timeout: 10000 });
   await page.waitForTimeout(2000);
 }
 
