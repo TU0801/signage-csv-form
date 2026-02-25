@@ -129,11 +129,15 @@ function hasTemplateImage(templateKey) {
             document.getElementById('startDate').value = today;
             document.getElementById('displayStartDate').value = today;
 
-            // #10: 点検開始日入力時に終了日へ自動入力
+            // #10: 点検開始日入力時に終了日・表示開始日・表示終了日へ自動入力
             document.getElementById('startDate').addEventListener('change', function() {
                 const endDate = document.getElementById('endDate');
+                // 表示開始日を常に更新
+                document.getElementById('displayStartDate').value = this.value;
                 if (!endDate.value) {
                     endDate.value = this.value;
+                    // 点検終了日も空だった場合、表示終了日も更新
+                    document.getElementById('displayEndDate').value = this.value;
                     updatePreview();
                 }
             });

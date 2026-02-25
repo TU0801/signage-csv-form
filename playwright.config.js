@@ -1,6 +1,9 @@
 // @ts-check
 const { defineConfig, devices } = require('@playwright/test');
 
+const isRemote = !!process.env.BASE_URL;
+const baseURL = process.env.BASE_URL || 'http://localhost:8080';
+
 module.exports = defineConfig({
   testDir: './tests',
   fullyParallel: true,
@@ -9,7 +12,7 @@ module.exports = defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
   use: {
-    baseURL: 'http://localhost:8080',
+    baseURL,
     trace: 'on-first-retry',
   },
   projects: [
@@ -18,9 +21,11 @@ module.exports = defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  webServer: {
-    command: 'npx http-server -p 8080',
-    url: 'http://localhost:8080',
-    reuseExistingServer: !process.env.CI,
-  },
+  ...(isRemote ? {} : {
+    webServer: {
+      command: 'npx http-server -p 8080',
+      url: 'http://localhost:8080',
+      reuseExistingServer: !process.env.CI,
+    },
+  }),
 });

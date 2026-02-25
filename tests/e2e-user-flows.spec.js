@@ -6,7 +6,7 @@ const { test, expect } = require('@playwright/test');
  * モックではなく実際のデータベースと認証を使用
  */
 
-const baseUrl = 'http://localhost:8080';
+const baseUrl = process.env.BASE_URL || 'http://localhost:8080';
 
 /**
  * 一般ユーザーでログイン
