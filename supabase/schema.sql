@@ -438,3 +438,46 @@ ALTER TABLE signage_profiles
 ALTER TABLE signage_master_inspection_types
   ADD CONSTRAINT fk_inspection_types_category
   FOREIGN KEY (category_id) REFERENCES signage_master_categories(id);
+
+-- ========================================
+-- 広告枠管理 (v1.24.0)
+-- ========================================
+
+CREATE TABLE signage_ad_slots (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  slot_index INTEGER NOT NULL UNIQUE CHECK (slot_index BETWEEN 1 AND 7),
+  image_url TEXT,
+  caption TEXT DEFAULT '',
+  link_url TEXT DEFAULT '',
+  is_active BOOLEAN DEFAULT false,
+  sort_order INTEGER DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- 初期データ（7枠を無効状態で作成）
+INSERT INTO signage_ad_slots (slot_index, is_active)
+VALUES (1, false),(2, false),(3, false),(4, false),(5, false),(6, false),(7, false);
+
+-- RLS有効化
+ALTER TABLE signage_ad_slots ENABLE ROW LEVEL SECURITY;
+
+-- 未ログイン含む全員が参照可能（ログイン画面で表示するため）
+CREATE POLICY "anon_read_ad_slots" ON signage_ad_slots
+  FOR SELECT TO anon, authenticated USING (true);
+
+-- 管理者のみ更新可能
+CREATE POLICY "admin_manage_ad_slots" ON signage_ad_slots
+  FOR ALL TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM signage_profiles
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM signage_profiles
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );

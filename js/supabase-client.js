@@ -1224,6 +1224,90 @@ export async function deletePosterImage(imageUrl) {
 }
 
 // ========================================
+// 広告枠管理 (v1.24.0)
+// ========================================
+
+// 広告枠データ取得（未認証でも呼び出し可能）
+export async function getAdSlots() {
+  const { data, error } = await supabase
+    .from('signage_ad_slots')
+    .select('*')
+    .order('slot_index');
+  if (error) throw error;
+  return data;
+}
+
+// 広告枠更新（管理者のみ）
+export async function upsertAdSlot(slotIndex, { imageUrl, caption, linkUrl, isActive }) {
+  const { error } = await supabase
+    .from('signage_ad_slots')
+    .update({
+      image_url: imageUrl,
+      caption,
+      link_url: linkUrl,
+      is_active: isActive,
+      updated_at: new Date().toISOString()
+    })
+    .eq('slot_index', slotIndex);
+  if (error) throw error;
+}
+
+// 広告枠画像アップロード（バケット: poster-images/ads/ に保存）
+export async function uploadAdImage(file, slotIndex) {
+  if (!file) return null;
+
+  const user = await getUser();
+  if (!user) throw new Error('ログインが必要です');
+
+  const extension = file.name.split('.').pop().toLowerCase();
+  if (!['png', 'jpg', 'jpeg'].includes(extension)) {
+    throw new Error('PNG、JPG形式の画像のみアップロードできます');
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    throw new Error('ファイルサイズは5MB以下にしてください');
+  }
+
+  const fileName = `ads/slot_${slotIndex}.${extension}`;
+
+  const { data, error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(fileName, file, {
+      contentType: file.type,
+      upsert: true
+    });
+
+  if (error) {
+    console.error('Ad image upload error:', error);
+    throw new Error('画像のアップロードに失敗しました: ' + error.message);
+  }
+
+  const { data: urlData } = supabase.storage
+    .from(STORAGE_BUCKET)
+    .getPublicUrl(data.path);
+
+  return urlData.publicUrl;
+}
+
+// 広告枠画像削除
+export async function deleteAdImage(imageUrl) {
+  if (!imageUrl) return;
+
+  const bucketUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/`;
+  if (!imageUrl.startsWith(bucketUrl)) return;
+
+  const path = imageUrl.replace(bucketUrl, '');
+
+  const { error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .remove([path]);
+
+  if (error) {
+    console.error('Ad image delete error:', error);
+  }
+}
+
+// ========================================
 // 建物設備管理
 // ========================================
 

@@ -1316,6 +1316,12 @@
                         <span>ユーザー管理</span>
                     </button>
                 </li>
+                <li class="sidebar-nav-item">
+                    <button class="sidebar-nav-link" data-tab="ads">
+                        <span class="sidebar-nav-icon">📢</span>
+                        <span>広告枠管理</span>
+                    </button>
+                </li>
             </nav>
         </aside>
 
@@ -1646,11 +1652,58 @@
                     </table>
                 </div>
             </div>
+
+            <!-- 広告枠管理タブ -->
+            <div class="tab-content" id="tab-ads">
+                <div class="action-bar">
+                    <h2 style="margin:0; font-size:1.25rem; font-weight:700; color:#1e293b;">広告枠管理</h2>
+                    <p style="margin:0; color:#64748b; font-size:0.875rem;">ログイン画面の広告枠（7枠）を管理します</p>
+                </div>
+                <div id="adSlotsGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:1rem; padding:1rem 0;">
+                    <!-- JSで動的生成 -->
+                </div>
+            </div>
         </main>
     </div>
 
     <!-- トースト通知用 -->
     <div id="toast" class="toast"></div>
+
+    <!-- 広告枠編集モーダル -->
+    <div id="adSlotModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
+        <div class="modal-content" style="max-width:500px; width:90%;">
+            <div class="modal-header">
+                <h3 id="adSlotModalTitle">広告枠 編集</h3>
+                <button type="button" class="modal-close" id="adSlotModalClose">×</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="adSlotIndex">
+                <div class="form-group">
+                    <label>現在の画像</label>
+                    <div id="adSlotImagePreview" style="margin-bottom:0.5rem;"></div>
+                    <label>画像を変更（PNG/JPG、5MB以下）</label>
+                    <input type="file" id="adSlotImageFile" accept=".png,.jpg,.jpeg">
+                </div>
+                <div class="form-group">
+                    <label>テキスト（キャプション）</label>
+                    <input type="text" id="adSlotCaption" maxlength="100" placeholder="例: 〇〇のご案内">
+                </div>
+                <div class="form-group">
+                    <label>リンクURL</label>
+                    <input type="url" id="adSlotLinkUrl" placeholder="https://example.com">
+                </div>
+                <div class="form-group">
+                    <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
+                        <input type="checkbox" id="adSlotIsActive"> 表示する
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline" id="adSlotCancelBtn">キャンセル</button>
+                <button type="button" class="btn btn-primary" id="adSlotSaveBtn">保存</button>
+            </div>
+        </div>
+    </div>
 
     <!-- マスター追加/編集モーダル -->
     <div id="masterModal">

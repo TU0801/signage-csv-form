@@ -50,7 +50,8 @@ import {
     deleteMasterVendorAction,
     deleteMasterInspectionAction,
     deleteMasterCategoryAction,
-    deleteMasterTemplateImageAction
+    deleteMasterTemplateImageAction,
+    initAdSlotsAdmin
 } from './admin-masters.js';
 
 import {
@@ -321,6 +322,7 @@ function initSidebarToggle() {
 function setupEventListeners() {
     // タブ切り替え（サイドバーナビゲーション + 旧タブ対応）
     const tabSelectors = '.admin-tab[data-tab], .sidebar-nav-link[data-tab]';
+    let _adSlotsInitialized = false;
     document.querySelectorAll(tabSelectors).forEach(tab => {
         tab.addEventListener('click', () => {
             // すべてのタブからactiveを削除
@@ -330,6 +332,12 @@ function setupEventListeners() {
             // クリックされたタブをアクティブに
             tab.classList.add('active');
             document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
+
+            // 広告枠タブ: 初回のみ初期化
+            if (tab.dataset.tab === 'ads' && !_adSlotsInitialized) {
+                _adSlotsInitialized = true;
+                initAdSlotsAdmin(showToast);
+            }
         });
     });
 

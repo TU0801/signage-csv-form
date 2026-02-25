@@ -20,7 +20,11 @@ import {
     updateTemplateImage,
     deleteTemplateImage,
     uploadTemplateImageFile,
-    deleteTemplateImageFile
+    deleteTemplateImageFile,
+    getAdSlots,
+    upsertAdSlot,
+    uploadAdImage,
+    deleteAdImage
 } from './supabase-client.js';
 
 // ========================================
@@ -1143,5 +1147,143 @@ export async function deleteMasterTemplateImageAction(id, masterData, showToast)
         console.error('Failed to delete template image:', error);
         showToast('削除に失敗しました', 'error');
         return false;
+    }
+}
+
+// ========================================
+// 広告枠管理 (v1.24.0)
+// ========================================
+
+let _adSlots = [];
+let _currentEditSlotIndex = null;
+let _adminShowToast = null;
+
+export async function initAdSlotsAdmin(showToast) {
+    _adminShowToast = showToast;
+    await loadAdSlotsAdmin();
+    setupAdSlotModal();
+}
+
+async function loadAdSlotsAdmin() {
+    try {
+        _adSlots = await getAdSlots();
+        renderAdSlotsGrid(_adSlots);
+    } catch (e) {
+        console.error('広告枠読み込みエラー:', e);
+        if (_adminShowToast) _adminShowToast('広告枠の読み込みに失敗しました', 'error');
+    }
+}
+
+function renderAdSlotsGrid(slots) {
+    const grid = document.getElementById('adSlotsGrid');
+    if (!grid) return;
+
+    grid.innerHTML = slots.map(slot => `
+        <div style="background:white; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,0.08); overflow:hidden; border:1px solid #e2e8f0;">
+            <div style="height:160px; background:#f1f5f9; display:flex; align-items:center; justify-content:center; overflow:hidden;">
+                ${slot.image_url
+                    ? `<img src="${escapeHtmlAdmin(slot.image_url)}" style="width:100%; height:100%; object-fit:cover;" alt="">`
+                    : `<span style="color:#94a3b8; font-size:0.875rem;">画像なし</span>`
+                }
+            </div>
+            <div style="padding:0.75rem 1rem;">
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.5rem;">
+                    <span style="font-weight:600; color:#1e293b;">広告枠 ${slot.slot_index}</span>
+                    <span style="padding:0.2rem 0.6rem; border-radius:999px; font-size:0.75rem; font-weight:600; background:${slot.is_active ? '#dcfce7' : '#f1f5f9'}; color:${slot.is_active ? '#16a34a' : '#94a3b8'};">
+                        ${slot.is_active ? '表示中' : '非表示'}
+                    </span>
+                </div>
+                ${slot.caption ? `<p style="font-size:0.875rem; color:#475569; margin:0 0 0.5rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtmlAdmin(slot.caption)}</p>` : ''}
+                ${slot.link_url ? `<p style="font-size:0.75rem; color:#94a3b8; margin:0 0 0.5rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtmlAdmin(slot.link_url)}</p>` : ''}
+                <button class="btn btn-outline btn-sm" onclick="window.openAdSlotModal(${slot.slot_index})">編集</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function escapeHtmlAdmin(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function setupAdSlotModal() {
+    const modal = document.getElementById('adSlotModal');
+    if (!modal) return;
+
+    document.getElementById('adSlotModalClose').addEventListener('click', closeAdSlotModal);
+    document.getElementById('adSlotCancelBtn').addEventListener('click', closeAdSlotModal);
+    document.getElementById('adSlotSaveBtn').addEventListener('click', saveAdSlot);
+
+    // モーダル外クリックで閉じる
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeAdSlotModal();
+    });
+}
+
+window.openAdSlotModal = function(slotIndex) {
+    _currentEditSlotIndex = slotIndex;
+    const slot = _adSlots.find(s => s.slot_index === slotIndex);
+    if (!slot) return;
+
+    document.getElementById('adSlotIndex').value = slotIndex;
+    document.getElementById('adSlotCaption').value = slot.caption || '';
+    document.getElementById('adSlotLinkUrl').value = slot.link_url || '';
+    document.getElementById('adSlotIsActive').checked = slot.is_active || false;
+    document.getElementById('adSlotImageFile').value = '';
+
+    const preview = document.getElementById('adSlotImagePreview');
+    preview.innerHTML = slot.image_url
+        ? `<img src="${escapeHtmlAdmin(slot.image_url)}" style="max-width:200px; max-height:120px; object-fit:cover; border-radius:6px; border:1px solid #e2e8f0;">`
+        : '<span style="color:#94a3b8; font-size:0.875rem;">画像未設定</span>';
+
+    document.getElementById('adSlotModalTitle').textContent = `広告枠 ${slotIndex} 編集`;
+    const modal = document.getElementById('adSlotModal');
+    modal.style.display = 'flex';
+};
+
+function closeAdSlotModal() {
+    const modal = document.getElementById('adSlotModal');
+    if (modal) modal.style.display = 'none';
+    _currentEditSlotIndex = null;
+}
+
+async function saveAdSlot() {
+    if (_currentEditSlotIndex === null) return;
+
+    const saveBtn = document.getElementById('adSlotSaveBtn');
+    saveBtn.disabled = true;
+    saveBtn.textContent = '保存中...';
+
+    try {
+        const slotIndex = _currentEditSlotIndex;
+        const slot = _adSlots.find(s => s.slot_index === slotIndex);
+        const caption = document.getElementById('adSlotCaption').value.trim();
+        const linkUrl = document.getElementById('adSlotLinkUrl').value.trim();
+        const isActive = document.getElementById('adSlotIsActive').checked;
+        const imageFile = document.getElementById('adSlotImageFile').files[0];
+
+        let imageUrl = slot ? slot.image_url : null;
+
+        // 画像アップロード
+        if (imageFile) {
+            imageUrl = await uploadAdImage(imageFile, slotIndex);
+        }
+
+        await upsertAdSlot(slotIndex, { imageUrl, caption, linkUrl, isActive });
+
+        if (_adminShowToast) _adminShowToast('広告枠を保存しました', 'success');
+        closeAdSlotModal();
+        await loadAdSlotsAdmin();
+    } catch (e) {
+        console.error('広告枠保存エラー:', e);
+        if (_adminShowToast) _adminShowToast('保存に失敗しました: ' + e.message, 'error');
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = '保存';
     }
 }
