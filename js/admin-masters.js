@@ -1178,27 +1178,51 @@ function renderAdSlotsGrid(slots) {
     const grid = document.getElementById('adSlotsGrid');
     if (!grid) return;
 
-    grid.innerHTML = slots.map(slot => `
-        <div style="background:white; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,0.08); overflow:hidden; border:1px solid #e2e8f0;">
-            <div style="height:160px; background:#f1f5f9; display:flex; align-items:center; justify-content:center; overflow:hidden;">
-                ${slot.image_url
-                    ? `<img src="${escapeHtmlAdmin(slot.image_url)}" style="width:100%; height:100%; object-fit:cover;" alt="">`
-                    : `<span style="color:#94a3b8; font-size:0.875rem;">画像なし</span>`
-                }
+    // スロットをインデックスでマップ化
+    const slotMap = Object.fromEntries(slots.map(s => [s.slot_index, s]));
+
+    // セル 0: ログイン（固定・編集不可）
+    const loginCell = `
+        <div style="border-radius:10px; overflow:hidden; background:linear-gradient(135deg,#667eea,#764ba2); display:flex; align-items:center; justify-content:center; min-height:160px;">
+            <div style="text-align:center; color:white; padding:1rem;">
+                <div style="font-size:1.5rem; margin-bottom:0.5rem;">🔐</div>
+                <div style="font-size:0.75rem; font-weight:600; opacity:0.9;">ログイン画面</div>
+                <div style="font-size:0.625rem; opacity:0.7; margin-top:0.25rem;">（変更不可）</div>
             </div>
-            <div style="padding:0.75rem 1rem;">
-                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.5rem;">
-                    <span style="font-weight:600; color:#1e293b;">広告枠 ${slot.slot_index}</span>
-                    <span style="padding:0.2rem 0.6rem; border-radius:999px; font-size:0.75rem; font-weight:600; background:${slot.is_active ? '#dcfce7' : '#f1f5f9'}; color:${slot.is_active ? '#16a34a' : '#94a3b8'};">
-                        ${slot.is_active ? '表示中' : '非表示'}
+        </div>`;
+
+    // セル 1〜7: 各広告枠
+    const adCells = [1,2,3,4,5,6,7].map(idx => {
+        const slot = slotMap[idx];
+        const isActive = slot?.is_active;
+        const hasImage = !!slot?.image_url;
+        return `
+            <div style="border-radius:10px; overflow:hidden; background:white; display:flex; flex-direction:column; min-height:160px; cursor:pointer; transition:box-shadow 0.15s;"
+                 onclick="window.openAdSlotModal(${idx})"
+                 onmouseenter="this.style.boxShadow='0 4px 12px rgba(0,0,0,0.15)'"
+                 onmouseleave="this.style.boxShadow='none'">
+                <!-- サムネイル -->
+                <div style="flex:1; background:#f1f5f9; display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative;">
+                    ${hasImage
+                        ? `<img src="${escapeHtmlAdmin(slot.image_url)}" style="width:100%;height:100%;object-fit:cover;" alt="">`
+                        : `<span style="color:#cbd5e1; font-size:2rem;">🖼</span>`}
+                    <!-- スロット番号バッジ -->
+                    <span style="position:absolute; top:6px; left:6px; background:rgba(0,0,0,0.5); color:white; font-size:0.65rem; font-weight:700; padding:2px 6px; border-radius:999px;">${idx}</span>
+                    <!-- ON/OFFバッジ -->
+                    <span style="position:absolute; top:6px; right:6px; font-size:0.65rem; font-weight:700; padding:2px 6px; border-radius:999px; background:${isActive ? '#dcfce7' : '#f1f5f9'}; color:${isActive ? '#16a34a' : '#94a3b8'};">
+                        ${isActive ? '表示中' : '非表示'}
                     </span>
                 </div>
-                ${slot.caption ? `<p style="font-size:0.875rem; color:#475569; margin:0 0 0.5rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtmlAdmin(slot.caption)}</p>` : ''}
-                ${slot.link_url ? `<p style="font-size:0.75rem; color:#94a3b8; margin:0 0 0.5rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtmlAdmin(slot.link_url)}</p>` : ''}
-                <button class="btn btn-outline btn-sm" onclick="window.openAdSlotModal(${slot.slot_index})">編集</button>
-            </div>
-        </div>
-    `).join('');
+                <!-- フッター -->
+                <div style="padding:0.5rem 0.75rem; border-top:1px solid #f1f5f9; background:white;">
+                    <p style="margin:0; font-size:0.75rem; color:${slot?.caption ? '#475569' : '#cbd5e1'}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                        ${slot?.caption ? escapeHtmlAdmin(slot.caption) : 'キャプションなし'}
+                    </p>
+                </div>
+            </div>`;
+    });
+
+    grid.innerHTML = loginCell + adCells.join('');
 }
 
 function escapeHtmlAdmin(str) {
