@@ -964,6 +964,19 @@
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
             animation: modalSlideIn 0.2s ease-out;
         }
+        #adSlotModal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        #adSlotModal.active {
+            display: flex;
+        }
         #adSlotModal .modal-content {
             background: white;
             border-radius: 16px;
@@ -973,6 +986,102 @@
             overflow-y: auto;
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
             animation: modalSlideIn 0.2s ease-out;
+        }
+        #adSlotModal .modal-header {
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        #adSlotModal .modal-header h3 {
+            margin: 0;
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: #1e293b;
+        }
+        #adSlotModal .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #94a3b8;
+            padding: 0;
+            line-height: 1;
+            transition: color 0.2s;
+        }
+        #adSlotModal .modal-close:hover {
+            color: #64748b;
+        }
+        #adSlotModal .modal-body {
+            padding: 1.5rem;
+        }
+        #adSlotModal .form-group {
+            margin-bottom: 1.25rem;
+        }
+        #adSlotModal .form-group label {
+            display: block;
+            font-weight: 500;
+            color: #374151;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+        }
+        #adSlotModal .form-group input[type="text"],
+        #adSlotModal .form-group input[type="url"] {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 0.9375rem;
+            transition: all 0.2s;
+        }
+        #adSlotModal .form-group input[type="text"]:focus,
+        #adSlotModal .form-group input[type="url"]:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        #adSlotModal .form-group input[type="file"] {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 2px dashed #e2e8f0;
+            border-radius: 10px;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        #adSlotModal .form-group input[type="file"]:hover {
+            border-color: #667eea;
+            background: #f8fafc;
+        }
+        #adSlotModal .image-preview {
+            margin-bottom: 0.5rem;
+        }
+        #adSlotModal .image-preview img {
+            max-width: 200px;
+            max-height: 120px;
+            object-fit: cover;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
+        }
+        #adSlotModal .image-preview .no-image {
+            color: #94a3b8;
+            font-size: 0.875rem;
+        }
+        #adSlotModal .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+        }
+        #adSlotModal .modal-footer {
+            padding: 1rem 1.5rem;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+            background: #f8fafc;
+            border-radius: 0 0 16px 16px;
         }
         @keyframes modalSlideIn {
             from {
@@ -1328,7 +1437,6 @@
                 </li>
                 <li class="sidebar-nav-item">
                     <button class="sidebar-nav-link" data-tab="ads">
-                        <span class="sidebar-nav-icon">📢</span>
                         <span>広告枠管理</span>
                     </button>
                 </li>
@@ -1680,8 +1788,8 @@
     <div id="toast" class="toast"></div>
 
     <!-- 広告枠編集モーダル -->
-    <div id="adSlotModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
-        <div class="modal-content" style="max-width:500px; width:90%;">
+    <div id="adSlotModal">
+        <div class="modal-content">
             <div class="modal-header">
                 <h3 id="adSlotModalTitle">広告枠 編集</h3>
                 <button type="button" class="modal-close" id="adSlotModalClose">×</button>
@@ -1690,7 +1798,7 @@
                 <input type="hidden" id="adSlotIndex">
                 <div class="form-group">
                     <label>現在の画像</label>
-                    <div id="adSlotImagePreview" style="margin-bottom:0.5rem;"></div>
+                    <div id="adSlotImagePreview" class="image-preview"></div>
                     <label>画像を変更（PNG/JPG、5MB以下）</label>
                     <input type="file" id="adSlotImageFile" accept=".png,.jpg,.jpeg">
                 </div>
@@ -1703,7 +1811,7 @@
                     <input type="url" id="adSlotLinkUrl" placeholder="https://example.com">
                 </div>
                 <div class="form-group">
-                    <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
+                    <label class="checkbox-label">
                         <input type="checkbox" id="adSlotIsActive"> 表示する
                     </label>
                 </div>
