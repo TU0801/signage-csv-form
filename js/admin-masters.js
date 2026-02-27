@@ -1262,17 +1262,17 @@ window.openAdSlotModal = function(slotIndex) {
 
     const preview = document.getElementById('adSlotImagePreview');
     preview.innerHTML = slot.image_url
-        ? `<img src="${escapeHtmlAdmin(slot.image_url)}" style="max-width:200px; max-height:120px; object-fit:cover; border-radius:6px;">`
-        : '<span style="color:#94a3b8; font-size:0.875rem;">画像未設定</span>';
+        ? `<img src="${escapeHtmlAdmin(slot.image_url)}">`
+        : '<span class="no-image">画像未設定</span>';
 
     document.getElementById('adSlotModalTitle').textContent = `広告枠 ${slotIndex} 編集`;
     const modal = document.getElementById('adSlotModal');
-    modal.style.display = 'flex';
+    modal.classList.add('active');
 };
 
 function closeAdSlotModal() {
     const modal = document.getElementById('adSlotModal');
-    if (modal) modal.style.display = 'none';
+    if (modal) modal.classList.remove('active');
     _currentEditSlotIndex = null;
 }
 
