@@ -8,7 +8,8 @@
     "test:headed": "npx playwright test --headed",
     "test:debug": "npx playwright test --debug",
     "test:report": "npx playwright show-report",
-    "serve": "npx http-server -p 8080"
+    "serve": "npx http-server -p 8080",
+    "prepare": "husky"
   },
   "repository": {
     "type": "git",
@@ -23,7 +24,8 @@
   "homepage": "https://github.com/TU0801/signage-csv-form#readme",
   "devDependencies": {
     "@playwright/test": "^1.57.0",
-    "http-server": "^14.1.1"
+    "http-server": "^14.1.1",
+    "husky": "^9.1.7"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.89.0"

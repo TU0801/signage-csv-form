@@ -1,0 +1,2 @@
+echo "🧪 pre-push: テスト実行中..."
+npx playwright test --reporter=list

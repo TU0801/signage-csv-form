@@ -4,49 +4,25 @@ description: プロジェクトのファイル構成と各ファイルの役割�
 allowed-tools: Read, Glob, Grep
 ---
 
-# ファイル構成スキル
+# ファイル構成
 
-## ディレクトリ構成
 ```
 signage-csv-form/
-├── index.html          # 1件入力画面
-├── bulk.html           # 一括入力画面
-├── admin.html          # 管理者画面
-├── login.html          # ログイン画面
-├── README.md           # プロジェクト概要
-├── CLAUDE.md           # Claude Code設定
-├── css/
-│   ├── style.css       # 共通スタイル
-│   └── bulk.css        # 一括入力専用
+├── index.html / bulk.html / admin.html / login.html
+├── css/style.css, bulk.css
 ├── js/
-│   ├── version.js      # バージョン管理
-│   ├── config.js       # 設定（APIキー等）
-│   ├── script.js       # 1件入力ロジック
-│   ├── supabase-client.js  # Supabase API
-│   ├── admin.js        # 管理者画面
-│   ├── admin-masters.js    # マスター管理
-│   ├── admin-settings.js   # 設定管理
-│   ├── bulk.js         # 一括入力エントリーポイント
-│   ├── bulk-state.js   # 状態管理
-│   ├── bulk-table.js   # テーブル操作
-│   ├── bulk-data.js    # データ操作
-│   └── bulk-modals.js  # モーダル管理
-├── docs/               # ドキュメント
-│   ├── SPECIFICATION.md    # システム仕様書
-│   ├── BUGS.md            # バグ管理
-│   ├── TEST_CASES.md      # テストケース
-│   ├── DEVELOPMENT_INSTRUCTIONS.md  # 開発手順
-│   └── VENDOR_MULTITENANCY_IMPLEMENTATION.md  # マルチテナント実装
-├── supabase/           # Supabaseスキーマ・マイグレーション
-├── scripts/            # ユーティリティスクリプト
-├── tests/              # Playwrightテスト
-├── images/             # テンプレート画像
-└── .claude/skills/     # Claudeスキル定義
+│   ├── config.js, version.js, supabase-client.js
+│   ├── script.js (1件入力), admin.js, admin-masters.js, admin-settings.js
+│   └── bulk.js, bulk-state.js, bulk-table.js, bulk-data.js, bulk-modals.js
+├── docs/
+│   ├── SPECIFICATION.md, FAILURE_PATTERNS.md, METRICS.md
+│   ├── NEXT_SESSION_TODO.txt, QUALITY_REVIEW_2026-03-01.md
+│   └── issues/
+├── tests/ (Playwright E2E)
+├── supabase/ (スキーマ・マイグレーション)
+└── .claude/skills/
 ```
 
-## モジュール分割ルール
-- 1ファイル500行以下を目標
-- 800行超えたら分割を検討
-
-## 命名規則
-- テスト: XX-機能名.spec.js（XXは連番）
+## ルール
+- 1ファイル500行以下目標、800行超で分割検討
+- テスト命名: XX-機能名.spec.js

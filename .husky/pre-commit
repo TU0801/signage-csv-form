@@ -1,0 +1,11 @@
+# 新しいexport追加時のリマインダー（ブロッカーではない）
+CHANGED_FILES=$(git diff --cached --name-only)
+if echo "$CHANGED_FILES" | grep -q '\.js$'; then
+  ADDED_EXPORTS=$(git diff --cached --diff-filter=M -- '*.js' | grep '^+.*export' | grep -v '^+++' || true)
+  if [ -n "$ADDED_EXPORTS" ]; then
+    echo ""
+    echo "⚠️  新しいexportが追加されています。import側の確認を忘れずに:"
+    echo "$ADDED_EXPORTS"
+    echo ""
+  fi
+fi

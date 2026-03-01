@@ -1,107 +1,63 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-## プロジェクト概要
-
 マンション共用部サイネージ向けCMS。保守会社ごとに担当ビルを管理。
 
-**URL**: https://github.com/TU0801/signage-csv-form
-**品質目標**: エンタープライズ級（修正率5%以下）
-**現状**: v1.20.11
+## 3つの絶対ルール
 
----
+### 1. テストなしコミット禁止
+```bash
+npx playwright test --reporter=list  # → 全PASS後にコミット
+```
+テスト赤 = プッシュ禁止。新機能より先にテスト修正。
 
-## ⚡ セッション開始時（必須・5分）
+### 2. DB操作前にスキーマ確認
+Supabase MCPの`list_tables` / `execute_sql`でカラム名を実DBから確認。
+推測でフィールド名を書かない。snake_case/camelCase変換は`getAllMasterDataCamelCase()`参照。
+
+### 3. import/export追加時に全依存確認
+```bash
+grep -r "関数名" js/  # 追加・変更する関数の全参照を確認
+```
+HTML要素の削除前も同様に`grep`で全参照確認。
+
+## 開発コマンド
 
 ```bash
-# 1. 前回の振り返り
-cat docs/NEXT_SESSION_TODO.txt
-
-# 2. 失敗パターン確認
-cat docs/FAILURE_PATTERNS.md | grep "⭐️"
-
-# 3. メトリクス確認
-cat docs/METRICS.md | tail -20
-```
-
-**目標設定**: fix<15%, 往復<2回, テスト100%
-
----
-
-## 🎯 3つの絶対ルール
-
-### 1. テストしてから報告
-```
-実装 → テスト → DB確認 → 「完了」
-```
-
-### 2. RLS/スキーマを最初に確認
-```bash
-grep "CREATE TABLE" supabase/schema.sql
-# Supabase Dashboardでポリシー確認
-```
-
-### 3. 失敗パターンを活用
-```bash
-grep -i "キーワード" docs/FAILURE_PATTERNS.md
-```
-
----
-
-## 📋 実装チェックリスト
-
-### Before
-- [ ] RLSポリシー確認
-- [ ] スキーマ確認
-- [ ] 失敗パターン確認
-
-### After
-- [ ] ローカルテスト
-- [ ] DBデータ確認
-- [ ] コンソールエラー0
-- [ ] 既存機能OK
-- [ ] **UI変更時はテストも更新**
-
----
-
-## 🔧 開発コマンド
-
-```bash
-npm run serve          # localhost:8080
-npm test              # 全テスト
+npm run serve                          # localhost:8080
+npx playwright test --reporter=list    # 全テスト
 npx playwright test tests/xxx.spec.js  # 単体テスト
 ```
 
----
+## セッション開始時
 
-## 📊 セッション終了時（必須）
+1. `npx playwright test` → 全PASS確認
+2. `docs/METRICS.md` で前回fix率確認
+3. 目標設定: fix<10%, 往復<1回
+
+## セッション終了時
 
 ```bash
-# メトリクス更新
-echo "fix: X/Y (Z%)" >> docs/METRICS.md
-
-# 次回TODO作成
-echo "[準備事項]" > docs/NEXT_SESSION_TODO.txt
+echo "YYYY-MM-DD: fix XX% | iterations X.X | tests XX/XX" >> docs/METRICS.md
 ```
 
-**更新なし = 改善なし**
+## 失敗パターン
 
----
+実装前に `docs/FAILURE_PATTERNS.md` を確認。症状→対策の1行表。
 
-## 📚 詳細は別ドキュメント
+## 実装チェックリスト
 
-- アーキテクチャ: `docs/SPECIFICATION.md`
+### Before
+- [ ] スキーマ確認（Supabase MCP）
+- [ ] 失敗パターン確認
+
+### After
+- [ ] `npx playwright test` 全PASS
+- [ ] コンソールエラー0
+- [ ] UI変更時は全体検証（1箇所の修正で全体が直ったと仮定しない）
+- [ ] UI要素削除時はユーザーに場所確認してから実行
+
+## 参照
+
+- 仕様書: `docs/SPECIFICATION.md`
 - 失敗パターン: `docs/FAILURE_PATTERNS.md`
-- 改善システム: `docs/CONTINUOUS_IMPROVEMENT_SYSTEM.md`
 - スキル: `.claude/skills/*/SKILL.md`
-
----
-
-## 🎯 目標
-
-- fix率: 5%以下
-- 往復: 1-2回
-- テスト: 100%
-
-**実行可能な300行以内に保つ。**
