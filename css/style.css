@@ -783,6 +783,12 @@ textarea:required {
     box-shadow: -2px 0 4px rgba(0,0,0,0.05);
 }
 
+/* sticky列: 偶数行の網掛け対応 */
+.data-table tbody tr:nth-child(even) td:first-child,
+.data-table tbody tr:nth-child(even) td:last-child {
+    background: #f9fafb;
+}
+
 .data-table thead th:first-child,
 .data-table thead th:last-child {
     z-index: 3;
