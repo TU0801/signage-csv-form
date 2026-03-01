@@ -20,7 +20,7 @@ export function initEntryEditModule(_getState, _getCallbacks) {
 /**
  * エントリ編集モーダルを開く
  * @param {string} id - エントリID
- * @param {string} mode - 'pending' or 'approved'
+ * @param {string} mode - 'pending' or 'list'
  */
 export async function editEntry(id, mode) {
     const { pendingEntries, entries, masterData } = getState();
@@ -32,6 +32,10 @@ export async function editEntry(id, mode) {
         showToast('エントリが見つかりません', 'error');
         return;
     }
+
+    // 物件名を事前に取得（テンプレート内での重複.find()を回避）
+    const property = masterData.properties.find(p => p.property_code === entry.property_code);
+    const propertyDisplay = `${entry.property_code || '-'} ${property?.property_name || ''}`;
 
     // 編集モーダルを作成
     const modal = document.createElement('div');
@@ -78,7 +82,7 @@ export async function editEntry(id, mode) {
                     <div style="display: grid; grid-template-columns: 1fr; gap: 0.75rem; font-size: 0.875rem;">
                         <div style="display: flex; gap: 0.5rem;">
                             <span style="color: #64748b; flex-shrink: 0;">物件：</span>
-                            <span style="font-weight: 600; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${entry.property_code || '-'} ${masterData.properties.find(p => p.property_code === entry.property_code)?.property_name || ''}">${entry.property_code || '-'} ${masterData.properties.find(p => p.property_code === entry.property_code)?.property_name || ''}</span>
+                            <span style="font-weight: 600; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${propertyDisplay}">${propertyDisplay}</span>
                         </div>
                         <div style="display: flex; gap: 0.5rem;">
                             <span style="color: #64748b; flex-shrink: 0;">端末：</span>
@@ -250,11 +254,11 @@ export function closeEditModal() {
 /**
  * 編集内容を保存
  * @param {string} id - エントリID
- * @param {string} mode - 'pending' or 'approved'
+ * @param {string} mode - 'pending' or 'list'
  */
 export async function saveEditedEntry(id, mode) {
     const { entries } = getState();
-    const { loadPendingEntries, loadEntries, renderPendingEntries, renderEntries } = getCallbacks();
+    const { loadPendingEntries, loadEntries } = getCallbacks();
 
     const updatedEntry = {
         display_start_date: document.getElementById('editDisplayStartDate').value || null,
@@ -280,10 +284,7 @@ export async function saveEditedEntry(id, mode) {
         await updateEntry(id, updatedEntry);
         showToast('編集しました', 'success');
         closeEditModal();
-        await loadPendingEntries();
-        await loadEntries();
-        renderPendingEntries();
-        renderEntries();
+        await Promise.all([loadPendingEntries(), loadEntries()]);
     } catch (error) {
         console.error('Failed to update entry:', error);
         showToast('編集に失敗しました: ' + error.message, 'error');

@@ -119,8 +119,7 @@ export async function approveSelected() {
     try {
         await approveEntries(selectedPendingIds);
         showToast(`${selectedPendingIds.length}件を承認しました`, 'success');
-        await loadPendingEntries();
-        await loadAllData();
+        await Promise.all([loadPendingEntries(), loadAllData()]);
         updateSidebarCounts();
     } catch (error) {
         console.error('Failed to approve entries:', error);
@@ -135,8 +134,7 @@ export async function approveSingle(id) {
     try {
         await approveEntry(id);
         showToast('承認しました', 'success');
-        await loadPendingEntries();
-        await loadAllData();
+        await Promise.all([loadPendingEntries(), loadAllData()]);
         updateSidebarCounts();
     } catch (error) {
         console.error('Failed to approve entry:', error);
@@ -152,8 +150,7 @@ export async function rejectSingle(id) {
     try {
         await rejectEntry(id, reason);
         showToast('却下しました', 'success');
-        await loadPendingEntries();
-        await loadAllData();
+        await Promise.all([loadPendingEntries(), loadAllData()]);
         updateSidebarCounts();
     } catch (error) {
         console.error('Failed to reject entry:', error);

@@ -309,7 +309,6 @@ export async function handleRemoveVendorInspection(relationshipId) {
 }
 
 export async function loadPendingBuildingRequests() {
-    const { setState: _setState } = { setState };
     try {
         const requests = await getPendingBuildingRequests();
         setState('pendingBuildingRequests', requests);

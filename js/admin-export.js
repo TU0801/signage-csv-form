@@ -28,9 +28,24 @@ export function generateCSV(data) {
 
     const csvRows = [headers.join(',')];
 
+    const formatDate = (d) => d ? d.replace(/-/g, '/') : '';
+    const defaultTime = getAppSettings().display_time_default || 6;
+
+    // terminal_idを正規化（JSON文字列の場合は端末ID文字列を抽出）
+    const normalizeTerminalId = (terminalId) => {
+        if (!terminalId) return '';
+        if (typeof terminalId === 'string' && terminalId.startsWith('{')) {
+            try {
+                const parsed = JSON.parse(terminalId);
+                return parsed.terminalId || parsed.terminal_id || parsed.id || terminalId;
+            } catch (_e) {
+                return terminalId;
+            }
+        }
+        return terminalId;
+    };
+
     data.forEach(entry => {
-        const formatDate = (d) => d ? d.replace(/-/g, '/') : '';
-        const defaultTime = getAppSettings().display_time_default || 6;
         const displayTime = entry.display_duration || defaultTime;
         const displayTimeFormatted = `0:00:${String(displayTime).padStart(2, '0')}`;
 
@@ -53,20 +68,6 @@ export function generateCSV(data) {
 
         // frame_No (poster_position)
         const frameNo = entry.poster_position || '2';
-
-        // terminal_idを正規化（JSON文字列の場合は端末ID文字列を抽出）
-        const normalizeTerminalId = (terminalId) => {
-            if (!terminalId) return '';
-            if (typeof terminalId === 'string' && terminalId.startsWith('{')) {
-                try {
-                    const parsed = JSON.parse(terminalId);
-                    return parsed.terminalId || parsed.terminal_id || parsed.id || terminalId;
-                } catch (e) {
-                    return terminalId;
-                }
-            }
-            return terminalId;
-        };
 
         const values = [
             entry.inspection_co || '',                   // 点検CO (#11: 自動採番)

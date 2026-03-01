@@ -147,10 +147,14 @@ export function restoreFilters() {
         const saved = localStorage.getItem('admin_entry_filters');
         if (saved) {
             const filters = JSON.parse(saved);
-            if (document.getElementById('filterProperty')) document.getElementById('filterProperty').value = filters.property || '';
-            if (document.getElementById('filterStartDate')) document.getElementById('filterStartDate').value = filters.startDate || '';
-            if (document.getElementById('filterEndDate')) document.getElementById('filterEndDate').value = filters.endDate || '';
-            if (document.getElementById('filterVendor')) document.getElementById('filterVendor').value = filters.vendor || '';
+            const elProperty = document.getElementById('filterProperty');
+            const elStartDate = document.getElementById('filterStartDate');
+            const elEndDate = document.getElementById('filterEndDate');
+            const elVendor = document.getElementById('filterVendor');
+            if (elProperty) elProperty.value = filters.property || '';
+            if (elStartDate) elStartDate.value = filters.startDate || '';
+            if (elEndDate) elEndDate.value = filters.endDate || '';
+            if (elVendor) elVendor.value = filters.vendor || '';
         }
     } catch (error) {
         console.error('Failed to restore filters:', error);
@@ -181,7 +185,7 @@ export async function loadEntries() {
         });
         setEntries(entries);
         renderEntries();
-        updateSelectedEntries();
+        updateBulkActionButtons();
         updateSidebarCounts();
     } catch (error) {
         console.error('Failed to load entries:', error);
@@ -278,24 +282,22 @@ async function deleteEntryById(id) {
 // 選択・一括操作
 // ========================================
 
-function updateSelectedEntries() {
-    const checkboxes = document.querySelectorAll('#entriesBody .entry-checkbox:checked');
-    const selectedCount = checkboxes.length;
-    const selectedInfo = document.getElementById('selectedEntriesInfo');
+function updateBulkActionButtons() {
+    const checkedCount = document.querySelectorAll('.entry-checkbox:checked').length;
+    const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
     const markExportedBtn = document.getElementById('markExportedBtn');
     const markSubmittedBtn = document.getElementById('markSubmittedBtn');
     const revertToPendingBtn = document.getElementById('revertToPendingBtn');
 
-    if (selectedCount > 0) {
-        selectedInfo.textContent = `(${selectedCount}件選択中)`;
-        markExportedBtn.disabled = false;
-        markSubmittedBtn.disabled = false;
-        if (revertToPendingBtn) revertToPendingBtn.disabled = false;
-    } else {
-        selectedInfo.textContent = '';
-        markExportedBtn.disabled = true;
-        markSubmittedBtn.disabled = true;
-        if (revertToPendingBtn) revertToPendingBtn.disabled = true;
+    const hasSelection = checkedCount > 0;
+    if (bulkDeleteBtn) bulkDeleteBtn.disabled = !hasSelection;
+    if (markExportedBtn) markExportedBtn.disabled = !hasSelection;
+    if (markSubmittedBtn) markSubmittedBtn.disabled = !hasSelection;
+    if (revertToPendingBtn) revertToPendingBtn.disabled = !hasSelection;
+
+    const selectedInfo = document.getElementById('selectedEntriesInfo');
+    if (selectedInfo) {
+        selectedInfo.textContent = hasSelection ? `${checkedCount}件選択中` : '';
     }
 }
 
@@ -303,7 +305,7 @@ export function toggleSelectAllEntries() {
     const selectAll = document.getElementById('selectAllEntries');
     const checkboxes = document.querySelectorAll('#entriesBody .entry-checkbox');
     checkboxes.forEach(cb => cb.checked = selectAll.checked);
-    updateSelectedEntries();
+    updateBulkActionButtons();
 }
 
 export function getSelectedEntryIds() {
@@ -344,26 +346,6 @@ export async function bulkDeleteEntries() {
     } catch (error) {
         console.error('Bulk delete failed:', error);
         showToast('削除に失敗しました', 'error');
-    }
-}
-
-function updateBulkActionButtons() {
-    const checkedCount = document.querySelectorAll('.entry-checkbox:checked').length;
-    const bulkDeleteBtn = document.getElementById('bulkDeleteBtn');
-    const markExportedBtn = document.getElementById('markExportedBtn');
-    const markSubmittedBtn = document.getElementById('markSubmittedBtn');
-    const revertToPendingBtn = document.getElementById('revertToPendingBtn');
-
-    const hasSelection = checkedCount > 0;
-    if (bulkDeleteBtn) bulkDeleteBtn.disabled = !hasSelection;
-    if (markExportedBtn) markExportedBtn.disabled = !hasSelection;
-    if (markSubmittedBtn) markSubmittedBtn.disabled = !hasSelection;
-    if (revertToPendingBtn) revertToPendingBtn.disabled = !hasSelection;
-
-    // 選択数表示
-    const selectedInfo = document.getElementById('selectedEntriesInfo');
-    if (selectedInfo) {
-        selectedInfo.textContent = hasSelection ? `${checkedCount}件選択中` : '';
     }
 }
 

@@ -235,41 +235,27 @@ async function init() {
 }
 
 async function loadAllData() {
+    const labels = ['マスターデータ', 'エントリ', 'ユーザー', '承認待ち'];
+    const results = await Promise.allSettled([
+        getAllMasterData(),
+        getAllEntries(),
+        getAllProfiles(),
+        getPendingEntries()
+    ]);
+
     const errors = [];
+    if (results[0].status === 'fulfilled') masterData = results[0].value;
+    else { console.error('Failed to load master data:', results[0].reason); errors.push(labels[0]); }
 
-    // マスターデータを取得
-    try {
-        masterData = await getAllMasterData();
-    } catch (error) {
-        console.error('Failed to load master data:', error);
-        errors.push('マスターデータ');
-    }
+    if (results[1].status === 'fulfilled') entries = results[1].value;
+    else { console.error('Failed to load entries:', results[1].reason); errors.push(labels[1]); }
 
-    // エントリを取得
-    try {
-        entries = await getAllEntries();
-    } catch (error) {
-        console.error('Failed to load entries:', error);
-        errors.push('エントリ');
-    }
+    if (results[2].status === 'fulfilled') profiles = results[2].value;
+    else { console.error('Failed to load profiles:', results[2].reason); errors.push(labels[2]); }
 
-    // プロファイルを取得
-    try {
-        profiles = await getAllProfiles();
-    } catch (error) {
-        console.error('Failed to load profiles:', error);
-        errors.push('ユーザー');
-    }
+    if (results[3].status === 'fulfilled') pendingEntries = results[3].value;
+    else { console.error('Failed to load pending entries:', results[3].reason); errors.push(labels[3]); }
 
-    // 承認待ちを取得
-    try {
-        pendingEntries = await getPendingEntries();
-    } catch (error) {
-        console.error('Failed to load pending entries:', error);
-        errors.push('承認待ち');
-    }
-
-    // エラーがあった場合のみトーストを表示
     if (errors.length > 0) {
         showToast(`一部データの取得に失敗しました: ${errors.join(', ')}`, 'error');
     }
