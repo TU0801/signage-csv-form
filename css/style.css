@@ -789,6 +789,12 @@ textarea:required {
     background: #f9fafb;
 }
 
+/* sticky列: hover対応 */
+.data-table tbody tr:hover td:first-child,
+.data-table tbody tr:hover td:last-child {
+    background: #eff6ff;
+}
+
 .data-table thead th:first-child,
 .data-table thead th:last-child {
     z-index: 3;

@@ -174,34 +174,22 @@ test.describe('カテゴリCRUD', () => {
   });
 
   // テストデータのクリーンアップ（テスト失敗時の残留データ対策）
+  // UI操作ではなくSupabase APIを直接呼び出し、確実に削除する
   test.afterAll(async ({ browser }) => {
     const context = await browser.newContext();
     const page = await context.newPage();
     try {
       await loginAsAdminAndGoToAdmin(page);
-      await clickMasterSubTab(page, 'categories');
-      page.on('dialog', async (dialog) => { await dialog.accept(); });
-      await page.waitForTimeout(1000);
-
-      // テストカテゴリを検索して削除（テストカテゴリ_ または 編集済カテゴリ_ で始まるもの）
-      const prefixes = ['テストカテゴリ_test_', '編集済カテゴリ_test_'];
-      for (const prefix of prefixes) {
-        let found = true;
-        while (found) {
-          const item = page.locator('#categoriesList').locator(`text=/${prefix}/`).first();
-          found = await item.isVisible({ timeout: 1000 }).catch(() => false);
-          if (found) {
-            const card = item.locator('..').locator('..');
-            const deleteBtn = card.locator('button:has-text("🗑")').first();
-            if (await deleteBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
-              await deleteBtn.click();
-              await page.waitForTimeout(2000);
-            } else {
-              found = false;
-            }
+      await page.evaluate(async () => {
+        const { getMasterCategories, deleteCategory } = await import('./js/supabase-client.js');
+        const categories = await getMasterCategories();
+        for (const cat of categories) {
+          if (cat.category_name.includes('テストカテゴリ_test_') ||
+              cat.category_name.includes('編集済カテゴリ_test_')) {
+            await deleteCategory(cat.id);
           }
         }
-      }
+      });
     } finally {
       await context.close();
     }
@@ -289,34 +277,22 @@ test.describe('保守会社CRUD', () => {
   });
 
   // テストデータのクリーンアップ（テスト失敗時の残留データ対策）
+  // UI操作ではなくSupabase APIを直接呼び出し、確実に削除する
   test.afterAll(async ({ browser }) => {
     const context = await browser.newContext();
     const page = await context.newPage();
     try {
       await loginAsAdminAndGoToAdmin(page);
-      await clickMasterSubTab(page, 'vendors');
-      page.on('dialog', async (dialog) => { await dialog.accept(); });
-      await page.waitForTimeout(1000);
-
-      // テスト保守会社を検索して削除（テスト保守会社_ または 編集済会社_ で始まるもの）
-      const prefixes = ['テスト保守会社_test_', '編集済会社_test_'];
-      for (const prefix of prefixes) {
-        let found = true;
-        while (found) {
-          const item = page.locator('#vendorsList').locator(`text=/${prefix}/`).first();
-          found = await item.isVisible({ timeout: 1000 }).catch(() => false);
-          if (found) {
-            const card = item.locator('..').locator('..');
-            const deleteBtn = card.locator('button:has-text("🗑")').first();
-            if (await deleteBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
-              await deleteBtn.click();
-              await page.waitForTimeout(2000);
-            } else {
-              found = false;
-            }
+      await page.evaluate(async () => {
+        const { getMasterVendors, deleteVendor } = await import('./js/supabase-client.js');
+        const vendors = await getMasterVendors();
+        for (const v of vendors) {
+          if (v.vendor_name.includes('テスト保守会社_test_') ||
+              v.vendor_name.includes('編集済会社_test_')) {
+            await deleteVendor(v.id);
           }
         }
-      }
+      });
     } finally {
       await context.close();
     }
