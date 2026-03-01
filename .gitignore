@@ -8,3 +8,4 @@ screenshots/
 error/
 *.backup
 *.log
+.vercel
