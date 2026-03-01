@@ -33,7 +33,8 @@ import {
     getMasterInspectionTypes,
     getBuildingEquipment,
     addBuildingEquipment,
-    deleteBuildingEquipment
+    deleteBuildingEquipment,
+    deleteProperty
 } from './supabase-client.js';
 
 import {
