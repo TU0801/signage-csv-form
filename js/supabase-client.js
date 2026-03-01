@@ -130,9 +130,9 @@ export async function getAllMasterData() {
     const code = p.property_code;
     if (!propertiesMap.has(code)) {
       propertiesMap.set(code, {
+        id: p.id,
         property_code: code,
         property_name: p.property_name,
-        address: p.address || '',
         terminals: []
       });
     }
@@ -579,77 +579,34 @@ export async function updateEntriesStatusBulk(ids, status) {
 // ========================================
 
 export async function addProperty(property) {
-  // terminalsが配列の場合、各端末ごとにレコードを作成
-  if (Array.isArray(property.terminals) && property.terminals.length > 0) {
-    const records = property.terminals.map(terminal => ({
-      property_code: property.property_code,
-      property_name: property.property_name,
-      terminal_id: terminal.terminal_id,
-      supplement: terminal.supplement || property.supplement || '',
-      address: property.address || ''
-    }));
-    const { data, error } = await supabase
-      .from('signage_master_properties')
-      .insert(records)
-      .select();
-    if (error) throw error;
-    return data;
-  } else {
-    // 旧形式の場合（後方互換性）
-    const { data, error } = await supabase
-      .from('signage_master_properties')
-      .insert(property)
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  }
+  const record = {
+    property_code: property.property_code,
+    property_name: property.property_name,
+    terminals: property.terminals
+  };
+  const { data, error } = await supabase
+    .from('signage_master_properties')
+    .insert(record)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
 }
 
 export async function updateProperty(id, property) {
-  // terminalsが配列の場合、同じproperty_codeの全レコードを更新/追加/削除
-  if (Array.isArray(property.terminals) && property.terminals.length > 0) {
-    // 既存のレコードを取得
-    const { data: existing, error: fetchError } = await supabase
-      .from('signage_master_properties')
-      .select('*')
-      .eq('property_code', property.property_code);
-    if (fetchError) throw fetchError;
-
-    // 既存のレコードを全て削除
-    if (existing && existing.length > 0) {
-      const { error: deleteError } = await supabase
-        .from('signage_master_properties')
-        .delete()
-        .eq('property_code', property.property_code);
-      if (deleteError) throw deleteError;
-    }
-
-    // 新しいレコードを挿入
-    const records = property.terminals.map(terminal => ({
-      property_code: property.property_code,
-      property_name: property.property_name,
-      terminal_id: terminal.terminal_id,
-      supplement: terminal.supplement || '',
-      address: property.address || ''
-    }));
-    const { data, error } = await supabase
-      .from('signage_master_properties')
-      .insert(records)
-      .select();
-    if (error) throw error;
-    return data;
-  } else {
-    // 旧形式の場合（後方互換性）
-    const { data, error } = await supabase
-      .from('signage_master_properties')
-      .update(property)
-      .eq('id', id)
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  }
+  const record = {
+    property_code: property.property_code,
+    property_name: property.property_name,
+    terminals: property.terminals
+  };
+  const { data, error } = await supabase
+    .from('signage_master_properties')
+    .update(record)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
 }
 
 export async function deleteProperty(id) {

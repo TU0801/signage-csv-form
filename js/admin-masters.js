@@ -642,7 +642,7 @@ export function openMasterModal(type, masterData, data = null) {
         if (data) {
             document.getElementById('vendorName').value = data.vendor_name || '';
             document.getElementById('emergencyContact').value = data.emergency_contact || '';
-            document.getElementById('vendorCategory').value = data.category || '点検';
+            document.getElementById('vendorCategory').value = data.inspection_type || '点検';
         } else {
             document.getElementById('vendorName').value = '';
             document.getElementById('emergencyContact').value = '';
@@ -904,8 +904,6 @@ export async function handleMasterFormSubmit(e, masterData, showToast, updateSta
                 property_code: propertyCode,
                 property_name: document.getElementById('propertyName').value,
                 terminals: terminals,
-                supplement: document.getElementById('supplement').value,
-                address: document.getElementById('address').value,
             };
             if (id) {
                 await updateProperty(id, data);
@@ -918,7 +916,7 @@ export async function handleMasterFormSubmit(e, masterData, showToast, updateSta
             const data = {
                 vendor_name: document.getElementById('vendorName').value,
                 emergency_contact: document.getElementById('emergencyContact').value,
-                category: document.getElementById('vendorCategory').value,
+                inspection_type: document.getElementById('vendorCategory').value,
             };
             if (id) {
                 await updateVendor(id, data);
