@@ -61,19 +61,7 @@ import {
     getAppSettings
 } from './admin-settings.js';
 
-// ========================================
-// セキュリティ: HTMLエスケープ
-// ========================================
-
-function escapeHtml(str) {
-    if (str === null || str === undefined) return '';
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-}
+import { escapeHtml, showToast } from './ui-utils.js';
 
 // ========================================
 // グローバル変数
@@ -321,6 +309,16 @@ function initSidebarToggle() {
 // ========================================
 
 function setupEventListeners() {
+    // モーダル閉じるボタン（onclick属性からaddEventListenerへ移行）
+    document.getElementById('masterModalCloseBtn')?.addEventListener('click', () => closeMasterModal());
+    document.getElementById('masterModalCancelBtn')?.addEventListener('click', () => closeMasterModal());
+    document.getElementById('entryDetailCloseBtn')?.addEventListener('click', () => closeEntryDetailModal());
+    document.getElementById('entryDetailDismissBtn')?.addEventListener('click', () => closeEntryDetailModal());
+    document.getElementById('userModalCloseBtn')?.addEventListener('click', () => closeUserModal());
+    document.getElementById('userModalCancelBtn')?.addEventListener('click', () => closeUserModal());
+    document.getElementById('equipmentModalCloseBtn')?.addEventListener('click', () => window.closeEquipmentModal());
+    document.getElementById('addEquipmentBtn')?.addEventListener('click', () => window.addEquipment());
+
     // タブ切り替え（サイドバーナビゲーション + 旧タブ対応）
     const tabSelectors = '.admin-tab[data-tab], .sidebar-nav-link[data-tab]';
     let _adSlotsInitialized = false;
@@ -1575,20 +1573,7 @@ window.openEditUserModal = openEditUserModal;
 window.handleDeactivateUser = handleDeactivateUser;
 window.handleActivateUser = handleActivateUser;
 
-// ========================================
-// ユーティリティ
-// ========================================
-
-function showToast(message, type = 'info') {
-    const toast = document.getElementById('toast');
-    toast.textContent = message;
-    toast.className = `toast ${type} show`;
-    setTimeout(() => {
-        toast.classList.remove('show');
-    }, 2500);
-}
-
-// showToastをグローバルスコープに公開（admin-masters.js等で使用）
+// showToastをグローバルスコープに公開（error-handler.js等で使用）
 window.showToast = showToast;
 
 // ========================================

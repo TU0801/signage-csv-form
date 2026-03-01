@@ -1829,7 +1829,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3 id="masterModalTitle">追加</h3>
-                <button type="button" class="modal-close" onclick="closeMasterModal()">×</button>
+                <button type="button" class="modal-close" id="masterModalCloseBtn">×</button>
             </div>
             <form id="masterForm">
                 <div class="modal-body">
@@ -1969,7 +1969,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-outline" onclick="closeMasterModal()">キャンセル</button>
+                    <button type="button" class="btn btn-outline" id="masterModalCancelBtn">キャンセル</button>
                     <button type="submit" class="btn btn-primary">保存</button>
                 </div>
             </form>
@@ -1981,13 +1981,13 @@
         <div class="modal-content" style="max-width: 600px;">
             <div class="modal-header">
                 <h3>エントリ詳細</h3>
-                <button type="button" class="modal-close" onclick="closeEntryDetailModal()">×</button>
+                <button type="button" class="modal-close" id="entryDetailCloseBtn">×</button>
             </div>
             <div class="modal-body" id="entryDetailBody">
                 <!-- Content will be filled by JavaScript -->
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-outline" onclick="closeEntryDetailModal()">閉じる</button>
+                <button type="button" class="btn btn-outline" id="entryDetailDismissBtn">閉じる</button>
             </div>
         </div>
     </div>
@@ -1997,7 +1997,7 @@
         <div class="modal-content" style="max-width: 500px;">
             <div class="modal-header">
                 <h3>ユーザー追加</h3>
-                <button type="button" class="modal-close" onclick="closeUserModal()">×</button>
+                <button type="button" class="modal-close" id="userModalCloseBtn">×</button>
             </div>
             <form id="userForm">
                 <div class="modal-body">
@@ -2025,7 +2025,7 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-outline" onclick="closeUserModal()">キャンセル</button>
+                    <button type="button" class="btn btn-outline" id="userModalCancelBtn">キャンセル</button>
                     <button type="submit" class="btn btn-primary" id="userSubmitBtn">追加</button>
                 </div>
             </form>
@@ -2037,7 +2037,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3 id="equipmentModalTitle">設備情報</h3>
-                <button type="button" class="modal-close" onclick="window.closeEquipmentModal()">×</button>
+                <button type="button" class="modal-close" id="equipmentModalCloseBtn">×</button>
             </div>
             <div class="modal-body">
                 <!-- 設備一覧テーブル -->
@@ -2104,7 +2104,7 @@
                         </div>
                         <div class="form-group" style="flex: 0; min-width: auto;">
                             <label>&nbsp;</label>
-                            <button type="button" class="btn btn-primary btn-sm" id="addEquipmentBtn" onclick="window.addEquipment()">追加</button>
+                            <button type="button" class="btn btn-primary btn-sm" id="addEquipmentBtn">追加</button>
                         </div>
                     </div>
                 </div>

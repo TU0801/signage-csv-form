@@ -27,6 +27,8 @@ import {
     deleteAdImage
 } from './supabase-client.js';
 
+import { escapeHtml, showToast } from './ui-utils.js';
+
 // ========================================
 // テンプレート画像マッピング
 // ========================================
@@ -112,20 +114,6 @@ export const templateImages = {
     "questionnaire_conducted01": "アンケート",
     "questionnaire_conducted02": "アンケート2"
 };
-
-// ========================================
-// HTMLエスケープ
-// ========================================
-
-function escapeHtml(str) {
-    if (str === null || str === undefined) return '';
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-}
 
 // ========================================
 // マスターデータ描画
@@ -366,10 +354,10 @@ async function updateInspectionSortOrders(masterData) {
                 inspection.sort_order = i;
             }
         }
-        window.showToast('並び順を更新しました', 'success');
+        showToast('並び順を更新しました', 'success');
     } catch (error) {
         console.error('Sort order update failed:', error);
-        window.showToast('並び順の更新に失敗しました', 'error');
+        showToast('並び順の更新に失敗しました', 'error');
     }
 }
 
@@ -1201,7 +1189,7 @@ function renderAdSlotsGrid(slots) {
                 <!-- サムネイル -->
                 <div style="flex:1; background:#f1f5f9; display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative;">
                     ${hasImage
-                        ? `<img src="${escapeHtmlAdmin(slot.image_url)}" style="width:100%;height:100%;object-fit:cover;" alt="">`
+                        ? `<img src="${escapeHtml(slot.image_url)}" style="width:100%;height:100%;object-fit:cover;" alt="">`
                         : ''}
                     <!-- スロット番号バッジ -->
                     <span style="position:absolute; top:6px; left:6px; background:rgba(0,0,0,0.5); color:white; font-size:0.65rem; font-weight:700; padding:2px 6px; border-radius:999px;">${idx}</span>
@@ -1213,23 +1201,13 @@ function renderAdSlotsGrid(slots) {
                 <!-- フッター -->
                 <div style="padding:0.5rem 0.75rem; border-top:1px solid #f1f5f9; background:white;">
                     <p style="margin:0; font-size:0.75rem; color:${slot?.caption ? '#475569' : '#cbd5e1'}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                        ${slot?.caption ? escapeHtmlAdmin(slot.caption) : 'キャプションなし'}
+                        ${slot?.caption ? escapeHtml(slot.caption) : 'キャプションなし'}
                     </p>
                 </div>
             </div>`;
     });
 
     grid.innerHTML = loginCell + adCells.join('');
-}
-
-function escapeHtmlAdmin(str) {
-    if (!str) return '';
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
 }
 
 function setupAdSlotModal() {
@@ -1259,7 +1237,7 @@ window.openAdSlotModal = function(slotIndex) {
 
     const preview = document.getElementById('adSlotImagePreview');
     preview.innerHTML = slot.image_url
-        ? `<img src="${escapeHtmlAdmin(slot.image_url)}">`
+        ? `<img src="${escapeHtml(slot.image_url)}">`
         : '<span class="no-image">画像未設定</span>';
 
     document.getElementById('adSlotModalTitle').textContent = `広告枠 ${slotIndex} 編集`;
