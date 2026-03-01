@@ -792,6 +792,10 @@ textarea:required {
 .data-table th:nth-child(1),
 .data-table td:nth-child(1) { width: 80px; }  /* 物件コード */
 
+/* 点検種別テーブル: 第1列の幅制限を解除 */
+#inspectionRelationshipsContainer .data-table th:nth-child(1),
+#inspectionRelationshipsContainer .data-table td:nth-child(1) { width: auto; }
+
 /* 開始日・終了日 (4,5列目) */
 .data-table th:nth-child(4),
 .data-table td:nth-child(4),
