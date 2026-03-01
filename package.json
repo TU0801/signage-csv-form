@@ -8,6 +8,7 @@
     "test:headed": "npx playwright test --headed",
     "test:debug": "npx playwright test --debug",
     "test:report": "npx playwright show-report",
+    "lint": "npx eslint js/",
     "serve": "npx http-server -p 8080",
     "prepare": "husky"
   },
@@ -23,7 +24,9 @@
   },
   "homepage": "https://github.com/TU0801/signage-csv-form#readme",
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.57.0",
+    "eslint": "^10.0.2",
     "http-server": "^14.1.1",
     "husky": "^9.1.7"
   },

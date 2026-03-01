@@ -466,7 +466,7 @@ function setupEventListeners() {
                 closeEntryDetailModal();
             }
             if (document.getElementById('equipmentModal')?.classList.contains('active')) {
-                closeEquipmentModal();
+                window.closeEquipmentModal();
             }
         }
     });
@@ -567,9 +567,9 @@ function renderPendingEntries() {
             </td>
         `;
         tr.querySelector('[data-action="detail"]').addEventListener('click', () => showEntryDetail(entry));
-        tr.querySelector('[data-action="edit"]').addEventListener('click', () => editEntry(entry.id, 'pending'));
-        tr.querySelector('[data-action="approve"]').addEventListener('click', () => approveSingle(entry.id));
-        tr.querySelector('[data-action="reject"]').addEventListener('click', () => rejectSingle(entry.id));
+        tr.querySelector('[data-action="edit"]').addEventListener('click', () => window.editEntry(entry.id, 'pending'));
+        tr.querySelector('[data-action="approve"]').addEventListener('click', () => window.approveSingle(entry.id));
+        tr.querySelector('[data-action="reject"]').addEventListener('click', () => window.rejectSingle(entry.id));
         tbody.appendChild(tr);
     });
 }
@@ -889,8 +889,8 @@ function renderEntries() {
             </td>
         `;
         tr.querySelector('[data-action="detail"]').addEventListener('click', () => showEntryDetail(entry));
-        tr.querySelector('[data-action="edit"]').addEventListener('click', () => editEntry(entry.id, 'list'));
-        tr.querySelector('[data-action="delete"]').addEventListener('click', () => deleteEntryById(entry.id));
+        tr.querySelector('[data-action="edit"]').addEventListener('click', () => window.editEntry(entry.id, 'list'));
+        tr.querySelector('[data-action="delete"]').addEventListener('click', () => window.deleteEntryById(entry.id));
         tr.querySelector('.entry-checkbox').addEventListener('change', updateBulkActionButtons);
         tbody.appendChild(tr);
     });
@@ -1259,8 +1259,8 @@ async function downloadCustomImages() {
                 const response = await fetch(entry.poster_image);
                 const blob = await response.blob();
                 // ファイル名: 物件コード_点検種別_ID先頭8文字.jpg
-                const safePropertyCode = (entry.property_code || 'unknown').replace(/[\/\\:*?"<>|]/g, '_');
-                const safeInspectionType = (entry.inspection_type || 'unknown').replace(/[\/\\:*?"<>|]/g, '_');
+                const safePropertyCode = (entry.property_code || 'unknown').replace(/[/\\:*?"<>|]/g, '_');
+                const safeInspectionType = (entry.inspection_type || 'unknown').replace(/[/\\:*?"<>|]/g, '_');
                 const filename = `${safePropertyCode}_${safeInspectionType}_${entry.id.slice(0, 8)}.jpg`;
                 zip.file(filename, blob);
             } catch (err) {
@@ -2289,7 +2289,7 @@ window.editEntry = async function(id, mode) {
     // 背景クリックで閉じる
     modal.addEventListener('click', (e) => {
         if (e.target.id === 'editEntryModal') {
-            closeEditModal();
+            window.closeEditModal();
         }
     });
 };
@@ -2325,7 +2325,7 @@ window.saveEditedEntry = async function(id, mode) {
     try {
         await updateEntry(id, updatedEntry);
         showToast('編集しました', 'success');
-        closeEditModal();
+        window.closeEditModal();
         await loadPendingEntries();
         await loadEntries();
         renderPendingEntries();

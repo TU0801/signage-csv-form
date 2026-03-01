@@ -109,7 +109,6 @@ export const templateImages = {
     // その他
     "bicycle_removal": "自転車撤去",
     "merchari_installation": "シェアサイクル設置",
-    "disinfection": "消毒",
     "questionnaire_conducted01": "アンケート",
     "questionnaire_conducted02": "アンケート2"
 };

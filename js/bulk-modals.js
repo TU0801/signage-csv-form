@@ -427,7 +427,7 @@ export function importFromPaste(callbacks) {
             continue;
         }
 
-        let rowData = {};
+        let rowData;
 
         // 新形式: 保守会社列なし、物件名で取込
         // 0: 点検CO(空), 1: 端末ID, 2: 物件名, 3: 緊急連絡先,
@@ -518,7 +518,7 @@ function parseDisplayTime(timeStr) {
 
 function formatDateForInput(dateStr) {
     if (!dateStr) return '';
-    const match = dateStr.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+    const match = dateStr.match(/(\d{4})[/-](\d{1,2})[/-](\d{1,2})/);
     if (match) {
         return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`;
     }
