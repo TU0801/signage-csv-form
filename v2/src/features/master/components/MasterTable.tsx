@@ -49,7 +49,7 @@ export function MasterTable<T extends Record<string, unknown>>({
                 {config.columns.map((col) => (
                   <td key={col.key} className="py-2 px-3">
                     {renderCell
-                      ? renderCell(col.key, item[col.key], item)
+                      ? (renderCell(col.key, item[col.key], item) ?? formatCellValue(item[col.key]))
                       : formatCellValue(item[col.key])}
                   </td>
                 ))}

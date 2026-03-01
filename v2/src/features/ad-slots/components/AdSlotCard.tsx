@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { useToast } from '@/components/ui/Toast';
+import { uploadAdImage } from '@/lib/storage';
 import type { DbAdSlot } from '@/types/database';
 
 interface AdSlotCardProps {
@@ -25,6 +26,7 @@ export function AdSlotCard({ slot, onUpdate }: AdSlotCardProps) {
   const [caption, setCaption] = useState(slot.caption ?? '');
   const [linkUrl, setLinkUrl] = useState(slot.link_url ?? '');
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     setImageUrl(slot.image_url ?? '');
@@ -60,6 +62,23 @@ export function AdSlotCard({ slot, onUpdate }: AdSlotCardProps) {
     }
   };
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const url = await uploadAdImage(file, slot.slot_index);
+      setImageUrl(url);
+      addToast('画像をアップロードしました', 'success');
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : 'アップロードに失敗しました', 'error');
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  };
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
@@ -79,12 +98,28 @@ export function AdSlotCard({ slot, onUpdate }: AdSlotCardProps) {
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
-          <Input
-            label="画像URL"
-            value={imageUrl}
-            onChange={(e) => setImageUrl(e.target.value)}
-            placeholder="https://..."
-          />
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <Input
+                label="画像URL"
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                placeholder="https://..."
+              />
+            </div>
+            <div className="relative">
+              <input
+                type="file"
+                accept="image/png,image/jpeg"
+                onChange={handleImageUpload}
+                disabled={uploading}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+              />
+              <Button variant="secondary" size="sm" disabled={uploading}>
+                {uploading ? '...' : '画像UP'}
+              </Button>
+            </div>
+          </div>
           <Input
             label="キャプション"
             value={caption}

@@ -21,6 +21,7 @@ export interface EntryFormData {
   posterPosition: string;
   frameNo: string;
   showOnBoard: boolean;
+  customPosterUrl?: string;
 }
 
 /** エントリー一覧表示用 */

@@ -1,9 +1,12 @@
-import { useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { useToast } from '@/components/ui/Toast';
+import { useMasterData } from '@/hooks/useMasterData';
 import { EntryStatus } from '@/lib/constants';
 import { generateCsv, downloadCsv, copyCsvToClipboard } from '@/lib/csv';
+import { exportInspectionReport } from '@/lib/report';
+import { downloadCustomImages } from '@/lib/zipDownload';
 import type { CsvEntry } from '@/lib/csv';
 import type { DbEntry } from '@/types/database';
 import { formatDateISO } from '@/lib/utils';
@@ -51,6 +54,8 @@ export function EntryActions({
   onClearSelection,
 }: EntryActionsProps) {
   const { addToast } = useToast();
+  const { properties } = useMasterData();
+  const [downloading, setDownloading] = useState(false);
 
   const handleExportCsv = useCallback(() => {
     if (selectedEntries.length === 0) {
@@ -95,10 +100,43 @@ export function EntryActions({
     [selectedEntries, onStatusChange, onClearSelection, addToast],
   );
 
+  const handleExportReport = useCallback(() => {
+    if (selectedEntries.length === 0) {
+      addToast('レポート対象を選択してください', 'warning');
+      return;
+    }
+    try {
+      exportInspectionReport(selectedEntries, properties);
+      addToast('点検レポートをダウンロードしました', 'success');
+    } catch {
+      addToast('レポートの生成に失敗しました', 'error');
+    }
+  }, [selectedEntries, properties, addToast]);
+
+  const handleDownloadImages = useCallback(async () => {
+    if (selectedEntries.length === 0) {
+      addToast('ダウンロード対象を選択してください', 'warning');
+      return;
+    }
+    setDownloading(true);
+    try {
+      const count = await downloadCustomImages(selectedEntries);
+      if (count === 0) {
+        addToast('ダウンロード対象の追加画像がありません', 'info');
+      } else {
+        addToast(`${count}件の画像をダウンロードしました`, 'success');
+      }
+    } catch {
+      addToast('画像のダウンロードに失敗しました', 'error');
+    } finally {
+      setDownloading(false);
+    }
+  }, [selectedEntries, addToast]);
+
   if (selectedEntries.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-3 rounded-md bg-blue-50 px-4 py-2">
+    <div className="flex flex-wrap items-center gap-3 rounded-md bg-blue-50 px-4 py-2">
       <span className="text-sm font-medium text-blue-800">
         {selectedEntries.length}件選択中
       </span>
@@ -115,6 +153,12 @@ export function EntryActions({
       </Button>
       <Button size="sm" variant="secondary" onClick={handleCopyCsv}>
         CSVコピー
+      </Button>
+      <Button size="sm" variant="secondary" onClick={handleExportReport}>
+        点検レポート
+      </Button>
+      <Button size="sm" variant="secondary" onClick={handleDownloadImages} disabled={downloading}>
+        {downloading ? 'DL中...' : '追加画像DL'}
       </Button>
       <Button size="sm" variant="ghost" onClick={onClearSelection}>
         選択解除

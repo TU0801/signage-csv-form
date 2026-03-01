@@ -24,6 +24,7 @@ const defaultValues: EntryFormData = {
   posterPosition: '4',
   frameNo: '1',
   showOnBoard: true,
+  customPosterUrl: '',
 };
 
 export function useEntryForm() {

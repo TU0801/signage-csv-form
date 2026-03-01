@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
 import { useMasterData } from '@/hooks/useMasterData';
@@ -10,6 +11,8 @@ import { EntryForm } from '@/features/single-entry/components/EntryForm';
 import { EntryDataList } from '@/features/single-entry/components/EntryDataList';
 import { CsvActions } from '@/features/single-entry/components/CsvActions';
 import { PosterPreview } from '@/features/single-entry/components/PosterPreview';
+import { uploadPosterImage } from '@/lib/storage';
+import { useAuthStore } from '@/stores/authStore';
 import type { EntryFormData } from '@/types/app';
 
 interface LocalEntry extends EntryFormData {
@@ -19,6 +22,7 @@ interface LocalEntry extends EntryFormData {
 export function SingleEntryPage() {
   const { addToast } = useToast();
   const { properties, vendors, inspectionTypes, categories, loading, error } = useMasterData();
+  const user = useAuthStore((s) => s.user);
 
   const { form, resetForm } = useEntryForm();
   const { setValue, reset } = form;
@@ -39,16 +43,32 @@ export function SingleEntryPage() {
 
   /** フォーム送信 → ローカル追加/更新 */
   const handleFormSubmit = useCallback(
-    (data: EntryFormData) => {
+    async (data: EntryFormData, customImageFile?: File) => {
+      let formData = { ...data };
+
+      // カスタム画像のアップロード
+      if (customImageFile && formData.posterType === 'custom' && user) {
+        try {
+          const url = await uploadPosterImage(customImageFile, user.id);
+          formData = { ...formData, customPosterUrl: url };
+        } catch (err) {
+          addToast(
+            err instanceof Error ? err.message : '画像アップロードに失敗しました',
+            'error',
+          );
+          return;
+        }
+      }
+
       if (editingId) {
         setLocalEntries((prev) =>
-          prev.map((e) => (e._id === editingId ? { ...data, _id: editingId } : e)),
+          prev.map((e) => (e._id === editingId ? { ...formData, _id: editingId } : e)),
         );
         setEditingId(null);
         addToast('エントリーを更新しました', 'success');
       } else {
         const newEntry: LocalEntry = {
-          ...data,
+          ...formData,
           _id: crypto.randomUUID(),
         };
         setLocalEntries((prev) => [...prev, newEntry]);
@@ -56,7 +76,7 @@ export function SingleEntryPage() {
       }
       resetForm();
     },
-    [editingId, resetForm, addToast],
+    [editingId, resetForm, addToast, user],
   );
 
   /** エントリー削除 */
@@ -98,6 +118,53 @@ export function SingleEntryPage() {
     [setValue],
   );
 
+  /** 前回を複製 */
+  const handleDuplicate = useCallback(() => {
+    if (localEntries.length === 0) {
+      addToast('複製するエントリーがありません', 'warning');
+      return;
+    }
+    const last = localEntries[localEntries.length - 1]!;
+    setValue('propertyCode', last.propertyCode);
+    cascading.handlePropertyChange(last.propertyCode);
+
+    // setTimeout で cascade 連動が完了した後にセット
+    setTimeout(() => {
+      setValue('terminalId', last.terminalId);
+      setValue('vendorName', last.vendorName);
+
+      const vendor = vendors.find((v) => v.vendor_name === last.vendorName);
+      if (vendor) {
+        setValue('emergencyContact', vendor.emergency_contact ?? '');
+      }
+
+      if (last.inspectionType) {
+        // カテゴリの特定
+        const inspType = inspectionTypes.find(
+          (t) => t.inspection_name === last.inspectionType,
+        );
+        if (inspType?.category_id) {
+          cascading.handleCategoryChange(inspType.category_id);
+        }
+      }
+
+      setTimeout(() => {
+        setValue('inspectionType', last.inspectionType);
+        const inspType = inspectionTypes.find(
+          (t) => t.inspection_name === last.inspectionType,
+        );
+        if (inspType) {
+          setValue('templateNo', inspType.template_no);
+        }
+        setValue('startDate', last.startDate);
+        setValue('endDate', last.endDate);
+        setValue('posterType', last.posterType);
+
+        addToast('前回のデータを複製しました', 'info');
+      }, 100);
+    }, 100);
+  }, [localEntries, setValue, cascading, vendors, inspectionTypes, addToast]);
+
   const terminals = cascading.getTerminals(form.watch('propertyCode'));
 
   if (loading) {
@@ -125,9 +192,19 @@ export function SingleEntryPage() {
         {/* 左: フォーム */}
         <Card>
           <CardHeader>
-            <h2 className="text-base font-semibold text-gray-900">
-              {editingId ? 'エントリー編集' : 'エントリー入力'}
-            </h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-semibold text-gray-900">
+                {editingId ? 'エントリー編集' : 'エントリー入力'}
+              </h2>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleDuplicate}
+                disabled={localEntries.length === 0}
+              >
+                前回を複製
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             <EntryForm

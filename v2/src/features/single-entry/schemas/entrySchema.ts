@@ -20,6 +20,7 @@ export const entrySchema = z.object({
   posterPosition: z.string().default('4'),
   frameNo: z.string().default('1'),
   showOnBoard: z.boolean().default(true),
+  customPosterUrl: z.string().default(''),
 });
 
 export type EntrySchemaType = z.infer<typeof entrySchema>;
