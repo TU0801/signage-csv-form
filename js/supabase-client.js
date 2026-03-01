@@ -1,19 +1,41 @@
-// supabase-client.js
-// Supabase連携モジュール
+/**
+ * supabase-client.js
+ * Supabase連携モジュール — 全DB操作のエントリーポイント
+ *
+ * テーブル一覧:
+ *   signage_profiles         — ユーザープロファイル (id, email, company_name, role, vendor_id)
+ *   signage_entries           — 点検データ (id, user_id, property_code, terminal_id, vendor_name, inspection_type, ...)
+ *   signage_master_properties — 物件マスタ (id, property_code, property_name, terminals[JSON])
+ *   signage_master_vendors    — 保守会社マスタ (id, vendor_name, emergency_contact, inspection_type)
+ *   signage_master_inspection_types — 点検種別マスタ (id, inspection_name, template_no, default_text, category, show_on_board, sort_order)
+ *   signage_master_categories — カテゴリマスタ (id, category_name, sort_order)
+ *   signage_master_template_images — テンプレート画像 (id, image_key, display_name, image_url, category, sort_order)
+ *   signage_master_settings   — 設定 (id, setting_key, setting_value)
+ *   building_vendors          — 物件×保守会社紐付け (id, property_code, vendor_id, status)
+ *   signage_vendor_inspections — 保守会社×点検種別紐付け (id, vendor_id, inspection_id, status)
+ *   signage_building_equipment — 建物設備 (id, property_code, inspection_type_id, vendor_id, inspection_months, remarks)
+ *   signage_ad_slots          — 広告枠 (id, slot_index, image_url, caption, link_url, is_active)
+ *
+ * 注意: DBはsnake_case。script.js向けにcamelCase変換する場合は getAllMasterDataCamelCase() を使用。
+ *       admin.js/admin-masters.jsはsnake_caseのまま使用。
+ */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.47.0';
 
-// 環境変数から取得（本番環境では適切に設定）
 const SUPABASE_URL = window.SUPABASE_URL || 'YOUR_SUPABASE_URL';
 const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || 'YOUR_SUPABASE_ANON_KEY';
 
+/** @type {import('@supabase/supabase-js').SupabaseClient} */
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ========================================
 // 認証関連
 // ========================================
 
-// 認証状態の取得
+/**
+ * 現在の認証ユーザーを取得
+ * @returns {Promise<import('@supabase/supabase-js').User|null>}
+ */
 export async function getUser() {
   try {
     const { data: { user }, error } = await supabase.auth.getUser();
@@ -28,7 +50,12 @@ export async function getUser() {
   }
 }
 
-// ログイン
+/**
+ * メール+パスワードでログイン
+ * @param {string} email
+ * @param {string} password
+ * @returns {Promise<{user: object, session: object}>}
+ */
 export async function signIn(email, password) {
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
@@ -38,13 +65,16 @@ export async function signIn(email, password) {
   return data;
 }
 
-// ログアウト
+/** ログアウト */
 export async function signOut() {
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
 }
 
-// ユーザープロファイル取得
+/**
+ * 現在ユーザーのプロファイルを取得 (signage_profiles)
+ * @returns {Promise<{id: string, email: string, company_name: string, role: 'admin'|'user', vendor_id: string|null}|null>}
+ */
 export async function getProfile() {
   const user = await getUser();
   if (!user) return null;
@@ -63,7 +93,7 @@ export async function getProfile() {
   return data;
 }
 
-// 管理者チェック
+/** @returns {Promise<boolean>} 管理者かどうか */
 export async function isAdmin() {
   const profile = await getProfile();
   return profile?.role === 'admin';
@@ -73,6 +103,10 @@ export async function isAdmin() {
 // マスターデータ取得
 // ========================================
 
+/**
+ * 物件マスタ全件取得 (signage_master_properties)
+ * @returns {Promise<Array<{id: string, property_code: string, property_name: string, terminals: Array<{terminalId: string, supplement: string}>}>>}
+ */
 export async function getMasterProperties() {
   const { data, error } = await supabase
     .from('signage_master_properties')
@@ -82,6 +116,10 @@ export async function getMasterProperties() {
   return data;
 }
 
+/**
+ * 保守会社マスタ全件取得 (signage_master_vendors)
+ * @returns {Promise<Array<{id: string, vendor_name: string, emergency_contact: string|null, inspection_type: string|null}>>}
+ */
 export async function getMasterVendors() {
   const { data, error } = await supabase
     .from('signage_master_vendors')
@@ -91,6 +129,11 @@ export async function getMasterVendors() {
   return data;
 }
 
+/**
+ * 点検種別マスタ全件取得 (signage_master_inspection_types)
+ * 注意: DBカラムは inspection_name（≠inspection_type）。entriesテーブルのinspection_typeに入る値。
+ * @returns {Promise<Array<{id: string, inspection_name: string, template_no: string, default_text: string|null, category: string|null, show_on_board: boolean, sort_order: number}>>}
+ */
 export async function getMasterInspectionTypes() {
   const { data, error } = await supabase
     .from('signage_master_inspection_types')
@@ -101,8 +144,11 @@ export async function getMasterInspectionTypes() {
   return data;
 }
 
-// 全マスターデータを一括取得
-// 権限フィルター付き: 一般ユーザーは担当ビルのみ、管理者は全ビル
+/**
+ * 全マスターデータを一括取得（snake_case形式）
+ * admin.js/admin-masters.js で使用。権限に応じて物件をフィルタ。
+ * @returns {Promise<{properties: Array, vendors: Array, inspectionTypes: Array, categories: Array, templateImages: Array}>}
+ */
 export async function getAllMasterData() {
   const profile = await getProfile();
 
@@ -159,8 +205,12 @@ export async function getAllMasterData() {
   return { properties, vendors, inspectionTypes, categories, templateImages };
 }
 
-// マスターデータをキャメルケースに変換（script.js用）
-// 権限フィルター付き: 一般ユーザーは担当ビルのみ、管理者は全ビル
+/**
+ * 全マスターデータをcamelCase形式で取得（script.js/bulk用）
+ * property_code→propertyCode, vendor_name→vendorName, inspection_name→inspectionType 等に変換。
+ * 注意: notices配列のinspectionTypeはDBのinspection_name値が入る。
+ * @returns {Promise<{properties: Array<{propertyCode,propertyName,terminalId,supplement,address}>, vendors: Array<{id,vendorName,emergencyContact,inspectionType}>, categories: string[], notices: Array<{inspectionType,templateNo,noticeText,showOnBoard,...}>, templateImages: Array}>}
+ */
 export async function getAllMasterDataCamelCase() {
   const profile = await getProfile();
 
@@ -240,7 +290,10 @@ export async function getAllMasterDataCamelCase() {
 // Building-Vendor Relationships（物件×ベンダー紐付け）
 // ========================================
 
-// ユーザーの担当ビル一覧を取得（一般ユーザー用）
+/**
+ * ユーザーの担当ビル一覧を取得。管理者は全ビル、一般ユーザーはvendor_idに紐づくビルのみ。
+ * @returns {Promise<Array<{id: string, property_code: string, property_name: string, terminals: Array}>>}
+ */
 export async function getAssignedBuildings() {
   const profile = await getProfile();
   if (!profile) throw new Error('ログインが必要です');
@@ -277,7 +330,11 @@ export async function getAssignedBuildings() {
   return properties || [];
 }
 
-// 特定ベンダーの担当ビルを取得（管理者用）
+/**
+ * 特定保守会社の担当ビル一覧を取得（管理者用）
+ * @param {string} vendorId - signage_master_vendors.id
+ * @returns {Promise<Array<{id: string, property_code: string, property_name: string, terminals: Array}>>}
+ */
 export async function getBuildingsByVendor(vendorId) {
   // Step 1: 紐付けを取得
   const { data: relationships, error: relError } = await supabase
@@ -301,7 +358,11 @@ export async function getBuildingsByVendor(vendorId) {
   return properties || [];
 }
 
-// ビル×ベンダーの紐付け一覧を取得（管理者用）
+/**
+ * ビル×保守会社の紐付け一覧を取得（管理者用）
+ * @param {{vendorId?: string, status?: 'active'|'pending'|'deleted'}} filters
+ * @returns {Promise<Array<{id: string, property_code: string, vendor_id: string, status: string, signage_master_vendors: {vendor_name: string}}>>}
+ */
 export async function getBuildingVendors(filters = {}) {
   let query = supabase
     .from('building_vendors')
@@ -320,7 +381,10 @@ export async function getBuildingVendors(filters = {}) {
   return data;
 }
 
-// 承認待ちのビル追加リクエストを取得（管理者用）
+/**
+ * 承認待ちのビル追加リクエスト一覧を取得（status='pending'）
+ * @returns {Promise<Array<{id: string, property_code: string, vendor_id: string, signage_master_vendors: {vendor_name: string}}>>}
+ */
 export async function getPendingBuildingRequests() {
   const { data, error } = await supabase
     .from('building_vendors')
@@ -332,7 +396,11 @@ export async function getPendingBuildingRequests() {
   return data;
 }
 
-// ビル×ベンダー紐付けを追加（一般ユーザー: pending、管理者: active）
+/**
+ * ビル×保守会社紐付けを追加。一般ユーザーはpending（承認待ち）、管理者はactive。
+ * @param {string} propertyCode - signage_master_properties.property_code
+ * @param {string|null} [vendorId] - 省略時はprofile.vendor_idを使用
+ */
 export async function addBuildingVendor(propertyCode, vendorId = null) {
   const profile = await getProfile();
   if (!profile) throw new Error('ログインが必要です');
@@ -361,7 +429,7 @@ export async function addBuildingVendor(propertyCode, vendorId = null) {
   return data;
 }
 
-// ビル追加リクエストを承認（管理者のみ）
+/** ビル追加リクエストを承認（status: pending→active） @param {string} buildingVendorId */
 export async function approveBuildingRequest(buildingVendorId) {
   const user = await getUser();
   const { data, error } = await supabase
@@ -378,7 +446,7 @@ export async function approveBuildingRequest(buildingVendorId) {
   return data;
 }
 
-// ビル追加リクエストを却下（削除）（管理者のみ）
+/** ビル追加リクエストを却下（レコード削除） @param {string} buildingVendorId */
 export async function rejectBuildingRequest(buildingVendorId) {
   const { error } = await supabase
     .from('building_vendors')
@@ -388,7 +456,7 @@ export async function rejectBuildingRequest(buildingVendorId) {
   if (error) throw error;
 }
 
-// ビル×ベンダー紐付けを削除（非表示化）
+/** ビル×保守会社紐付けを論理削除（status→'deleted'） @param {string} buildingVendorId */
 export async function removeBuildingVendor(buildingVendorId) {
   const { data, error} = await supabase
     .from('building_vendors')
@@ -405,7 +473,11 @@ export async function removeBuildingVendor(buildingVendorId) {
 // Vendor-Inspection Relationships（ベンダー×点検種別紐付け）
 // ========================================
 
-// ベンダーの点検種別紐付け一覧を取得
+/**
+ * 保守会社の点検種別紐付け一覧を取得
+ * @param {string} vendorId - signage_master_vendors.id
+ * @returns {Promise<Array<{id: string, vendor_id: string, inspection_id: string, signage_master_inspection_types: {inspection_name: string, category: string}}>>}
+ */
 export async function getVendorInspections(vendorId) {
   const { data, error } = await supabase
     .from('signage_vendor_inspections')
@@ -418,7 +490,7 @@ export async function getVendorInspections(vendorId) {
   return data;
 }
 
-// ベンダー×点検種別の紐付けを追加
+/** 保守会社×点検種別の紐付けを追加 @param {string} vendorId @param {string} inspectionId */
 export async function addVendorInspection(vendorId, inspectionId) {
   const { data, error } = await supabase
     .from('signage_vendor_inspections')
@@ -434,7 +506,7 @@ export async function addVendorInspection(vendorId, inspectionId) {
   return data;
 }
 
-// ベンダー×点検種別の紐付けを削除（非表示化）
+/** 保守会社×点検種別の紐付けを論理削除（status→'inactive'） @param {string} relationshipId */
 export async function removeVendorInspection(relationshipId) {
   const { data, error } = await supabase
     .from('signage_vendor_inspections')
@@ -451,6 +523,7 @@ export async function removeVendorInspection(relationshipId) {
 // 点検データCRUD
 // ========================================
 
+/** 全エントリ取得（新しい順） @returns {Promise<Array>} signage_entries全件 */
 export async function getEntries() {
   const { data, error } = await supabase
     .from('signage_entries')
@@ -460,7 +533,7 @@ export async function getEntries() {
   return data;
 }
 
-// #7: 当月以降のユーザーエントリを取得（作成データセクション用）
+/** 当月以降のログインユーザーのエントリを取得 @returns {Promise<Array>} */
 export async function getUserEntriesCurrentMonth() {
   const user = await getUser();
   if (!user) return [];
@@ -484,6 +557,10 @@ export async function getUserEntriesCurrentMonth() {
   return data || [];
 }
 
+/**
+ * エントリ1件作成。user_idは自動付与。
+ * @param {Object} entry - property_code, terminal_id, vendor_name, inspection_type, inspection_start等
+ */
 export async function createEntry(entry) {
   const user = await getUser();
   if (!user) throw new Error('ログインが必要です');
@@ -496,6 +573,7 @@ export async function createEntry(entry) {
   return data;
 }
 
+/** エントリ複数件一括作成 @param {Array<Object>} entries */
 export async function createEntries(entries) {
   const user = await getUser();
   if (!user) throw new Error('ログインが必要です');
@@ -508,6 +586,7 @@ export async function createEntries(entries) {
   return data;
 }
 
+/** エントリ更新 @param {string} id @param {Object} entry - 更新するフィールド */
 export async function updateEntry(id, entry) {
   const { data, error } = await supabase
     .from('signage_entries')
@@ -519,6 +598,7 @@ export async function updateEntry(id, entry) {
   return data;
 }
 
+/** エントリ物理削除 @param {string} id */
 export async function deleteEntry(id) {
   const { error } = await supabase
     .from('signage_entries')
@@ -531,6 +611,10 @@ export async function deleteEntry(id) {
 // 管理者用: 全データ取得
 // ========================================
 
+/**
+ * 管理者用: フィルタ付きエントリ全件取得
+ * @param {{propertyCode?: string, startDate?: string, endDate?: string, status?: string, statusArray?: string[], vendorName?: string}} filters
+ */
 export async function getAllEntries(filters = {}) {
   let query = supabase
     .from('signage_entries')
@@ -563,7 +647,11 @@ export async function getAllEntries(filters = {}) {
   return data;
 }
 
-// ステータス一括更新
+/**
+ * エントリのステータス一括更新
+ * @param {string[]} ids
+ * @param {'pending'|'draft'|'ready'|'exported'} status
+ */
 export async function updateEntriesStatusBulk(ids, status) {
   const { data, error } = await supabase
     .from('signage_entries')
@@ -578,6 +666,10 @@ export async function updateEntriesStatusBulk(ids, status) {
 // 管理者用: マスターデータ管理
 // ========================================
 
+/**
+ * 物件追加
+ * @param {{property_code: string|number, property_name: string, terminals: Array<{terminalId: string, supplement: string}>}} property
+ */
 export async function addProperty(property) {
   const record = {
     property_code: property.property_code,
@@ -593,6 +685,7 @@ export async function addProperty(property) {
   return data;
 }
 
+/** 物件更新 @param {string} id @param {{property_code: string|number, property_name: string, terminals: Array}} property */
 export async function updateProperty(id, property) {
   const record = {
     property_code: property.property_code,
@@ -609,6 +702,7 @@ export async function updateProperty(id, property) {
   return data;
 }
 
+/** 物件削除 @param {string} id */
 export async function deleteProperty(id) {
   const { error } = await supabase
     .from('signage_master_properties')
@@ -617,6 +711,7 @@ export async function deleteProperty(id) {
   if (error) throw error;
 }
 
+/** 保守会社追加 @param {{vendor_name: string, emergency_contact?: string, inspection_type?: string}} vendor */
 export async function addVendor(vendor) {
   const { data, error } = await supabase
     .from('signage_master_vendors')
@@ -627,6 +722,7 @@ export async function addVendor(vendor) {
   return data;
 }
 
+/** 保守会社更新 @param {string} id @param {Object} vendor */
 export async function updateVendor(id, vendor) {
   const { data, error } = await supabase
     .from('signage_master_vendors')
@@ -638,6 +734,7 @@ export async function updateVendor(id, vendor) {
   return data;
 }
 
+/** 保守会社削除 @param {string} id */
 export async function deleteVendor(id) {
   const { error } = await supabase
     .from('signage_master_vendors')
@@ -646,6 +743,11 @@ export async function deleteVendor(id) {
   if (error) throw error;
 }
 
+/**
+ * 点検種別追加
+ * @param {{inspection_name: string, template_no?: string, default_text?: string, category?: string, show_on_board?: boolean, sort_order?: number}} inspectionType
+ * 注意: inspection_name がユーザーに表示される「点検種別名」。entries.inspection_type に格納される値。
+ */
 export async function addInspectionType(inspectionType) {
   const { data, error } = await supabase
     .from('signage_master_inspection_types')
@@ -656,6 +758,7 @@ export async function addInspectionType(inspectionType) {
   return data;
 }
 
+/** 点検種別更新 @param {string} id @param {Object} inspectionType */
 export async function updateInspectionType(id, inspectionType) {
   const { data, error } = await supabase
     .from('signage_master_inspection_types')
@@ -667,6 +770,7 @@ export async function updateInspectionType(id, inspectionType) {
   return data;
 }
 
+/** 点検種別削除 @param {string} id */
 export async function deleteInspectionType(id) {
   const { error } = await supabase
     .from('signage_master_inspection_types')
@@ -679,6 +783,7 @@ export async function deleteInspectionType(id) {
 // 管理者用: ユーザー管理
 // ========================================
 
+/** 全ユーザープロファイル取得（管理者用） @returns {Promise<Array>} */
 export async function getAllProfiles() {
   const { data, error } = await supabase
     .from('signage_profiles')
@@ -688,6 +793,7 @@ export async function getAllProfiles() {
   return data;
 }
 
+/** ユーザーロール変更 @param {string} id @param {'admin'|'user'} role */
 export async function updateProfileRole(id, role) {
   const { data, error } = await supabase
     .from('signage_profiles')
@@ -699,7 +805,7 @@ export async function updateProfileRole(id, role) {
   return data;
 }
 
-// ユーザープロファイル更新（管理者用）
+/** ユーザープロファイル更新（管理者用） @param {string} id @param {Object} updates */
 export async function updateUserProfile(id, updates) {
   console.log('🔍 UPDATE開始:', { id, updates });
 
@@ -734,7 +840,7 @@ export async function updateUserProfile(id, updates) {
   return profile;
 }
 
-// ユーザーのステータス変更（管理者用）
+/** ユーザーステータス変更 @param {string} id @param {string} status */
 export async function updateUserStatus(id, status) {
   const { data, error } = await supabase
     .from('signage_profiles')
@@ -746,7 +852,14 @@ export async function updateUserStatus(id, status) {
   return data;
 }
 
-// ユーザー作成（管理者用）- 直接パスワード設定
+/**
+ * ユーザー作成（管理者用）。signUp→プロファイルupsert→管理者セッション復元。
+ * @param {string} email
+ * @param {string} password - 6文字以上
+ * @param {string} companyName
+ * @param {'admin'|'user'} role
+ * @param {string|null} [vendorId] - signage_master_vendors.id
+ */
 export async function createUser(email, password, companyName, role, vendorId = null) {
   // 現在のセッションを保存
   const { data: { session: currentSession } } = await supabase.auth.getSession();
@@ -827,6 +940,7 @@ export async function createUser(email, password, companyName, role, vendorId = 
 // 管理者用: 承認ワークフロー
 // ========================================
 
+/** 承認待ちエントリ取得（status='draft'） @returns {Promise<Array>} */
 export async function getPendingEntries() {
   const { data, error } = await supabase
     .from('signage_entries')
@@ -837,6 +951,7 @@ export async function getPendingEntries() {
   return data;
 }
 
+/** エントリ承認（status: draft→ready） @param {string} id */
 export async function approveEntry(id) {
   const { data, error } = await supabase
     .from('signage_entries')
@@ -850,6 +965,7 @@ export async function approveEntry(id) {
   return data;
 }
 
+/** エントリ一括承認 @param {string[]} ids */
 export async function approveEntries(ids) {
   const { data, error } = await supabase
     .from('signage_entries')
@@ -862,6 +978,7 @@ export async function approveEntries(ids) {
   return data;
 }
 
+/** エントリ却下（物理削除） @param {string} id @param {string} [reason] */
 export async function rejectEntry(id, reason = '') {
   // 却下 = 削除（スキーマにrejectedステータスがないため）
   // reason は将来的にログや通知で使用可能（現在は未使用）
@@ -873,7 +990,7 @@ export async function rejectEntry(id, reason = '') {
   return { id, reason };
 }
 
-// 申請処理（pending → draft）
+/** エントリ申請（pending→draft） @param {string} id */
 export async function submitEntry(id) {
   const { data, error } = await supabase
     .from('signage_entries')
@@ -885,7 +1002,7 @@ export async function submitEntry(id) {
   return data;
 }
 
-// 複数件の申請処理
+/** エントリ一括申請 @param {string[]} ids */
 export async function submitEntries(ids) {
   const { data, error } = await supabase
     .from('signage_entries')
@@ -896,7 +1013,7 @@ export async function submitEntries(ids) {
   return data;
 }
 
-// 未申請に戻す（管理者用）
+/** 未申請に戻す（status→'pending'） @param {string} id */
 export async function revertToPending(id) {
   const { data, error } = await supabase
     .from('signage_entries')
@@ -912,6 +1029,7 @@ export async function revertToPending(id) {
 // 設定管理
 // ========================================
 
+/** 設定全件取得 @returns {Promise<Array<{setting_key: string, setting_value: string}>>} */
 export async function getSettings() {
   const { data, error } = await supabase
     .from('signage_master_settings')
@@ -920,6 +1038,7 @@ export async function getSettings() {
   return data;
 }
 
+/** 設定値取得 @param {string} key @returns {Promise<string|null>} */
 export async function getSetting(key) {
   const { data, error } = await supabase
     .from('signage_master_settings')
@@ -930,6 +1049,7 @@ export async function getSetting(key) {
   return data?.setting_value;
 }
 
+/** 設定値更新（upsert） @param {string} key @param {string|number} value */
 export async function updateSetting(key, value) {
   const { data, error } = await supabase
     .from('signage_master_settings')
@@ -944,6 +1064,7 @@ export async function updateSetting(key, value) {
   return data;
 }
 
+/** 設定一括更新 @param {Object<string, string|number>} settings - {key: value}形式 */
 export async function updateSettings(settings) {
   const updates = Object.entries(settings).map(([key, value]) => ({
     setting_key: key,
@@ -963,6 +1084,7 @@ export async function updateSettings(settings) {
 // カテゴリ管理
 // ========================================
 
+/** カテゴリマスタ全件取得 @returns {Promise<Array<{id: string, category_name: string, sort_order: number}>>} */
 export async function getMasterCategories() {
   const { data, error } = await supabase
     .from('signage_master_categories')
@@ -972,6 +1094,7 @@ export async function getMasterCategories() {
   return data;
 }
 
+/** カテゴリ追加 @param {{category_name: string, sort_order?: number}} categoryData */
 export async function addCategory(categoryData) {
   const { data, error } = await supabase
     .from('signage_master_categories')
@@ -982,6 +1105,7 @@ export async function addCategory(categoryData) {
   return data;
 }
 
+/** カテゴリ更新 @param {string} id @param {Object} categoryData */
 export async function updateCategory(id, categoryData) {
   const { data, error } = await supabase
     .from('signage_master_categories')
@@ -993,6 +1117,7 @@ export async function updateCategory(id, categoryData) {
   return data;
 }
 
+/** カテゴリ削除 @param {string} id */
 export async function deleteCategory(id) {
   const { error } = await supabase
     .from('signage_master_categories')
@@ -1005,6 +1130,7 @@ export async function deleteCategory(id) {
 // テンプレート画像マスタ管理
 // ========================================
 
+/** テンプレート画像マスタ全件取得 @returns {Promise<Array<{id: string, image_key: string, display_name: string, image_url: string, category: string|null, sort_order: number}>>} */
 export async function getMasterTemplateImages() {
   const { data, error } = await supabase
     .from('signage_master_template_images')
@@ -1015,6 +1141,7 @@ export async function getMasterTemplateImages() {
   return data;
 }
 
+/** テンプレート画像追加 @param {{image_key: string, display_name: string, image_url: string, category?: string, sort_order?: number}} templateImage */
 export async function addTemplateImage(templateImage) {
   const { data, error } = await supabase
     .from('signage_master_template_images')
@@ -1025,6 +1152,7 @@ export async function addTemplateImage(templateImage) {
   return data;
 }
 
+/** テンプレート画像更新 @param {string} id @param {Object} templateImage */
 export async function updateTemplateImage(id, templateImage) {
   const { data, error } = await supabase
     .from('signage_master_template_images')
@@ -1036,6 +1164,7 @@ export async function updateTemplateImage(id, templateImage) {
   return data;
 }
 
+/** テンプレート画像削除 @param {string} id */
 export async function deleteTemplateImage(id) {
   const { error } = await supabase
     .from('signage_master_template_images')
@@ -1044,7 +1173,7 @@ export async function deleteTemplateImage(id) {
   if (error) throw error;
 }
 
-// テンプレート画像をStorageにアップロード
+/** テンプレート画像をStorageにアップロード @param {File} file @param {string} imageKey @returns {Promise<string>} publicUrl */
 export async function uploadTemplateImageFile(file, imageKey) {
   if (!file) return null;
 
@@ -1086,7 +1215,7 @@ export async function uploadTemplateImageFile(file, imageKey) {
   return urlData.publicUrl;
 }
 
-// テンプレート画像をStorageから削除
+/** テンプレート画像をStorageから削除 @param {string} imageUrl */
 export async function deleteTemplateImageFile(imageUrl) {
   if (!imageUrl) return;
 
@@ -1124,7 +1253,7 @@ function base64ToBlob(base64Data) {
   return new Blob([byteArray], { type: mimeType });
 }
 
-// 画像をStorageにアップロードしてURLを返す
+/** カスタムポスター画像をbase64からアップロード @param {string} base64Data @returns {Promise<string|null>} publicUrl */
 export async function uploadPosterImage(base64Data) {
   if (!base64Data) return null;
 
@@ -1161,7 +1290,7 @@ export async function uploadPosterImage(base64Data) {
   return urlData.publicUrl;
 }
 
-// 画像を削除
+/** ポスター画像をStorageから削除 @param {string} imageUrl */
 export async function deletePosterImage(imageUrl) {
   if (!imageUrl) return;
 
@@ -1184,7 +1313,7 @@ export async function deletePosterImage(imageUrl) {
 // 広告枠管理 (v1.24.0)
 // ========================================
 
-// 広告枠データ取得（未認証でも呼び出し可能）
+/** 広告枠データ取得（slot_index 1-7） @returns {Promise<Array<{slot_index: number, image_url: string|null, caption: string, link_url: string, is_active: boolean}>>} */
 export async function getAdSlots() {
   const { data, error } = await supabase
     .from('signage_ad_slots')
@@ -1194,7 +1323,7 @@ export async function getAdSlots() {
   return data;
 }
 
-// 広告枠更新（管理者のみ）
+/** 広告枠更新 @param {number} slotIndex 1-7 @param {{imageUrl?: string, caption?: string, linkUrl?: string, isActive?: boolean}} data */
 export async function upsertAdSlot(slotIndex, { imageUrl, caption, linkUrl, isActive }) {
   const { error } = await supabase
     .from('signage_ad_slots')
@@ -1209,7 +1338,7 @@ export async function upsertAdSlot(slotIndex, { imageUrl, caption, linkUrl, isAc
   if (error) throw error;
 }
 
-// 広告枠画像アップロード（バケット: poster-images/ads/ に保存）
+/** 広告枠画像アップロード @param {File} file @param {number} slotIndex @returns {Promise<string|null>} publicUrl */
 export async function uploadAdImage(file, slotIndex) {
   if (!file) return null;
 
@@ -1246,7 +1375,7 @@ export async function uploadAdImage(file, slotIndex) {
   return urlData.publicUrl;
 }
 
-// 広告枠画像削除
+/** 広告枠画像削除 @param {string} imageUrl */
 export async function deleteAdImage(imageUrl) {
   if (!imageUrl) return;
 
@@ -1268,7 +1397,11 @@ export async function deleteAdImage(imageUrl) {
 // 建物設備管理
 // ========================================
 
-// 設備情報取得（物件コード指定）
+/**
+ * 設備情報取得（物件コード指定）
+ * @param {string} propertyCode - 物件コード（signage_master_properties.property_code）
+ * @returns {Promise<Array<{id: number, property_code: string, equipment_name: string, location: string, created_at: string}>>}
+ */
 export async function getBuildingEquipment(propertyCode) {
   const { data, error } = await supabase
     .from('signage_building_equipment')
@@ -1279,7 +1412,11 @@ export async function getBuildingEquipment(propertyCode) {
   return data || [];
 }
 
-// 設備情報追加
+/**
+ * 設備情報追加
+ * @param {{property_code: string, equipment_name: string, location?: string}} equipment - DBカラム名(snake_case)で指定
+ * @returns {Promise<Object>} 挿入されたレコード
+ */
 export async function addBuildingEquipment(equipment) {
   const { data, error } = await supabase
     .from('signage_building_equipment')
@@ -1290,7 +1427,10 @@ export async function addBuildingEquipment(equipment) {
   return data;
 }
 
-// 設備情報削除
+/**
+ * 設備情報削除
+ * @param {number} id - signage_building_equipment.id
+ */
 export async function deleteBuildingEquipment(id) {
   const { error } = await supabase
     .from('signage_building_equipment')
