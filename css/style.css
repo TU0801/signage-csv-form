@@ -795,6 +795,17 @@ textarea:required {
     background: #eff6ff;
 }
 
+/* sticky列: submitted行対応 */
+.data-table tbody tr.submitted td:first-child,
+.data-table tbody tr.submitted td:last-child {
+    background: #f0fdf4;
+}
+
+.data-table tbody tr.submitted:hover td:first-child,
+.data-table tbody tr.submitted:hover td:last-child {
+    background: #dcfce7;
+}
+
 .data-table thead th:first-child,
 .data-table thead th:last-child {
     z-index: 3;
