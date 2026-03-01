@@ -750,6 +750,10 @@ textarea:required {
     font-size: 0.875rem;
 }
 
+.data-table tbody tr {
+    background: white;
+}
+
 .data-table tbody tr:nth-child(even) {
     background: #f9fafb;
 }
@@ -783,27 +787,10 @@ textarea:required {
     box-shadow: -2px 0 4px rgba(0,0,0,0.05);
 }
 
-/* sticky列: 偶数行の網掛け対応 */
-.data-table tbody tr:nth-child(even) td:first-child,
-.data-table tbody tr:nth-child(even) td:last-child {
-    background: #f9fafb;
-}
-
-/* sticky列: hover対応 */
-.data-table tbody tr:hover td:first-child,
-.data-table tbody tr:hover td:last-child {
-    background: #eff6ff;
-}
-
-/* sticky列: submitted行対応 */
-.data-table tbody tr.submitted td:first-child,
-.data-table tbody tr.submitted td:last-child {
-    background: #f0fdf4;
-}
-
-.data-table tbody tr.submitted:hover td:first-child,
-.data-table tbody tr.submitted:hover td:last-child {
-    background: #dcfce7;
+/* sticky列: TRの背景色を自動継承 */
+.data-table tbody td:first-child,
+.data-table tbody td:last-child {
+    background: inherit;
 }
 
 .data-table thead th:first-child,
