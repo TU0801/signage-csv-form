@@ -125,34 +125,27 @@ export function SingleEntryPage() {
       return;
     }
     const last = localEntries[localEntries.length - 1]!;
+    const inspType = inspectionTypes.find(
+      (t) => t.inspection_name === last.inspectionType,
+    );
+
     setValue('propertyCode', last.propertyCode);
     cascading.handlePropertyChange(last.propertyCode);
 
-    // setTimeout で cascade 連動が完了した後にセット
+    // cascade 連動の完了後にフィールドをセット
     setTimeout(() => {
       setValue('terminalId', last.terminalId);
       setValue('vendorName', last.vendorName);
 
       const vendor = vendors.find((v) => v.vendor_name === last.vendorName);
-      if (vendor) {
-        setValue('emergencyContact', vendor.emergency_contact ?? '');
-      }
+      setValue('emergencyContact', vendor?.emergency_contact ?? '');
 
-      if (last.inspectionType) {
-        // カテゴリの特定
-        const inspType = inspectionTypes.find(
-          (t) => t.inspection_name === last.inspectionType,
-        );
-        if (inspType?.category_id) {
-          cascading.handleCategoryChange(inspType.category_id);
-        }
+      if (inspType?.category_id) {
+        cascading.handleCategoryChange(inspType.category_id);
       }
 
       setTimeout(() => {
         setValue('inspectionType', last.inspectionType);
-        const inspType = inspectionTypes.find(
-          (t) => t.inspection_name === last.inspectionType,
-        );
         if (inspType) {
           setValue('templateNo', inspType.template_no);
         }

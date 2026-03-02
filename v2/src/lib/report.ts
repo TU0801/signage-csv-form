@@ -1,11 +1,13 @@
-import * as XLSX from 'xlsx';
 import type { DbEntry, DbProperty } from '@/types/database';
+import { formatDateSlash, formatDateTime } from './utils';
 
 /** 点検レポートをXLSXファイルとしてダウンロード */
-export function exportInspectionReport(
+export async function exportInspectionReport(
   entries: DbEntry[],
   properties: DbProperty[],
-): void {
+): Promise<void> {
+  const XLSX = await import('xlsx');
+
   const headers = [
     '物件コード',
     '物件名',
@@ -17,25 +19,20 @@ export function exportInspectionReport(
     '登録日時',
   ];
 
-  const data = entries.map((entry) => {
-    const prop = properties.find((p) => p.property_code === entry.property_code);
-    return [
-      entry.property_code || '',
-      prop?.property_name || '',
-      entry.inspection_type || '',
-      entry.inspection_start
-        ? new Date(entry.inspection_start).toLocaleDateString('ja-JP')
-        : '',
-      entry.inspection_end
-        ? new Date(entry.inspection_end).toLocaleDateString('ja-JP')
-        : '',
-      entry.remarks || '',
-      entry.vendor_name || '',
-      entry.created_at ? new Date(entry.created_at).toLocaleString('ja-JP') : '',
-    ];
-  });
+  const propertyMap = new Map(properties.map((p) => [p.property_code, p.property_name]));
 
-  const now = new Date().toLocaleString('ja-JP');
+  const data = entries.map((entry) => [
+    entry.property_code || '',
+    propertyMap.get(entry.property_code) || '',
+    entry.inspection_type || '',
+    entry.inspection_start ? formatDateSlash(entry.inspection_start) : '',
+    entry.inspection_end ? formatDateSlash(entry.inspection_end) : '',
+    entry.remarks || '',
+    entry.vendor_name || '',
+    entry.created_at ? formatDateTime(entry.created_at) : '',
+  ]);
+
+  const now = formatDateTime(new Date());
   const titleRows: (string | number)[][] = [
     ['点検レポート'],
     [`出力日時: ${now}`],

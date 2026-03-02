@@ -2,13 +2,11 @@ import { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { useToast } from '@/components/ui/Toast';
-import { useMasterData } from '@/hooks/useMasterData';
+import { supabase, TABLES } from '@/lib/supabase';
 import { EntryStatus } from '@/lib/constants';
 import { generateCsv, downloadCsv, copyCsvToClipboard } from '@/lib/csv';
-import { exportInspectionReport } from '@/lib/report';
-import { downloadCustomImages } from '@/lib/zipDownload';
 import type { CsvEntry } from '@/lib/csv';
-import type { DbEntry } from '@/types/database';
+import type { DbEntry, DbProperty } from '@/types/database';
 import { formatDateISO } from '@/lib/utils';
 
 interface EntryActionsProps {
@@ -54,7 +52,6 @@ export function EntryActions({
   onClearSelection,
 }: EntryActionsProps) {
   const { addToast } = useToast();
-  const { properties } = useMasterData();
   const [downloading, setDownloading] = useState(false);
 
   const handleExportCsv = useCallback(() => {
@@ -100,18 +97,22 @@ export function EntryActions({
     [selectedEntries, onStatusChange, onClearSelection, addToast],
   );
 
-  const handleExportReport = useCallback(() => {
+  const handleExportReport = useCallback(async () => {
     if (selectedEntries.length === 0) {
       addToast('レポート対象を選択してください', 'warning');
       return;
     }
     try {
-      exportInspectionReport(selectedEntries, properties);
+      const [{ exportInspectionReport }, { data }] = await Promise.all([
+        import('@/lib/report'),
+        supabase.from(TABLES.properties).select('*').order('property_code'),
+      ]);
+      exportInspectionReport(selectedEntries, (data ?? []) as DbProperty[]);
       addToast('点検レポートをダウンロードしました', 'success');
     } catch {
       addToast('レポートの生成に失敗しました', 'error');
     }
-  }, [selectedEntries, properties, addToast]);
+  }, [selectedEntries, addToast]);
 
   const handleDownloadImages = useCallback(async () => {
     if (selectedEntries.length === 0) {
@@ -120,6 +121,7 @@ export function EntryActions({
     }
     setDownloading(true);
     try {
+      const { downloadCustomImages } = await import('@/lib/zipDownload');
       const count = await downloadCustomImages(selectedEntries);
       if (count === 0) {
         addToast('ダウンロード対象の追加画像がありません', 'info');

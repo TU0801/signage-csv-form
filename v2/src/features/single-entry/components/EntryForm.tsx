@@ -1,9 +1,11 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type { UseFormReturn } from 'react-hook-form';
 import { Input } from '@/components/ui/Input';
 import { TextArea } from '@/components/ui/TextArea';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
+import { useToast } from '@/components/ui/Toast';
+import { validateImageFile } from '@/lib/storage';
 import type { EntryFormData } from '@/types/app';
 import type { DbProperty, DbVendor, DbInspectionType } from '@/types/database';
 import type { Terminal } from '@/types/database';
@@ -63,6 +65,7 @@ export function EntryForm({
     watch,
     formState: { errors },
   } = form;
+  const { addToast } = useToast();
 
   const templateNo = watch('templateNo');
   const posterType = watch('posterType');
@@ -72,25 +75,38 @@ export function EntryForm({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // posterType 変更時にカスタム画像をクリア + URL リーク防止
+  useEffect(() => {
+    if (posterType !== 'custom' && previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+      setCustomImageFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }, [posterType]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // アンマウント時の URL リーク防止
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
   const handleImageSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
-    if (!validTypes.includes(file.type)) {
-      alert('JPG, JPEG, PNG形式の画像を選択してください');
-      e.target.value = '';
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      alert('画像サイズは5MB以下にしてください');
+    try {
+      validateImageFile(file);
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : 'ファイルが不正です', 'error');
       e.target.value = '';
       return;
     }
 
     setCustomImageFile(file);
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(URL.createObjectURL(file));
   };
 
   const handleClearImage = () => {

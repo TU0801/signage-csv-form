@@ -1,5 +1,3 @@
-import JSZip from 'jszip';
-import { saveAs } from 'file-saver';
 import type { DbEntry } from '@/types/database';
 
 /** カスタムポスター画像をZIPでダウンロード */
@@ -12,18 +10,27 @@ export async function downloadCustomImages(entries: DbEntry[]): Promise<number> 
     return 0;
   }
 
+  const [JSZip, { saveAs }] = await Promise.all([
+    import('jszip').then((m) => m.default),
+    import('file-saver'),
+  ]);
+
   const zip = new JSZip();
 
-  for (const entry of customEntries) {
-    try {
+  const results = await Promise.allSettled(
+    customEntries.map(async (entry) => {
       const response = await fetch(entry.poster_image!);
       const blob = await response.blob();
       const safeCode = (entry.property_code || 'unknown').replace(/[/\\:*?"<>|]/g, '_');
       const safeType = (entry.inspection_type || 'unknown').replace(/[/\\:*?"<>|]/g, '_');
       const filename = `${safeCode}_${safeType}_${entry.id.slice(0, 8)}.jpg`;
-      zip.file(filename, blob);
-    } catch (err) {
-      console.error(`Failed to fetch image for entry ${entry.id}:`, err);
+      return { filename, blob };
+    }),
+  );
+
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      zip.file(result.value.filename, result.value.blob);
     }
   }
 

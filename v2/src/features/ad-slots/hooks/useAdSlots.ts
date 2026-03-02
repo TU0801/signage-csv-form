@@ -4,7 +4,7 @@ import type { DbAdSlot } from '@/types/database';
 
 const SLOT_COUNT = 7;
 
-export function useAdSlots() {
+export function useAdSlots({ activeOnly = false } = {}) {
   const [slots, setSlots] = useState<DbAdSlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -13,10 +13,14 @@ export function useAdSlots() {
     setLoading(true);
     setError(null);
     try {
-      const { data, error: err } = await supabase
+      let query = supabase
         .from(TABLES.adSlots)
         .select('*')
         .order('slot_index');
+      if (activeOnly) {
+        query = query.eq('is_active', true);
+      }
+      const { data, error: err } = await query;
       if (err) throw err;
       setSlots((data ?? []) as DbAdSlot[]);
     } catch (err) {
@@ -24,7 +28,7 @@ export function useAdSlots() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeOnly]);
 
   useEffect(() => {
     fetchSlots();

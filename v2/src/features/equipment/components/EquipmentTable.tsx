@@ -1,7 +1,8 @@
+import { useMemo } from 'react';
 import { Button } from '@/components/ui/Button';
 import type { DbBuildingEquipment, DbInspectionType, DbVendor } from '@/types/database';
 
-const MONTH_LABELS = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+const MONTH_LABELS = Array.from({ length: 12 }, (_, i) => `${i + 1}月`);
 
 interface EquipmentTableProps {
   items: DbBuildingEquipment[];
@@ -11,11 +12,14 @@ interface EquipmentTableProps {
 }
 
 export function EquipmentTable({ items, inspectionTypes, vendors, onDelete }: EquipmentTableProps) {
-  const getInspectionName = (id: string) =>
-    inspectionTypes.find((t) => t.id === id)?.inspection_name ?? id;
-
-  const getVendorName = (id: string | null) =>
-    id ? (vendors.find((v) => v.id === id)?.vendor_name ?? id) : '-';
+  const inspectionMap = useMemo(
+    () => new Map(inspectionTypes.map((t) => [t.id, t.inspection_name])),
+    [inspectionTypes],
+  );
+  const vendorMap = useMemo(
+    () => new Map(vendors.map((v) => [v.id, v.vendor_name])),
+    [vendors],
+  );
 
   const formatMonths = (months: number[] | null) =>
     months && months.length > 0 ? months.map((m) => MONTH_LABELS[m - 1] ?? m).join(', ') : '-';
@@ -40,8 +44,8 @@ export function EquipmentTable({ items, inspectionTypes, vendors, onDelete }: Eq
         <tbody>
           {items.map((item) => (
             <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50">
-              <td className="px-3 py-2">{getInspectionName(item.inspection_type_id)}</td>
-              <td className="px-3 py-2">{getVendorName(item.vendor_id)}</td>
+              <td className="px-3 py-2">{inspectionMap.get(item.inspection_type_id) ?? item.inspection_type_id}</td>
+              <td className="px-3 py-2">{item.vendor_id ? (vendorMap.get(item.vendor_id) ?? item.vendor_id) : '-'}</td>
               <td className="px-3 py-2">{formatMonths(item.inspection_months)}</td>
               <td className="px-3 py-2 max-w-[200px] truncate">{item.remarks ?? '-'}</td>
               <td className="px-3 py-2 max-w-[200px] truncate">{item.remarks2 ?? '-'}</td>

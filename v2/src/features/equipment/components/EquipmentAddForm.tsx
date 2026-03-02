@@ -4,7 +4,7 @@ import { Select } from '@/components/ui/Select';
 import { Input } from '@/components/ui/Input';
 import type { DbInspectionType, DbVendor } from '@/types/database';
 
-const MONTHS = Array.from({ length: 12 }, (_, i) => ({
+const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => ({
   value: String(i + 1),
   label: `${i + 1}月`,
 }));
@@ -97,7 +97,7 @@ export function EquipmentAddForm({
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">点検月</label>
         <div className="flex flex-wrap gap-2">
-          {MONTHS.map((m) => (
+          {MONTH_OPTIONS.map((m) => (
             <button
               key={m.value}
               type="button"

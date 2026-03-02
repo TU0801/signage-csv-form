@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
-import { useAdSlotsPublic } from '@/features/ad-slots/hooks/useAdSlotsPublic';
+import { useAdSlots } from '@/features/ad-slots/hooks/useAdSlots';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 
@@ -12,7 +12,7 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false);
   const signIn = useAuthStore((s) => s.signIn);
   const navigate = useNavigate();
-  const { slots } = useAdSlotsPublic();
+  const { slots } = useAdSlots({ activeOnly: true });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
