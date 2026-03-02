@@ -23,8 +23,8 @@ function createEmptyFormData(): EntryFormData {
     noticeText: '',
     remarks: '',
     posterType: 'template',
-    posterPosition: '',
-    frameNo: '',
+    posterPosition: '2',
+    frameNo: '2',
     showOnBoard: true,
   };
 }

@@ -4,7 +4,7 @@ import { entrySchema, type EntrySchemaType } from '../schemas/entrySchema';
 import { DEFAULT_DISPLAY_DURATION } from '@/lib/constants';
 import type { EntryFormData } from '@/types/app';
 
-const defaultValues: EntryFormData = {
+export const DEFAULT_ENTRY_FORM_DATA: EntryFormData = {
   propertyCode: '',
   terminalId: '',
   vendorName: '',
@@ -21,8 +21,8 @@ const defaultValues: EntryFormData = {
   noticeText: '',
   remarks: '',
   posterType: 'template',
-  posterPosition: '4',
-  frameNo: '1',
+  posterPosition: '2',
+  frameNo: '2',
   showOnBoard: true,
   customPosterUrl: '',
 };
@@ -30,12 +30,12 @@ const defaultValues: EntryFormData = {
 export function useEntryForm() {
   const form = useForm<EntryFormData>({
     resolver: zodResolver(entrySchema) as Resolver<EntryFormData>,
-    defaultValues,
+    defaultValues: DEFAULT_ENTRY_FORM_DATA,
     mode: 'onBlur',
   });
 
   const resetForm = () => {
-    form.reset(defaultValues);
+    form.reset(DEFAULT_ENTRY_FORM_DATA);
   };
 
   return {

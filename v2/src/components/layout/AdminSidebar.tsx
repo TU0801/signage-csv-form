@@ -1,8 +1,11 @@
+import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { supabase, TABLES } from '@/lib/supabase';
+import { EntryStatus } from '@/lib/constants';
 
 const adminNav = [
-  { to: '/admin', label: '承認', exact: true },
+  { to: '/admin', label: '承認', exact: true, showBadge: true },
   { to: '/admin/entries', label: 'データ一覧' },
   { to: '/admin/master', label: 'マスター管理' },
   { to: '/admin/relationships', label: '紐付け管理' },
@@ -13,6 +16,17 @@ const adminNav = [
 
 export function AdminSidebar() {
   const location = useLocation();
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    (async () => {
+      const { count } = await supabase
+        .from(TABLES.entries)
+        .select('*', { count: 'exact', head: true })
+        .eq('status', EntryStatus.PENDING);
+      setPendingCount(count ?? 0);
+    })();
+  }, [location.pathname]);
 
   const isActive = (item: (typeof adminNav)[number]) => {
     if (item.exact) return location.pathname === item.to;
@@ -27,13 +41,18 @@ export function AdminSidebar() {
             key={item.to}
             to={item.to}
             className={cn(
-              'block px-3 py-2 rounded-md text-sm font-medium transition-colors',
+              'flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-colors',
               isActive(item)
                 ? 'bg-blue-50 text-blue-700'
                 : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
             )}
           >
-            {item.label}
+            <span>{item.label}</span>
+            {item.showBadge && pendingCount > 0 && (
+              <span className="ml-2 inline-flex items-center justify-center rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold text-white min-w-[1.25rem]">
+                {pendingCount}
+              </span>
+            )}
           </Link>
         ))}
       </nav>

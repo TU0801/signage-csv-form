@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS signage_profiles (
   company_name TEXT,
   role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user')),
   vendor_id UUID REFERENCES signage_master_vendors(id),
+  is_active BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );

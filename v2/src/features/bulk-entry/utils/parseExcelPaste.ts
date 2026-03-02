@@ -1,5 +1,5 @@
 import type { EntryFormData } from '@/types/app';
-import { DEFAULT_DISPLAY_DURATION } from '@/lib/constants';
+import { DEFAULT_ENTRY_FORM_DATA } from '@/features/single-entry/hooks/useEntryForm';
 
 /**
  * TSVカラムヘッダーと EntryFormData フィールドのマッピング
@@ -36,28 +36,21 @@ const COLUMN_MAP: Record<string, keyof EntryFormData> = {
 };
 
 function createEmptyFormData(): EntryFormData {
-  return {
-    propertyCode: '',
-    terminalId: '',
-    vendorName: '',
-    emergencyContact: '',
-    inspectionType: '',
-    templateNo: '',
-    startDate: '',
-    endDate: '',
-    displayStartDate: '',
-    displayStartTime: '',
-    displayEndDate: '',
-    displayEndTime: '',
-    displayDuration: DEFAULT_DISPLAY_DURATION,
-    noticeText: '',
-    remarks: '',
-    posterType: 'template',
-    posterPosition: '',
-    frameNo: '',
-    showOnBoard: true,
-  };
+  return { ...DEFAULT_ENTRY_FORM_DATA };
 }
+
+/** ヘッダーなし時のデフォルトカラム順序（PasteModalでも参照） */
+export const DEFAULT_PASTE_COLUMNS: readonly (keyof EntryFormData)[] = [
+  'propertyCode',
+  'terminalId',
+  'vendorName',
+  'inspectionType',
+  'startDate',
+  'endDate',
+  'displayStartDate',
+  'displayEndDate',
+  'remarks',
+];
 
 /**
  * Normalize date strings: YYYY/MM/DD -> YYYY-MM-DD
@@ -94,17 +87,7 @@ export function parseExcelPaste(text: string): Partial<EntryFormData>[] {
     return trimmed in COLUMN_MAP;
   });
 
-  const DEFAULT_COLUMNS: (keyof EntryFormData)[] = [
-    'propertyCode',
-    'terminalId',
-    'vendorName',
-    'inspectionType',
-    'startDate',
-    'endDate',
-    'displayStartDate',
-    'displayEndDate',
-    'remarks',
-  ];
+  const DEFAULT_COLUMNS = DEFAULT_PASTE_COLUMNS;
 
   let columnMapping: (keyof EntryFormData | null)[];
   let dataLines: string[];

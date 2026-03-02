@@ -5,6 +5,7 @@ const STORAGE_KEY = 'signage-entries-filters';
 
 export interface EntriesFilters {
   propertyCode: string;
+  vendorName: string;
   status: EntryStatus | '';
   dateFrom: string;
   dateTo: string;
@@ -12,6 +13,7 @@ export interface EntriesFilters {
 
 const defaultFilters: EntriesFilters = {
   propertyCode: '',
+  vendorName: '',
   status: '',
   dateFrom: '',
   dateTo: '',
@@ -52,7 +54,7 @@ export function useEntriesFilters() {
     setFilters(defaultFilters);
   }, []);
 
-  const hasActiveFilters = filters.propertyCode !== '' || filters.status !== '' || filters.dateFrom !== '' || filters.dateTo !== '';
+  const hasActiveFilters = filters.propertyCode !== '' || filters.vendorName !== '' || filters.status !== '' || filters.dateFrom !== '' || filters.dateTo !== '';
 
   return {
     filters,

@@ -27,12 +27,12 @@ describe('entrySchema', () => {
     displayStartTime: '09:00',
     displayEndDate: '2026-04-30',
     displayEndTime: '18:00',
-    displayDuration: 10,
+    displayDuration: 6,
     noticeText: '点検のお知らせ',
     remarks: '備考テスト',
     posterType: 'template' as const,
-    posterPosition: '4',
-    frameNo: '1',
+    posterPosition: '2',
+    frameNo: '2',
     showOnBoard: true,
   };
 
@@ -95,7 +95,7 @@ describe('entrySchema', () => {
     const resultTemplate = entrySchema.safeParse({ ...validData, posterType: 'template' });
     expect(resultTemplate.success).toBe(true);
 
-    const resultCustom = entrySchema.safeParse({ ...validData, posterType: 'custom' });
+    const resultCustom = entrySchema.safeParse({ ...validData, posterType: 'custom', customPosterUrl: 'https://example.com/image.png' });
     expect(resultCustom.success).toBe(true);
 
     const resultInvalid = entrySchema.safeParse({ ...validData, posterType: 'invalid' });
@@ -111,12 +111,12 @@ describe('entrySchema', () => {
     }
   });
 
-  it('should default displayDuration to 10', () => {
+  it('should default displayDuration to 6', () => {
     const data = omit(validData, 'displayDuration');
     const result = entrySchema.safeParse(data);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.displayDuration).toBe(10);
+      expect(result.data.displayDuration).toBe(6);
     }
   });
 
@@ -138,21 +138,21 @@ describe('entrySchema', () => {
     }
   });
 
-  it('should default posterPosition to 4', () => {
+  it('should default posterPosition to 2', () => {
     const data = omit(validData, 'posterPosition');
     const result = entrySchema.safeParse(data);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.posterPosition).toBe('4');
+      expect(result.data.posterPosition).toBe('2');
     }
   });
 
-  it('should default frameNo to 1', () => {
+  it('should default frameNo to 2', () => {
     const data = omit(validData, 'frameNo');
     const result = entrySchema.safeParse(data);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.frameNo).toBe('1');
+      expect(result.data.frameNo).toBe('2');
     }
   });
 });

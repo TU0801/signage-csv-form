@@ -35,11 +35,11 @@ const posterTypeOptions = [
 ];
 
 const posterPositionOptions = [
-  { value: '0', label: '全面' },
-  { value: '1', label: '左上' },
-  { value: '2', label: '右上' },
-  { value: '3', label: '左下' },
-  { value: '4', label: '右下' },
+  { value: '1', label: '①上左' },
+  { value: '2', label: '②上中' },
+  { value: '3', label: '③上右' },
+  { value: '4', label: '④中央' },
+  { value: '0', label: '⓪全体' },
 ];
 
 export function EntryForm({

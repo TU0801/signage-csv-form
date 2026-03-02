@@ -17,6 +17,9 @@ export function useEntriesTable(filters: EntriesFilters) {
       if (filters.propertyCode) {
         query = query.eq('property_code', filters.propertyCode);
       }
+      if (filters.vendorName) {
+        query = query.eq('vendor_name', filters.vendorName);
+      }
       if (filters.status) {
         query = query.eq('status', filters.status);
       }
@@ -35,7 +38,7 @@ export function useEntriesTable(filters: EntriesFilters) {
     } finally {
       setLoading(false);
     }
-  }, [filters.propertyCode, filters.status, filters.dateFrom, filters.dateTo]);
+  }, [filters.propertyCode, filters.vendorName, filters.status, filters.dateFrom, filters.dateTo]);
 
   useEffect(() => {
     fetchEntries();

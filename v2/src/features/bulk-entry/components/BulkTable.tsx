@@ -4,6 +4,7 @@ import type { BulkRow, EntryFormData } from '@/types/app';
 import { useBulkStore } from '@/stores/bulkStore';
 import { useBulkTable } from '../hooks/useBulkTable';
 import { useBulkDragDrop } from '../hooks/useBulkDragDrop';
+import { ContextMenu } from './ContextMenu';
 import { Badge } from '@/components/ui/Badge';
 import { cn } from '@/lib/utils';
 
@@ -23,6 +24,9 @@ export function BulkTable({ onOpenRowDetail }: BulkTableProps) {
   const selectAll = useBulkStore((s) => s.selectAll);
   const clearSelection = useBulkStore((s) => s.clearSelection);
   const updateRow = useBulkStore((s) => s.updateRow);
+  const addRow = useBulkStore((s) => s.addRow);
+  const duplicateRows = useBulkStore((s) => s.duplicateRows);
+  const removeRows = useBulkStore((s) => s.removeRows);
   const rows = useBulkStore((s) => s.rows);
   const { handleDragStart, handleDragOver, handleDrop, handleDragEnd, draggedRowId } =
     useBulkDragDrop();
@@ -30,6 +34,12 @@ export function BulkTable({ onOpenRowDetail }: BulkTableProps) {
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
   const [editValue, setEditValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; rowId: string } | null>(null);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent, rowId: string) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, rowId });
+  }, []);
 
   const allSelected = rows.length > 0 && selectedIds.size === rows.length;
   const someSelected = selectedIds.size > 0 && !allSelected;
@@ -102,6 +112,7 @@ export function BulkTable({ onOpenRowDetail }: BulkTableProps) {
   }
 
   return (
+    <>
     <div className="overflow-x-auto rounded-lg border border-gray-200">
       <table className="w-full border-collapse text-sm">
         <thead>
@@ -158,6 +169,7 @@ export function BulkTable({ onOpenRowDetail }: BulkTableProps) {
                 onDragOver={handleDragOver}
                 onDrop={handleDrop(bulkRow._id)}
                 onDragEnd={handleDragEnd}
+                onContextMenu={(e) => handleContextMenu(e, bulkRow._id)}
                 className={cn(
                   'border-b transition-colors',
                   isSelected && 'bg-blue-50',
@@ -285,5 +297,33 @@ export function BulkTable({ onOpenRowDetail }: BulkTableProps) {
         </tbody>
       </table>
     </div>
+
+    {contextMenu && (
+      <ContextMenu
+        x={contextMenu.x}
+        y={contextMenu.y}
+        onClose={() => setContextMenu(null)}
+        items={[
+          {
+            label: '複製',
+            onClick: () => duplicateRows([contextMenu.rowId]),
+          },
+          {
+            label: '上に行を挿入',
+            onClick: () => addRow(),
+          },
+          {
+            label: '詳細を開く',
+            onClick: () => onOpenRowDetail(contextMenu.rowId),
+          },
+          {
+            label: '削除',
+            danger: true,
+            onClick: () => removeRows([contextMenu.rowId]),
+          },
+        ]}
+      />
+    )}
+    </>
   );
 }

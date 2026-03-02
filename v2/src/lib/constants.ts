@@ -32,5 +32,9 @@ export const VendorInspectionStatus = {
 export type VendorInspectionStatus =
   (typeof VendorInspectionStatus)[keyof typeof VendorInspectionStatus];
 
-export const DEFAULT_DISPLAY_DURATION = 10;
+export const DEFAULT_DISPLAY_DURATION = 6;
+export const DISPLAY_TIME_MAX = 30;
+export const REMARKS_MAX_LINES = 5;
+export const REMARKS_MAX_CHARS_PER_LINE = 25;
+export const NOTICE_TEXT_MAX_CHARS = 200;
 export const MAX_AD_SLOTS = 7;

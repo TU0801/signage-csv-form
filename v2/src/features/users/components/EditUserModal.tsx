@@ -10,19 +10,21 @@ interface EditUserModalProps {
   onClose: () => void;
   user: DbProfile | null;
   vendors: DbVendor[];
-  onUpdate: (id: string, params: { role?: DbProfile['role']; vendor_id?: string | null }) => Promise<void>;
+  onUpdate: (id: string, params: { role?: DbProfile['role']; vendor_id?: string | null; is_active?: boolean }) => Promise<void>;
 }
 
 export function EditUserModal({ open, onClose, user, vendors, onUpdate }: EditUserModalProps) {
   const { addToast } = useToast();
   const [role, setRole] = useState<DbProfile['role']>('user');
   const [vendorId, setVendorId] = useState('');
+  const [isActive, setIsActive] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (user) {
       setRole(user.role);
       setVendorId(user.vendor_id ?? '');
+      setIsActive(user.is_active ?? true);
     }
   }, [user]);
 
@@ -33,6 +35,7 @@ export function EditUserModal({ open, onClose, user, vendors, onUpdate }: EditUs
       await onUpdate(user.id, {
         role,
         vendor_id: vendorId || null,
+        is_active: isActive,
       });
       addToast('ユーザーを更新しました', 'success');
       onClose();
@@ -65,6 +68,18 @@ export function EditUserModal({ open, onClose, user, vendors, onUpdate }: EditUs
           value={vendorId}
           onChange={(e) => setVendorId(e.target.value)}
         />
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            id="isActive"
+            checked={isActive}
+            onChange={(e) => setIsActive(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          />
+          <label htmlFor="isActive" className="text-sm text-gray-700">
+            有効
+          </label>
+        </div>
         <div className="flex justify-end gap-3 pt-2">
           <Button variant="secondary" onClick={onClose}>
             キャンセル

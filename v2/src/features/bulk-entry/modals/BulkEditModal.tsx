@@ -6,6 +6,7 @@ import { Select } from '@/components/ui/Select';
 import { useBulkStore } from '@/stores/bulkStore';
 import type { EntryFormData } from '@/types/app';
 import { useMasterData } from '@/hooks/useMasterData';
+import { buildTerminalOptions } from '../utils/buildTerminalOptions';
 
 interface BulkEditModalProps {
   open: boolean;
@@ -20,7 +21,7 @@ type EditableField = {
 
 const EDITABLE_FIELDS: EditableField[] = [
   { key: 'propertyCode', label: '物件コード', type: 'select' },
-  { key: 'terminalId', label: '端末ID', type: 'text' },
+  { key: 'terminalId', label: '端末ID', type: 'select' },
   { key: 'vendorName', label: '保守会社名', type: 'select' },
   { key: 'inspectionType', label: '点検種別', type: 'select' },
   { key: 'startDate', label: '開始日', type: 'date' },
@@ -36,6 +37,7 @@ export function BulkEditModal({ open, onClose }: BulkEditModalProps) {
   const { properties, vendors, inspectionTypes } = useMasterData();
   const [selectedField, setSelectedField] = useState<keyof EntryFormData | ''>('');
   const [value, setValue] = useState('');
+  const [selectedPropertyCode, setSelectedPropertyCode] = useState('');
 
   const ids = [...selectedIds];
 
@@ -45,11 +47,13 @@ export function BulkEditModal({ open, onClose }: BulkEditModalProps) {
     onClose();
     setSelectedField('');
     setValue('');
+    setSelectedPropertyCode('');
   };
 
   const handleClose = () => {
     setSelectedField('');
     setValue('');
+    setSelectedPropertyCode('');
     onClose();
   };
 
@@ -62,6 +66,10 @@ export function BulkEditModal({ open, onClose }: BulkEditModalProps) {
           value: p.property_code,
           label: `${p.property_code} - ${p.property_name}`,
         }));
+      case 'terminalId': {
+        const prop = properties.find((p) => p.property_code === selectedPropertyCode);
+        return buildTerminalOptions(prop?.terminals ?? []);
+      }
       case 'vendorName':
         return vendors.map((v) => ({
           value: v.vendor_name,
@@ -96,7 +104,22 @@ export function BulkEditModal({ open, onClose }: BulkEditModalProps) {
         />
 
         {currentField && (
-          <div>
+          <div className="space-y-3">
+            {currentField.key === 'terminalId' && (
+              <Select
+                label="対象物件を選択"
+                value={selectedPropertyCode}
+                onChange={(e) => {
+                  setSelectedPropertyCode(e.target.value);
+                  setValue('');
+                }}
+                options={properties.map((p) => ({
+                  value: p.property_code,
+                  label: `${p.property_code} - ${p.property_name}`,
+                }))}
+                placeholder="物件を選択してください"
+              />
+            )}
             {currentField.type === 'select' ? (
               <Select
                 label={`新しい値: ${currentField.label}`}

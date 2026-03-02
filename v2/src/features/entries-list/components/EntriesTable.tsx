@@ -22,6 +22,7 @@ import { useEntriesTable } from '../hooks/useEntriesTable';
 import { useEntriesFilters } from '../hooks/useEntriesFilters';
 import { useEntryMutations } from '../hooks/useEntryMutations';
 import type { DbEntry } from '@/types/database';
+import { useMasterData } from '@/hooks/useMasterData';
 import { formatDateSlash } from '@/lib/utils';
 
 const statusVariantMap: Record<string, 'default' | 'success' | 'warning' | 'danger' | 'primary'> = {
@@ -35,6 +36,15 @@ export function EntriesTable() {
   const { filters, updateFilter, resetFilters, hasActiveFilters } = useEntriesFilters();
   const { entries, loading, error, refetch } = useEntriesTable(filters);
   const { addToast } = useToast();
+  const { properties } = useMasterData();
+
+  const propertyNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const p of properties) {
+      map.set(p.property_code, p.property_name);
+    }
+    return map;
+  }, [properties]);
   const { updateEntry, updateStatusBulk, deleteEntry } = useEntryMutations(refetch);
 
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -71,6 +81,12 @@ export function EntriesTable() {
         size: 120,
       },
       {
+        id: 'property_name',
+        header: '物件名',
+        cell: ({ row }) => propertyNameMap.get(row.original.property_code) ?? '-',
+        size: 150,
+      },
+      {
         accessorKey: 'terminal_id',
         header: '端末ID',
         size: 100,
@@ -88,6 +104,15 @@ export function EntriesTable() {
       {
         accessorKey: 'inspection_start',
         header: '点検開始日',
+        cell: ({ getValue }) => {
+          const val = getValue<string | null>();
+          return val ? formatDateSlash(val) : '-';
+        },
+        size: 110,
+      },
+      {
+        accessorKey: 'inspection_end',
+        header: '点検終了日',
         cell: ({ getValue }) => {
           const val = getValue<string | null>();
           return val ? formatDateSlash(val) : '-';
@@ -123,6 +148,30 @@ export function EntriesTable() {
         size: 100,
       },
       {
+        accessorKey: 'remarks',
+        header: '備考',
+        cell: ({ getValue }) => {
+          const val = getValue<string | null>();
+          if (!val) return '-';
+          const truncated = val.length > 20 ? val.slice(0, 20) + '...' : val;
+          return (
+            <span title={val} className="cursor-default">
+              {truncated}
+            </span>
+          );
+        },
+        size: 150,
+      },
+      {
+        accessorKey: 'user_id',
+        header: '登録者',
+        cell: ({ getValue }) => {
+          const val = getValue<string | null>();
+          return val ? val.slice(0, 8) + '...' : '-';
+        },
+        size: 100,
+      },
+      {
         id: 'actions',
         header: '操作',
         cell: ({ row }) => (
@@ -144,7 +193,7 @@ export function EntriesTable() {
         size: 120,
       },
     ],
-    [],
+    [propertyNameMap],
   );
 
   // eslint-disable-next-line react-hooks/incompatible-library

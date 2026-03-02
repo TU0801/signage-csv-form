@@ -3,7 +3,9 @@ import { Card, CardHeader, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useMasterData } from '@/hooks/useMasterData';
+import { useEntries } from '@/hooks/useEntries';
 import { useEntryForm } from '@/features/single-entry/hooks/useEntryForm';
 import { useCascadingSelects } from '@/features/single-entry/hooks/useCascadingSelects';
 import { usePreview } from '@/features/single-entry/hooks/usePreview';
@@ -13,6 +15,8 @@ import { CsvActions } from '@/features/single-entry/components/CsvActions';
 import { PosterPreview } from '@/features/single-entry/components/PosterPreview';
 import { uploadPosterImage } from '@/lib/storage';
 import { useAuthStore } from '@/stores/authStore';
+import { EntryStatus } from '@/lib/constants';
+import { AdminVendorFilter, useAdminVendorFilter } from '@/components/AdminVendorFilter';
 import type { EntryFormData } from '@/types/app';
 
 interface LocalEntry extends EntryFormData {
@@ -23,13 +27,20 @@ export function SingleEntryPage() {
   const { addToast } = useToast();
   const { properties, vendors, inspectionTypes, categories, loading, error } = useMasterData();
   const user = useAuthStore((s) => s.user);
+  const { createEntry } = useEntries();
+  const [submitting, setSubmitting] = useState(false);
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
+  const adminFilter = useAdminVendorFilter();
+
+  // 管理者ベンダーフィルタ適用
+  const filteredProperties = adminFilter.filterProperties(properties);
 
   const { form, resetForm } = useEntryForm();
   const { setValue, reset } = form;
 
   const cascading = useCascadingSelects({
     setValue,
-    properties,
+    properties: filteredProperties,
     vendors,
     inspectionTypes,
     categories,
@@ -158,6 +169,65 @@ export function SingleEntryPage() {
     }, 100);
   }, [localEntries, setValue, cascading, vendors, inspectionTypes, addToast]);
 
+  /** Supabase一括保存（申請する） */
+  const handleBatchSubmit = useCallback(async () => {
+    if (!user) {
+      addToast('ログインが必要です', 'error');
+      return;
+    }
+    if (localEntries.length === 0) {
+      addToast('エントリーがありません', 'warning');
+      return;
+    }
+
+    setSubmitting(true);
+
+    const results = await Promise.allSettled(
+      localEntries.map((entry) =>
+        createEntry({
+          user_id: user.id,
+          property_code: entry.propertyCode,
+          terminal_id: entry.terminalId,
+          vendor_name: entry.vendorName,
+          emergency_contact: entry.emergencyContact || null,
+          inspection_type: entry.inspectionType,
+          template_no: entry.templateNo || null,
+          inspection_start: entry.startDate || null,
+          inspection_end: entry.endDate || null,
+          display_start_date: entry.displayStartDate || null,
+          display_start_time: entry.displayStartTime || null,
+          display_end_date: entry.displayEndDate || null,
+          display_end_time: entry.displayEndTime || null,
+          display_duration: entry.displayDuration || null,
+          announcement: entry.noticeText || null,
+          remarks: entry.remarks || null,
+          poster_type: entry.posterType || null,
+          poster_position: entry.posterPosition || null,
+          frame_no: entry.frameNo || null,
+          status: EntryStatus.DRAFT,
+          poster_image: entry.customPosterUrl || null,
+        }),
+      ),
+    );
+
+    const successCount = results.filter((r) => r.status === 'fulfilled').length;
+    const errorCount = results.filter((r) => r.status === 'rejected').length;
+
+    setSubmitting(false);
+
+    if (successCount > 0) {
+      addToast(`${successCount}件を申請しました`, 'success');
+      if (errorCount === 0) {
+        setLocalEntries([]);
+        setEditingId(null);
+        resetForm();
+      }
+    }
+    if (errorCount > 0) {
+      addToast(`${errorCount}件の申請に失敗しました`, 'error');
+    }
+  }, [user, localEntries, createEntry, addToast, resetForm]);
+
   const terminals = cascading.getTerminals(form.watch('propertyCode'));
 
   if (loading) {
@@ -181,6 +251,11 @@ export function SingleEntryPage() {
     <div className="space-y-6">
       <h1 className="text-xl font-bold text-gray-900">1件入力</h1>
 
+      <AdminVendorFilter
+        vendors={vendors}
+        onVendorFilter={adminFilter.setSelectedVendorId}
+      />
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* 左: フォーム */}
         <Card>
@@ -202,7 +277,7 @@ export function SingleEntryPage() {
           <CardContent>
             <EntryForm
               form={form}
-              properties={properties}
+              properties={filteredProperties}
               vendors={vendors}
               filteredInspectionTypes={cascading.filteredInspectionTypes}
               categoryOptions={cascading.categoryOptions}
@@ -241,10 +316,20 @@ export function SingleEntryPage() {
 
           <Card>
             <CardHeader>
-              <h2 className="text-base font-semibold text-gray-900">CSV出力</h2>
+              <h2 className="text-base font-semibold text-gray-900">申請・CSV出力</h2>
             </CardHeader>
             <CardContent>
-              <CsvActions entries={localEntries} />
+              <div className="space-y-4">
+                <Button
+                  variant="primary"
+                  onClick={() => setShowSubmitConfirm(true)}
+                  disabled={localEntries.length === 0 || submitting}
+                  className="w-full"
+                >
+                  {submitting ? '送信中...' : `申請する (${localEntries.length}件)`}
+                </Button>
+                <CsvActions entries={localEntries} />
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -258,6 +343,16 @@ export function SingleEntryPage() {
         templateNo={preview.previewTemplateNo}
         posterPosition={form.watch('posterPosition')}
         onPositionChange={handlePositionChange}
+      />
+
+      {/* 申請確認ダイアログ */}
+      <ConfirmDialog
+        open={showSubmitConfirm}
+        onClose={() => setShowSubmitConfirm(false)}
+        onConfirm={handleBatchSubmit}
+        title="申請確認"
+        message={`${localEntries.length}件のエントリーを申請しますか？`}
+        confirmLabel="申請する"
       />
     </div>
   );

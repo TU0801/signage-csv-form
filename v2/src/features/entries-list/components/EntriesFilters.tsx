@@ -25,11 +25,16 @@ export function EntriesFilters({
   onReset,
   hasActiveFilters,
 }: EntriesFiltersProps) {
-  const { properties } = useMasterData();
+  const { properties, vendors } = useMasterData();
 
   const propertyOptions = properties.map((p) => ({
     value: p.property_code,
     label: `${p.property_code} - ${p.property_name}`,
+  }));
+
+  const vendorOptions = vendors.map((v) => ({
+    value: v.vendor_name,
+    label: v.vendor_name,
   }));
 
   return (
@@ -41,6 +46,15 @@ export function EntriesFilters({
           placeholder="すべて"
           value={filters.propertyCode}
           onChange={(e) => onUpdateFilter('propertyCode', e.target.value)}
+        />
+      </div>
+      <div className="w-48">
+        <Select
+          label="保守会社"
+          options={vendorOptions}
+          placeholder="すべて"
+          value={filters.vendorName}
+          onChange={(e) => onUpdateFilter('vendorName', e.target.value)}
         />
       </div>
       <div className="w-40">

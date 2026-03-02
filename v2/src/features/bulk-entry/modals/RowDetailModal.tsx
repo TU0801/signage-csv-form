@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -7,6 +8,7 @@ import { Badge } from '@/components/ui/Badge';
 import { useBulkStore } from '@/stores/bulkStore';
 import { useMasterData } from '@/hooks/useMasterData';
 import type { EntryFormData } from '@/types/app';
+import { buildTerminalOptions } from '../utils/buildTerminalOptions';
 
 interface RowDetailModalProps {
   open: boolean;
@@ -33,10 +35,25 @@ export function RowDetailModal({ open, onClose, rowId }: RowDetailModalProps) {
     updateRow(row._id, { [field]: value });
   };
 
+  const handlePropertyChange = (propertyCode: string) => {
+    handleChange('propertyCode', propertyCode);
+    const property = properties.find((p) => p.property_code === propertyCode);
+    if (property?.terminals?.length) {
+      handleChange('terminalId', property.terminals[0]!.id);
+    } else {
+      handleChange('terminalId', '');
+    }
+  };
+
   const propertyOptions = properties.map((p) => ({
     value: p.property_code,
     label: `${p.property_code} - ${p.property_name}`,
   }));
+
+  const terminalOptions = useMemo(() => {
+    const selectedProperty = properties.find((p) => p.property_code === row.propertyCode);
+    return buildTerminalOptions(selectedProperty?.terminals ?? []);
+  }, [properties, row.propertyCode]);
 
   const vendorOptions = vendors.map((v) => ({
     value: v.vendor_name,
@@ -70,17 +87,28 @@ export function RowDetailModal({ open, onClose, rowId }: RowDetailModalProps) {
           <Select
             label="物件コード"
             value={row.propertyCode}
-            onChange={(e) => handleChange('propertyCode', e.target.value)}
+            onChange={(e) => handlePropertyChange(e.target.value)}
             options={propertyOptions}
             placeholder="選択してください"
             error={row._errors['propertyCode']}
           />
-          <Input
-            label="端末ID"
-            value={row.terminalId}
-            onChange={(e) => handleChange('terminalId', e.target.value)}
-            error={row._errors['terminalId']}
-          />
+          {terminalOptions.length > 0 ? (
+            <Select
+              label="端末ID"
+              value={row.terminalId}
+              onChange={(e) => handleChange('terminalId', e.target.value)}
+              options={terminalOptions}
+              placeholder="選択してください"
+              error={row._errors['terminalId']}
+            />
+          ) : (
+            <Input
+              label="端末ID"
+              value={row.terminalId}
+              onChange={(e) => handleChange('terminalId', e.target.value)}
+              error={row._errors['terminalId']}
+            />
+          )}
           <Select
             label="保守会社名"
             value={row.vendorName}
