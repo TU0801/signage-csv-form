@@ -60,6 +60,7 @@ import {
     loadPendingBuildingRequests,
     openAddBuildingModal,
     openAddInspectionModal,
+    closeInspectionSelectModal,
     handleRemoveBuildingVendor,
     handleRemoveVendorInspection,
     handleApproveBuildingRequest,
@@ -449,6 +450,9 @@ function setupEventListeners() {
             if (document.getElementById('equipmentModal')?.classList.contains('active')) {
                 window.closeEquipmentModal();
             }
+            if (document.getElementById('inspectionSelectModal')?.classList.contains('active')) {
+                closeInspectionSelectModal();
+            }
         }
     });
 
@@ -599,6 +603,7 @@ window.handleRemoveBuildingVendor = handleRemoveBuildingVendor;
 window.handleRemoveVendorInspection = handleRemoveVendorInspection;
 window.openAddBuildingModal = openAddBuildingModal;
 window.openAddInspectionModal = openAddInspectionModal;
+window.closeInspectionSelectModal = closeInspectionSelectModal;
 window.handleApproveBuildingRequest = handleApproveBuildingRequest;
 window.handleRejectBuildingRequest = handleRejectBuildingRequest;
 window.openEquipmentModal = openEquipmentModal;

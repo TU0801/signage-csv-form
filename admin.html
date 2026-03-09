@@ -739,6 +739,27 @@
         </div>
     </div>
 
+    <!-- 点検種別選択モーダル -->
+    <div id="inspectionSelectModal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 540px;">
+            <div class="modal-header">
+                <h3>点検種別を追加</h3>
+                <button type="button" class="modal-close" onclick="closeInspectionSelectModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="color: #64748b; font-size: 0.875rem; margin-bottom: 1rem;">
+                    追加する点検種別を選択してください（複数選択可）
+                </p>
+                <div id="inspectionSelectGrid" class="inspection-select-grid"></div>
+            </div>
+            <div class="modal-footer">
+                <span id="inspectionSelectCount" class="inspection-select-count">0件選択中</span>
+                <button type="button" class="btn btn-outline" onclick="closeInspectionSelectModal()">キャンセル</button>
+                <button type="button" class="btn btn-primary" id="inspectionSelectConfirmBtn" disabled>追加</button>
+            </div>
+        </div>
+    </div>
+
     <script src="js/version.js"></script>
     <script src="js/config.js"></script>
     <script>

@@ -318,13 +318,15 @@
         .poster-notice-text {
             position: absolute;
             top: 28%;
-            right: 4%;
-            width: 42%;
+            left: 60%;
+            right: 5%;
+            bottom: 30%;
             font-size: 2.5cqw;
             line-height: 1.35;
             color: #1e293b;
             word-break: break-all;
             white-space: pre-wrap;
+            overflow: hidden;
         }
 
         .poster-vendor-text {

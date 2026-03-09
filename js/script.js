@@ -664,7 +664,10 @@ function hasTemplateImage(templateKey) {
             document.getElementById('terminal').innerHTML = '<option value="">選択してください</option>';
             document.getElementById('vendor').value = '';
             document.getElementById('emergencyContact').value = '';
-            document.getElementById('inspectionType').value = '';
+            const inspectionTypeEl = document.getElementById('inspectionType');
+            inspectionTypeEl.value = '';
+            inspectionTypeEl.disabled = false;
+            inspectionTypeEl.style.background = '';
             document.getElementById('showOnBoard').checked = true;
             document.getElementById('remarks').value = '';
             document.getElementById('noticeText').value = '';
@@ -1007,19 +1010,23 @@ function hasTemplateImage(templateKey) {
                 onVendorChange();
 
                 // 点検種別も自動設定（ベンダーのinspectionTypeに基づく）
-                if (selectedVendorData?.inspectionType) {
-                    const inspectionSelect = document.getElementById('inspectionType');
-                    const inspectionOption = Array.from(inspectionSelect.options).find(
+                const inspectionSelect = document.getElementById('inspectionType');
+                const inspectionOption = selectedVendorData?.inspectionType
+                    ? Array.from(inspectionSelect.options).find(
                         opt => opt.textContent.includes(selectedVendorData.inspectionType)
-                    );
-                    if (inspectionOption) {
-                        inspectionSelect.value = inspectionOption.value;
-                        inspectionSelect.disabled = true;
-                        inspectionSelect.style.background = '#f0f0f0';
-                        // プレビュー更新
-                        onInspectionTypeChange();
-                    }
+                    )
+                    : null;
+
+                if (inspectionOption) {
+                    inspectionSelect.value = inspectionOption.value;
+                    inspectionSelect.disabled = true;
+                    inspectionSelect.style.background = '#f0f0f0';
+                } else {
+                    inspectionSelect.value = '';
+                    inspectionSelect.disabled = false;
+                    inspectionSelect.style.background = '';
                 }
+                onInspectionTypeChange();
             }
 
             // 物件選択を再描画

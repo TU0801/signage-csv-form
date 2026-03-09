@@ -252,27 +252,81 @@ export async function openAddInspectionModal(vendorId) {
             return;
         }
 
-        const options = availableInspections.map(i => `${i.inspection_name}`).join('\n');
-        const selected = prompt(`追加する点検種別を選択してください:\n\n${options}\n\n点検種別名を入力:`);
+        const grid = document.getElementById('inspectionSelectGrid');
+        const countSpan = document.getElementById('inspectionSelectCount');
+        const confirmBtn = document.getElementById('inspectionSelectConfirmBtn');
 
-        if (!selected) return;
+        // ピルボタンを生成
+        grid.innerHTML = availableInspections.map(i =>
+            `<button type="button" class="inspection-select-btn" data-inspection-id="${i.id}">${escapeHtml(i.inspection_name)}</button>`
+        ).join('');
 
-        const inspection = availableInspections.find(i => i.inspection_name === selected);
-        if (!inspection) {
-            showToast('点検種別が見つかりません', 'error');
-            return;
-        }
+        // 選択状態の管理
+        const updateCount = () => {
+            const selectedCount = grid.querySelectorAll('.inspection-select-btn.selected').length;
+            countSpan.textContent = `${selectedCount}件選択中`;
+            confirmBtn.disabled = selectedCount === 0;
+        };
 
-        await addVendorInspection(vendorId, inspection.id);
-        showToast('点検種別を追加しました', 'success');
-        await loadVendorInspectionRelationships(vendorId);
+        // クリックでトグル
+        grid.querySelectorAll('.inspection-select-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                btn.classList.toggle('selected');
+                updateCount();
+            });
+        });
+
+        // 確認ボタン
+        confirmBtn.onclick = () => {
+            const ids = Array.from(grid.querySelectorAll('.inspection-select-btn.selected'))
+                .map(btn => btn.dataset.inspectionId);
+            confirmInspectionSelection(vendorId, ids);
+        };
+
+        // 初期状態リセット
+        updateCount();
+
+        // モーダル表示
+        document.getElementById('inspectionSelectModal').classList.add('active');
     } catch (error) {
-        console.error('Failed to add vendor-inspection relationship:', error);
-        if (error.message.includes('duplicate') || error.message.includes('unique')) {
-            showToast('この点検種別は既に追加されています', 'error');
+        console.error('Failed to open inspection select modal:', error);
+        showToast('点検種別の取得に失敗しました', 'error');
+    }
+}
+
+export function closeInspectionSelectModal() {
+    document.getElementById('inspectionSelectModal').classList.remove('active');
+}
+
+async function confirmInspectionSelection(vendorId, selectedIds) {
+    if (selectedIds.length === 0) return;
+
+    closeInspectionSelectModal();
+
+    try {
+        const results = await Promise.allSettled(
+            selectedIds.map(id => addVendorInspection(vendorId, id))
+        );
+        const succeeded = results.filter(r => r.status === 'fulfilled').length;
+        const failed = results.filter(r => r.status === 'rejected');
+
+        if (failed.length === 0) {
+            showToast(`${succeeded}件の点検種別を追加しました`, 'success');
+        } else if (succeeded > 0) {
+            showToast(`${succeeded}件追加、${failed.length}件失敗`, 'error');
         } else {
-            showToast('追加に失敗しました: ' + error.message, 'error');
+            const reason = failed[0].reason?.message || '';
+            if (reason.includes('duplicate') || reason.includes('unique')) {
+                showToast('一部の点検種別は既に追加されています', 'error');
+            } else {
+                showToast('追加に失敗しました: ' + reason, 'error');
+            }
         }
+    } catch (error) {
+        console.error('Failed to add vendor-inspection relationships:', error);
+        showToast('追加に失敗しました', 'error');
+    } finally {
+        await loadVendorInspectionRelationships(vendorId);
     }
 }
 
