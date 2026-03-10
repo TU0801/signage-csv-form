@@ -334,8 +334,22 @@ function hasTemplateImage(templateKey) {
                         </div>
                     </div>
                 `;
+
+                // 画像のアスペクト比をコンテナに反映
+                const img = container.querySelector('img');
+                const setAspectRatio = () => {
+                    if (img.naturalWidth && img.naturalHeight) {
+                        container.style.aspectRatio = `${img.naturalWidth} / ${img.naturalHeight}`;
+                    }
+                };
+                if (img.complete && img.naturalWidth) {
+                    setAspectRatio();
+                } else {
+                    img.addEventListener('load', setAspectRatio);
+                }
             } else {
                 container.innerHTML = '<div class="poster-preview-placeholder">点検工事案内を選択</div>';
+                container.style.aspectRatio = '';
             }
         }
 

@@ -284,16 +284,13 @@
             position: relative;
             background: #f8fafc;
             border-radius: 6px;
-            overflow: auto;
-            flex: 1;
-            min-height: 200px;
+            overflow: hidden;
             max-height: 500px;
+            max-width: 100%;
         }
 
         .poster-preview img {
             width: 100%;
-            height: 100%;
-            object-fit: contain;
             display: block;
         }
 
