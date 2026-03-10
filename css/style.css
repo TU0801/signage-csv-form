@@ -285,8 +285,8 @@
             background: #f8fafc;
             border-radius: 6px;
             overflow: hidden;
-            max-height: 500px;
             max-width: 100%;
+            max-height: 60vh;
         }
 
         .poster-preview img {
