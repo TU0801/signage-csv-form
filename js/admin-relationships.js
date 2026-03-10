@@ -218,22 +218,99 @@ function renderVendorInspectionRelationships(relationships, vendorId) {
 }
 
 export async function openAddBuildingModal(vendorId) {
-    const propertyCode = prompt('追加する物件コードを入力してください:');
-    if (!propertyCode) return;
+    try {
+        const [allProperties, linkedBuildings] = await Promise.all([
+            getMasterProperties(),
+            getBuildingVendors({ vendorId })
+        ]);
+
+        const linkedCodes = new Set(
+            linkedBuildings.filter(r => r.status === 'active').map(r => String(r.property_code))
+        );
+
+        // property_code 単位でユニーク化（複数端末がある物件は1つにまとめる）
+        const seen = new Set();
+        const availableProperties = allProperties.filter(p => {
+            const code = String(p.property_code);
+            if (seen.has(code) || linkedCodes.has(code)) return false;
+            seen.add(code);
+            return true;
+        });
+
+        if (availableProperties.length === 0) {
+            showToast('すべての物件が既に紐付けられています', 'info');
+            return;
+        }
+
+        const grid = document.getElementById('buildingSelectGrid');
+        const countSpan = document.getElementById('buildingSelectCount');
+        const confirmBtn = document.getElementById('buildingSelectConfirmBtn');
+
+        grid.innerHTML = availableProperties.map(p =>
+            `<button type="button" class="pill-select-btn" data-property-code="${escapeHtml(String(p.property_code))}">${escapeHtml(p.property_name)}（${escapeHtml(String(p.property_code))}）</button>`
+        ).join('');
+
+        const updateCount = () => {
+            const selectedCount = grid.querySelectorAll('.pill-select-btn.selected').length;
+            countSpan.textContent = `${selectedCount}件選択中`;
+            confirmBtn.disabled = selectedCount === 0;
+        };
+
+        grid.querySelectorAll('.pill-select-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                btn.classList.toggle('selected');
+                updateCount();
+            });
+        });
+
+        confirmBtn.onclick = () => {
+            const codes = Array.from(grid.querySelectorAll('.pill-select-btn.selected'))
+                .map(btn => btn.dataset.propertyCode);
+            confirmBuildingSelection(vendorId, codes);
+        };
+
+        updateCount();
+
+        document.getElementById('buildingSelectModal').classList.add('active');
+    } catch (error) {
+        console.error('Failed to open building select modal:', error);
+        showToast('物件の取得に失敗しました', 'error');
+    }
+}
+
+export function closeBuildingSelectModal() {
+    document.getElementById('buildingSelectModal').classList.remove('active');
+}
+
+async function confirmBuildingSelection(vendorId, selectedCodes) {
+    if (selectedCodes.length === 0) return;
+
+    closeBuildingSelectModal();
 
     try {
-        await addBuildingVendor(propertyCode, vendorId);
-        showToast('ビルを追加しました', 'success');
-        await loadBuildingVendorRelationships(vendorId);
-    } catch (error) {
-        console.error('Failed to add building-vendor relationship:', error);
-        if (error.message.includes('duplicate') || error.message.includes('unique')) {
-            showToast('この物件は既に追加されています', 'error');
-        } else if (error.message.includes('foreign key') || error.message.includes('not found')) {
-            showToast('物件コードが見つかりません', 'error');
+        const results = await Promise.allSettled(
+            selectedCodes.map(code => addBuildingVendor(code, vendorId))
+        );
+        const succeeded = results.filter(r => r.status === 'fulfilled').length;
+        const failed = results.filter(r => r.status === 'rejected');
+
+        if (failed.length === 0) {
+            showToast(`${succeeded}件の物件を追加しました`, 'success');
+        } else if (succeeded > 0) {
+            showToast(`${succeeded}件追加、${failed.length}件失敗`, 'error');
         } else {
-            showToast('追加に失敗しました: ' + error.message, 'error');
+            const reason = failed[0].reason?.message || '';
+            if (reason.includes('duplicate') || reason.includes('unique')) {
+                showToast('一部の物件は既に追加されています', 'error');
+            } else {
+                showToast('追加に失敗しました: ' + reason, 'error');
+            }
         }
+    } catch (error) {
+        console.error('Failed to add building-vendor relationships:', error);
+        showToast('追加に失敗しました', 'error');
+    } finally {
+        await loadBuildingVendorRelationships(vendorId);
     }
 }
 
@@ -258,18 +335,18 @@ export async function openAddInspectionModal(vendorId) {
 
         // ピルボタンを生成
         grid.innerHTML = availableInspections.map(i =>
-            `<button type="button" class="inspection-select-btn" data-inspection-id="${i.id}">${escapeHtml(i.inspection_name)}</button>`
+            `<button type="button" class="pill-select-btn" data-inspection-id="${i.id}">${escapeHtml(i.inspection_name)}</button>`
         ).join('');
 
         // 選択状態の管理
         const updateCount = () => {
-            const selectedCount = grid.querySelectorAll('.inspection-select-btn.selected').length;
+            const selectedCount = grid.querySelectorAll('.pill-select-btn.selected').length;
             countSpan.textContent = `${selectedCount}件選択中`;
             confirmBtn.disabled = selectedCount === 0;
         };
 
         // クリックでトグル
-        grid.querySelectorAll('.inspection-select-btn').forEach(btn => {
+        grid.querySelectorAll('.pill-select-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 btn.classList.toggle('selected');
                 updateCount();
@@ -278,7 +355,7 @@ export async function openAddInspectionModal(vendorId) {
 
         // 確認ボタン
         confirmBtn.onclick = () => {
-            const ids = Array.from(grid.querySelectorAll('.inspection-select-btn.selected'))
+            const ids = Array.from(grid.querySelectorAll('.pill-select-btn.selected'))
                 .map(btn => btn.dataset.inspectionId);
             confirmInspectionSelection(vendorId, ids);
         };
