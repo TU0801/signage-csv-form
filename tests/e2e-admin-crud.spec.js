@@ -567,9 +567,9 @@ test.describe('広告枠管理', () => {
 
   test('広告枠グリッドが表示される', async ({ page }) => {
     await expect(page.locator('#adSlotsGrid')).toBeVisible();
-    // 8つのセル（0: ログイン固定 + 1-7: 広告枠）
+    // 4つのセル（0: ログイン固定 + 1-3: 広告枠）
     const cells = await page.locator('#adSlotsGrid > div').count();
-    expect(cells).toBe(8);
+    expect(cells).toBe(4);
   });
 });
 

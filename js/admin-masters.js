@@ -1176,8 +1176,8 @@ function renderAdSlotsGrid(slots) {
             </div>
         </div>`;
 
-    // セル 1〜7: 各広告枠
-    const adCells = [1,2,3,4,5,6,7].map(idx => {
+    // セル 1〜3: 各広告枠
+    const adCells = [1,2,3].map(idx => {
         const slot = slotMap[idx];
         const isActive = slot?.is_active;
         const hasImage = !!slot?.image_url;

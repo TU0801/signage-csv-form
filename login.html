@@ -9,10 +9,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
     <style>
-        /* 8分割グリッドレイアウト */
+        /* 2×2グリッドレイアウト（各セル960×540 = 16:9） */
         .login-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(2, 1fr);
             grid-template-rows: repeat(2, 1fr);
             height: 100vh;
             width: 100%;
@@ -194,14 +194,10 @@
             </div>
         </div>
 
-        <!-- 広告枠1〜7 -->
+        <!-- 広告枠1〜3 -->
         <div class="login-cell ad-slot" data-slot="1"><div class="ad-slot-empty">広告スペース</div></div>
         <div class="login-cell ad-slot" data-slot="2"><div class="ad-slot-empty">広告スペース</div></div>
         <div class="login-cell ad-slot" data-slot="3"><div class="ad-slot-empty">広告スペース</div></div>
-        <div class="login-cell ad-slot" data-slot="4"><div class="ad-slot-empty">広告スペース</div></div>
-        <div class="login-cell ad-slot" data-slot="5"><div class="ad-slot-empty">広告スペース</div></div>
-        <div class="login-cell ad-slot" data-slot="6"><div class="ad-slot-empty">広告スペース</div></div>
-        <div class="login-cell ad-slot" data-slot="7"><div class="ad-slot-empty">広告スペース</div></div>
     </div>
 
     <script src="js/version.js"></script>
@@ -245,7 +241,6 @@
                     const closeTag = hasLink ? `</a>` : `</div>`;
                     cell.innerHTML = `${openTag}
                         <div class="ad-slot-image"><img src="${escapeHtml(slot.image_url)}" alt=""></div>
-                        <div class="ad-slot-caption">${escapeHtml(slot.caption || '')}</div>
                     ${closeTag}`;
                 });
             } catch (e) {
