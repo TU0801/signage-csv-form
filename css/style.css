@@ -319,7 +319,7 @@
             left: 60%;
             right: 5%;
             bottom: 30%;
-            font-size: 2.5cqw;
+            font-size: calc(var(--pw, 400) * 0.025px);
             line-height: 1.35;
             color: #1e293b;
             word-break: break-all;
@@ -334,7 +334,7 @@
             right: 5%;
             display: flex;
             justify-content: space-between;
-            font-size: 1.8cqw;
+            font-size: calc(var(--pw, 400) * 0.018px);
             color: #1e293b;
             white-space: nowrap;
             overflow: hidden;
@@ -346,7 +346,7 @@
             left: 10%;
             right: 10%;
             text-align: center;
-            font-size: 3.5cqw;
+            font-size: calc(var(--pw, 400) * 0.035px);
             font-weight: bold;
             color: #ffffff;
             z-index: 10;
@@ -360,15 +360,14 @@
             left: 12%;
             right: 12%;
             height: 15%;
-            font-size: 2cqw;
+            font-size: calc(var(--pw, 400) * 0.02px);
             line-height: 1.4;
             color: #1e293b;
             overflow: hidden;
         }
 
-        .poster-preview {
-            container-type: inline-size;
-        }
+        /* container-type: inline-size は使わない（幅0崩壊の原因）
+           代わりにJSで --pw CSS変数を設定 */
 
         .position-grid {
             display: grid;
