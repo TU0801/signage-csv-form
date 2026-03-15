@@ -335,21 +335,40 @@ function hasTemplateImage(templateKey) {
                     </div>
                 `;
 
-                // 画像のアスペクト比をコンテナに反映
+                // 画像のアスペクト比をコンテナに反映し、max-height制約時も幅を正しく設定
                 const img = container.querySelector('img');
-                const setAspectRatio = () => {
+                const fitContainer = () => {
                     if (img.naturalWidth && img.naturalHeight) {
+                        const ratio = img.naturalWidth / img.naturalHeight;
                         container.style.aspectRatio = `${img.naturalWidth} / ${img.naturalHeight}`;
+                        // max-heightで高さが制約される場合、幅を正しく縮める
+                        requestAnimationFrame(() => {
+                            const rect = container.getBoundingClientRect();
+                            const expectedHeight = rect.width / ratio;
+                            if (expectedHeight > rect.height + 1) {
+                                container.style.width = `${rect.height * ratio}px`;
+                            } else {
+                                container.style.width = '';
+                            }
+                        });
                     }
                 };
                 if (img.complete && img.naturalWidth) {
-                    setAspectRatio();
+                    fitContainer();
                 } else {
-                    img.addEventListener('load', setAspectRatio);
+                    img.addEventListener('load', fitContainer);
                 }
+                // ウィンドウリサイズ時にも再計算
+                window._posterResizeHandler && window.removeEventListener('resize', window._posterResizeHandler);
+                window._posterResizeHandler = () => {
+                    container.style.width = '';
+                    fitContainer();
+                };
+                window.addEventListener('resize', window._posterResizeHandler);
             } else {
                 container.innerHTML = '<div class="poster-preview-placeholder">点検工事案内を選択</div>';
                 container.style.aspectRatio = '';
+                container.style.width = '';
             }
         }
 
