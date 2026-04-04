@@ -18,10 +18,9 @@ async function loginAsAdmin(page) {
   await page.fill('input[type="email"]', 'admin@example.com');
   await page.fill('input[type="password"]', 'admin123');
   await page.click('button[type="submit"]');
-  await page.waitForURL(url => !url.toString().includes('login.html'), { timeout: 10000 });
+  await page.waitForURL(url => !url.toString().includes('login.html'), { timeout: 30000 });
   await page.goto(`${baseUrl}/admin.html`);
   await page.waitForLoadState('networkidle');
-  await page.waitForTimeout(2000);
 }
 
 async function loginAsUser(page) {
@@ -29,8 +28,8 @@ async function loginAsUser(page) {
   await page.fill('input[type="email"]', 'a@a');
   await page.fill('input[type="password"]', 'aaaaaa');
   await page.click('button[type="submit"]');
-  await page.waitForURL(url => !url.toString().includes('login.html'), { timeout: 10000 });
-  await page.waitForTimeout(2000);
+  await page.waitForURL(url => !url.toString().includes('login.html'), { timeout: 30000 });
+  await page.waitForLoadState('networkidle');
 }
 
 /**
@@ -218,6 +217,46 @@ test.describe('紐付け・ビル管理', () => {
   test('getPendingBuildingRequests が配列を返す', async ({ page }) => {
     const data = await callSupabaseFunction(page, 'getPendingBuildingRequests');
     expect(Array.isArray(data)).toBe(true);
+  });
+
+  test('addBuildingVendor → 削除 → 再追加が成功する', async ({ page }) => {
+    // テスト用の物件コードを取得
+    const properties = await callSupabaseFunction(page, 'getMasterProperties');
+    const vendors = await callSupabaseFunction(page, 'getMasterVendors');
+    if (properties.length === 0 || vendors.length === 0) {
+      test.skip();
+      return;
+    }
+    const testCode = '__test_reactivate_' + Date.now();
+    const vendorId = vendors[0].id;
+
+    // テスト用レコードを直接作成（property_codeは実在しなくてもDB上は追加可能）
+    const added = await page.evaluate(async ({ code, vid }) => {
+      const { supabase } = await import('./js/supabase/client.js');
+      const user = (await supabase.auth.getUser()).data.user;
+      const { data, error } = await supabase
+        .from('building_vendors')
+        .insert({ property_code: code, vendor_id: vid, status: 'active', requested_by: user.id, approved_by: user.id })
+        .select().single();
+      if (error) throw new Error(error.message);
+      return data;
+    }, { code: testCode, vid: vendorId });
+    expect(added.status).toBe('active');
+
+    // 削除（soft delete）
+    const removed = await callSupabaseFunction(page, 'removeBuildingVendor', [added.id]);
+    expect(removed.status).toBe('deleted');
+
+    // 再追加 → 以前はここでduplicate keyエラーになっていた
+    const reactivated = await callSupabaseFunction(page, 'addBuildingVendor', [testCode, vendorId]);
+    expect(reactivated.status).toBe('active');
+    expect(reactivated.id).toBe(added.id); // 同じレコードが再有効化される
+
+    // クリーンアップ: テストレコードを物理削除
+    await page.evaluate(async ({ id }) => {
+      const { supabase } = await import('./js/supabase/client.js');
+      await supabase.from('building_vendors').delete().eq('id', id);
+    }, { id: added.id });
   });
 
   test('getVendorInspections がvendor_id付きで配列を返す', async ({ page }) => {

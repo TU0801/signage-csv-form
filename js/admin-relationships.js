@@ -225,7 +225,7 @@ export async function openAddBuildingModal(vendorId) {
         ]);
 
         const linkedCodes = new Set(
-            linkedBuildings.filter(r => r.status === 'active').map(r => String(r.property_code))
+            linkedBuildings.filter(r => r.status === 'active' || r.status === 'pending').map(r => String(r.property_code))
         );
 
         // property_code 単位でユニーク化（複数端末がある物件は1つにまとめる）

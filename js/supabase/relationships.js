@@ -79,16 +79,46 @@ export async function addBuildingVendor(propertyCode, vendorId = null) {
   const finalVendorId = vendorId || profile.vendor_id;
   if (!finalVendorId) throw new Error('ベンダーIDが設定されていません');
 
+  // 既存レコード確認（deleted含む）
+  const { data: existing } = await supabase
+    .from('building_vendors')
+    .select('id, status')
+    .eq('property_code', propertyCode)
+    .eq('vendor_id', finalVendorId)
+    .single();
+
+  const newStatus = isAdminUser ? 'active' : 'pending';
+
+  if (existing) {
+    if (existing.status === 'active') {
+      throw new Error('この物件は既に追加されています');
+    }
+    // deleted/pending → 再有効化
+    const { data, error } = await supabase
+      .from('building_vendors')
+      .update({
+        status: newStatus,
+        requested_by: user.id,
+        approved_by: isAdminUser ? user.id : null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', existing.id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
   const { data, error } = await supabase
     .from('building_vendors')
-    .upsert({
+    .insert({
       property_code: propertyCode,
       vendor_id: finalVendorId,
-      status: isAdminUser ? 'active' : 'pending',
+      status: newStatus,
       requested_by: user.id,
       approved_by: isAdminUser ? user.id : null,
       updated_at: new Date().toISOString()
-    }, { onConflict: 'property_code,vendor_id' })
+    })
     .select()
     .single();
   if (error) throw error;
