@@ -7,6 +7,7 @@ import {
     getAppSettings
 } from './bulk-state.js';
 import { addRow, validateRow } from './bulk-table.js';
+import { normalizeTerminalId, CSV_HEADERS, escapeCSVField } from './shared-utils.js';
 
 // ========================================
 // 自動保存・復元
@@ -117,27 +118,6 @@ export async function saveAll(callbacks) {
             const displayStartDate = row.displayStartDate || today;
             const displayEndDate = row.displayEndDate || row.endDate || null;
 
-            // terminal_idを正規化（JSON文字列やオブジェクトから端末ID文字列を抽出）
-            const normalizeTerminalId = (terminalId) => {
-                if (!terminalId) return '';
-                if (typeof terminalId === 'string') {
-                    // JSON文字列の場合はパースして抽出
-                    if (terminalId.startsWith('{')) {
-                        try {
-                            const parsed = JSON.parse(terminalId);
-                            return parsed.terminalId || parsed.terminal_id || parsed.id || terminalId;
-                        } catch (e) {
-                            return terminalId;
-                        }
-                    }
-                    return terminalId;
-                }
-                if (typeof terminalId === 'object') {
-                    return terminalId.terminalId || terminalId.terminal_id || terminalId.id || '';
-                }
-                return String(terminalId);
-            };
-
             return {
                 property_code: String(row.propertyCode),
                 terminal_id: normalizeTerminalId(row.terminalId) || property?.terminal_id || '',
@@ -203,15 +183,7 @@ export function generateCSV() {
     const validRows = rows.filter(r => r.isValid);
     if (validRows.length === 0) return '';
 
-    // サンプルCSVに合わせた列順（1件入力と同じ）
-    const headers = [
-        '点検CO', '端末ID', '物件コード', '保守会社名', '緊急連絡先番号',
-        '点検工事案内', '掲示板に表示する', '点検案内TPLNo', '点検開始日',
-        '点検完了日', '掲示備考', '掲示板用案内文', 'frame_No', '表示開始日',
-        '表示終了日', '表示開始時刻', '表示終了時刻', '表示時間', '統合ポリシー',
-        '制御', '変更日', '変更時刻', '最終エクスポート日時', 'ID', '変更日時',
-        '点検日時', '表示日時', '貼紙区分'
-    ];
+    const headers = CSV_HEADERS;
 
     // 現在日時（1件入力と同じ形式）
     const now = new Date();
@@ -280,11 +252,7 @@ export function generateCSV() {
             'テンプレート'                                // 貼紙区分
         ];
 
-        csvRows.push(values.map(v => {
-            if (v == null) return '';
-            const s = String(v);
-            return (s.includes(',') || s.includes('"') || s.includes('\n')) ? '"' + s.replace(/"/g, '""') + '"' : s;
-        }).join(','));
+        csvRows.push(values.map(escapeCSVField).join(','));
     });
 
     return csvRows.join('\n');
@@ -330,17 +298,6 @@ export async function copyCSV(callbacks) {
 // ========================================
 // ユーティリティ
 // ========================================
-
-export function showToast(message, type = 'info') {
-    const toast = document.getElementById('toast');
-    toast.textContent = message;
-    toast.className = `toast ${type} show`;
-    // エラーの場合は長めに表示
-    const duration = type === 'error' ? 5000 : 2500;
-    setTimeout(() => {
-        toast.classList.remove('show');
-    }, duration);
-}
 
 // ========================================
 // UI更新

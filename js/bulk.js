@@ -15,9 +15,10 @@ import {
 } from './bulk-modals.js';
 import {
     triggerAutoSave, restoreAutoSave, saveAll,
-    downloadCSV, copyCSV, showToast,
+    downloadCSV, copyCSV,
     updateStats, updateEmptyState, updateButtons, applyFilter
 } from './bulk-data.js';
+import { showToast } from './ui-utils.js';
 
 // ========================================
 // コールバックオブジェクト

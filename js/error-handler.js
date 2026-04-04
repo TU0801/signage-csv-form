@@ -30,6 +30,9 @@ function translateError(errorMessage) {
 export function handleError(error, context = '', customMessage = null) {
     console.error(`Error in ${context}:`, error);
 
+    // Supabaseにエラーログを保存
+    logError(error, context);
+
     // カスタムメッセージが指定されている場合はそれを使用
     if (customMessage) {
         if (window.showToast) {
@@ -62,7 +65,7 @@ export function handleSuccess(message, context = '') {
     }
 }
 
-// エラーロギング（将来的にSupabaseに保存可能）
+// エラーロギング（Supabaseに保存）
 export function logError(error, context = '', userId = null) {
     const errorLog = {
         timestamp: new Date().toISOString(),
@@ -76,8 +79,51 @@ export function logError(error, context = '', userId = null) {
 
     console.error('Error Log:', errorLog);
 
-    // 将来的な拡張: Supabaseにログ保存
-    // await supabase.from('error_logs').insert(errorLog);
+    // Supabaseにログ保存（非同期、失敗してもアプリに影響なし）
+    saveErrorToSupabase(errorLog);
+}
+
+// Supabaseにエラーログを保存（REST API直接呼び出し）
+async function saveErrorToSupabase(errorLog) {
+    try {
+        const url = window.SUPABASE_URL;
+        const key = window.SUPABASE_ANON_KEY;
+        if (!url || !key) return;
+
+        // 認証トークンを取得（ログイン中の場合）
+        let accessToken = key;
+        try {
+            const sessionStr = localStorage.getItem(`sb-${new URL(url).hostname.split('.')[0]}-auth-token`);
+            if (sessionStr) {
+                const session = JSON.parse(sessionStr);
+                if (session.access_token) {
+                    accessToken = session.access_token;
+                }
+            }
+        } catch (_e) {
+            // セッション取得失敗時はanon keyで続行
+        }
+
+        await fetch(`${url}/rest/v1/error_logs`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'apikey': key,
+                'Authorization': `Bearer ${accessToken}`,
+                'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify({
+                context: errorLog.context || null,
+                message: errorLog.message || null,
+                stack: errorLog.stack || null,
+                user_id: errorLog.userId || null,
+                user_agent: errorLog.userAgent || null,
+                url: errorLog.url || null
+            })
+        });
+    } catch (_e) {
+        // エラーログ保存の失敗は無視（無限ループ防止）
+    }
 }
 
 // グローバルに公開

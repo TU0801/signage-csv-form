@@ -2,6 +2,7 @@
 
 import { showToast } from './ui-utils.js';
 import { getAppSettings } from './admin-settings.js';
+import { normalizeTerminalId, CSV_HEADERS, escapeCSVField } from './shared-utils.js';
 
 /**
  * CSV文字列を生成
@@ -11,15 +12,7 @@ import { getAppSettings } from './admin-settings.js';
 export function generateCSV(data) {
     if (data.length === 0) return '';
 
-    // script.js と bulk-data.js と同じ28列のヘッダー
-    const headers = [
-        '点検CO', '端末ID', '物件コード', '保守会社名', '緊急連絡先番号',
-        '点検工事案内', '掲示板に表示する', '点検案内TPLNo', '点検開始日',
-        '点検完了日', '掲示備考', '掲示板用案内文', 'frame_No', '表示開始日',
-        '表示終了日', '表示開始時刻', '表示終了時刻', '表示時間', '統合ポリシー',
-        '制御', '変更日', '変更時刻', '最終エクスポート日時', 'ID', '変更日時',
-        '点検日時', '表示日時', '貼紙区分'
-    ];
+    const headers = CSV_HEADERS;
 
     // 現在日時
     const now = new Date();
@@ -30,20 +23,6 @@ export function generateCSV(data) {
 
     const formatDate = (d) => d ? d.replace(/-/g, '/') : '';
     const defaultTime = getAppSettings().display_time_default || 6;
-
-    // terminal_idを正規化（JSON文字列の場合は端末ID文字列を抽出）
-    const normalizeTerminalId = (terminalId) => {
-        if (!terminalId) return '';
-        if (typeof terminalId === 'string' && terminalId.startsWith('{')) {
-            try {
-                const parsed = JSON.parse(terminalId);
-                return parsed.terminalId || parsed.terminal_id || parsed.id || terminalId;
-            } catch (_e) {
-                return terminalId;
-            }
-        }
-        return terminalId;
-    };
 
     data.forEach(entry => {
         const displayTime = entry.display_duration || defaultTime;
@@ -100,12 +79,7 @@ export function generateCSV(data) {
             posterTypeText                               // 貼紙区分
         ];
 
-        // CSVエスケープ処理
-        csvRows.push(values.map(v => {
-            if (v == null) return '';
-            const s = String(v);
-            return (s.includes(',') || s.includes('"') || s.includes('\n')) ? '"' + s.replace(/"/g, '""') + '"' : s;
-        }).join(','));
+        csvRows.push(values.map(escapeCSVField).join(','));
     });
 
     return csvRows.join('\n');

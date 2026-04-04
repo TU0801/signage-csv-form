@@ -8,6 +8,7 @@ import {
 
 import { escapeHtml, showToast } from './ui-utils.js';
 import { getAppSettings } from './admin-settings.js';
+import { normalizeTerminalId } from './shared-utils.js';
 
 let getState = null;
 let getCallbacks = null;
@@ -359,26 +360,13 @@ export function showEntryDetail(entry) {
     const formatDateTime = (d) => d ? new Date(d).toLocaleString('ja-JP') : '-';
 
     // terminal_idを正規化（JSON文字列の場合は端末ID文字列を抽出）
-    const normalizeTerminalId = (terminalId) => {
-        if (!terminalId) return '-';
-        if (typeof terminalId === 'string' && terminalId.startsWith('{')) {
-            try {
-                const parsed = JSON.parse(terminalId);
-                return parsed.terminalId || parsed.terminal_id || parsed.id || terminalId;
-            } catch (_e) {
-                return terminalId;
-            }
-        }
-        return terminalId;
-    };
-
     const html = `
         <div class="detail-grid">
             <div class="detail-label">物件コード</div>
             <div class="detail-value">${escapeHtml(entry.property_code)}</div>
 
             <div class="detail-label">端末ID</div>
-            <div class="detail-value">${escapeHtml(normalizeTerminalId(entry.terminal_id))}</div>
+            <div class="detail-value">${escapeHtml(normalizeTerminalId(entry.terminal_id) || '-')}</div>
 
             <div class="detail-label">保守会社</div>
             <div class="detail-value">${escapeHtml(entry.vendor_name)}</div>

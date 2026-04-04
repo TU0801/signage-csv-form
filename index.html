@@ -244,8 +244,12 @@
     <script type="module">
         // 認証モジュール（ログイン必須）
         import { getUser, getProfile, isAdmin, signOut, getSettings, createEntries, uploadPosterImage, getAllMasterDataCamelCase, getMasterVendors, getBuildingsByVendor, addBuildingVendor, getMasterProperties, getUserEntriesCurrentMonth, submitEntry } from './js/supabase-client.js';
+        import { normalizeTerminalId, CSV_HEADERS, escapeCSVField } from './js/shared-utils.js';
 
         // script.jsから使えるようにwindowに公開
+        window.normalizeTerminalId = normalizeTerminalId;
+        window.CSV_HEADERS = CSV_HEADERS;
+        window.escapeCSVField = escapeCSVField;
         window.createEntriesToSupabase = createEntries;
         window.uploadPosterImage = uploadPosterImage;
         window.getAllMasterDataCamelCase = getAllMasterDataCamelCase;
