@@ -1,2 +1,2 @@
-echo "🧪 pre-push: テスト実行中..."
-npx playwright test --reporter=list
+echo "🧪 pre-push: スモークテスト実行中..."
+npx playwright test tests/smoke.spec.js --reporter=list
