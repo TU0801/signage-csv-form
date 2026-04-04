@@ -90,6 +90,7 @@ export default [
   },
   // script.js はモジュールではなく通常のスクリプト
   // masterData, showLoading, hideLoading はHTML内のインラインスクリプトで定義
+  // getTemplateImageUrl, hasTemplateImage は template-images.js で定義
   {
     files: ['js/script.js'],
     languageOptions: {
@@ -98,7 +99,27 @@ export default [
         masterData: 'writable',
         showLoading: 'readonly',
         hideLoading: 'readonly',
+        getTemplateImageUrl: 'readonly',
+        hasTemplateImage: 'readonly',
       },
+    },
+  },
+  // csv-generator.js はモジュールではなく通常のスクリプト
+  // showToast は script.js で定義
+  {
+    files: ['js/csv-generator.js'],
+    languageOptions: {
+      sourceType: 'script',
+      globals: {
+        showToast: 'readonly',
+      },
+    },
+  },
+  // template-images.js はモジュールではなく通常のスクリプト
+  {
+    files: ['js/template-images.js'],
+    languageOptions: {
+      sourceType: 'script',
     },
   },
 ];

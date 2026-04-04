@@ -615,6 +615,9 @@ window.openEquipmentModal = openEquipmentModal;
 window.closeEquipmentModal = closeEquipmentModal;
 window.addEquipment = addEquipment;
 window.deleteEquipmentRow = deleteEquipmentRow;
+window.openEditUserModal = openEditUserModal;
+window.handleDeactivateUser = handleDeactivateUser;
+window.handleActivateUser = handleActivateUser;
 
 // ========================================
 // 起動
