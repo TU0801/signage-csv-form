@@ -26,12 +26,27 @@ function translateError(errorMessage) {
     return '操作に失敗しました';
 }
 
+// セッションからユーザーIDを同期的に取得（非同期APIを避ける）
+function getUserIdFromSession() {
+    try {
+        const url = window.SUPABASE_URL;
+        if (!url) return null;
+        const key = `sb-${new URL(url).hostname.split('.')[0]}-auth-token`;
+        const sessionStr = localStorage.getItem(key);
+        if (!sessionStr) return null;
+        const session = JSON.parse(sessionStr);
+        return session?.user?.id || null;
+    } catch (_e) {
+        return null;
+    }
+}
+
 // 統一エラーハンドラー
 export function handleError(error, context = '', customMessage = null) {
     console.error(`Error in ${context}:`, error);
 
-    // Supabaseにエラーログを保存
-    logError(error, context);
+    // Supabaseにエラーログを保存（認証トークンからユーザーIDを推定）
+    logError(error, context, getUserIdFromSession());
 
     // カスタムメッセージが指定されている場合はそれを使用
     if (customMessage) {

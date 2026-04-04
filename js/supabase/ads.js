@@ -1,10 +1,7 @@
 // supabase/ads.js - 広告枠管理
 
-import { supabase } from './client.js';
+import { supabase, SUPABASE_URL, STORAGE_BUCKET } from './client.js';
 import { getUser } from './auth.js';
-
-const SUPABASE_URL = window.SUPABASE_URL || 'YOUR_SUPABASE_URL';
-const STORAGE_BUCKET = 'poster-images';
 
 export async function getAdSlots() {
   const { data, error } = await supabase.from('signage_ad_slots').select('*').order('slot_index');

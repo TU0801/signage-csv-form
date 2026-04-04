@@ -1,5 +1,5 @@
 # ESLintチェック（エラーのみブロック、警告は許容）
-CHANGED_JS=$(git diff --cached --name-only -- '*.js' | grep '^js/' || true)
+CHANGED_JS=$(git diff --cached --name-only -- '*.js' | grep '^js/' | tr '\n' ' ' || true)
 if [ -n "$CHANGED_JS" ]; then
   echo "🔍 ESLint: 変更されたJSファイルをチェック中..."
   npx eslint $CHANGED_JS --max-warnings=30
