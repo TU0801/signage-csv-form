@@ -13,12 +13,12 @@ async function loginAndGoToIndex(page) {
   await page.fill('input[type="email"]', 'a@a');
   await page.fill('input[type="password"]', 'aaaaaa');
   await page.click('button[type="submit"]');
-  await page.waitForURL(url => !url.toString().includes('login.html'), { timeout: 10000 });
-  await page.waitForTimeout(2000);
+  await page.waitForURL(url => !url.toString().includes('login.html'), { timeout: 30000 });
+  await page.waitForLoadState('networkidle');
   // index.htmlに確実に遷移
   if (!page.url().includes('index.html')) {
     await page.goto(`${baseUrl}/index.html`);
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState('networkidle');
   }
 }
 

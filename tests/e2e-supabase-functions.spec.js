@@ -235,7 +235,7 @@ test.describe('紐付け・ビル管理', () => {
       const { supabase } = await import('./js/supabase/client.js');
       const user = (await supabase.auth.getUser()).data.user;
       const { data, error } = await supabase
-        .from('building_vendors')
+        .from('signage_building_vendors')
         .insert({ property_code: code, vendor_id: vid, status: 'active', requested_by: user.id, approved_by: user.id })
         .select().single();
       if (error) throw new Error(error.message);
@@ -255,7 +255,7 @@ test.describe('紐付け・ビル管理', () => {
     // クリーンアップ: テストレコードを物理削除
     await page.evaluate(async ({ id }) => {
       const { supabase } = await import('./js/supabase/client.js');
-      await supabase.from('building_vendors').delete().eq('id', id);
+      await supabase.from('signage_building_vendors').delete().eq('id', id);
     }, { id: added.id });
   });
 

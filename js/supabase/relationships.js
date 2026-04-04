@@ -15,7 +15,7 @@ export async function getAssignedBuildings() {
   if (!profile.vendor_id) return [];
 
   const { data: relationships, error: relError } = await supabase
-    .from('building_vendors')
+    .from('signage_building_vendors')
     .select('property_code')
     .eq('vendor_id', profile.vendor_id)
     .eq('status', 'active');
@@ -33,7 +33,7 @@ export async function getAssignedBuildings() {
 
 export async function getBuildingsByVendor(vendorId) {
   const { data: relationships, error: relError } = await supabase
-    .from('building_vendors')
+    .from('signage_building_vendors')
     .select('property_code')
     .eq('vendor_id', vendorId)
     .eq('status', 'active');
@@ -51,7 +51,7 @@ export async function getBuildingsByVendor(vendorId) {
 
 export async function getBuildingVendors(filters = {}) {
   let query = supabase
-    .from('building_vendors')
+    .from('signage_building_vendors')
     .select('*, signage_master_vendors(vendor_name, inspection_type)')
     .order('created_at', { ascending: false });
   if (filters.vendorId) query = query.eq('vendor_id', filters.vendorId);
@@ -63,7 +63,7 @@ export async function getBuildingVendors(filters = {}) {
 
 export async function getPendingBuildingRequests() {
   const { data, error } = await supabase
-    .from('building_vendors')
+    .from('signage_building_vendors')
     .select('*, signage_master_vendors(vendor_name)')
     .eq('status', 'pending')
     .order('created_at', { ascending: false });
@@ -81,7 +81,7 @@ export async function addBuildingVendor(propertyCode, vendorId = null) {
 
   // 既存レコード確認（deleted含む）
   const { data: existing } = await supabase
-    .from('building_vendors')
+    .from('signage_building_vendors')
     .select('id, status')
     .eq('property_code', propertyCode)
     .eq('vendor_id', finalVendorId)
@@ -95,7 +95,7 @@ export async function addBuildingVendor(propertyCode, vendorId = null) {
     }
     // deleted/pending → 再有効化
     const { data, error } = await supabase
-      .from('building_vendors')
+      .from('signage_building_vendors')
       .update({
         status: newStatus,
         requested_by: user.id,
@@ -110,7 +110,7 @@ export async function addBuildingVendor(propertyCode, vendorId = null) {
   }
 
   const { data, error } = await supabase
-    .from('building_vendors')
+    .from('signage_building_vendors')
     .insert({
       property_code: propertyCode,
       vendor_id: finalVendorId,
@@ -128,7 +128,7 @@ export async function addBuildingVendor(propertyCode, vendorId = null) {
 export async function approveBuildingRequest(buildingVendorId) {
   const user = await getUser();
   const { data, error } = await supabase
-    .from('building_vendors')
+    .from('signage_building_vendors')
     .update({ status: 'active', approved_by: user.id })
     .eq('id', buildingVendorId)
     .select()
@@ -139,7 +139,7 @@ export async function approveBuildingRequest(buildingVendorId) {
 
 export async function rejectBuildingRequest(buildingVendorId) {
   const { error } = await supabase
-    .from('building_vendors')
+    .from('signage_building_vendors')
     .delete()
     .eq('id', buildingVendorId);
   if (error) throw error;
@@ -147,7 +147,7 @@ export async function rejectBuildingRequest(buildingVendorId) {
 
 export async function removeBuildingVendor(buildingVendorId) {
   const { data, error } = await supabase
-    .from('building_vendors')
+    .from('signage_building_vendors')
     .update({ status: 'deleted' })
     .eq('id', buildingVendorId)
     .select()

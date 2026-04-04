@@ -119,7 +119,7 @@ async function saveErrorToSupabase(errorLog) {
             // セッション取得失敗時はanon keyで続行
         }
 
-        await fetch(`${url}/rest/v1/error_logs`, {
+        await fetch(`${url}/rest/v1/signage_error_logs`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -139,6 +139,50 @@ async function saveErrorToSupabase(errorLog) {
     } catch (_e) {
         // エラーログ保存の失敗は無視（無限ループ防止）
     }
+}
+
+// グローバルエラーキャッチ（重複防止付き）
+const _recentErrors = new Map();
+const ERROR_DEBOUNCE_MS = 5000;
+
+function isDuplicateError(message) {
+    const now = Date.now();
+    const lastTime = _recentErrors.get(message);
+    if (lastTime && (now - lastTime) < ERROR_DEBOUNCE_MS) {
+        return true;
+    }
+    _recentErrors.set(message, now);
+    // 古いエントリを定期的にクリーンアップ
+    if (_recentErrors.size > 50) {
+        for (const [key, time] of _recentErrors) {
+            if ((now - time) >= ERROR_DEBOUNCE_MS) {
+                _recentErrors.delete(key);
+            }
+        }
+    }
+    return false;
+}
+
+// window.onerror: グローバルJSエラー捕捉
+if (typeof window !== 'undefined') {
+    window.onerror = function (message, source, lineno, colno, error) {
+        const msg = String(message || 'Unknown error');
+        if (isDuplicateError(msg)) return;
+        const err = error || new Error(msg);
+        if (!err.stack && source) {
+            err.stack = `${msg} at ${source}:${lineno}:${colno}`;
+        }
+        logError(err, `global:${source}:${lineno}`, getUserIdFromSession());
+    };
+
+    // unhandledrejection: 未処理Promise拒否捕捉
+    window.addEventListener('unhandledrejection', function (event) {
+        const reason = event.reason;
+        const msg = String(reason?.message || reason || 'Unhandled promise rejection');
+        if (isDuplicateError(msg)) return;
+        const err = reason instanceof Error ? reason : new Error(msg);
+        logError(err, 'unhandledrejection', getUserIdFromSession());
+    });
 }
 
 // グローバルに公開

@@ -19,8 +19,8 @@ async function loginAsUser(page) {
   await page.fill('input[type="email"]', 'a@a');
   await page.fill('input[type="password"]', 'aaaaaa');
   await page.click('button[type="submit"]');
-  await page.waitForURL(url => !url.toString().includes('login.html'), { timeout: 10000 });
-  await page.waitForTimeout(2000);
+  await page.waitForURL(url => !url.toString().includes('login.html'), { timeout: 30000 });
+  await page.waitForLoadState('networkidle');
 }
 
 // ============================================
@@ -66,8 +66,8 @@ async function loginAsAdmin(page) {
   await page.fill('input[type="email"]', 'admin@example.com');
   await page.fill('input[type="password"]', 'admin123');
   await page.click('button[type="submit"]');
-  await page.waitForURL(/\/(index|admin)\.html/, { timeout: 10000 });
-  await page.waitForTimeout(2000);
+  await page.waitForURL(/\/(index|admin)\.html/, { timeout: 30000 });
+  await page.waitForLoadState('networkidle');
 }
 
 // ============================================

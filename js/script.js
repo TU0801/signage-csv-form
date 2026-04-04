@@ -844,7 +844,7 @@ let selectedVendorIdForAdmin = null;
                 const vendorDropdown = document.getElementById('vendor');
                 vendorDropdown.disabled = false;
                 vendorDropdown.style.background = '';
-                vendorDropdown.value = '';
+                vendorDropdown.value = '0';
 
                 // 点検種別のロックも解除
                 const inspectionSelect = document.getElementById('inspectionType');

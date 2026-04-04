@@ -258,11 +258,11 @@ export function renderEntries() {
 
     document.getElementById('entriesCount').textContent = entries.length;
 
-    // 全選択チェックボックスをデフォルトで選択状態に
+    // 全選択チェックボックスをリセット
     const selectAll = document.getElementById('selectAllEntries');
     if (selectAll) {
-        selectAll.checked = true;
-        document.querySelectorAll('.entry-checkbox').forEach(cb => cb.checked = true);
+        selectAll.checked = false;
+        document.querySelectorAll('.entry-checkbox').forEach(cb => cb.checked = false);
     }
     updateBulkActionButtons();
 }

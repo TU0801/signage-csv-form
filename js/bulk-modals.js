@@ -11,7 +11,7 @@ let copiedRowData = null;
 // LocalStorageから安全にテンプレートを読み込む
 function getStoredTemplates() {
     try {
-        return getStoredTemplates();
+        return JSON.parse(localStorage.getItem('bulk_templates') || '{}');
     } catch (e) {
         console.warn('Failed to parse bulk_templates from localStorage:', e);
         return {};

@@ -9,6 +9,8 @@
     "test:debug": "npx playwright test --debug",
     "test:report": "npx playwright show-report",
     "lint": "npx eslint js/",
+    "deps": "npx madge js/admin.js js/bulk.js --image deps.svg && echo 'deps.svg generated'",
+    "deps:circular": "npx madge js/admin.js js/bulk.js --circular",
     "serve": "npx http-server -p 8080",
     "prepare": "husky"
   },

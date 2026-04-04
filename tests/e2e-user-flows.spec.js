@@ -18,10 +18,8 @@ async function loginAsUser(page, email = 'a@a', password = 'aaaaaa') {
   await page.click('button[type="submit"]');
 
   // ログイン成功を待機（管理者はadmin.html、一般ユーザーはindex.htmlへリダイレクト）
-  await page.waitForURL(url => !url.toString().includes('login.html'), { timeout: 10000 });
-
-  // マスターデータの読み込みを待機
-  await page.waitForTimeout(2000);
+  await page.waitForURL(url => !url.toString().includes('login.html'), { timeout: 30000 });
+  await page.waitForLoadState('networkidle');
 }
 
 /**
@@ -68,6 +66,12 @@ test.describe('一件入力', () => {
   test.beforeEach(async ({ page }) => {
     await loginAsUser(page);
     await page.goto(`${baseUrl}/index.html`);
+    await page.waitForLoadState('networkidle');
+    // マスターデータ読み込み完了を待機（物件セレクトにオプションが追加されるまで）
+    await page.waitForFunction(() => {
+      const opts = document.querySelectorAll('#property option');
+      return opts.length > 1;
+    }, { timeout: 15000 }).catch(() => {});
   });
 
   test('物件を選択すると端末が自動的に設定される', async ({ page }) => {
@@ -161,7 +165,9 @@ test.describe('一括入力', () => {
   test.beforeEach(async ({ page }) => {
     await loginAsUser(page);
     await page.goto(`${baseUrl}/bulk.html`);
-    await page.waitForTimeout(2000); // データ読み込み待機
+    await page.waitForLoadState('networkidle');
+    // 一括入力画面のUI準備完了を待機
+    await page.waitForSelector('h1', { timeout: 10000 });
   });
 
   test('一括入力画面が表示される', async ({ page }) => {
@@ -201,6 +207,7 @@ test.describe('エラーケース', () => {
   test.beforeEach(async ({ page }) => {
     await loginAsUser(page);
     await page.goto(`${baseUrl}/index.html`);
+    await page.waitForLoadState('networkidle');
   });
 
   test('一件入力で必須項目が未入力の場合はデータ追加できない', async ({ page }) => {

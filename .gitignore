@@ -9,3 +9,4 @@ error/
 *.backup
 *.log
 .vercel
+deps.svg

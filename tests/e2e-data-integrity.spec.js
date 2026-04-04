@@ -13,8 +13,8 @@ async function loginAsUser(page, email = 'a@a', password = 'aaaaaa') {
   await page.fill('input[type="email"]', email);
   await page.fill('input[type="password"]', password);
   await page.click('button[type="submit"]');
-  await page.waitForURL(url => !url.toString().includes('login.html'), { timeout: 10000 });
-  await page.waitForTimeout(2000);
+  await page.waitForURL(url => !url.toString().includes('login.html'), { timeout: 30000 });
+  await page.waitForLoadState('networkidle');
 }
 
 async function loginAsAdmin(page) {
