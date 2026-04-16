@@ -136,7 +136,7 @@ function renderBuildingVendorRelationships(relationships, properties, vendorId) 
             <p style="color: #64748b; font-size: 0.875rem; margin: 0;">
                 ${activeRelationships.length}件の物件が紐付けられています
             </p>
-            <button class="btn btn-primary btn-sm" onclick="openAddBuildingModal('${vendorId}')">
+            <button class="btn btn-primary btn-sm" onclick="openAddBuildingModal('${escapeHtml(vendorId)}')">
                 <span class="btn-icon">➕</span> ビルを追加
             </button>
         </div>
@@ -161,8 +161,8 @@ function renderBuildingVendorRelationships(relationships, properties, vendorId) 
                                 <td><span class="status-badge status-active">有効</span></td>
                                 <td>${new Date(r.created_at).toLocaleDateString('ja-JP')}</td>
                                 <td style="display: flex; gap: 0.5rem;">
-                                    <button class="btn btn-outline btn-sm btn-equipment" onclick="openEquipmentModal('${r.property_code}', '${escapeHtml(propertiesMap[r.property_code] || r.property_code)}')">🔧 設備</button>
-                                    <button class="btn btn-danger btn-sm" onclick="handleRemoveBuildingVendor('${r.id}')">削除</button>
+                                    <button class="btn btn-outline btn-sm btn-equipment" onclick="openEquipmentModal('${escapeHtml(r.property_code)}', '${escapeHtml(propertiesMap[r.property_code] || r.property_code)}')">🔧 設備</button>
+                                    <button class="btn btn-danger btn-sm" onclick="handleRemoveBuildingVendor('${escapeHtml(r.id)}')">削除</button>
                                 </td>
                             </tr>
                         `).join('')}
@@ -181,7 +181,7 @@ function renderVendorInspectionRelationships(relationships, vendorId) {
             <p style="color: #64748b; font-size: 0.875rem; margin: 0;">
                 ${relationships.length}件の点検種別が紐付けられています
             </p>
-            <button class="btn btn-primary btn-sm" onclick="openAddInspectionModal('${vendorId}')">
+            <button class="btn btn-primary btn-sm" onclick="openAddInspectionModal('${escapeHtml(vendorId)}')">
                 <span class="btn-icon">➕</span> 点検種別を追加
             </button>
         </div>
@@ -206,7 +206,7 @@ function renderVendorInspectionRelationships(relationships, vendorId) {
                                 <td><span class="status-badge status-active">有効</span></td>
                                 <td>${new Date(r.created_at).toLocaleDateString('ja-JP')}</td>
                                 <td>
-                                    <button class="btn btn-danger btn-sm" onclick="handleRemoveVendorInspection('${r.id}')">削除</button>
+                                    <button class="btn btn-danger btn-sm" onclick="handleRemoveVendorInspection('${escapeHtml(r.id)}')">削除</button>
                                 </td>
                             </tr>
                         `).join('')}
@@ -475,8 +475,8 @@ function renderPendingBuildingRequests() {
             <td>${getUserEmail(req.requested_by)}</td>
             <td>${new Date(req.created_at).toLocaleString('ja-JP')}</td>
             <td>
-                <button class="btn btn-success btn-sm" onclick="handleApproveBuildingRequest('${req.id}')">承認</button>
-                <button class="btn btn-danger btn-sm" onclick="handleRejectBuildingRequest('${req.id}')">却下</button>
+                <button class="btn btn-success btn-sm" onclick="handleApproveBuildingRequest('${escapeHtml(req.id)}')">承認</button>
+                <button class="btn btn-danger btn-sm" onclick="handleRejectBuildingRequest('${escapeHtml(req.id)}')">却下</button>
             </td>
         </tr>
     `;}).join('');

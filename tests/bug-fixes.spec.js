@@ -114,6 +114,63 @@ test.describe('Bug4: admin-entry-edit.js のXSS対策', () => {
 });
 
 // ========================================
+// Bug8: admin-relationships.js onclick埋込のescapeHtml化（水平展開）
+// ========================================
+test.describe('Bug8: admin-relationships.js onclick埋込の escape', () => {
+  test('ソースコードで onclick 内の動的値が escapeHtml で包まれている', async ({ page }) => {
+    const response = await page.request.get(`${baseUrl}/js/admin-relationships.js`);
+    const code = await response.text();
+
+    // raw テンプレ埋込 onclick="fn('${var}')" が残っていないこと（escapeHtml を経由しない ${...} はNG）
+    const rawOnclickPattern = /onclick="[a-zA-Z_]+\('\$\{(?!escapeHtml)[^}]+\}/;
+    expect(code).not.toMatch(rawOnclickPattern);
+  });
+});
+
+// ========================================
+// Bug9: csv-generator.js null安全化（水平展開）
+// ========================================
+test.describe('Bug9: csv-generator.js の null 安全', () => {
+  test('entry.remarks / entry.noticeText が undefined でも generateCSV が例外を投げない', async ({ page }) => {
+    await loginAsUser(page);
+    await page.goto(`${baseUrl}/index.html`);
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(1500);
+
+    const result = await page.evaluate(() => {
+      window._entries = [{
+        terminalId: 'T001',
+        propertyCode: '120109',
+        vendorName: 'Test',
+        emergencyContact: '000',
+        inspectionType: 'x',
+        showOnBoard: true,
+        templateNo: '',
+        startDate: '2026-04-20',
+        endDate: '2026-04-21',
+        // remarks と noticeText を意図的に欠落させる
+        frameNo: 2,
+        displayStartDate: '',
+        displayEndDate: '',
+        displayStartTime: '',
+        displayEndTime: '',
+        displayTime: 6,
+        posterType: 'template'
+      }];
+      try {
+        const csv = typeof window.generateCSV === 'function' ? window.generateCSV() : null;
+        return { ok: true, csv };
+      } catch (e) {
+        return { ok: false, error: String(e?.message || e) };
+      }
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.csv).toContain('120109');
+  });
+});
+
+// ========================================
 // Bug5: script.js 物件コードソート
 // ========================================
 test.describe('Bug5: 物件コードプルダウンのソート', () => {

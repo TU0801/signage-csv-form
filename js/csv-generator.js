@@ -14,8 +14,8 @@ function generateCSV() {
         const ed = e.endDate ? e.endDate.replace(/-/g, '/') : sd;
         const dsd = e.displayStartDate ? e.displayStartDate.replace(/-/g, '/') : '';
         const ded = e.displayEndDate ? e.displayEndDate.replace(/-/g, '/') : ed;
-        const dt = `0:00:${String(e.displayTime).padStart(2, '0')}`;
-        return ['', normalizeTerminalId(e.terminalId), e.propertyCode, e.vendorName, e.emergencyContact, e.inspectionType, e.showOnBoard ? 'TRUE' : 'False', e.templateNo, sd, ed, e.remarks.replace(/\n/g, '\r\n'), e.noticeText.replace(/\n/g, '\r\n'), e.frameNo !== undefined ? String(e.frameNo) : '2', dsd, ded, e.displayStartTime || '', e.displayEndTime || '', dt, '', '', dateStr, '', '', '', `${dateStr} [${timeStr}]`, `${sd} [00:00:00]`, `${dsd} [00:00:00]`, e.posterType === 'template' ? 'テンプレート' : '追加'];
+        const dt = `0:00:${String(e.displayTime ?? 6).padStart(2, '0')}`;
+        return ['', normalizeTerminalId(e.terminalId), e.propertyCode, e.vendorName, e.emergencyContact, e.inspectionType, e.showOnBoard ? 'TRUE' : 'False', e.templateNo, sd, ed, (e.remarks || '').replace(/\n/g, '\r\n'), (e.noticeText || '').replace(/\n/g, '\r\n'), e.frameNo !== undefined ? String(e.frameNo) : '2', dsd, ded, e.displayStartTime || '', e.displayEndTime || '', dt, '', '', dateStr, '', '', '', `${dateStr} [${timeStr}]`, `${sd} [00:00:00]`, `${dsd} [00:00:00]`, e.posterType === 'template' ? 'テンプレート' : '追加'];
     });
 
     const esc = window.escapeCSVField || (v => {
