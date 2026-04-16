@@ -10,12 +10,17 @@ export async function getUser() {
   try {
     const { data: { user }, error } = await supabase.auth.getUser();
     if (error) {
-      console.error('Failed to get user:', error);
+      // 未ログイン時の AuthSessionMissingError は想定内のためログを出さない
+      if (error.name !== 'AuthSessionMissingError') {
+        console.error('Failed to get user:', error);
+      }
       return null;
     }
     return user;
   } catch (error) {
-    console.error('Unexpected error getting user:', error);
+    if (error?.name !== 'AuthSessionMissingError') {
+      console.error('Unexpected error getting user:', error);
+    }
     return null;
   }
 }

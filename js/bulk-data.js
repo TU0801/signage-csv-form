@@ -223,13 +223,13 @@ export function generateCSV() {
 
         const values = [
             '',                                          // 点検CO (#11: DB保存後に自動採番)
-            row.terminalId || property?.terminal_id || '', // 端末ID
+            row.terminalId || property?.terminalId || '', // 端末ID
             row.propertyCode,                            // 物件コード
             row.vendorName,                              // 保守会社名
-            vendor?.emergency_contact || '',             // 緊急連絡先番号
+            vendor?.emergencyContact || '',              // 緊急連絡先番号
             row.inspectionType,                          // 点検工事案内
             showOnBoard,                                 // 掲示板に表示する
-            inspection?.template_no || '',               // 点検案内TPLNo
+            inspection?.templateNo || '',                // 点検案内TPLNo
             sd,                                          // 点検開始日
             ed,                                          // 点検完了日
             remarksText,                                 // 掲示備考

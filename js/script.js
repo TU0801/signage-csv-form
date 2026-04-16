@@ -60,7 +60,14 @@ let selectedVendorIdForAdmin = null;
             // #4: 既存optionをクリアしてから追加（フィルター時の重複防止）
             select.innerHTML = '<option value="">選択してください</option>';
             const seen = new Set();
-            masterData.properties.forEach(p => {
+            // 物件コードは数値想定のため数値昇順でソート（非数値は文字列昇順にフォールバック）
+            const sorted = [...masterData.properties].sort((a, b) => {
+                const na = parseInt(a.propertyCode, 10);
+                const nb = parseInt(b.propertyCode, 10);
+                if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
+                return String(a.propertyCode).localeCompare(String(b.propertyCode));
+            });
+            sorted.forEach(p => {
                 if (!seen.has(p.propertyCode)) {
                     seen.add(p.propertyCode);
                     const opt = document.createElement('option');

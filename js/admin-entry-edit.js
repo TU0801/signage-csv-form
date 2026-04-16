@@ -1,7 +1,7 @@
 // admin-entry-edit.js - エントリ編集モーダル
 
 import { updateEntry } from './supabase-client.js';
-import { showToast } from './ui-utils.js';
+import { escapeHtml, showToast } from './ui-utils.js';
 import { getAppSettings } from './admin-settings.js';
 
 let getState = null;
@@ -35,7 +35,7 @@ export async function editEntry(id, mode) {
 
     // 物件名を事前に取得（テンプレート内での重複.find()を回避）
     const property = masterData.properties.find(p => p.property_code === entry.property_code);
-    const propertyDisplay = `${entry.property_code || '-'} ${property?.property_name || ''}`;
+    const propertyDisplay = escapeHtml(`${entry.property_code || '-'} ${property?.property_name || ''}`);
 
     // 編集モーダルを作成
     const modal = document.createElement('div');
@@ -86,19 +86,19 @@ export async function editEntry(id, mode) {
                         </div>
                         <div style="display: flex; gap: 0.5rem;">
                             <span style="color: #64748b; flex-shrink: 0;">端末：</span>
-                            <span style="font-weight: 600; color: #1e293b;">${entry.terminal_id || '-'}</span>
+                            <span style="font-weight: 600; color: #1e293b;">${escapeHtml(entry.terminal_id || '-')}</span>
                         </div>
                         <div style="display: flex; gap: 0.5rem;">
                             <span style="color: #64748b; flex-shrink: 0;">保守会社：</span>
-                            <span style="font-weight: 600; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${entry.vendor_name || '-'}">${entry.vendor_name || '-'}</span>
+                            <span style="font-weight: 600; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(entry.vendor_name || '-')}">${escapeHtml(entry.vendor_name || '-')}</span>
                         </div>
                         <div style="display: flex; gap: 0.5rem;">
                             <span style="color: #64748b; flex-shrink: 0;">点検種別：</span>
-                            <span style="font-weight: 600; color: #1e293b;">${entry.inspection_type || '-'}</span>
+                            <span style="font-weight: 600; color: #1e293b;">${escapeHtml(entry.inspection_type || '-')}</span>
                         </div>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
-                            <div><span style="color: #64748b;">点検開始：</span><span style="font-weight: 600; color: #1e293b;">${entry.inspection_start || '-'}</span></div>
-                            <div><span style="color: #64748b;">点検終了：</span><span style="font-weight: 600; color: #1e293b;">${entry.inspection_end || '-'}</span></div>
+                            <div><span style="color: #64748b;">点検開始：</span><span style="font-weight: 600; color: #1e293b;">${escapeHtml(entry.inspection_start || '-')}</span></div>
+                            <div><span style="color: #64748b;">点検終了：</span><span style="font-weight: 600; color: #1e293b;">${escapeHtml(entry.inspection_end || '-')}</span></div>
                         </div>
                     </div>
                 </div>
