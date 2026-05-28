@@ -657,6 +657,9 @@ export function openMasterModal(type, masterData, data = null) {
     document.getElementById('masterType').value = type;
     document.getElementById('masterId').value = data?.id || '';
 
+    // 物件タイプは設備テーブルを含むため、モーダルを広げて見やすくする
+    modal.querySelector('.modal-content')?.classList.toggle('property-wide', type === 'property');
+
     // タイプに応じてフィールドを表示＆有効化
     if (type === 'property') {
         const section = document.getElementById('propertyFields');

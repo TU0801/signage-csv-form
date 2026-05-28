@@ -466,31 +466,33 @@
 
                     <!-- 物件用フィールド -->
                     <div id="propertyFields" style="display:none;">
-                        <div class="form-group">
-                            <label>物件コード *</label>
-                            <input type="number" id="propertyCode" required>
-                        </div>
-                        <div class="form-group">
-                            <label>物件名 *</label>
-                            <input type="text" id="propertyName" required>
-                        </div>
-                        <div class="form-group">
-                            <label>端末リスト *</label>
-                            <div id="terminalsList" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.5rem;"></div>
-                            <button type="button" class="btn btn-outline btn-sm" id="addTerminalBtn">+ 端末を追加</button>
-                        </div>
-                        <div class="form-group">
-                            <label>補足</label>
-                            <input type="text" id="supplement">
-                        </div>
-                        <div class="form-group">
-                            <label>住所</label>
-                            <input type="text" id="address">
+                        <div class="property-grid">
+                            <div class="form-group">
+                                <label>物件コード *</label>
+                                <input type="number" id="propertyCode" required>
+                            </div>
+                            <div class="form-group">
+                                <label>物件名 *</label>
+                                <input type="text" id="propertyName" required>
+                            </div>
+                            <div class="form-group full-span">
+                                <label>端末リスト *</label>
+                                <div id="terminalsList" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.5rem;"></div>
+                                <button type="button" class="btn btn-outline btn-sm" id="addTerminalBtn">+ 端末を追加</button>
+                            </div>
+                            <div class="form-group">
+                                <label>補足</label>
+                                <input type="text" id="supplement">
+                            </div>
+                            <div class="form-group">
+                                <label>住所</label>
+                                <input type="text" id="address">
+                            </div>
                         </div>
 
                         <!-- 設備情報（物件マスターに統合） -->
-                        <div class="form-group">
-                            <label>設備情報</label>
+                        <div class="equipment-section">
+                            <div class="section-title">🔧 設備情報</div>
                             <table class="equipment-table">
                                 <thead>
                                     <tr>
