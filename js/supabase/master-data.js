@@ -76,7 +76,8 @@ export async function getAllMasterData() {
         id: p.id,
         property_code: code,
         property_name: p.property_name,
-        terminals: []
+        terminals: [],
+        equipment: Array.isArray(p.equipment) ? p.equipment : []
       });
     }
     if (Array.isArray(p.terminals)) {

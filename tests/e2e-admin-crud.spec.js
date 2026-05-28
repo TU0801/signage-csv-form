@@ -524,6 +524,53 @@ test.describe('マスターモーダル バリデーション', () => {
     await expect(page.locator('#propertyName')).toBeVisible();
   });
 
+  test('物件モーダルに設備情報セクションが表示される', async ({ page }) => {
+    await clickMasterSubTab(page, 'properties');
+    await page.click('#addPropertyBtn');
+    await page.waitForTimeout(300);
+
+    await expect(page.locator('#propertyFields')).toBeVisible();
+    // 設備UIが物件マスター内に統合されている
+    await expect(page.locator('#propEquipmentTableBody')).toBeAttached();
+    await expect(page.locator('#propEquipmentType')).toBeVisible();
+    await expect(page.locator('#propEquipmentVendor')).toBeVisible();
+    await expect(page.locator('#propMonthCheckboxes')).toBeVisible();
+    await expect(page.locator('#propAddEquipmentBtn')).toBeVisible();
+  });
+
+  test('物件モーダルで設備をローカル追加・削除できる', async ({ page }) => {
+    await clickMasterSubTab(page, 'properties');
+    await page.click('#addPropertyBtn');
+    await page.waitForTimeout(300);
+
+    // 点検カテゴリの設備種別が無い環境ではスキップ
+    const typeOptions = await page.locator('#propEquipmentType option:not([value=""])').count();
+    if (typeOptions === 0) {
+      test.skip();
+      return;
+    }
+
+    // 種別を選び、点検月を1つチェックして追加
+    await page.selectOption('#propEquipmentType', { index: 1 });
+    await page.locator('#propMonthCheckboxes input[type="checkbox"]').first().check();
+    await page.click('#propAddEquipmentBtn');
+    await page.waitForTimeout(200);
+
+    // 行が1つ増え、空メッセージは非表示
+    await expect(page.locator('#propEquipmentTableBody tr')).toHaveCount(1);
+    await expect(page.locator('#propEquipmentEmptyMessage')).toBeHidden();
+
+    // 削除すると行が消える
+    await page.click('#propEquipmentTableBody .prop-equipment-remove');
+    await page.waitForTimeout(200);
+    await expect(page.locator('#propEquipmentTableBody tr')).toHaveCount(0);
+  });
+
+  test('旧設備モーダルは廃止されている', async ({ page }) => {
+    // 設備UIは物件マスターへ統合済み。独立した #equipmentModal は存在しない
+    await expect(page.locator('#equipmentModal')).toHaveCount(0);
+  });
+
   test('点検種別追加モーダルでカテゴリとテンプレートが選択できる', async ({ page }) => {
     await clickMasterSubTab(page, 'inspections');
     await page.click('#addInspectionBtn');

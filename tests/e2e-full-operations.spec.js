@@ -480,6 +480,8 @@ test.describe('admin.html: 管理画面', () => {
         await page.waitForTimeout(500);
       }
     }
+    // 設備UISはマスター管理へ移動済み。紐付け管理に設備ボタンは存在しない
+    await expect(page.locator('.btn-equipment')).toHaveCount(0);
     expect(consoleErrors).toEqual([]);
   });
 

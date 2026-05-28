@@ -76,14 +76,6 @@ import {
 } from './admin-entry-edit.js';
 
 import {
-    initEquipmentModule,
-    openEquipmentModal,
-    closeEquipmentModal,
-    addEquipment,
-    deleteEquipmentRow
-} from './admin-equipment.js';
-
-import {
     initPendingModule,
     loadPendingEntries,
     renderPendingEntries,
@@ -183,11 +175,6 @@ async function init() {
     initEntryEditModule(
         () => ({ pendingEntries, entries, masterData }),
         () => ({ loadPendingEntries, loadEntries, renderPendingEntries, renderEntries })
-    );
-
-    // 設備管理モジュール初期化
-    initEquipmentModule(
-        () => ({ masterData })
     );
 
     // 承認待ちモジュール初期化
@@ -306,8 +293,6 @@ function setupEventListeners() {
     document.getElementById('entryDetailDismissBtn')?.addEventListener('click', () => closeEntryDetailModal());
     document.getElementById('userModalCloseBtn')?.addEventListener('click', () => closeUserModal());
     document.getElementById('userModalCancelBtn')?.addEventListener('click', () => closeUserModal());
-    document.getElementById('equipmentModalCloseBtn')?.addEventListener('click', () => window.closeEquipmentModal());
-    document.getElementById('addEquipmentBtn')?.addEventListener('click', () => window.addEquipment());
 
     // タブ切り替え（サイドバーナビゲーション + 旧タブ対応）
     const tabSelectors = '.admin-tab[data-tab], .sidebar-nav-link[data-tab]';
@@ -448,9 +433,6 @@ function setupEventListeners() {
             if (document.getElementById('entryDetailModal')?.classList.contains('active')) {
                 closeEntryDetailModal();
             }
-            if (document.getElementById('equipmentModal')?.classList.contains('active')) {
-                window.closeEquipmentModal();
-            }
             if (document.getElementById('inspectionSelectModal')?.classList.contains('active')) {
                 closeInspectionSelectModal();
             }
@@ -502,12 +484,14 @@ window.editPropertyByCode = function(propertyCode) {
     const property = masterData.properties.find(p => String(p.property_code) === String(propertyCode));
     if (!property) return;
 
-    // モーダルに渡すデータを構築
+    // モーダルに渡すデータを構築（id を含めて updateProperty で更新できるようにする）
     const propertyData = {
+        id: property.id,
         property_code: property.property_code,
         property_name: property.property_name,
         address: property.address || '',
-        terminals: property.terminals || []
+        terminals: property.terminals || [],
+        equipment: property.equipment || []
     };
 
     console.log('Opening property modal with data:', propertyData);
@@ -611,10 +595,6 @@ window.closeInspectionSelectModal = closeInspectionSelectModal;
 window.closeBuildingSelectModal = closeBuildingSelectModal;
 window.handleApproveBuildingRequest = handleApproveBuildingRequest;
 window.handleRejectBuildingRequest = handleRejectBuildingRequest;
-window.openEquipmentModal = openEquipmentModal;
-window.closeEquipmentModal = closeEquipmentModal;
-window.addEquipment = addEquipment;
-window.deleteEquipmentRow = deleteEquipmentRow;
 window.openEditUserModal = openEditUserModal;
 window.handleDeactivateUser = handleDeactivateUser;
 window.handleActivateUser = handleActivateUser;

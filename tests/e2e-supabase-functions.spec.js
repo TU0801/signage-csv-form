@@ -317,19 +317,26 @@ test.describe('広告枠', () => {
 });
 
 // ============================================
-// ビル設備
+// ビル設備（物件マスターに統合）
 // ============================================
 test.describe('ビル設備', () => {
-  test('getBuildingEquipment が配列を返す', async ({ page }) => {
+  test('getMasterProperties の equipment は存在すれば配列', async ({ page }) => {
     await loginAsAdmin(page);
-    // 物件コードを取得
     const properties = await callSupabaseFunction(page, 'getMasterProperties');
-    if (properties.length === 0) {
-      test.skip();
-      return;
+    expect(Array.isArray(properties)).toBe(true);
+    for (const p of properties) {
+      if ('equipment' in p && p.equipment !== null) {
+        expect(Array.isArray(p.equipment)).toBe(true);
+      }
     }
-    const code = properties[0].property_code;
-    const data = await callSupabaseFunction(page, 'getBuildingEquipment', [code]);
-    expect(Array.isArray(data)).toBe(true);
+  });
+
+  test('getAllMasterData の各物件が equipment 配列を持つ', async ({ page }) => {
+    await loginAsAdmin(page);
+    const data = await callSupabaseFunction(page, 'getAllMasterData');
+    expect(Array.isArray(data.properties)).toBe(true);
+    for (const p of data.properties) {
+      expect(Array.isArray(p.equipment)).toBe(true);
+    }
   });
 });

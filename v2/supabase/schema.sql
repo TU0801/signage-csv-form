@@ -49,6 +49,9 @@ CREATE TABLE IF NOT EXISTS signage_master_properties (
   property_code TEXT UNIQUE NOT NULL,
   property_name TEXT NOT NULL,
   terminals JSONB NOT NULL DEFAULT '[]',
+  -- 設備情報（旧 signage_building_equipment から統合）。要素キーは snake_case:
+  -- { inspection_type_id, vendor_id, inspection_months, remarks, remarks2 }
+  equipment JSONB NOT NULL DEFAULT '[]',
   created_at TIMESTAMPTZ DEFAULT now()
 );
 

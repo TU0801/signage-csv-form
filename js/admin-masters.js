@@ -551,6 +551,91 @@ function addTerminalField(terminal = {}) {
     terminalsList.appendChild(terminalDiv);
 }
 
+// ========================================
+// 物件モーダル: 設備情報（物件マスターに統合）
+// ========================================
+
+// 物件モーダルで編集中の設備リスト。物件「保存」時に data.equipment として永続化する
+let currentPropertyEquipment = [];
+
+// 設備の種類・保守会社セレクトを初期化
+function populatePropertyEquipmentSelects(masterData) {
+    const typeSelect = document.getElementById('propEquipmentType');
+    if (typeSelect) {
+        typeSelect.innerHTML = '<option value="">選択...</option>' +
+            (masterData.inspectionTypes || []).filter(t => t.category === '点検')
+                .map(t => `<option value="${escapeHtml(t.id)}">${escapeHtml(t.inspection_name)}</option>`).join('');
+    }
+    const vendorSelect = document.getElementById('propEquipmentVendor');
+    if (vendorSelect) {
+        vendorSelect.innerHTML = '<option value="">なし</option>' +
+            (masterData.vendors || []).map(v => `<option value="${escapeHtml(v.id)}">${escapeHtml(v.vendor_name)}</option>`).join('');
+    }
+}
+
+// 設備追加フォームをクリア
+function resetPropertyEquipmentForm() {
+    ['propEquipmentType', 'propEquipmentVendor', 'propEquipmentRemarks', 'propEquipmentRemarks2'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    document.querySelectorAll('#propMonthCheckboxes input').forEach(cb => { cb.checked = false; });
+}
+
+// 設備一覧を描画（currentPropertyEquipment を表示）
+function renderPropertyEquipment(masterData) {
+    const tbody = document.getElementById('propEquipmentTableBody');
+    const emptyMsg = document.getElementById('propEquipmentEmptyMessage');
+    if (!tbody) return;
+
+    if (!currentPropertyEquipment.length) {
+        tbody.innerHTML = '';
+        if (emptyMsg) emptyMsg.style.display = 'block';
+        return;
+    }
+    if (emptyMsg) emptyMsg.style.display = 'none';
+
+    tbody.innerHTML = '';
+    currentPropertyEquipment.forEach((eq, index) => {
+        const inspType = (masterData.inspectionTypes || []).find(t => t.id === eq.inspection_type_id);
+        const vendor = (masterData.vendors || []).find(v => v.id === eq.vendor_id);
+        const months = Array.isArray(eq.inspection_months) ? eq.inspection_months : [];
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${escapeHtml(inspType?.inspection_name || '-')}</td>
+            <td>${escapeHtml(vendor?.vendor_name || '-')}</td>
+            <td>${months.length ? months.map(m => `${m}月`).join(', ') : '-'}</td>
+            <td>${escapeHtml(eq.remarks || '')}</td>
+            <td>${escapeHtml(eq.remarks2 || '')}</td>
+            <td><button type="button" class="btn btn-danger btn-sm prop-equipment-remove">削除</button></td>
+        `;
+        tr.querySelector('.prop-equipment-remove').addEventListener('click', () => {
+            currentPropertyEquipment.splice(index, 1);
+            renderPropertyEquipment(masterData);
+        });
+        tbody.appendChild(tr);
+    });
+}
+
+// 設備追加フォームの内容をローカルリストへ追加（DB保存は物件「保存」時にまとめて実行）
+function addPropertyEquipmentRow(masterData) {
+    const typeId = document.getElementById('propEquipmentType').value;
+    if (!typeId) {
+        showToast('設備種類を選択してください', 'error');
+        return;
+    }
+    const months = [...document.querySelectorAll('#propMonthCheckboxes input:checked')].map(cb => parseInt(cb.value, 10));
+    currentPropertyEquipment.push({
+        inspection_type_id: typeId,
+        vendor_id: document.getElementById('propEquipmentVendor').value || null,
+        inspection_months: months,
+        remarks: document.getElementById('propEquipmentRemarks').value,
+        remarks2: document.getElementById('propEquipmentRemarks2').value
+    });
+    resetPropertyEquipmentForm();
+    renderPropertyEquipment(masterData);
+}
+
 export function openMasterModal(type, masterData, data = null) {
     const modal = document.getElementById('masterModal');
     const title = document.getElementById('masterModalTitle');
@@ -617,6 +702,19 @@ export function openMasterModal(type, masterData, data = null) {
             // 新規追加の場合は1つ端末フィールドを追加
             addTerminalField();
         }
+
+        // 設備情報を初期化（ローカル配列で編集し、保存時にまとめて永続化）
+        populatePropertyEquipmentSelects(masterData);
+        resetPropertyEquipmentForm();
+        let equipment = data?.equipment || [];
+        if (typeof equipment === 'string') {
+            try { equipment = JSON.parse(equipment); } catch (e) { equipment = []; }
+        }
+        // masterData 側のオブジェクトを直接書き換えないようクローンして保持
+        currentPropertyEquipment = Array.isArray(equipment) ? equipment.map(e => ({ ...e })) : [];
+        renderPropertyEquipment(masterData);
+        const addEquipmentBtn = document.getElementById('propAddEquipmentBtn');
+        if (addEquipmentBtn) addEquipmentBtn.onclick = () => addPropertyEquipmentRow(masterData);
     } else if (type === 'vendor') {
         const section = document.getElementById('vendorFields');
         section.style.display = 'block';
@@ -887,6 +985,7 @@ export async function handleMasterFormSubmit(e, masterData, showToast, updateSta
                 property_code: propertyCode,
                 property_name: document.getElementById('propertyName').value,
                 terminals: terminals,
+                equipment: currentPropertyEquipment,
             };
             if (id) {
                 await updateProperty(id, data);

@@ -161,7 +161,6 @@ function renderBuildingVendorRelationships(relationships, properties, vendorId) 
                                 <td><span class="status-badge status-active">有効</span></td>
                                 <td>${new Date(r.created_at).toLocaleDateString('ja-JP')}</td>
                                 <td style="display: flex; gap: 0.5rem;">
-                                    <button class="btn btn-outline btn-sm btn-equipment" onclick="openEquipmentModal('${escapeHtml(r.property_code)}', '${escapeHtml(propertiesMap[r.property_code] || r.property_code)}')">🔧 設備</button>
                                     <button class="btn btn-danger btn-sm" onclick="handleRemoveBuildingVendor('${escapeHtml(r.id)}')">削除</button>
                                 </td>
                             </tr>

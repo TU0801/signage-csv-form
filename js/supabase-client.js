@@ -16,7 +16,6 @@
  *   supabase/settings.js      — 設定管理
  *   supabase/storage.js       — 画像アップロード/削除
  *   supabase/ads.js           — 広告枠管理
- *   supabase/equipment.js     — 建物設備管理
  */
 
 // クライアント
@@ -81,4 +80,3 @@ export {
 export { getAdSlots, upsertAdSlot, uploadAdImage, deleteAdImage } from './supabase/ads.js';
 
 // 建物設備
-export { getBuildingEquipment, addBuildingEquipment, deleteBuildingEquipment } from './supabase/equipment.js';

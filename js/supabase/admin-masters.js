@@ -4,14 +4,14 @@ import { supabase } from './client.js';
 
 // 物件
 export async function addProperty(property) {
-  const record = { property_code: property.property_code, property_name: property.property_name, terminals: property.terminals };
+  const record = { property_code: property.property_code, property_name: property.property_name, terminals: property.terminals, equipment: property.equipment ?? [] };
   const { data, error } = await supabase.from('signage_master_properties').insert(record).select().single();
   if (error) throw error;
   return data;
 }
 
 export async function updateProperty(id, property) {
-  const record = { property_code: property.property_code, property_name: property.property_name, terminals: property.terminals };
+  const record = { property_code: property.property_code, property_name: property.property_name, terminals: property.terminals, equipment: property.equipment ?? [] };
   const { data, error } = await supabase.from('signage_master_properties').update(record).eq('id', id).select().single();
   if (error) throw error;
   return data;
