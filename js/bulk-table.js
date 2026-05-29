@@ -93,12 +93,7 @@ export function addRow(data = {}, callbacks) {
     };
 
     addRowToState(row);
-    renderRow(row, callbacks);
-
-    // インポート時のプロパティが設定されている場合は端末リストを更新
-    if (row.propertyCode) {
-        updateTerminals(rowId, row.propertyCode, true);
-    }
+    renderRow(row, callbacks);  // renderRow内で物件に応じた端末リスト更新も行う（重複呼び出しは避ける）
 
     validateRow(rowId, callbacks);
     callbacks.updateStats();
@@ -435,9 +430,13 @@ export function validateRow(rowId, callbacks) {
     row.errors = [];
 
     // 必須フィールドのチェック
-    if (!row.propertyCode) row.errors.push('物件');
+    // 物件はマスタに実在するコードであることを要求（貼り付け等で生値が入っても弾く）
+    const masterData = getMasterData();
+    const propExists = !!row.propertyCode &&
+        masterData.properties.some(p => String(p.propertyCode) === String(row.propertyCode));
+    if (!propExists) row.errors.push('物件');
     if (!row.inspectionType) row.errors.push('点検種別');
-    if (row.propertyCode && !row.terminalId) row.errors.push('端末');
+    if (propExists && !row.terminalId) row.errors.push('端末');
     // 保守会社は画面上部で設定済みのためチェック不要
 
     // 日付の論理チェック
@@ -597,9 +596,20 @@ export function updateTerminals(rowId, propertyCode, preserveSelection = false) 
                 terminalSelect.appendChild(opt);
             });
 
-            // 既存の選択を保持するか、最初の端末を自動選択
-            if (preserveSelection && currentTerminalId && terminalIds.includes(currentTerminalId)) {
-                terminalSelect.value = currentTerminalId;
+            // 端末の選択ロジック:
+            // - 貼り付け/復元(preserveSelection)時、指定端末が物件に実在 → 採用
+            // - 指定端末が物件に存在しない → 黙って別端末に差し替えず空に（validateRowで端末エラーになり気づける）
+            // - 端末未指定 or UIでの物件変更 → 最初の端末を自動選択
+            if (preserveSelection) {
+                if (currentTerminalId && terminalIds.includes(currentTerminalId)) {
+                    terminalSelect.value = currentTerminalId;
+                } else if (currentTerminalId) {
+                    terminalSelect.value = '';
+                    if (row) row.terminalId = '';
+                } else if (terminalIds.length > 0) {
+                    terminalSelect.value = terminalIds[0];
+                    if (row) row.terminalId = terminalIds[0];
+                }
             } else if (terminalIds.length > 0) {
                 terminalSelect.value = terminalIds[0];
                 if (row) row.terminalId = terminalIds[0];

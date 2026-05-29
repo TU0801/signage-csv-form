@@ -388,27 +388,29 @@ export function downloadExcelTemplate() {
 }
 
 export function importFromPaste(callbacks) {
-    const text = document.getElementById('pasteArea').value.trim();
-    if (!text) {
+    const raw = document.getElementById('pasteArea').value;
+    if (!raw.trim()) {
         callbacks.showToast('データを入力してください', 'error');
         return;
     }
 
     const masterData = getMasterData();
-    const lines = text.split('\n');
+    // 行単位に分割。先頭セルが空のデータでも列がずれないよう全体trimはせず、
+    // 末尾の完全な空行のみ除去する（CRLF対策で \r も落とす）。
+    const lines = raw.split(/\r?\n/);
+    while (lines.length > 0 && lines[lines.length - 1].trim() === '') lines.pop();
+
     let importCount = 0;
     let errorCount = 0;
+    let unresolvedCount = 0; // 物件を特定できなかった行数
 
-    // ヘッダー行をスキップするかどうか判定（最初の列がヘッダーキーワードかどうかで判断）
+    // ヘッダー行をスキップするかどうか判定（最初の2列がヘッダーキーワードかどうかで判断）
     let startIndex = 0;
-    const firstLine = lines[0] || '';
-    const firstCols = firstLine.split('\t');
+    const firstCols = (lines[0] || '').split('\t');
     const firstColLower = (firstCols[0] || '').toLowerCase().trim();
     const secondColLower = (firstCols[1] || '').toLowerCase().trim();
-
-    // 最初の2列がヘッダーっぽいかどうかで判定（データ内のキーワードと区別）
     const headerKeywords = [
-        '物件コード', '物件', 'property',
+        '物件コード', '物件名', '物件', 'property',
         '端末id', '端末', 'terminal',
         '保守会社', '業者', 'vendor'
     ];
@@ -419,103 +421,55 @@ export function importFromPaste(callbacks) {
         startIndex = 1;
     }
 
+    // 対応フォーマット（Excel貼り付け）:
+    // 0:物件名/物件コード, 1:端末ID, 2:点検種別, 3:開始日, 4:終了日, 5:備考, 6:案内文(任意), 7:表示位置(任意)
     for (let i = startIndex; i < lines.length; i++) {
-        const line = lines[i];
-        const cols = line.split('\t');
-        if (cols.length < 3) {
-            errorCount++;
+        const cols = lines[i].split('\t');
+        const propValue = cols[0]?.trim() || '';
+        const terminalId = cols[1]?.trim() || '';
+        const inspectionType = cols[2]?.trim() || '';
+
+        // 物件・端末・点検種別がいずれも無い行は無視（空行や区切り行）
+        if (!propValue && !terminalId && !inspectionType) {
+            if (lines[i].trim() !== '') errorCount++;
             continue;
         }
 
-        let rowData;
+        // 物件名・物件コードの両方で照合。見つからなければ生値を入れず空にし、
+        // 行は残して validateRow で「物件」エラー（赤）にする → silent取り込みを防ぐ。
+        const property = masterData.properties.find(p =>
+            p.propertyName === propValue || String(p.propertyCode) === String(propValue)
+        );
+        if (!property && propValue) unresolvedCount++;
 
-        // 新形式: 保守会社列なし、物件名で取込
-        // 0: 点検CO(空), 1: 端末ID, 2: 物件名, 3: 緊急連絡先,
-        // 4: 点検種別, 5: 掲示板表示, 6: TPLNo, 7: 開始日, 8: 終了日,
-        // 9: 備考, 10: 案内文, 11: frame_No(position), 12: 表示開始日,
-        // 13: 表示開始時刻, 14: 表示終了日, 15: 表示終了時刻, 16: 貼紙区分, 17: 表示時間
-        if (cols.length >= 10) {
-            const masterData = getMasterData();
-            const propertyName = cols[2]?.trim() || '';
-            // 物件名から物件コードを検索
-            const property = masterData.properties.find(p => p.propertyName === propertyName);
+        const rowData = {
+            propertyCode: property?.propertyCode || '',
+            terminalId: terminalId,
+            inspectionType: inspectionType,
+            startDate: formatDateForInput(cols[3]?.trim() || ''),
+            endDate: formatDateForInput(cols[4]?.trim() || ''),
+            remarks: cols[5]?.trim() || '',
+            noticeText: cols[6]?.trim() || '',
+            position: cols[7] ? parseInt(cols[7]) : 2
+        };
 
-            rowData = {
-                terminalId: cols[1]?.trim() || '',
-                propertyCode: property?.propertyCode || propertyName, // 見つからない場合はそのまま
-                inspectionType: cols[4]?.trim() || '',
-                startDate: formatDateForInput(cols[7]?.trim() || ''),
-                endDate: formatDateForInput(cols[8]?.trim() || ''),
-                remarks: cols[9]?.trim() || '',
-                noticeText: cols[10]?.trim() || '',
-                position: cols[11] ? parseInt(cols[11]) : 2,
-                displayStartDate: formatDateForInput(cols[12]?.trim() || ''),
-                displayStartTime: cols[13]?.trim() || '',
-                displayEndDate: formatDateForInput(cols[14]?.trim() || ''),
-                displayEndTime: cols[15]?.trim() || '',
-                displayTime: cols[17] ? parseDisplayTime(cols[17].trim()) : 6,
-                showOnBoard: cols[5]?.trim().toLowerCase() !== 'false'
-            };
-        } else {
-            // シンプルな形式（10列未満）: 物件名, 端末ID, 点検種別, 開始日, 終了日, 備考（任意）
-            const masterData = getMasterData();
-            const propertyName = cols[0]?.trim() || '';
-            const property = masterData.properties.find(p => p.propertyName === propertyName);
-
-            console.log('🔍 Import row:', {
-                cols: cols,
-                propertyName: propertyName,
-                property: property?.propertyCode,
-                terminalId: cols[1],
-                inspectionType: cols[2],
-                startDate: cols[3],
-                endDate: cols[4],
-                remarks: cols[5]
-            });
-
-            rowData = {
-                propertyCode: property?.propertyCode || propertyName,
-                terminalId: cols[1]?.trim() || '',
-                inspectionType: cols[2]?.trim() || '',
-                startDate: formatDateForInput(cols[3]?.trim() || ''),
-                endDate: formatDateForInput(cols[4]?.trim() || ''),
-                remarks: cols[5]?.trim() || '', // 空でもOK
-                noticeText: cols[6]?.trim() || '',
-                position: cols[7] ? parseInt(cols[7]) : 2
-            };
-        }
-
-        // 物件コードまたは何かしらのデータがあれば取り込む
-        const hasData = rowData.propertyCode || rowData.inspectionType;
-
-        if (hasData) {
-            addRow(rowData, callbacks);
-            importCount++;
-        } else {
-            errorCount++;
-        }
+        addRow(rowData, callbacks);
+        importCount++;
     }
 
     closePasteModal();
     if (importCount > 0) {
         callbacks.showToast(`${importCount}件のデータを取り込みました`, 'success');
     }
+    if (unresolvedCount > 0) {
+        callbacks.showToast(`${unresolvedCount}件は物件名が見つかりませんでした。行を確認してください`, 'error');
+    }
     if (errorCount > 0) {
-        callbacks.showToast(`${errorCount}件のデータをスキップしました`, 'error');
+        callbacks.showToast(`${errorCount}件の不正な行をスキップしました`, 'error');
     }
 }
 
 // 表示時間を解析（0:00:06形式→6秒）
-function parseDisplayTime(timeStr) {
-    if (!timeStr) return 6;
-    const match = timeStr.match(/(\d+):(\d+):(\d+)/);
-    if (match) {
-        return parseInt(match[3]) || 6;
-    }
-    const num = parseInt(timeStr);
-    return isNaN(num) ? 6 : num;
-}
-
 function formatDateForInput(dateStr) {
     if (!dateStr) return '';
     const match = dateStr.match(/(\d{4})[/-](\d{1,2})[/-](\d{1,2})/);
