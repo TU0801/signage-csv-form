@@ -4,7 +4,7 @@
 function generateCSV() {
     const entries = window._entries || [];
     const normalizeTerminalId = window.normalizeTerminalId || ((id) => id || '');
-    const headers = window.CSV_HEADERS || ['点検CO','端末ID','物件コード','保守会社名','緊急連絡先番号','点検工事案内','掲示板に表示する','点検案内TPLNo','点検開始日','点検完了日','掲示備考','掲示板用案内文','frame_No','表示開始日','表示終了日','表示開始時刻','表示終了時刻','表示時間','統合ポリシー','制御','変更日','変更時刻','最終エクスポート日時','ID','変更日時','点検日時','表示日時','貼紙区分'];
+    const headers = window.CSV_HEADERS || ['点検CO','端末ID','物件コード','受注先名','緊急連絡先番号','点検工事案内','掲示板に表示する','点検案内TPLNo','点検開始日','点検完了日','掲示備考','掲示板用案内文','frame_No','表示開始日','表示終了日','表示開始時刻','表示終了時刻','表示時間','統合ポリシー','制御','変更日','変更時刻','最終エクスポート日時','ID','変更日時','点検日時','表示日時','貼紙区分'];
     const now = new Date();
     const dateStr = now.toISOString().split('T')[0].replace(/-/g, '/');
     const timeStr = now.toTimeString().substring(0, 8);

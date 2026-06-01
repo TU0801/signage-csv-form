@@ -88,7 +88,7 @@ test.describe('Bug1-3: bulk CSV snake_case/camelCase 整合', () => {
     const lines = result.csv.split('\n');
     expect(lines.length).toBeGreaterThanOrEqual(2); // headers + 1 data row
     const cells = lines[1].split(',');
-    // 28列CSV_HEADERS: [0]点検CO, [1]端末ID, [2]物件コード, [3]保守会社名,
+    // 28列CSV_HEADERS: [0]点検CO, [1]端末ID, [2]物件コード, [3]受注先名,
     //                   [4]緊急連絡先番号, [5]点検工事案内, [6]掲示板に表示する, [7]点検案内TPLNo
     expect(cells[4]).toBe(result.expectedEmergency);
     expect(cells[7]).toBe(result.expectedTemplate);
