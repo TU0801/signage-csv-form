@@ -8,6 +8,7 @@
     "test:headed": "npx playwright test --headed",
     "test:debug": "npx playwright test --debug",
     "test:report": "npx playwright show-report",
+    "test:vrt:update": "bash scripts/update-vrt-snapshots.sh",
     "lint": "npx eslint js/",
     "deps": "npx madge js/admin.js js/bulk.js --image deps.svg && echo 'deps.svg generated'",
     "deps:circular": "npx madge js/admin.js js/bulk.js --circular",
