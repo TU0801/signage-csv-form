@@ -165,12 +165,33 @@
 }
 
 /* ========================================
+   カードレイアウト（内部スクロール）
+   共通の .container は height:calc(100vh-44px); overflow:hidden で固定されているため、
+   bulk画面では .card を高さいっぱいに広げ、テーブル領域だけを内部スクロールさせる。
+   これをしないと行数が増えたときにフッター（申請ボタン）が画面外にクリップされ
+   スクロールも効かなくなる。bulk.css は bulk.html のみで読み込まれるためスコープ安全。
+======================================== */
+.card {
+    height: 100%;
+}
+
+/* スクロールしない固定領域 */
+#adminVendorSelectGroup,
+.bulk-toolbar,
+.filter-bar,
+.bulk-footer {
+    flex-shrink: 0;
+}
+
+/* ========================================
    テーブルコンテナ
 ======================================== */
 .bulk-table-container {
+    flex: 1 1 auto;
+    min-height: 0;        /* flexアイテムを内容より縮められるようにし、overflowを有効化 */
     overflow-x: auto;
+    overflow-y: auto;     /* テーブル行が増えたらここだけ縦スクロール */
     background: white;
-    min-height: 300px;
 }
 
 /* ========================================
