@@ -69,6 +69,7 @@
                                 <option value="点検">点検</option>
                                 <option value="工事">工事</option>
                                 <option value="清掃">清掃</option>
+                                <option value="その他">その他</option>
                                 <option value="アンケート">アンケート</option>
                             </select>
                         </div>
@@ -246,7 +247,7 @@
     </script>
     <script type="module">
         // 認証モジュール（ログイン必須）
-        import { getUser, getProfile, isAdmin, signOut, getSettings, createEntries, uploadPosterImage, getAllMasterDataCamelCase, getMasterVendors, getBuildingsByVendor, addBuildingVendor, getMasterProperties, getUserEntriesCurrentMonth, submitEntry } from './js/supabase-client.js';
+        import { getUser, getProfile, isAdmin, signOut, getSettings, createEntries, uploadPosterImage, getAllMasterDataCamelCase, getMasterVendors, getBuildingsByVendor, addBuildingVendor, getMasterProperties, getUserEntriesCurrentMonth, submitEntry, getVendorInspections } from './js/supabase-client.js';
         import { normalizeTerminalId, CSV_HEADERS, escapeCSVField } from './js/shared-utils.js';
 
         // script.jsから使えるようにwindowに公開
@@ -261,6 +262,7 @@
         window.getMasterProperties = getMasterProperties;
         window.getUserEntriesCurrentMonth = getUserEntriesCurrentMonth;  // #7: 申請済みデータ取得
         window.submitEntry = submitEntry;  // 申請処理（pending → draft）
+        window.getVendorInspections = getVendorInspections;  // ベンダー×点検種別 紐づけ取得（script.jsの紐づけ反映に使用）
 
         async function initAuth() {
             try {
@@ -275,6 +277,10 @@
                 const profile = await getProfile();
                 document.getElementById('userEmail').textContent = profile?.email || user.email;
                 document.getElementById('logoutBtn').style.display = 'block';
+
+                // 一般ユーザー（ベンダー）の紐づけ反映用に vendor_id を公開（管理者は null）。
+                // initScript() 実行前に設定する必要がある（script.js init がこれを参照するため）。
+                window.currentVendorId = profile?.vendor_id || null;
 
                 // 設定を読み込み
                 try {

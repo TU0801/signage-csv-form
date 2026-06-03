@@ -147,7 +147,9 @@ export async function getAllMasterDataCamelCase() {
 
   const notices = inspectionTypes.map((it, index) => ({
     id: index + 1,
+    inspectionId: it.id,              // 実DBのUUID（ベンダー×点検種別 紐付け照合に使用）
     inspectionType: it.inspection_name,
+    category: it.category || '',      // 実カテゴリ（テキスト列）。点検種別の絞り込みに使用
     categoryId: it.category_id || 0,
     showOnBoard: it.show_on_board !== false,
     templateNo: it.template_no || '',
