@@ -58,7 +58,7 @@ async function init() {
     const admin = await isAdmin();
     if (admin) {
         document.getElementById('adminLink').style.display = 'block';
-        document.getElementById('adminVendorSelectGroup').style.display = 'block';
+        document.getElementById('adminVendorSelectGroup').style.display = 'inline-flex';
 
         // ベンダー一覧を読み込み
         const vendors = await getMasterVendors();
