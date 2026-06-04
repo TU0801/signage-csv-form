@@ -160,6 +160,66 @@
 }
 
 /* ========================================
+   テンプレート管理（一覧・削除）
+======================================== */
+.template-manage-hint {
+    margin: 0 0 0.75rem;
+    font-size: 0.8125rem;
+    color: #64748b;
+}
+
+.template-manage-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.template-manage-empty {
+    margin: 1rem 0;
+    text-align: center;
+    color: #94a3b8;
+    font-size: 0.875rem;
+}
+
+.template-manage-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.625rem 0.75rem;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+}
+
+.template-manage-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-width: 0;
+}
+
+.template-manage-name {
+    font-weight: 600;
+    color: #1e293b;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.template-manage-meta {
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+.template-manage-item .btn {
+    flex-shrink: 0;        /* 長いテンプレ名でも削除ボタンを縮めない */
+    white-space: nowrap;   /* 「削除」を2行に折り返さない */
+}
+
+/* ========================================
    右クリックメニュー
 ======================================== */
 .context-menu {

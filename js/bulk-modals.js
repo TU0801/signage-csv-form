@@ -8,14 +8,58 @@ import { addRow, updateTerminals, validateRow, insertRowAt, getSelectedRowIds } 
 
 let copiedRowData = null;
 
-// LocalStorageから安全にテンプレートを読み込む
-function getStoredTemplates() {
+// テンプレートのユニークID生成（名前の重複に耐えるため）
+function genTemplateId() {
     try {
-        return JSON.parse(localStorage.getItem('bulk_templates') || '{}');
+        if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+            return window.crypto.randomUUID();
+        }
+    } catch (e) { /* crypto 不可なら下のフォールバックへ */ }
+    return `tpl_${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
+}
+
+// LocalStorageから安全にテンプレートを読み込む（配列形式）
+// 形式: [{ id, name, vendorId, vendorName, createdAt, rows: [...] }]
+function getStoredTemplates() {
+    let raw;
+    try {
+        raw = JSON.parse(localStorage.getItem('bulk_templates') || '[]');
     } catch (e) {
         console.warn('Failed to parse bulk_templates from localStorage:', e);
-        return {};
+        return [];
     }
+    // 旧形式（{ [name]: {...} } オブジェクト）を配列形式へ自動移行
+    if (raw && !Array.isArray(raw) && typeof raw === 'object') {
+        const migrated = Object.entries(raw).map(([name, t]) => ({
+            id: genTemplateId(),
+            name,
+            vendorId: (t && t.vendorId) || null,   // 旧データに企業情報は無い → 全社共通扱い
+            vendorName: (t && t.vendorName) || null,
+            createdAt: (t && t.createdAt) || null,
+            rows: (t && t.rows) || []
+        }));
+        setStoredTemplates(migrated);
+        return migrated;
+    }
+    return Array.isArray(raw) ? raw : [];
+}
+
+function setStoredTemplates(templates) {
+    // setItem はストレージ満杯/書き込み拒否環境で throw しうる。
+    // 移行処理(getStoredTemplates)は read 経路かつ init の try 外から呼ばれるため、
+    // ここで握りつぶさないと init 全体が連鎖停止する。失敗は警告に留める。
+    try {
+        localStorage.setItem('bulk_templates', JSON.stringify(templates));
+    } catch (e) {
+        console.warn('Failed to save bulk_templates to localStorage:', e);
+    }
+}
+
+// 現在選択中の企業で表示できるテンプレートのみ抽出
+// （vendorId が一致するもの ＋ 企業未設定のレガシー/全社共通テンプレート）
+function getVisibleTemplates() {
+    const { id: vendorId } = getCurrentVendor();
+    return getStoredTemplates().filter(t => !t.vendorId || t.vendorId === vendorId);
 }
 
 // ========================================
@@ -505,52 +549,76 @@ export function saveTemplate(callbacks) {
         return;
     }
 
+    const { id: vendorId, name: vendorName } = getCurrentVendor();
     const templates = getStoredTemplates();
-    templates[name] = {
-        createdAt: Date.now(),
-        rows: rows.map(r => ({
-            propertyCode: r.propertyCode,
-            terminalId: r.terminalId,
-            // vendorName は保存しない（適用時に getCurrentVendor() を使用）
-            inspectionType: r.inspectionType,
-            displayTime: r.displayTime,
-            noticeText: r.noticeText,
-            displayStartDate: r.displayStartDate,
-            displayStartTime: r.displayStartTime,
-            displayEndDate: r.displayEndDate,
-            displayEndTime: r.displayEndTime,
-            showOnBoard: r.showOnBoard,
-            position: r.position
-        }))
-    };
 
-    localStorage.setItem('bulk_templates', JSON.stringify(templates));
+    const rowsData = rows.map(r => ({
+        propertyCode: r.propertyCode,
+        terminalId: r.terminalId,
+        // vendorName は行に保存しない（適用時に getCurrentVendor() を使用）
+        inspectionType: r.inspectionType,
+        displayTime: r.displayTime,
+        noticeText: r.noticeText,
+        displayStartDate: r.displayStartDate,
+        displayStartTime: r.displayStartTime,
+        displayEndDate: r.displayEndDate,
+        displayEndTime: r.displayEndTime,
+        showOnBoard: r.showOnBoard,
+        position: r.position
+    }));
+
+    // 同一企業内で同名テンプレートがあれば上書き、無ければ新規追加
+    // （企業が異なれば同名でも別テンプレートとして共存できる）
+    const existing = templates.find(
+        t => t.name === name && (t.vendorId || null) === (vendorId || null)
+    );
+    if (existing) {
+        existing.rows = rowsData;
+        existing.createdAt = Date.now();
+        existing.vendorName = vendorName || null;
+    } else {
+        templates.push({
+            id: genTemplateId(),
+            name,
+            vendorId: vendorId || null,
+            vendorName: vendorName || null,
+            createdAt: Date.now(),
+            rows: rowsData
+        });
+    }
+
+    setStoredTemplates(templates);
     closeTemplateModal();
     callbacks.loadTemplates();
     callbacks.showToast(`テンプレート「${name}」を保存しました`, 'success');
 }
 
 export function loadTemplates() {
-    const templates = getStoredTemplates();
     const select = document.getElementById('templateSelect');
+    if (!select) return;
     select.innerHTML = '<option value="">テンプレート</option>';
 
-    Object.keys(templates).forEach(name => {
+    // 現在選択中の企業のテンプレートのみ表示
+    getVisibleTemplates().forEach(t => {
         const opt = document.createElement('option');
-        opt.value = name;
-        opt.textContent = name;
+        opt.value = t.id;            // value はユニークな id（名前の重複に耐える）
+        // 全社共通(vendorId=null)は同名の企業別テンプレと区別できるよう接尾辞を付ける
+        opt.textContent = t.vendorId ? t.name : `${t.name}（全社共通）`;
         select.appendChild(opt);
     });
 }
 
-export function applyTemplate(name, callbacks) {
-    const templates = getStoredTemplates();
-    const template = templates[name];
-    if (!template) return;
+export function applyTemplate(id, callbacks) {
+    const select = document.getElementById('templateSelect');
+    const template = getStoredTemplates().find(t => t.id === id);
+    if (!template) {
+        if (select) select.value = '';
+        return;
+    }
 
     if (getRows().length > 0) {
         if (!confirm('現在のデータを置き換えますか？')) {
-            document.getElementById('templateSelect').value = '';
+            if (select) select.value = '';
             return;
         }
     }
@@ -558,10 +626,87 @@ export function applyTemplate(name, callbacks) {
     document.getElementById('tableBody').innerHTML = '';
     callbacks.clearRows();
 
-    template.rows.forEach(rowData => {
+    // rows 欠損（外部改竄・旧バージョン由来）でも clearRows 後に落ちないよう防御
+    const templateRows = Array.isArray(template.rows) ? template.rows : [];
+    templateRows.forEach(rowData => {
         addRow(rowData, callbacks);
     });
 
-    document.getElementById('templateSelect').value = '';
-    callbacks.showToast(`テンプレート「${name}」を適用しました`, 'success');
+    if (select) select.value = '';
+    callbacks.showToast(`テンプレート「${template.name}」を適用しました`, 'success');
+}
+
+// ========================================
+// テンプレート管理（一覧・削除）
+// ========================================
+
+export function openManageTemplateModal(callbacks) {
+    renderManageTemplateList(callbacks);
+    document.getElementById('manageTemplateModal').classList.add('active');
+}
+
+export function closeManageTemplateModal() {
+    document.getElementById('manageTemplateModal').classList.remove('active');
+}
+
+function renderManageTemplateList(callbacks) {
+    const listEl = document.getElementById('manageTemplateList');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+
+    const templates = getVisibleTemplates();
+    if (templates.length === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'template-manage-empty';
+        empty.textContent = '登録済みのテンプレートはありません';
+        listEl.appendChild(empty);
+        return;
+    }
+
+    templates.forEach(t => {
+        const item = document.createElement('div');
+        item.className = 'template-manage-item';
+
+        const info = document.createElement('div');
+        info.className = 'template-manage-info';
+
+        const nameEl = document.createElement('span');
+        nameEl.className = 'template-manage-name';
+        nameEl.textContent = t.name;              // XSS防止: textContent で挿入
+        info.appendChild(nameEl);
+
+        const metaEl = document.createElement('span');
+        metaEl.className = 'template-manage-meta';
+        const rowCount = Array.isArray(t.rows) ? t.rows.length : 0;
+        const scope = t.vendorName ? t.vendorName : '全社共通';
+        metaEl.textContent = `${scope} ・ ${rowCount}行`;
+        info.appendChild(metaEl);
+
+        item.appendChild(info);
+
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'btn btn-sm btn-danger-outline';
+        delBtn.textContent = '削除';
+        delBtn.addEventListener('click', () => deleteTemplate(t.id, callbacks));
+        item.appendChild(delBtn);
+
+        listEl.appendChild(item);
+    });
+}
+
+export function deleteTemplate(id, callbacks) {
+    const templates = getStoredTemplates();
+    const target = templates.find(t => t.id === id);
+    if (!target) return;
+
+    if (!confirm(`テンプレート「${target.name}」を削除しますか？\nこの操作は取り消せません。`)) {
+        return;
+    }
+
+    setStoredTemplates(templates.filter(t => t.id !== id));
+
+    callbacks.loadTemplates();           // ツールバーのドロップダウンを更新
+    renderManageTemplateList(callbacks); // 管理一覧を更新
+    callbacks.showToast(`テンプレート「${target.name}」を削除しました`, 'success');
 }

@@ -62,6 +62,7 @@
                             <option value="">テンプレート</option>
                         </select>
                         <button class="btn btn-outline btn-sm" id="saveTemplateBtn" title="現在の設定をテンプレートとして保存">テンプレ保存</button>
+                        <button class="btn btn-outline btn-sm" id="manageTemplateBtn" title="登録済みテンプレートの管理・削除">🗑 管理</button>
                     </div>
                 </div>
 
@@ -226,6 +227,25 @@
             <div class="modal-footer">
                 <button class="btn btn-outline" id="cancelSaveTemplate">キャンセル</button>
                 <button class="btn btn-primary" id="confirmSaveTemplate">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- テンプレート管理モーダル -->
+    <div class="modal-overlay" id="manageTemplateModal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h3>テンプレート管理</h3>
+                <button class="modal-close" id="closeManageTemplateModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="template-manage-hint">選択中の保守会社のテンプレートと全社共通テンプレートを表示しています。</p>
+                <div id="manageTemplateList" class="template-manage-list">
+                    <!-- 動的にテンプレート一覧 -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" id="closeManageTemplateFooter">閉じる</button>
             </div>
         </div>
     </div>

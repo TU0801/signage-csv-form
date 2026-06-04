@@ -11,7 +11,8 @@ import {
     openRowDetailModal, closeRowDetailModal,
     openPasteModal, closePasteModal, importFromPaste, downloadExcelTemplate,
     openSaveTemplateModal, closeTemplateModal, saveTemplate,
-    loadTemplates, applyTemplate
+    loadTemplates, applyTemplate,
+    openManageTemplateModal, closeManageTemplateModal
 } from './bulk-modals.js';
 import {
     triggerAutoSave, restoreAutoSave, saveAll,
@@ -78,6 +79,7 @@ async function init() {
                     const freshData = await getAllMasterDataCamelCase();
                     setMasterData(freshData);
                     setCurrentVendor(null, null);
+                    loadTemplates(); // 企業未選択 → 全社共通テンプレートのみ表示
                     return;
                 }
 
@@ -112,6 +114,7 @@ async function init() {
                 clearRows();
                 updateStats();
                 updateEmptyState();
+                loadTemplates(); // 選択した企業のテンプレートのみ表示
             } catch (error) {
                 console.error('Failed to load vendor data:', error);
                 showToast('保守会社データの取得に失敗しました', 'error');
@@ -265,6 +268,30 @@ function setupEventListeners() {
         closeTemplateModalBtn.addEventListener('click', closeTemplateModal);
     }
 
+    // テンプレート管理（一覧・削除）
+    const manageTemplateBtn = document.getElementById('manageTemplateBtn');
+    if (manageTemplateBtn) {
+        manageTemplateBtn.addEventListener('click', () => openManageTemplateModal(callbacks));
+    }
+
+    const closeManageTemplateModalBtn = document.getElementById('closeManageTemplateModal');
+    if (closeManageTemplateModalBtn) {
+        closeManageTemplateModalBtn.addEventListener('click', closeManageTemplateModal);
+    }
+
+    const closeManageTemplateFooter = document.getElementById('closeManageTemplateFooter');
+    if (closeManageTemplateFooter) {
+        closeManageTemplateFooter.addEventListener('click', closeManageTemplateModal);
+    }
+
+    // オーバーレイ（背景）クリックで閉じる（pasteModal と同様）
+    const manageTemplateModal = document.getElementById('manageTemplateModal');
+    if (manageTemplateModal) {
+        manageTemplateModal.addEventListener('click', (e) => {
+            if (e.target.id === 'manageTemplateModal') closeManageTemplateModal();
+        });
+    }
+
     // 右クリックメニューを閉じる
     document.addEventListener('click', hideContextMenu);
 
@@ -304,6 +331,7 @@ function handleGlobalKeyDown(e) {
     if (e.key === 'Escape') {
         closePasteModal();
         closeTemplateModal();
+        closeManageTemplateModal();
         closeRowDetailModal();
         hideContextMenu();
     }
