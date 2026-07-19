@@ -123,6 +123,7 @@ async function saveErrorToSupabase(errorLog) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
+                'Content-Profile': 'signage',
                 'apikey': key,
                 'Authorization': `Bearer ${accessToken}`,
                 'Prefer': 'return=minimal'

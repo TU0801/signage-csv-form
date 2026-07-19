@@ -7,4 +7,5 @@ const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || 'YOUR_SUPABASE_ANON_KEY';
 export const STORAGE_BUCKET = 'poster-images';
 
 /** @type {import('@supabase/supabase-js').SupabaseClient} */
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// baranプロジェクトはアプリ別スキーマ構成。本アプリのテーブルはsignageスキーマに在る
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { db: { schema: 'signage' } });

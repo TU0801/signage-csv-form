@@ -7,7 +7,8 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY env vars');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// baranプロジェクトはアプリ別スキーマ構成。本アプリのテーブルはsignageスキーマに在る
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, { db: { schema: 'signage' } });
 
 /** v1テーブル名 → v2コード内で使う定数 */
 export const TABLES = {
