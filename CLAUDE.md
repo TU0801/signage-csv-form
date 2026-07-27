@@ -45,7 +45,7 @@ npm run deps:circular                  # 循環依存チェック
 | ページ | 主要JS | 役割 |
 |--------|--------|------|
 | index.html | script.js, csv-generator.js | 一般ユーザー入力・CSV生成 |
-| admin.html | admin.js → admin-*.js (8ファイル) | 管理画面 |
+| admin.html | admin.js → admin-*.js  | 管理画面 |
 | bulk.html | bulk.js → bulk-*.js (4ファイル) | 一括入力 |
 
 **共有モジュール**（変更時は3ページへの影響を確認）:
@@ -92,7 +92,7 @@ DBはsnake_case、JSはcamelCase。変換は`getAllMasterDataCamelCase()`（`js/
 ### window公開
 
 admin.htmlのonclick属性から呼ぶ関数は`window.関数名 = 関数名`で公開が必須。
-現在admin.jsで27関数を公開中。新規追加時は公開忘れに注意。
+新規追加時は公開忘れに注意。
 
 ## テストカバレッジ
 
