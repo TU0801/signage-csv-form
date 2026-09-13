@@ -3,9 +3,9 @@
 import {
     getUser,
     getProfile,
-    isAdmin,
     signOut,
     watchSessionUser,
+    rejectInactiveUser,
     getAllMasterData,
     getAllEntries,
     getAllProfiles,
@@ -133,9 +133,11 @@ async function init() {
         return;
     }
 
+    const profile = await getProfile();
+    if (await rejectInactiveUser(profile)) return;
+
     // 管理者チェック
-    const admin = await isAdmin();
-    if (!admin) {
+    if (profile?.role !== 'admin') {
         alert('管理者権限が必要です');
         window.location.href = 'index.html';
         return;
@@ -143,7 +145,6 @@ async function init() {
     watchSessionUser(user.id);
 
     // ユーザー情報表示
-    const profile = await getProfile();
     document.getElementById('userEmail').textContent = profile?.email || user.email;
 
     // ログアウトボタン

@@ -778,6 +778,8 @@
 
     <script src="js/version.js"></script>
     <script src="js/config.js"></script>
+    <!-- エラーを signage_error_logs に保存（他のモジュールより先に読み込む） -->
+    <script type="module" src="js/error-handler.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             if (window.APP_VERSION) {

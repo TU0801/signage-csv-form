@@ -203,6 +203,8 @@
 
     <script src="js/version.js"></script>
     <script src="js/config.js"></script>
+    <!-- エラーを signage_error_logs に保存（他のモジュールより先に読み込む） -->
+    <script type="module" src="js/error-handler.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             if (window.APP_VERSION) {
@@ -211,7 +213,7 @@
         });
     </script>
     <script type="module">
-        import { signIn, getUser, isAdmin, getAdSlots } from './js/supabase-client.js';
+        import { signIn, signOut, getUser, getProfile, getAdSlots, INACTIVE_ACCOUNT_MESSAGE } from './js/supabase-client.js';
 
         // XSS対策
         function escapeHtml(str) {
@@ -250,13 +252,35 @@
         }
         loadAdSlots();
 
+        function showError(message) {
+            const errorMessage = document.getElementById('errorMessage');
+            errorMessage.textContent = message;
+            errorMessage.classList.add('show');
+        }
+
+        // 無効化されたアカウントはこの端末のセッションを破棄してログインさせない
+        async function redirectByProfile() {
+            const profile = await getProfile();
+            if (profile?.status === 'inactive') {
+                await signOut({ scope: 'local' });
+                showError(INACTIVE_ACCOUNT_MESSAGE);
+                return false;
+            }
+            window.location.href = profile?.role === 'admin' ? 'admin.html' : 'index.html';
+            return true;
+        }
+
+        // 各画面から無効化で戻された場合の案内
+        const loginNotice = sessionStorage.getItem('loginNotice');
+        if (loginNotice) {
+            sessionStorage.removeItem('loginNotice');
+            showError(loginNotice);
+        }
+
         // 既にログイン済みの場合はリダイレクト
         async function checkAuth() {
             const user = await getUser();
-            if (user) {
-                const admin = await isAdmin();
-                window.location.href = admin ? 'admin.html' : 'index.html';
-            }
+            if (user) await redirectByProfile();
         }
         checkAuth();
 
@@ -275,8 +299,10 @@
 
             try {
                 await signIn(email, password);
-                const admin = await isAdmin();
-                window.location.href = admin ? 'admin.html' : 'index.html';
+                if (!(await redirectByProfile())) {
+                    button.disabled = false;
+                    button.textContent = 'ログイン';
+                }
             } catch (error) {
                 errorMessage.textContent = 'ログインに失敗しました。メールアドレスとパスワードを確認してください。';
                 errorMessage.classList.add('show');

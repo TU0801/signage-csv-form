@@ -356,3 +356,137 @@ test.describe('修正依頼0913: 別タブでのアカウント切替', () => {
     ).toBe(false);
   });
 });
+
+// ========================================
+// 修正依頼0913 追加対応（2026-09-13）
+//   - 一般ユーザーが自分の role を admin に書き換えられた（RLS の穴）→ DBトリガーで拒否
+//   - ユーザー編集のパスワード欄が無視されていた → Edge Function signage-admin-users で変更
+//   - 無効化が status 列の欠落で失敗し、無効化しても入れた → 列追加＋ログイン・各画面で拒否
+//   - error-handler.js がどの画面にも読み込まれず signage_error_logs が0件だった
+// テスト専用の一般ユーザー e2e-user@example.com（保守会社は b@b と同じ）を使う
+// ========================================
+const E2E_USER = { email: 'e2e-user@example.com', password: 'e2euser123' };
+
+async function loginAndGetSupabase(page, { email, password }) {
+  await page.goto(`${baseUrl}/js/config.js`);
+  return page.evaluate(async ([e, p]) => {
+    await import('/js/config.js');
+    const { supabase } = await import('/js/supabase/client.js');
+    const { data, error } = await supabase.auth.signInWithPassword({ email: e, password: p });
+    return { userId: data?.user?.id || null, error: error?.message || null };
+  }, [email, password]);
+}
+
+async function openUsersTab(page) {
+  await loginAsUser(page);
+  await page.goto(`${baseUrl}/admin.html`);
+  await page.waitForLoadState('networkidle');
+  await page.click('.sidebar-nav-link[data-tab="users"]');
+  await expect(page.locator('#usersBody tr', { hasText: E2E_USER.email })).toBeVisible({ timeout: 15000 });
+}
+
+test.describe('修正依頼0913: アカウント管理', () => {
+  test.describe.configure({ mode: 'serial' });
+
+  test('一般ユーザーは自分の権限を admin に変更できない', async ({ page }) => {
+    const { userId } = await loginAndGetSupabase(page, E2E_USER);
+    const result = await page.evaluate(async (id) => {
+      const { supabase } = await import('/js/supabase/client.js');
+      const { error } = await supabase.from('signage_profiles').update({ role: 'admin' }).eq('id', id);
+      const { data } = await supabase.from('signage_profiles').select('role').eq('id', id).single();
+      return { code: error?.code || null, role: data?.role };
+    }, userId);
+    expect(result).toEqual({ code: '42501', role: 'user' });
+  });
+
+  test('一般ユーザーはユーザー管理の Edge Function を使えない', async ({ page }) => {
+    const { userId } = await loginAndGetSupabase(page, E2E_USER);
+    const message = await page.evaluate(async (id) => {
+      const { updateUserPassword } = await import('/js/supabase/users.js');
+      try {
+        await updateUserPassword(id, 'hacked123');
+        return 'no error';
+      } catch (e) {
+        return e.message;
+      }
+    }, userId);
+    expect(message).toBe('管理者権限が必要です');
+  });
+
+  test('管理者はユーザー編集でパスワードを変更できる', async ({ page, browser }) => {
+    const newPassword = 'e2euser456';
+    await openUsersTab(page);
+    try {
+      await page.locator('#usersBody tr', { hasText: E2E_USER.email }).getByRole('button', { name: '編集' }).click();
+      await expect(page.locator('#userModal')).toHaveClass(/active/);
+      await page.fill('#newUserPassword', newPassword);
+      await page.click('#userSubmitBtn');
+      await expect(page.getByText('ユーザー情報とパスワードを更新しました')).toBeVisible({ timeout: 15000 });
+
+      const other = await browser.newContext();
+      const login = await loginAndGetSupabase(await other.newPage(), { email: E2E_USER.email, password: newPassword });
+      await other.close();
+      expect(login.error).toBeNull();
+    } finally {
+      await page.evaluate(async ([email, password]) => {
+        const { getAllProfiles, updateUserPassword } = await import('/js/supabase/users.js');
+        const target = (await getAllProfiles()).find(p => p.email === email);
+        await updateUserPassword(target.id, password);
+      }, [E2E_USER.email, E2E_USER.password]);
+    }
+  });
+
+  test('無効化したユーザーはログインできず、有効化で戻る', async ({ page, browser }) => {
+    page.on('dialog', dialog => dialog.accept());
+    await openUsersTab(page);
+    const row = page.locator('#usersBody tr', { hasText: E2E_USER.email });
+    try {
+      await row.getByRole('button', { name: '無効化' }).click();
+      await expect(row.getByRole('button', { name: '有効化' })).toBeVisible({ timeout: 15000 });
+
+      const other = await browser.newContext();
+      const userPage = await other.newPage();
+      await userPage.goto(`${baseUrl}/login.html`);
+      await userPage.fill('input[type="email"]', E2E_USER.email);
+      await userPage.fill('input[type="password"]', E2E_USER.password);
+      await userPage.click('button[type="submit"]');
+      await expect(userPage.locator('#errorMessage')).toHaveText(/無効化されています/, { timeout: 15000 });
+      await expect(userPage).toHaveURL(/login\.html/);
+      await other.close();
+
+      await row.getByRole('button', { name: '有効化' }).click();
+      await expect(row.getByRole('button', { name: '無効化' })).toBeVisible({ timeout: 15000 });
+    } finally {
+      await page.evaluate(async (email) => {
+        const { getAllProfiles, updateUserStatus } = await import('/js/supabase/users.js');
+        const target = (await getAllProfiles()).find(p => p.email === email);
+        if (target.status !== 'active') await updateUserStatus(target.id, 'active');
+      }, E2E_USER.email);
+    }
+  });
+});
+
+test.describe('修正依頼0913: エラーログ保存', () => {
+  test('画面で失敗して console.error に渡されたエラーが signage_error_logs に送られる', async ({ page }) => {
+    const posted = [];
+    // 本番DBにテストのログを残さないよう、送信内容だけを捕まえて応答を差し替える
+    await page.route('**/rest/v1/signage_error_logs', async route => {
+      posted.push(route.request().postDataJSON());
+      await route.fulfill({ status: 201, body: '' });
+    });
+    await loginAsUser(page);
+    await page.goto(`${baseUrl}/admin.html`);
+    await page.waitForLoadState('networkidle');
+
+    await page.evaluate(() => {
+      console.error('Failed to remove building-vendor relationship:', { message: 'JSON object requested, multiple (or no) rows returned', code: 'PGRST116' });
+    });
+
+    await expect.poll(() => posted.length, { timeout: 10000 }).toBeGreaterThan(0);
+    expect(posted[0]).toMatchObject({
+      context: 'Failed to remove building-vendor relationship:',
+      message: 'JSON object requested, multiple (or no) rows returned [PGRST116]',
+    });
+    expect(posted[0].user_id).toBeTruthy();
+  });
+});

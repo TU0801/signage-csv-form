@@ -22,7 +22,7 @@
 export { supabase } from './supabase/client.js';
 
 // 認証
-export { getUser, signIn, signOut, getProfile, isAdmin, watchSessionUser } from './supabase/auth.js';
+export { getUser, signIn, signOut, getProfile, isAdmin, watchSessionUser, rejectInactiveUser, INACTIVE_ACCOUNT_MESSAGE } from './supabase/auth.js';
 
 // マスターデータ取得
 export {
@@ -58,7 +58,7 @@ export {
 // ユーザー管理
 export {
   getAllProfiles, updateProfileRole, updateUserProfile,
-  updateUserStatus, createUser
+  updateUserStatus, createUser, updateUserPassword
 } from './supabase/users.js';
 
 // 承認ワークフロー

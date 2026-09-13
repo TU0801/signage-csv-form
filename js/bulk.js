@@ -1,6 +1,6 @@
 // bulk.js - 一括入力画面のメインエントリーポイント
 
-import { getUser, getProfile, isAdmin, signOut, watchSessionUser, getAllMasterDataCamelCase, getSettings, getMasterVendors, getBuildingsByVendor, addBuildingVendor } from './supabase-client.js';
+import { getUser, getProfile, isAdmin, signOut, watchSessionUser, rejectInactiveUser, getAllMasterDataCamelCase, getSettings, getMasterVendors, getBuildingsByVendor, addBuildingVendor } from './supabase-client.js';
 import { setMasterData, getMasterData, setCurrentUserId, setCurrentFilter, clearRows, getRows, setAppSettings, setCurrentVendor, getCurrentVendor } from './bulk-state.js';
 import {
     addRowWithCopy, duplicateSelectedRows, deleteSelectedRows,
@@ -53,6 +53,7 @@ async function init() {
     watchSessionUser(user.id);
 
     const profile = await getProfile();
+    if (await rejectInactiveUser(profile)) return;
     document.getElementById('userEmail').textContent = profile?.email || user.email;
 
     // 管理者の場合は管理リンクとベンダー選択を表示

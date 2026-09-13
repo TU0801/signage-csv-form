@@ -236,6 +236,8 @@
     <script src="js/script.js"></script>
     <script src="js/csv-generator.js"></script>
     <script src="js/config.js"></script>
+    <!-- エラーを signage_error_logs に保存（他のモジュールより先に読み込む） -->
+    <script type="module" src="js/error-handler.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             if (window.APP_VERSION) {
@@ -245,7 +247,7 @@
     </script>
     <script type="module">
         // 認証モジュール（ログイン必須）
-        import { getUser, getProfile, isAdmin, signOut, watchSessionUser, getSettings, createEntries, uploadPosterImage, getAllMasterDataCamelCase, getMasterVendors, getBuildingsByVendor, addBuildingVendor, getMasterProperties, getUserEntriesCurrentMonth, submitEntry, getVendorInspections } from './js/supabase-client.js';
+        import { getUser, getProfile, isAdmin, signOut, watchSessionUser, rejectInactiveUser, getSettings, createEntries, uploadPosterImage, getAllMasterDataCamelCase, getMasterVendors, getBuildingsByVendor, addBuildingVendor, getMasterProperties, getUserEntriesCurrentMonth, submitEntry, getVendorInspections } from './js/supabase-client.js';
         import { normalizeTerminalId, CSV_HEADERS, escapeCSVField } from './js/shared-utils.js';
 
         // script.jsから使えるようにwindowに公開
@@ -274,6 +276,7 @@
 
                 // ログイン済み
                 const profile = await getProfile();
+                if (await rejectInactiveUser(profile)) return;
                 document.getElementById('userEmail').textContent = profile?.email || user.email;
                 document.getElementById('logoutBtn').style.display = 'block';
 

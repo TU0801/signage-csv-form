@@ -40,9 +40,12 @@ export async function signIn(email, password) {
   return data;
 }
 
-/** ログアウト */
-export async function signOut() {
-  const { error } = await supabase.auth.signOut();
+/**
+ * ログアウト
+ * @param {{scope?: 'global'|'local'|'others'}} [options]
+ */
+export async function signOut(options) {
+  const { error } = await supabase.auth.signOut(options);
   if (error) throw error;
 }
 
@@ -74,10 +77,19 @@ export async function isAdmin() {
   return profile?.role === 'admin';
 }
 
-// createUser の signUp は一時的にこのタブのセッションを新ユーザーに切り替えるため、その間は監視を止める
-let sessionWatchSuspended = false;
-export function suspendSessionWatch(suspended) {
-  sessionWatchSuspended = suspended;
+export const INACTIVE_ACCOUNT_MESSAGE = 'このアカウントは無効化されています。管理者にお問い合わせください。';
+
+/**
+ * 無効化されたユーザーならこの端末のセッションを破棄してログイン画面へ戻す。
+ * @param {{status?: string}|null} profile
+ * @returns {Promise<boolean>} 戻した場合 true（呼び出し側は以降の初期化を中断する）
+ */
+export async function rejectInactiveUser(profile) {
+  if (profile?.status !== 'inactive') return false;
+  await supabase.auth.signOut({ scope: 'local' });
+  sessionStorage.setItem('loginNotice', INACTIVE_ACCOUNT_MESSAGE);
+  window.location.href = 'login.html';
+  return true;
 }
 
 /**
@@ -87,13 +99,9 @@ export function suspendSessionWatch(suspended) {
  * @param {string} userId 画面の初期化時に確認したユーザーID
  */
 export function watchSessionUser(userId) {
-  let timer = null;
   supabase.auth.onAuthStateChange(() => {
-    if (sessionWatchSuspended) return;
-    clearTimeout(timer);
-    // 他タブの createUser による一時的な切り替えは直後に元へ戻るため、少し待ってから判定する
-    timer = setTimeout(async () => {
-      if (sessionWatchSuspended) return;
+    // コールバック内で auth API を呼ぶとロック待ちになるため、抜けてから現在のセッションを確認する
+    setTimeout(async () => {
       const { data: { session } } = await supabase.auth.getSession();
       const currentId = session?.user?.id || null;
       if (currentId === userId) return;
@@ -102,6 +110,6 @@ export function watchSessionUser(userId) {
       } else {
         window.location.href = 'login.html';
       }
-    }, 1500);
+    }, 0);
   });
 }

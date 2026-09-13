@@ -1,5 +1,8 @@
 // error-handler.js - 統一エラーハンドリング
 
+// 下の console.error フックより前の本来の出力先。ログ保存処理自身の出力はここへ流し、フックの再入を防ぐ
+const originalConsoleError = console.error.bind(console);
+
 // 英語エラーを日本語に変換
 function translateError(errorMessage) {
     const translations = {
@@ -43,9 +46,7 @@ function getUserIdFromSession() {
 
 // 統一エラーハンドラー
 export function handleError(error, context = '', customMessage = null) {
-    console.error(`Error in ${context}:`, error);
-
-    // Supabaseにエラーログを保存（認証トークンからユーザーIDを推定）
+    // console 出力と Supabase への保存（ユーザーIDは認証トークンから推定）
     logError(error, context, getUserIdFromSession());
 
     // カスタムメッセージが指定されている場合はそれを使用
@@ -80,19 +81,35 @@ export function handleSuccess(message, context = '') {
     }
 }
 
+// Supabase の PostgrestError 等は Error を継承しないプレーンオブジェクトのことがあるため、code/details も含めて文字列化する
+function describeError(error) {
+    if (!error || typeof error !== 'object') return String(error);
+    const extra = [error.code, error.details, error.hint].filter(Boolean).join(' / ');
+    const message = error.message || safeStringify(error);
+    return extra ? `${message} [${extra}]` : message;
+}
+
+function safeStringify(value) {
+    try {
+        return JSON.stringify(value);
+    } catch (_e) {
+        return String(value);
+    }
+}
+
 // エラーロギング（Supabaseに保存）
 export function logError(error, context = '', userId = null) {
     const errorLog = {
         timestamp: new Date().toISOString(),
         context,
-        message: error.message || error.toString(),
-        stack: error.stack,
+        message: describeError(error),
+        stack: error.stack || (typeof error === 'object' ? safeStringify(error) : undefined),
         userId,
         userAgent: navigator.userAgent,
         url: window.location.href
     };
 
-    console.error('Error Log:', errorLog);
+    originalConsoleError('Error Log:', errorLog);
 
     // Supabaseにログ保存（非同期、失敗してもアプリに影響なし）
     saveErrorToSupabase(errorLog);
@@ -184,6 +201,25 @@ if (typeof window !== 'undefined') {
         const err = reason instanceof Error ? reason : new Error(msg);
         logError(err, 'unhandledrejection', getUserIdFromSession());
     });
+
+    // 各画面の catch 節は console.error(説明, error) + トーストで失敗を扱っているため、
+    // console.error に Error（または message を持つエラーオブジェクト）が渡されたら保存する
+    console.error = function (...args) {
+        originalConsoleError(...args);
+        const error = args.find(a => a instanceof Error || (a && typeof a === 'object' && typeof a.message === 'string'));
+        if (!error) return;
+        const context = args.filter(a => typeof a === 'string').join(' ').slice(0, 200) || 'console.error';
+        const message = describeError(error);
+        if (isDuplicateError(`${context}|${message}`)) return;
+        saveErrorToSupabase({
+            context,
+            message,
+            stack: error.stack || safeStringify(error),
+            userId: getUserIdFromSession(),
+            userAgent: navigator.userAgent,
+            url: window.location.href
+        });
+    };
 }
 
 // グローバルに公開

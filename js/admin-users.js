@@ -7,6 +7,7 @@ import {
     updateUserProfile,
     updateUserStatus,
     createUser,
+    updateUserPassword,
     getMasterVendors
 } from './supabase-client.js';
 
@@ -237,6 +238,12 @@ async function handleEditUserSubmit(userId) {
         showToast('保守会社を選択してください', 'error');
         return;
     }
+    // 空欄ならパスワードは変更しない
+    const newPassword = document.getElementById('newUserPassword').value;
+    if (newPassword && newPassword.length < 6) {
+        showToast('パスワードは6文字以上で入力してください', 'error');
+        return;
+    }
 
     submitBtn.disabled = true;
     submitBtn.textContent = '更新中...';
@@ -246,8 +253,11 @@ async function handleEditUserSubmit(userId) {
             role: role,
             vendor_id: vendorId
         });
+        if (newPassword) {
+            await updateUserPassword(userId, newPassword);
+        }
 
-        showToast('ユーザー情報を更新しました', 'success');
+        showToast(newPassword ? 'ユーザー情報とパスワードを更新しました' : 'ユーザー情報を更新しました', 'success');
         closeUserModal();
 
         // フォームをリセット

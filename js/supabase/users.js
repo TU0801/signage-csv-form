@@ -1,7 +1,6 @@
 // supabase/users.js - ユーザー管理
 
 import { supabase } from './client.js';
-import { suspendSessionWatch } from './auth.js';
 
 export async function getAllProfiles() {
   const { data, error } = await supabase.from('signage_profiles').select('*').order('created_at', { ascending: false });
@@ -30,47 +29,27 @@ export async function updateUserStatus(id, status) {
   return data;
 }
 
-export async function createUser(email, password, companyName, role, vendorId = null) {
-  suspendSessionWatch(true);
-  try {
-    return await createUserWithSessionSwap(email, password, companyName, role, vendorId);
-  } finally {
-    suspendSessionWatch(false);
+// ユーザー作成・パスワード変更は service_role が必要なため、管理者検証付きの Edge Function で行う
+// （supabase/functions/signage-admin-users）
+async function invokeAdminUsers(body) {
+  const { data, error } = await supabase.functions.invoke('signage-admin-users', { body });
+  if (error) {
+    let message = error.message;
+    try {
+      message = (await error.context.json()).error || message;
+    } catch (_e) {
+      // レスポンス本文が JSON でない場合は SDK のメッセージを使う
+    }
+    throw new Error(message);
   }
+  return data;
 }
 
-async function createUserWithSessionSwap(email, password, companyName, role, vendorId) {
-  const { data: { session: currentSession } } = await supabase.auth.getSession();
+export async function createUser(email, password, _companyName, role, vendorId = null) {
+  const { user } = await invokeAdminUsers({ action: 'create_user', email, password, role, vendorId });
+  return user;
+}
 
-  const { data: authData, error: authError } = await supabase.auth.signUp({
-    email, password,
-    options: { data: { company_name: companyName, role: role } }
-  });
-  if (authError) throw authError;
-  if (authData.user && authData.user.identities && authData.user.identities.length === 0) {
-    throw new Error('このメールアドレスは既に登録されています');
-  }
-  if (!authData.user) throw new Error('ユーザー作成に失敗しました');
-
-  const needsEmailConfirmation = !authData.session;
-
-  const profileData = { id: authData.user.id, email: email, company_name: companyName, role: role };
-  if (vendorId) profileData.vendor_id = vendorId;
-
-  const { data: profile, error: profileError } = await supabase
-    .from('signage_profiles')
-    .upsert(profileData, { onConflict: 'id' })
-    .select();
-  if (profileError) throw new Error('プロファイル作成に失敗しました: ' + profileError.message);
-
-  if (currentSession) {
-    await supabase.auth.setSession({ access_token: currentSession.access_token, refresh_token: currentSession.refresh_token });
-  }
-
-  if (needsEmailConfirmation) {
-    const result = authData.user;
-    result._needsEmailConfirmation = true;
-    return result;
-  }
-  return authData.user;
+export async function updateUserPassword(userId, password) {
+  await invokeAdminUsers({ action: 'set_password', userId, password });
 }
