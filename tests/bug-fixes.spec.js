@@ -567,6 +567,36 @@ test.describe('修正依頼0913: 承認フローの迂回防止', () => {
     }, entryFor(userId, 'draft'));
     expect(result).toEqual({ code: '42501', status: 'draft', deleteError: null });
   });
+
+  test('一般ユーザーは申請済みのエントリの内容を変更できない（管理者の確認後の差し替え防止）', async ({ page }) => {
+    const { userId } = await loginAndGetSupabase(page, E2E_USER);
+    const result = await page.evaluate(async (row) => {
+      const { supabase } = await import('/js/supabase/client.js');
+      const { data: created, error: insertError } = await supabase.from('signage_entries').insert(row).select('id').single();
+      if (insertError) return { insertError: insertError.message };
+      const { error: submitError } = await supabase.from('signage_entries').update({ status: 'draft' }).eq('id', created.id);
+      const { error: editError } = await supabase.from('signage_entries').update({ remarks: 'swapped' }).eq('id', created.id);
+      const { error: deleteError } = await supabase.from('signage_entries').delete().eq('id', created.id);
+      return { submitError: submitError?.message || null, editCode: editError?.code || null, deleteError: deleteError?.message || null };
+    }, entryFor(userId, 'pending'));
+    expect(result).toEqual({ submitError: null, editCode: '42501', deleteError: null });
+  });
+});
+
+test.describe('修正依頼0913: CSV出力は承認済みのみ', () => {
+  test('一覧読み込み直後の未承認エントリが出力対象に含まれない', async ({ page }) => {
+    await loginAsUser(page);
+    await page.goto(`${baseUrl}/admin.html`);
+    await page.waitForLoadState('networkidle');
+    const statuses = await page.evaluate(async () => {
+      const { getFilteredExportEntries } = await import('/js/admin-export.js');
+      const sample = ['pending', 'draft', 'ready', 'exported'].map((status, i) => ({
+        id: String(i), status, property_code: '', inspection_start: '2999-01-01',
+      }));
+      return getFilteredExportEntries(sample).map(e => e.status);
+    });
+    expect(statuses).toEqual(['ready', 'exported']);
+  });
 });
 
 test.describe('修正依頼0913: エラーログ保存', () => {

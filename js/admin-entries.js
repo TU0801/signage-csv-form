@@ -440,7 +440,7 @@ export function showEntryDetail(entry) {
                 <div class="detail-value">${formatDateTime(entry.created_at)}</div>
 
                 <div class="detail-label">ステータス</div>
-                <div class="detail-value">${entry.status === 'submitted' ? '承認済み' : '承認待ち'}</div>
+                <div class="detail-value">${entry.status === 'ready' || entry.status === 'exported' ? '承認済み' : entry.status === 'pending' ? '未申請' : '承認待ち'}</div>
             </div>
         </div>
     `;

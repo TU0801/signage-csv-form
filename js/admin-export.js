@@ -85,8 +85,10 @@ export function generateCSV(data) {
     return csvRows.join('\n');
 }
 
+const APPROVED_STATUSES = ['ready', 'exported'];
+
 /**
- * フィルターに基づくエクスポート対象エントリを取得
+ * フィルターに基づくエクスポート対象エントリを取得（承認済みのみ）
  * @param {Array} entries - 全エントリ配列
  * @returns {Array} フィルター済みエントリ
  */
@@ -96,6 +98,8 @@ export function getFilteredExportEntries(entries) {
     const exportEndDate = document.getElementById('filterEndDate')?.value || '';
 
     return entries.filter(entry => {
+        // 出力は承認済みのみ（loadAllData 直後の entries には承認待ち・未申請も含まれるため、ここで必ず絞る）
+        if (!APPROVED_STATUSES.includes(entry.status)) return false;
         if (exportProperty && String(entry.property_code) !== exportProperty) return false;
         if (exportStartDate && entry.inspection_start < exportStartDate) return false;
         if (exportEndDate && entry.inspection_start > exportEndDate) return false;
@@ -223,7 +227,7 @@ export function copyCSV(entries) {
 export async function downloadCustomImages(entries) {
     // カスタム画像を持つエントリをフィルタ
     const customImageEntries = entries.filter(e =>
-        e.poster_type === 'custom' && e.poster_image
+        APPROVED_STATUSES.includes(e.status) && e.poster_type === 'custom' && e.poster_image
     );
 
     if (customImageEntries.length === 0) {
