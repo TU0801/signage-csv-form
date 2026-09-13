@@ -462,7 +462,7 @@ let adminVendorChangeSeq = 0;
 
             const entry = {
                 terminalId: terminalId || property.terminalId,
-                propertyCode: parseInt(propertyCode),
+                propertyCode: propertyCode, // 英数字コード（z0023A01 等）もあるため数値化しない
                 propertyName: property.propertyName,
                 vendorName: vendor.vendorName,
                 emergencyContact: vendor.emergencyContact,

@@ -22,7 +22,7 @@
 export { supabase } from './supabase/client.js';
 
 // 認証
-export { getUser, signIn, signOut, getProfile, isAdmin } from './supabase/auth.js';
+export { getUser, signIn, signOut, getProfile, isAdmin, watchSessionUser } from './supabase/auth.js';
 
 // マスターデータ取得
 export {

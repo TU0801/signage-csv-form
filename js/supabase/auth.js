@@ -73,3 +73,35 @@ export async function isAdmin() {
   const profile = await getProfile();
   return profile?.role === 'admin';
 }
+
+// createUser の signUp は一時的にこのタブのセッションを新ユーザーに切り替えるため、その間は監視を止める
+let sessionWatchSuspended = false;
+export function suspendSessionWatch(suspended) {
+  sessionWatchSuspended = suspended;
+}
+
+/**
+ * 表示中の画面のユーザーと、別タブ等で切り替わった現在のセッションが食い違ったら画面を開き直す。
+ * 管理画面を開いたまま別タブで一般ユーザーにログインすると、画面は管理者のまま一般ユーザー権限で
+ * 書き込みが走り RLS に拒否されていた（2026-09-09 物件登録403・紐付け削除406）。
+ * @param {string} userId 画面の初期化時に確認したユーザーID
+ */
+export function watchSessionUser(userId) {
+  let timer = null;
+  supabase.auth.onAuthStateChange(() => {
+    if (sessionWatchSuspended) return;
+    clearTimeout(timer);
+    // 他タブの createUser による一時的な切り替えは直後に元へ戻るため、少し待ってから判定する
+    timer = setTimeout(async () => {
+      if (sessionWatchSuspended) return;
+      const { data: { session } } = await supabase.auth.getSession();
+      const currentId = session?.user?.id || null;
+      if (currentId === userId) return;
+      if (currentId) {
+        window.location.reload();
+      } else {
+        window.location.href = 'login.html';
+      }
+    }, 1500);
+  });
+}

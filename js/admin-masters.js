@@ -534,19 +534,13 @@ function addTerminalField(terminal = {}) {
     terminalDiv.style.cssText = 'display: flex; gap: 0.5rem; align-items: center;';
 
     terminalDiv.innerHTML = `
-        <input type="text" class="terminal-id" placeholder="端末ID" value="${escapeHtml(terminal.terminal_id || terminal.terminalId || '')}" style="flex: 1;" required>
+        <input type="text" class="terminal-id" placeholder="端末ID" value="${escapeHtml(terminal.terminal_id || terminal.terminalId || '')}" style="flex: 1;">
         <input type="text" class="terminal-supplement" placeholder="補足（任意）" value="${escapeHtml(terminal.supplement || '')}" style="flex: 1;">
         <button type="button" class="btn btn-outline btn-sm btn-danger-outline remove-terminal-btn">削除</button>
     `;
 
     // 削除ボタンのイベントリスナー
-    terminalDiv.querySelector('.remove-terminal-btn').addEventListener('click', () => {
-        if (terminalsList.children.length > 1) {
-            terminalDiv.remove();
-        } else {
-            alert('最低1つの端末が必要です');
-        }
-    });
+    terminalDiv.querySelector('.remove-terminal-btn').addEventListener('click', () => terminalDiv.remove());
 
     terminalsList.appendChild(terminalDiv);
 }
@@ -970,17 +964,17 @@ export async function handleMasterFormSubmit(e, masterData, showToast, updateSta
 
     try {
         if (type === 'property') {
-            // 端末リストを収集
+            // 端末リストを収集（サイネージ未設置の物件もあるため任意。端末IDが空の行は保存しない）
             const terminalItems = document.querySelectorAll('#terminalsList .terminal-item');
             const terminals = Array.from(terminalItems).map(item => ({
-                terminal_id: item.querySelector('.terminal-id').value,
-                supplement: item.querySelector('.terminal-supplement').value || ''
-            }));
+                terminal_id: item.querySelector('.terminal-id').value.trim(),
+                supplement: item.querySelector('.terminal-supplement').value.trim()
+            })).filter(t => t.terminal_id);
 
-            const propertyCodeValue = document.getElementById('propertyCode').value;
-            const propertyCode = parseInt(propertyCodeValue);
-            if (!propertyCodeValue || isNaN(propertyCode)) {
-                showToast('物件コードは数値で入力してください', 'error');
+            // 物件コードは英数字（z0023A01 等）もあるため文字列のまま扱う（DBも text 型）
+            const propertyCode = document.getElementById('propertyCode').value.trim();
+            if (!propertyCode) {
+                showToast('物件コードを入力してください', 'error');
                 return;
             }
 

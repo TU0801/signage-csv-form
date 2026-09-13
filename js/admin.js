@@ -5,6 +5,7 @@ import {
     getProfile,
     isAdmin,
     signOut,
+    watchSessionUser,
     getAllMasterData,
     getAllEntries,
     getAllProfiles,
@@ -139,6 +140,7 @@ async function init() {
         window.location.href = 'index.html';
         return;
     }
+    watchSessionUser(user.id);
 
     // ユーザー情報表示
     const profile = await getProfile();

@@ -1,6 +1,7 @@
 // supabase/users.js - ユーザー管理
 
 import { supabase } from './client.js';
+import { suspendSessionWatch } from './auth.js';
 
 export async function getAllProfiles() {
   const { data, error } = await supabase.from('signage_profiles').select('*').order('created_at', { ascending: false });
@@ -30,6 +31,15 @@ export async function updateUserStatus(id, status) {
 }
 
 export async function createUser(email, password, companyName, role, vendorId = null) {
+  suspendSessionWatch(true);
+  try {
+    return await createUserWithSessionSwap(email, password, companyName, role, vendorId);
+  } finally {
+    suspendSessionWatch(false);
+  }
+}
+
+async function createUserWithSessionSwap(email, password, companyName, role, vendorId) {
   const { data: { session: currentSession } } = await supabase.auth.getSession();
 
   const { data: authData, error: authError } = await supabase.auth.signUp({
