@@ -92,6 +92,20 @@ export async function rejectInactiveUser(profile) {
   return true;
 }
 
+function showSessionChangedOverlay() {
+  if (document.getElementById('sessionChangedOverlay')) return;
+  const overlay = document.createElement('div');
+  overlay.id = 'sessionChangedOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,0.75);display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:12px;padding:1.5rem 2rem;max-width:420px;text-align:center;font-size:0.95rem;color:#1e293b;">
+      <p style="margin:0 0 1rem;">別のタブでログアウト、または別のアカウントでログインしたため、この画面は使用できません。</p>
+      <button type="button" style="padding:0.5rem 1.25rem;border:none;border-radius:6px;background:#2563eb;color:#fff;cursor:pointer;">画面を開き直す</button>
+    </div>`;
+  overlay.querySelector('button').addEventListener('click', () => window.location.reload());
+  document.body.appendChild(overlay);
+}
+
 /**
  * 表示中の画面のユーザーと、別タブ等で切り替わった現在のセッションが食い違ったら画面を開き直す。
  * 管理画面を開いたまま別タブで一般ユーザーにログインすると、画面は管理者のまま一般ユーザー権限で
@@ -105,6 +119,9 @@ export function watchSessionUser(userId) {
       const { data: { session } } = await supabase.auth.getSession();
       const currentId = session?.user?.id || null;
       if (currentId === userId) return;
+      // 離脱確認（一括入力の beforeunload）で移動が止められても、別人の権限で操作を続けられないよう画面を塞ぐ
+      window.sessionUserChanged = true;
+      showSessionChangedOverlay();
       if (currentId) {
         window.location.reload();
       } else {

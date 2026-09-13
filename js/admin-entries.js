@@ -274,7 +274,8 @@ async function deleteEntryById(id) {
         await deleteEntry(id);
         showToast('削除しました', 'success');
         await loadEntries();
-    } catch (_error) {
+    } catch (error) {
+        console.error('Failed to delete entry:', error);
         showToast('削除に失敗しました', 'error');
     }
 }

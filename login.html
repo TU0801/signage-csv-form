@@ -261,9 +261,10 @@
         // 無効化されたアカウントはこの端末のセッションを破棄してログインさせない
         async function redirectByProfile() {
             const profile = await getProfile();
-            if (profile?.status === 'inactive') {
+            // signage のプロファイルが無い（共用 Auth の他アプリ専用アカウント等）場合も入れない
+            if (!profile || profile.status !== 'active') {
                 await signOut({ scope: 'local' });
-                showError(INACTIVE_ACCOUNT_MESSAGE);
+                showError(profile ? INACTIVE_ACCOUNT_MESSAGE : 'このアカウントは点検日入力システムでは利用できません。管理者にお問い合わせください。');
                 return false;
             }
             window.location.href = profile?.role === 'admin' ? 'admin.html' : 'index.html';

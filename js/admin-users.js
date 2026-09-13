@@ -95,7 +95,8 @@ export async function loadUsers() {
                 showToast('権限を更新しました', 'success');
                 setState('profiles', await getAllProfiles());
                 await loadUsers();
-            } catch (_error) {
+            } catch (error) {
+                console.error('Failed to update role:', error);
                 showToast('権限の更新に失敗しました', 'error');
                 const profile = profiles.find(p => p.id === userId);
                 if (profile) e.target.value = profile.role;
@@ -149,7 +150,8 @@ async function handleUserFormSubmit(e) {
     const vendorId = document.getElementById('newUserVendor').value || null;
     const submitBtn = document.getElementById('userSubmitBtn');
 
-    if (!vendorId) {
+    // 保守会社は一般ユーザーのみ必須（管理者は保守会社なしで運用している）
+    if (role !== 'admin' && !vendorId) {
         showToast('保守会社を選択してください', 'error');
         return;
     }
@@ -158,13 +160,8 @@ async function handleUserFormSubmit(e) {
     submitBtn.textContent = '追加中...';
 
     try {
-        const user = await createUser(email, password, null, role, vendorId);
-
-        if (user._needsEmailConfirmation) {
-            showToast('ユーザーを追加しました（メール確認が必要です）', 'warning');
-        } else {
-            showToast('ユーザーを追加しました', 'success');
-        }
+        await createUser(email, password, null, role, vendorId);
+        showToast('ユーザーを追加しました', 'success');
         closeUserModal();
 
         // ユーザー一覧を更新
@@ -234,7 +231,7 @@ async function handleEditUserSubmit(userId) {
     const vendorId = document.getElementById('newUserVendor').value || null;
     const submitBtn = document.getElementById('userSubmitBtn');
 
-    if (!vendorId) {
+    if (role !== 'admin' && !vendorId) {
         showToast('保守会社を選択してください', 'error');
         return;
     }
@@ -249,13 +246,14 @@ async function handleEditUserSubmit(userId) {
     submitBtn.textContent = '更新中...';
 
     try {
+        // パスワード変更（共用アカウント等で拒否され得る）を先に行い、失敗したら権限・保守会社も保存しない
+        if (newPassword) {
+            await updateUserPassword(userId, newPassword);
+        }
         await updateUserProfile(userId, {
             role: role,
             vendor_id: vendorId
         });
-        if (newPassword) {
-            await updateUserPassword(userId, newPassword);
-        }
 
         showToast(newPassword ? 'ユーザー情報とパスワードを更新しました' : 'ユーザー情報を更新しました', 'success');
         closeUserModal();

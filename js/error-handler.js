@@ -204,6 +204,8 @@ if (typeof window !== 'undefined') {
 
     // 各画面の catch 節は console.error(説明, error) + トーストで失敗を扱っているため、
     // console.error に Error（または message を持つエラーオブジェクト）が渡されたら保存する
+    const MAX_CONSOLE_ERROR_SENDS_PER_PAGE = 50;
+    let consoleErrorSendCount = 0;
     console.error = function (...args) {
         originalConsoleError(...args);
         const error = args.find(a => a instanceof Error || (a && typeof a === 'object' && typeof a.message === 'string'));
@@ -211,6 +213,9 @@ if (typeof window !== 'undefined') {
         const context = args.filter(a => typeof a === 'string').join(' ').slice(0, 200) || 'console.error';
         const message = describeError(error);
         if (isDuplicateError(`${context}|${message}`)) return;
+        // 同じ失敗が文言を変えて繰り返されてもテーブルを埋めないよう、1ページあたりの送信件数に上限を設ける
+        if (consoleErrorSendCount >= MAX_CONSOLE_ERROR_SENDS_PER_PAGE) return;
+        consoleErrorSendCount++;
         saveErrorToSupabase({
             context,
             message,

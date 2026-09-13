@@ -713,7 +713,8 @@
                     </div>
                     <div class="form-group">
                         <label>保守会社 *</label>
-                        <select id="newUserVendor" required>
+                        <!-- 一般ユーザーのみ必須（admin-users.js で検証）。管理者は未設定でも保存できる -->
+                        <select id="newUserVendor">
                             <option value="">-- 選択してください --</option>
                         </select>
                         <small style="color: #64748b; font-size: 0.875rem;">管理者の場合は「管理者（BARAN）」を選択してください</small>

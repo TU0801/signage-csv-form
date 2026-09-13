@@ -56,7 +56,10 @@ async function copyCSV() {
     try {
         await navigator.clipboard.writeText(generateCSV());
         showToast('コピーしました', 'success');
-    } catch { showToast('コピー失敗', 'error'); }
+    } catch (error) {
+        console.error('Failed to copy CSV:', error);
+        showToast('コピー失敗', 'error');
+    }
 }
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });

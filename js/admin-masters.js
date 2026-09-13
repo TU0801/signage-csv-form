@@ -1059,6 +1059,7 @@ export async function handleMasterFormSubmit(e, masterData, showToast, updateSta
                 try {
                     imageUrl = await uploadTemplateImageFile(file, imageKey);
                 } catch (uploadError) {
+                    console.error('Failed to upload template image:', uploadError);
                     showToast(`画像のアップロードに失敗しました: ${uploadError.message}`, 'error');
                     return false;
                 }
@@ -1127,6 +1128,7 @@ export async function deleteMasterPropertyAction(id, masterData, entries, showTo
         updateStats();
         return true;
     } catch (error) {
+        console.error('Failed to delete property:', error);
         showToast('削除に失敗しました', 'error');
         return false;
     }
@@ -1142,6 +1144,7 @@ export async function deleteMasterVendorAction(id, masterData, showToast) {
         loadMasterData(masterData);
         return true;
     } catch (error) {
+        console.error('Failed to delete vendor:', error);
         showToast('削除に失敗しました', 'error');
         return false;
     }
@@ -1165,6 +1168,7 @@ export async function deleteMasterInspectionAction(id, masterData, entries, show
         loadMasterData(masterData);
         return true;
     } catch (error) {
+        console.error('Failed to delete inspection type:', error);
         showToast('削除に失敗しました', 'error');
         return false;
     }
@@ -1178,6 +1182,7 @@ export async function deleteMasterCategoryAction(id, masterData, showToast) {
         await loadCategories(masterData);
         return true;
     } catch (error) {
+        console.error('Failed to delete category:', error);
         showToast('削除に失敗しました', 'error');
         return false;
     }

@@ -440,9 +440,20 @@ test.describe('修正依頼0913: アカウント管理', () => {
     page.on('dialog', dialog => dialog.accept());
     await openUsersTab(page);
     const row = page.locator('#usersBody tr', { hasText: E2E_USER.email });
+    // 無効化の前からログインしている画面（開いたままのタブ）を用意する
+    const openedTab = await (await browser.newContext()).newPage();
+    await loginAndGetSupabase(openedTab, E2E_USER);
+    const isActiveMember = () => openedTab.evaluate(async () => {
+      const { supabase } = await import('/js/supabase/client.js');
+      const { data } = await supabase.rpc('is_active_member');
+      return data;
+    });
     try {
+      expect(await isActiveMember()).toBe(true);
       await row.getByRole('button', { name: '無効化' }).click();
       await expect(row.getByRole('button', { name: '有効化' })).toBeVisible({ timeout: 15000 });
+      // RLS の判定（全ポリシー共通）は開いたままのセッションにも即時に効く
+      expect(await isActiveMember()).toBe(false);
 
       const other = await browser.newContext();
       const userPage = await other.newPage();
@@ -462,7 +473,62 @@ test.describe('修正依頼0913: アカウント管理', () => {
         const target = (await getAllProfiles()).find(p => p.email === email);
         if (target.status !== 'active') await updateUserStatus(target.id, 'active');
       }, E2E_USER.email);
+      await openedTab.context().close();
     }
+  });
+
+  test('他システムと共用のアカウントはパスワードを変更できない', async ({ page }) => {
+    await openUsersTab(page);
+    const message = await page.evaluate(async () => {
+      const { supabase } = await import('/js/supabase/client.js');
+      const { updateUserPassword } = await import('/js/supabase/users.js');
+      // 001@baran-ev.com は biz でも使われている共用アカウント
+      const { data: target } = await supabase.from('signage_profiles').select('id').eq('email', '001@baran-ev.com').maybeSingle();
+      if (!target) return 'skip';
+      try {
+        await updateUserPassword(target.id, 'shouldnotchange1');
+        return 'no error';
+      } catch (e) {
+        return e.message;
+      }
+    });
+    test.skip(message === 'skip', '共用アカウントがない環境');
+    expect(message).toContain('他のシステムと共用');
+  });
+
+  test('管理者ユーザーは保守会社なしでも編集を保存できる', async ({ page }) => {
+    await openUsersTab(page);
+    await page.locator('#usersBody tr', { hasText: 'admin@example.com' }).getByRole('button', { name: '編集' }).click();
+    await expect(page.locator('#userModal')).toHaveClass(/active/);
+    await page.selectOption('#newUserRole', 'admin');
+    await page.selectOption('#newUserVendor', '');
+    await page.click('#userSubmitBtn');
+    await expect(page.getByText('ユーザー情報を更新しました')).toBeVisible({ timeout: 15000 });
+  });
+});
+
+test.describe('修正依頼0913: 一括入力中のアカウント切替', () => {
+  test('行が残っていても、別タブで切り替わったら画面を塞いで開き直す', async ({ context }) => {
+    const bulkPage = await context.newPage();
+    await loginAsUser(bulkPage);
+    await bulkPage.goto(`${baseUrl}/bulk.html`);
+    await bulkPage.waitForLoadState('networkidle');
+    await bulkPage.click('#addRowBtn');
+    await bulkPage.evaluate(() => { window.__beforeSwitch = true; });
+    const dialogs = [];
+    bulkPage.on('dialog', dialog => { dialogs.push(dialog.type()); dialog.dismiss(); });
+
+    const otherTab = await openSameOriginTab(context);
+    await otherTab.evaluate(async () => {
+      const { supabase } = await import('/js/supabase/client.js');
+      await supabase.auth.signOut({ scope: 'local' });
+    });
+
+    await expect.poll(
+      () => bulkPage.evaluate(() => window.__beforeSwitch === true).catch(() => false),
+      { timeout: 15000 }
+    ).toBe(false);
+    expect(dialogs).not.toContain('beforeunload');
   });
 });
 

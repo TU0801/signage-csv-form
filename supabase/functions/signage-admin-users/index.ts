@@ -15,6 +15,19 @@ const corsHeaders = {
 
 const MIN_PASSWORD_LENGTH = 6;
 
+// service_role での書き込みは監査トリガーが操作者を記録できない（auth.uid() が NULL）ため、操作した管理者をここで残す
+// deno-lint-ignore no-explicit-any
+async function writeAudit(admin: any, actorId: string, operation: string, targetId: string, data: Record<string, unknown>) {
+  const { error } = await admin.from('signage_audit_logs').insert({
+    table_name: 'auth.users',
+    operation,
+    record_id: targetId,
+    user_id: actorId,
+    new_data: data,
+  });
+  if (error) console.error('audit log insert failed:', error.message);
+}
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -84,20 +97,31 @@ Deno.serve(async (req) => {
       .single();
     if (profileError) {
       // プロファイルの無いログイン可能なユーザーを残さない（直前に作ったユーザーなので削除して安全）
-      await admin.auth.admin.deleteUser(created.user.id);
-      return json({ error: `プロファイル作成に失敗しました: ${profileError.message}` }, 500);
+      const { error: rollbackError } = await admin.auth.admin.deleteUser(created.user.id);
+      const rollbackNote = rollbackError
+        ? `（作成したログインアカウント ${created.user.email} の取り消しにも失敗しました: ${rollbackError.message}）`
+        : '';
+      return json({ error: `プロファイル作成に失敗しました: ${profileError.message}${rollbackNote}` }, 500);
     }
+    await writeAudit(admin, caller.id, 'CREATE_USER', created.user.id, { email: created.user.email, role, vendor_id: vendorId });
     return json({ user: profile });
   }
 
   if (body.action === 'set_password') {
     const userId = typeof body.userId === 'string' ? body.userId : '';
     // baran プロジェクトの auth.users は他アプリと共用のため、signage のユーザーに限定する
-    const { data: target } = await admin.from('signage_profiles').select('id').eq('id', userId).maybeSingle();
+    const { data: target } = await admin.from('signage_profiles').select('id, email').eq('id', userId).maybeSingle();
     if (!target) return json({ error: 'ユーザーが見つかりません' }, 404);
+    // 他アプリ（noj/mansion/biz）でも使われているアカウントは、変更が他アプリのログインにも及ぶため拒否する
+    const { data: shared, error: sharedError } = await admin.rpc('is_shared_auth_user', { target: userId });
+    if (sharedError) return json({ error: `共用アカウントの確認に失敗しました: ${sharedError.message}` }, 500);
+    if (shared) {
+      return json({ error: 'このアカウントは他のシステムと共用のため、ここではパスワードを変更できません' }, 409);
+    }
 
     const { error } = await admin.auth.admin.updateUserById(userId, { password });
     if (error) return json({ error: `パスワード変更に失敗しました: ${error.message}` }, 400);
+    await writeAudit(admin, caller.id, 'SET_PASSWORD', userId, { email: target.email });
     return json({ ok: true });
   }
 

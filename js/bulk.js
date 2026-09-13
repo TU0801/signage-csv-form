@@ -299,6 +299,8 @@ function setupEventListeners() {
 
     // ページ離脱警告
     window.addEventListener('beforeunload', (e) => {
+        // 別タブでのアカウント切替を検知して開き直す場合は確認を出さない（supabase/auth.js watchSessionUser）
+        if (window.sessionUserChanged) return;
         if (getRows().length > 0) {
             e.preventDefault();
             e.returnValue = '';
