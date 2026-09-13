@@ -261,10 +261,11 @@
         // 無効化されたアカウントはこの端末のセッションを破棄してログインさせない
         async function redirectByProfile() {
             const profile = await getProfile();
-            // signage のプロファイルが無い（共用 Auth の他アプリ専用アカウント等）場合も入れない
+            // signage のプロファイルが無い（共用 Auth の他アプリ専用アカウント等）場合も入れない。
+            // getProfile は通信エラーでも null を返すため、どちらの場合にも当てはまる案内にする
             if (!profile || profile.status !== 'active') {
                 await signOut({ scope: 'local' });
-                showError(profile ? INACTIVE_ACCOUNT_MESSAGE : 'このアカウントは点検日入力システムでは利用できません。管理者にお問い合わせください。');
+                showError(profile ? INACTIVE_ACCOUNT_MESSAGE : 'アカウント情報を確認できませんでした。もう一度ログインしてください。解決しない場合は管理者にお問い合わせください。');
                 return false;
             }
             window.location.href = profile?.role === 'admin' ? 'admin.html' : 'index.html';
