@@ -124,7 +124,7 @@ async function init() {
         });
     } else {
         // 一般ユーザー：プロファイルから保守会社を取得して固定
-        if (profile.vendor_id) {
+        if (profile?.vendor_id) {
             // マスターデータ取得後に vendor_name を検索するため、後で設定
         }
     }
@@ -148,7 +148,7 @@ async function init() {
         setAppSettings(settings);
 
         // 一般ユーザーの場合、プロファイルから保守会社を設定
-        if (!admin && profile.vendor_id) {
+        if (!admin && profile?.vendor_id) {
             const vendor = masterData.vendors.find(v => v.id === profile.vendor_id);
             setCurrentVendor(profile.vendor_id, vendor?.vendorName || null);
         }

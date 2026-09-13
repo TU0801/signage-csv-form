@@ -79,15 +79,36 @@ export async function isAdmin() {
 
 export const INACTIVE_ACCOUNT_MESSAGE = 'このアカウントは無効化されています。管理者にお問い合わせください。';
 
+export const NO_PROFILE_MESSAGE = 'このアカウントは点検日入力システムでは利用できません。管理者にお問い合わせください。';
+export const PROFILE_UNKNOWN_MESSAGE = 'アカウント情報を確認できませんでした。もう一度ログインしてください。解決しない場合は管理者にお問い合わせください。';
+
 /**
- * 無効化されたユーザーならこの端末のセッションを破棄してログイン画面へ戻す。
+ * ログイン中のユーザーがこのシステムを使えるかを判定する。
+ * auth.users は他アプリと共用のため、signage のプロファイルが無いアカウントでもログイン自体はできてしまう。
+ * getProfile は「行が無い」と「通信エラー」のどちらでも null を返すので、null のときは改めて確かめる。
+ * @param {{status?: string}|null} profile getProfile() の結果
+ * @returns {Promise<'active'|'inactive'|'no_profile'|'unknown'>}
+ */
+export async function checkAccountAccess(profile) {
+  if (profile) return profile.status === 'inactive' ? 'inactive' : 'active';
+  const user = await getUser();
+  if (!user) return 'unknown';
+  const { data, error } = await supabase.from('signage_profiles').select('id').eq('id', user.id).maybeSingle();
+  if (error) return 'unknown';
+  return data ? 'unknown' : 'no_profile';
+}
+
+/**
+ * 無効化されたユーザー・signage のプロファイルが無いユーザーならこの端末のセッションを破棄してログイン画面へ戻す。
+ * 通信エラー等で判定できない場合は戻さない（データは RLS が保護している）。
  * @param {{status?: string}|null} profile
  * @returns {Promise<boolean>} 戻した場合 true（呼び出し側は以降の初期化を中断する）
  */
 export async function rejectInactiveUser(profile) {
-  if (profile?.status !== 'inactive') return false;
+  const access = await checkAccountAccess(profile);
+  if (access !== 'inactive' && access !== 'no_profile') return false;
   await supabase.auth.signOut({ scope: 'local' });
-  sessionStorage.setItem('loginNotice', INACTIVE_ACCOUNT_MESSAGE);
+  sessionStorage.setItem('loginNotice', access === 'inactive' ? INACTIVE_ACCOUNT_MESSAGE : NO_PROFILE_MESSAGE);
   window.location.href = 'login.html';
   return true;
 }

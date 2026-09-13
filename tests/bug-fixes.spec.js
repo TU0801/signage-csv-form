@@ -599,6 +599,97 @@ test.describe('修正依頼0913: CSV出力は承認済みのみ', () => {
   });
 });
 
+// ========================================
+// 残課題対応（2026-09-13）
+//   - signage のプロファイルが無いセッション（共用 Auth の他アプリ専用アカウント）を各画面で弾く
+//   - マスタは有効な signage メンバーのみ閲覧（未ログインで読めるのはログイン画面の広告枠だけ）
+//   - 貼紙画像バケットの置き場所・形式制限（scripts/masters-and-storage-lockdown.sql）
+// ========================================
+async function loginE2EUserAtIndex(page) {
+  await loginAsUser(page, E2E_USER.email, E2E_USER.password);
+  if (!page.url().includes('index.html')) {
+    await page.goto(`${baseUrl}/index.html`);
+    await page.waitForLoadState('networkidle');
+  }
+}
+
+test.describe('残課題: プロファイルの無いセッション', () => {
+  test('signage のプロファイルが無いアカウントは1件入力画面からログイン画面へ戻される', async ({ page }) => {
+    await loginE2EUserAtIndex(page);
+    await page.route('**/rest/v1/signage_error_logs', route => route.fulfill({ status: 201, body: '' }));
+    // 他アプリ専用アカウントを再現するため、プロファイル取得を「行なし」の応答に差し替える
+    await page.route('**/rest/v1/signage_profiles*', route => {
+      const wantsObject = (route.request().headers()['accept'] || '').includes('vnd.pgrst.object');
+      return wantsObject
+        ? route.fulfill({ status: 406, contentType: 'application/json', body: JSON.stringify({ code: 'PGRST116', message: 'JSON object requested, multiple (or no) rows returned', details: 'The result contains 0 rows', hint: null }) })
+        : route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+    });
+    await page.goto(`${baseUrl}/index.html`);
+    await expect(page).toHaveURL(/login\.html/, { timeout: 15000 });
+    await expect(page.locator('#errorMessage')).toHaveText(/点検日入力システムでは利用できません/);
+  });
+
+  test('プロファイルの取得が通信エラーのときは画面から追い出さない', async ({ page }) => {
+    await loginE2EUserAtIndex(page);
+    // 通信エラーは signage_error_logs に送られるので、本番にテストのログを残さないよう差し替える
+    await page.route('**/rest/v1/signage_error_logs', route => route.fulfill({ status: 201, body: '' }));
+    await page.route('**/rest/v1/signage_profiles*', route => route.abort('failed'));
+    await page.goto(`${baseUrl}/index.html`);
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(2000);
+    expect(page.url()).toContain('index.html');
+  });
+});
+
+test.describe('残課題: マスタと画像バケットの制限', () => {
+  test('未ログインではマスタを読めず、ログイン画面の広告枠は読める', async ({ page }) => {
+    await page.goto(`${baseUrl}/js/config.js`);
+    const counts = await page.evaluate(async () => {
+      await import('/js/config.js');
+      const { supabase } = await import('/js/supabase/client.js');
+      const count = async (table) => (await supabase.from(table).select('id').limit(5)).data?.length ?? -1;
+      return {
+        properties: await count('signage_master_properties'),
+        vendors: await count('signage_master_vendors'),
+        settings: await count('signage_master_settings'),
+        adSlots: (await supabase.from('signage_ad_slots').select('slot_index').limit(5)).data?.length ?? -1,
+      };
+    });
+    expect(counts.properties).toBe(0);
+    expect(counts.vendors).toBe(0);
+    expect(counts.settings).toBe(0);
+    expect(counts.adSlots).toBeGreaterThan(0);
+  });
+
+  test('一般ユーザーは templates/ に置けず、画像以外の形式も置けない', async ({ page, browser }) => {
+    const { userId } = await loginAndGetSupabase(page, E2E_USER);
+    const stamp = `e2e_${Date.now()}`;
+    const paths = { template: `templates/${stamp}.png`, text: `${userId}/${stamp}.txt` };
+    const result = await page.evaluate(async (p) => {
+      const { supabase } = await import('/js/supabase/client.js');
+      const png = new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], { type: 'image/png' });
+      const txt = new Blob(['not an image'], { type: 'text/plain' });
+      const template = await supabase.storage.from('poster-images').upload(p.template, png, { contentType: 'image/png' });
+      const text = await supabase.storage.from('poster-images').upload(p.text, txt, { contentType: 'text/plain' });
+      return { templateUploaded: !template.error, textUploaded: !text.error };
+    }, paths);
+    try {
+      expect(result).toEqual({ templateUploaded: false, textUploaded: false });
+    } finally {
+      // 万一アップロードできてしまった場合は管理者で片付ける
+      if (result.templateUploaded || result.textUploaded) {
+        const adminPage = await (await browser.newContext()).newPage();
+        await loginAndGetSupabase(adminPage, { email: 'a@a', password: 'aaaaaa' });
+        await adminPage.evaluate(async (p) => {
+          const { supabase } = await import('/js/supabase/client.js');
+          await supabase.storage.from('poster-images').remove([p.template, p.text]);
+        }, paths);
+        await adminPage.context().close();
+      }
+    }
+  });
+});
+
 test.describe('修正依頼0913: エラーログ保存', () => {
   test('画面で失敗して console.error に渡されたエラーが signage_error_logs に送られる', async ({ page }) => {
     const posted = [];

@@ -213,7 +213,7 @@
         });
     </script>
     <script type="module">
-        import { signIn, signOut, getUser, getProfile, getAdSlots, INACTIVE_ACCOUNT_MESSAGE } from './js/supabase-client.js';
+        import { signIn, signOut, getUser, getProfile, getAdSlots, checkAccountAccess, INACTIVE_ACCOUNT_MESSAGE, NO_PROFILE_MESSAGE, PROFILE_UNKNOWN_MESSAGE } from './js/supabase-client.js';
 
         // XSS対策
         function escapeHtml(str) {
@@ -261,11 +261,11 @@
         // 無効化されたアカウントはこの端末のセッションを破棄してログインさせない
         async function redirectByProfile() {
             const profile = await getProfile();
-            // signage のプロファイルが無い（共用 Auth の他アプリ専用アカウント等）場合も入れない。
-            // getProfile は通信エラーでも null を返すため、どちらの場合にも当てはまる案内にする
-            if (!profile || profile.status !== 'active') {
+            // 無効化・signage のプロファイルが無い（共用 Auth の他アプリ専用アカウント等）・判定不能（通信エラー）は入れない
+            const access = await checkAccountAccess(profile);
+            if (access !== 'active') {
                 await signOut({ scope: 'local' });
-                showError(profile ? INACTIVE_ACCOUNT_MESSAGE : 'アカウント情報を確認できませんでした。もう一度ログインしてください。解決しない場合は管理者にお問い合わせください。');
+                showError({ inactive: INACTIVE_ACCOUNT_MESSAGE, no_profile: NO_PROFILE_MESSAGE }[access] || PROFILE_UNKNOWN_MESSAGE);
                 return false;
             }
             window.location.href = profile?.role === 'admin' ? 'admin.html' : 'index.html';
