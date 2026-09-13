@@ -534,6 +534,41 @@ test.describe('修正依頼0913: 一括入力中のアカウント切替', () =>
   });
 });
 
+// 一般ユーザーが API を直接呼んで承認フロー（draft → 管理者が ready）を迂回できないこと
+// （scripts/entries-approval-guard.sql のトリガー）
+test.describe('修正依頼0913: 承認フローの迂回防止', () => {
+  test.describe.configure({ mode: 'serial' });
+
+  const entryFor = (userId, status) => ({
+    user_id: userId, property_code: 'E2E-APPROVAL-GUARD', terminal_id: 'x', vendor_name: 'x', inspection_type: 'x', status,
+  });
+
+  test('一般ユーザーは承認済み（ready）でエントリを登録できない', async ({ page }) => {
+    const { userId } = await loginAndGetSupabase(page, E2E_USER);
+    const code = await page.evaluate(async (row) => {
+      const { supabase } = await import('/js/supabase/client.js');
+      const { error } = await supabase.from('signage_entries').insert(row);
+      return error?.code || null;
+    }, entryFor(userId, 'ready'));
+    expect(code).toBe('42501');
+  });
+
+  test('一般ユーザーは申請したエントリを自分で承認済みにできない', async ({ page }) => {
+    const { userId } = await loginAndGetSupabase(page, E2E_USER);
+    const result = await page.evaluate(async (row) => {
+      const { supabase } = await import('/js/supabase/client.js');
+      const { data: created, error: insertError } = await supabase.from('signage_entries').insert(row).select('id').single();
+      if (insertError) return { insertError: insertError.message };
+      const { error } = await supabase.from('signage_entries').update({ status: 'exported' }).eq('id', created.id);
+      const { data: after } = await supabase.from('signage_entries').select('status').eq('id', created.id).single();
+      // 承認前の自分の行は取り下げ（削除）できるので、ここで片付ける
+      const { error: deleteError } = await supabase.from('signage_entries').delete().eq('id', created.id);
+      return { code: error?.code || null, status: after?.status, deleteError: deleteError?.message || null };
+    }, entryFor(userId, 'draft'));
+    expect(result).toEqual({ code: '42501', status: 'draft', deleteError: null });
+  });
+});
+
 test.describe('修正依頼0913: エラーログ保存', () => {
   test('画面で失敗して console.error に渡されたエラーが signage_error_logs に送られる', async ({ page }) => {
     const posted = [];
