@@ -486,7 +486,9 @@ test.describe('修正依頼0913: アカウント管理', () => {
       const { data: target } = await supabase.from('signage_profiles').select('id').eq('email', '001@baran-ev.com').maybeSingle();
       if (!target) return 'skip';
       try {
-        await updateUserPassword(target.id, 'shouldnotchange1');
+        // 判定が壊れていても実際のパスワードが変わらないよう、長さ不足（6文字未満）の値を送る。
+        // Edge Function は対象・共用の確認をパスワード長の検証より先に行う
+        await updateUserPassword(target.id, 'x');
         return 'no error';
       } catch (e) {
         return e.message;

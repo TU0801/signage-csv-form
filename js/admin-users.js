@@ -250,10 +250,16 @@ async function handleEditUserSubmit(userId) {
         if (newPassword) {
             await updateUserPassword(userId, newPassword);
         }
-        await updateUserProfile(userId, {
-            role: role,
-            vendor_id: vendorId
-        });
+        try {
+            await updateUserProfile(userId, {
+                role: role,
+                vendor_id: vendorId
+            });
+        } catch (profileError) {
+            if (!newPassword) throw profileError;
+            // パスワードは変わっているので、それが伝わるように分けて知らせる
+            throw new Error(`パスワードは変更済みですが、権限・保守会社の保存に失敗しました（${profileError.message}）`);
+        }
 
         showToast(newPassword ? 'ユーザー情報とパスワードを更新しました' : 'ユーザー情報を更新しました', 'success');
         closeUserModal();

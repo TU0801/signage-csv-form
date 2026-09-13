@@ -62,15 +62,16 @@ Deno.serve(async (req) => {
   }
 
   const password = typeof body.password === 'string' ? body.password : '';
-  if (password.length < MIN_PASSWORD_LENGTH) {
-    return json({ error: `パスワードは${MIN_PASSWORD_LENGTH}文字以上で入力してください` }, 400);
-  }
+  const passwordError = password.length < MIN_PASSWORD_LENGTH
+    ? json({ error: `パスワードは${MIN_PASSWORD_LENGTH}文字以上で入力してください` }, 400)
+    : null;
 
   if (body.action === 'create_user') {
     const email = typeof body.email === 'string' ? body.email.trim() : '';
     const role = body.role === 'admin' ? 'admin' : body.role === 'user' ? 'user' : null;
     const vendorId = typeof body.vendorId === 'string' && body.vendorId ? body.vendorId : null;
     if (!email || !role) return json({ error: 'メールアドレスと権限を指定してください' }, 400);
+    if (passwordError) return passwordError;
     if (vendorId) {
       const { data: vendor } = await admin.from('signage_master_vendors').select('id').eq('id', vendorId).maybeSingle();
       if (!vendor) return json({ error: '保守会社が見つかりません' }, 400);
@@ -118,6 +119,8 @@ Deno.serve(async (req) => {
     if (shared) {
       return json({ error: 'このアカウントは他のシステムと共用のため、ここではパスワードを変更できません' }, 409);
     }
+    // 対象の確認はパスワード長の検証より先に行う（短いパスワードで共用判定を試しても変更が起こり得ないようにするため）
+    if (passwordError) return passwordError;
 
     const { error } = await admin.auth.admin.updateUserById(userId, { password });
     if (error) return json({ error: `パスワード変更に失敗しました: ${error.message}` }, 400);

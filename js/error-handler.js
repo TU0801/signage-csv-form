@@ -115,8 +115,19 @@ export function logError(error, context = '', userId = null) {
     saveErrorToSupabase(errorLog);
 }
 
+// 同じ失敗が文言を変えて繰り返されてもテーブルを埋めないよう、1ページあたりの送信件数に上限を設ける（全経路共通）
+const MAX_ERROR_SENDS_PER_PAGE = 50;
+let errorSendCount = 0;
+// 画面遷移で中断された通信の失敗（Failed to fetch 等）は障害ではないため、離脱開始後は送らない
+let pageUnloading = false;
+if (typeof window !== 'undefined') {
+    window.addEventListener('pagehide', () => { pageUnloading = true; });
+}
+
 // Supabaseにエラーログを保存（REST API直接呼び出し）
 async function saveErrorToSupabase(errorLog) {
+    if (pageUnloading || errorSendCount >= MAX_ERROR_SENDS_PER_PAGE) return;
+    errorSendCount++;
     try {
         const url = window.SUPABASE_URL;
         const key = window.SUPABASE_ANON_KEY;
@@ -204,8 +215,6 @@ if (typeof window !== 'undefined') {
 
     // 各画面の catch 節は console.error(説明, error) + トーストで失敗を扱っているため、
     // console.error に Error（または message を持つエラーオブジェクト）が渡されたら保存する
-    const MAX_CONSOLE_ERROR_SENDS_PER_PAGE = 50;
-    let consoleErrorSendCount = 0;
     console.error = function (...args) {
         originalConsoleError(...args);
         const error = args.find(a => a instanceof Error || (a && typeof a === 'object' && typeof a.message === 'string'));
@@ -213,9 +222,6 @@ if (typeof window !== 'undefined') {
         const context = args.filter(a => typeof a === 'string').join(' ').slice(0, 200) || 'console.error';
         const message = describeError(error);
         if (isDuplicateError(`${context}|${message}`)) return;
-        // 同じ失敗が文言を変えて繰り返されてもテーブルを埋めないよう、1ページあたりの送信件数に上限を設ける
-        if (consoleErrorSendCount >= MAX_CONSOLE_ERROR_SENDS_PER_PAGE) return;
-        consoleErrorSendCount++;
         saveErrorToSupabase({
             context,
             message,
