@@ -24,6 +24,7 @@ import {
 } from './supabase-client.js';
 
 import { escapeHtml, showToast } from './ui-utils.js';
+import { syncBuildingVendorsFromEquipment } from './supabase/relationships.js';
 
 // ========================================
 // テンプレート画像マッピング
@@ -552,6 +553,9 @@ function addTerminalField(terminal = {}) {
 // 物件モーダルで編集中の設備リスト。物件「保存」時に data.equipment として永続化する
 let currentPropertyEquipment = [];
 
+// 編集中の行の位置。null なら「追加」モード（0913 依頼③: 一度登録した設備種類が削除しかできなかった）
+let editingEquipmentIndex = null;
+
 // 設備の種類・保守会社セレクトを初期化
 function populatePropertyEquipmentSelects(masterData) {
     const typeSelect = document.getElementById('propEquipmentType');
@@ -574,6 +578,36 @@ function resetPropertyEquipmentForm() {
         if (el) el.value = '';
     });
     document.querySelectorAll('#propMonthCheckboxes input').forEach(cb => { cb.checked = false; });
+    editingEquipmentIndex = null;
+    updateEquipmentFormMode();
+}
+
+// 追加モードと編集モードでボタンの表示を切り替える。
+// 何も出さないと、編集を押したのに「追加」ボタンのままで行が二重になる
+function updateEquipmentFormMode() {
+    const addBtn = document.getElementById('propAddEquipmentBtn');
+    const cancelBtn = document.getElementById('propCancelEquipmentBtn');
+    const editing = editingEquipmentIndex !== null;
+    if (addBtn) addBtn.textContent = editing ? '更新' : '追加';
+    if (cancelBtn) cancelBtn.style.display = editing ? '' : 'none';
+}
+
+// 既存の行をフォームへ読み込む（0913 依頼③）
+function startEditPropertyEquipment(index, masterData) {
+    const eq = currentPropertyEquipment[index];
+    if (!eq) return;
+    editingEquipmentIndex = index;
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
+    set('propEquipmentType', eq.inspection_type_id);
+    set('propEquipmentVendor', eq.vendor_id);
+    set('propEquipmentRemarks', eq.remarks);
+    set('propEquipmentRemarks2', eq.remarks2);
+    const months = Array.isArray(eq.inspection_months) ? eq.inspection_months.map(Number) : [];
+    document.querySelectorAll('#propMonthCheckboxes input').forEach(cb => {
+        cb.checked = months.includes(parseInt(cb.value, 10));
+    });
+    updateEquipmentFormMode();
+    renderPropertyEquipment(masterData);
 }
 
 // 設備一覧を描画（currentPropertyEquipment を表示）
@@ -595,16 +629,26 @@ function renderPropertyEquipment(masterData) {
         const vendor = (masterData.vendors || []).find(v => v.id === eq.vendor_id);
         const months = Array.isArray(eq.inspection_months) ? eq.inspection_months : [];
         const tr = document.createElement('tr');
+        if (index === editingEquipmentIndex) tr.style.background = '#fff8e1';
         tr.innerHTML = `
             <td>${escapeHtml(inspType?.inspection_name || '-')}</td>
             <td>${escapeHtml(vendor?.vendor_name || '-')}</td>
             <td>${months.length ? months.map(m => `${m}月`).join(', ') : '-'}</td>
             <td>${escapeHtml(eq.remarks || '')}</td>
             <td>${escapeHtml(eq.remarks2 || '')}</td>
-            <td><button type="button" class="btn btn-danger btn-sm prop-equipment-remove">削除</button></td>
+            <td>
+                <button type="button" class="btn btn-secondary btn-sm prop-equipment-edit">編集</button>
+                <button type="button" class="btn btn-danger btn-sm prop-equipment-remove">削除</button>
+            </td>
         `;
+        tr.querySelector('.prop-equipment-edit').addEventListener('click', () => {
+            startEditPropertyEquipment(index, masterData);
+        });
         tr.querySelector('.prop-equipment-remove').addEventListener('click', () => {
             currentPropertyEquipment.splice(index, 1);
+            // 編集中の行を消したらフォームも戻す。残すと存在しない行を更新しにいく
+            if (editingEquipmentIndex === index) resetPropertyEquipmentForm();
+            else if (editingEquipmentIndex !== null && editingEquipmentIndex > index) editingEquipmentIndex -= 1;
             renderPropertyEquipment(masterData);
         });
         tbody.appendChild(tr);
@@ -619,13 +663,21 @@ function addPropertyEquipmentRow(masterData) {
         return;
     }
     const months = [...document.querySelectorAll('#propMonthCheckboxes input:checked')].map(cb => parseInt(cb.value, 10));
-    currentPropertyEquipment.push({
+    const row = {
         inspection_type_id: typeId,
         vendor_id: document.getElementById('propEquipmentVendor').value || null,
         inspection_months: months,
         remarks: document.getElementById('propEquipmentRemarks').value,
         remarks2: document.getElementById('propEquipmentRemarks2').value
-    });
+    };
+    // 同じ点検種別を二重に登録させない（業務システム側も unique 制約で弾く）
+    const dup = currentPropertyEquipment.findIndex((e, i) => e.inspection_type_id === typeId && i !== editingEquipmentIndex);
+    if (dup >= 0) {
+        showToast('この設備種類は既に登録されています', 'error');
+        return;
+    }
+    if (editingEquipmentIndex !== null) currentPropertyEquipment[editingEquipmentIndex] = row;
+    else currentPropertyEquipment.push(row);
     resetPropertyEquipmentForm();
     renderPropertyEquipment(masterData);
 }
@@ -709,9 +761,14 @@ export function openMasterModal(type, masterData, data = null) {
         }
         // masterData 側のオブジェクトを直接書き換えないようクローンして保持
         currentPropertyEquipment = Array.isArray(equipment) ? equipment.map(e => ({ ...e })) : [];
+        // **モーダルを開くたびに編集モードを解除する。** 残すと前回の編集位置のまま
+        // 別の物件を開いて、無関係な行を上書きする
+        resetPropertyEquipmentForm();
         renderPropertyEquipment(masterData);
         const addEquipmentBtn = document.getElementById('propAddEquipmentBtn');
         if (addEquipmentBtn) addEquipmentBtn.onclick = () => addPropertyEquipmentRow(masterData);
+        const cancelEquipmentBtn = document.getElementById('propCancelEquipmentBtn');
+        if (cancelEquipmentBtn) cancelEquipmentBtn.onclick = () => { resetPropertyEquipmentForm(); renderPropertyEquipment(masterData); };
     } else if (type === 'vendor') {
         const section = document.getElementById('vendorFields');
         section.style.display = 'block';
@@ -990,6 +1047,15 @@ export async function handleMasterFormSubmit(e, masterData, showToast, updateSta
             } else {
                 await addProperty(data);
                 showToast('物件を追加しました', 'success');
+            }
+            // 設備情報で選んだ保守会社を紐付け管理にも反映する（0913 依頼②）。
+            // 失敗しても物件の保存自体は成功しているので、警告だけ出して続ける
+            try {
+                const synced = await syncBuildingVendorsFromEquipment(propertyCode, currentPropertyEquipment);
+                if (synced.added > 0) showToast(`保守会社 ${synced.added} 件を紐付け管理にも追加しました`, 'success');
+            } catch (e) {
+                console.error('Failed to sync building vendors:', e);
+                showToast('紐付け管理への反映に失敗しました（物件は保存済みです）', 'error');
             }
         } else if (type === 'vendor') {
             const data = {

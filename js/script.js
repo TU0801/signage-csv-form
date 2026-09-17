@@ -966,6 +966,19 @@ let adminVendorChangeSeq = 0;
             const updatedProperties = [];
             buildings.forEach(b => {
                 const terminals = Array.isArray(b.terminals) ? b.terminals : [];
+                if (terminals.length === 0) {
+                    // **端末が無い物件も1行として残す（0913 依頼①）。**
+                    // terminals.forEach だけだと、サイネージ未設置の物件（実データで248件中97件）が
+                    // 物件リストから丸ごと消えて、点検案内を作れなかった
+                    updatedProperties.push({
+                        propertyCode: b.property_code,
+                        propertyName: b.property_name,
+                        terminalId: '',
+                        supplement: '',
+                        address: b.address || ''
+                    });
+                    return;
+                }
                 terminals.forEach(t => {
                     updatedProperties.push({
                         propertyCode: b.property_code, // getBuildingsByVendor returns snake_case

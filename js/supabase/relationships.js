@@ -191,3 +191,41 @@ export async function removeVendorInspection(relationshipId) {
   if (error) throw error;
   return data;
 }
+
+/**
+ * 物件マスターの設備情報から、保守会社の紐付けを作る（0913 依頼②）。
+ *
+ * **マスター管理＞物件で保守会社を選んでも、紐付け管理には出てこなかった。**
+ * 設備情報は signage_master_properties.equipment に入るだけで、
+ * 紐付け管理が見る signage_building_vendors とは別だったため。
+ *
+ * 物件の保存時にここを呼び、設備情報に出てくる保守会社を紐付けに足す。
+ * **既にある紐付けは触らない**（人が status を pending / 解除に変えたものを戻さない）。
+ */
+export async function syncBuildingVendorsFromEquipment(propertyCode, equipment) {
+  const list = Array.isArray(equipment) ? equipment : [];
+  const vendorIds = [...new Set(list.map(e => e && e.vendor_id).filter(Boolean))];
+  if (vendorIds.length === 0) return { added: 0 };
+
+  const { data: existing, error: exError } = await supabase
+    .from('signage_building_vendors')
+    .select('vendor_id')
+    .eq('property_code', String(propertyCode));
+  if (exError) throw exError;
+
+  const have = new Set((existing || []).map(r => String(r.vendor_id)));
+  const toAdd = vendorIds.filter(id => !have.has(String(id)));
+  if (toAdd.length === 0) return { added: 0 };
+
+  const user = await getUser();
+  const rows = toAdd.map(vendor_id => ({
+    property_code: String(propertyCode),
+    vendor_id,
+    status: 'active',
+    requested_by: user?.id ?? null,
+    approved_by: user?.id ?? null
+  }));
+  const { error } = await supabase.from('signage_building_vendors').insert(rows);
+  if (error) throw error;
+  return { added: rows.length };
+}
