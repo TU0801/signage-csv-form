@@ -229,3 +229,45 @@ export async function syncBuildingVendorsFromEquipment(propertyCode, equipment) 
   if (error) throw error;
   return { added: rows.length };
 }
+
+/**
+ * 物件の点検情報を業務システム（biz）へ保存する（2026-09-19 の統合切り替え）。
+ *
+ * **正本は biz.property_inspections。** signage 側の jsonb には書かない。
+ * 窓口は signage スキーマの RPC で、権限は signage の管理者（is_active_admin）で見る
+ * ＝点検の担当者が業務システムの帳票・入金・支払に触れることはない。
+ *
+ * 画面で消された行は biz 側からも消す必要があるので、
+ * **「今ある一覧」と「送られた一覧」を突き合わせて差分を出す**。
+ */
+export async function saveInspectionsToBiz(propertyCode, equipment) {
+  const list = Array.isArray(equipment) ? equipment : [];
+
+  const { data: current, error: readErr } = await supabase.rpc('inspections_for_property', { p_property_code: String(propertyCode) });
+  if (readErr) throw readErr;
+
+  const wantIds = new Set(list.map(e => e && e.inspection_type_id).filter(Boolean));
+  // 画面から消えた点検を削除する。**残すと消したはずの案内が出続ける**
+  for (const row of current || []) {
+    if (!wantIds.has(row.inspection_type_id)) {
+      const { error } = await supabase.rpc('delete_property_inspection', { p_id: row.id });
+      if (error) throw error;
+    }
+  }
+
+  for (const e of list) {
+    if (!e || !e.inspection_type_id) continue;
+    const months = Array.isArray(e.inspection_months) ? e.inspection_months.map(Number).filter(n => n >= 1 && n <= 12) : [];
+    const { error } = await supabase.rpc('upsert_property_inspection', {
+      p_property_code: String(propertyCode),
+      p_inspection_type_id: e.inspection_type_id,
+      p_maintainer_id: e.vendor_id || null,
+      p_inspection_months: months,
+      p_maintainer_equipment_code: null,
+      p_remarks: e.remarks || null,
+      p_remarks2: e.remarks2 || null
+    });
+    if (error) throw error;
+  }
+  return { saved: list.length };
+}

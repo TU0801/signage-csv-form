@@ -24,7 +24,7 @@ import {
 } from './supabase-client.js';
 
 import { escapeHtml, showToast } from './ui-utils.js';
-import { syncBuildingVendorsFromEquipment } from './supabase/relationships.js';
+import { syncBuildingVendorsFromEquipment, saveInspectionsToBiz } from './supabase/relationships.js';
 
 // ========================================
 // テンプレート画像マッピング
@@ -1047,6 +1047,15 @@ export async function handleMasterFormSubmit(e, masterData, showToast, updateSta
             } else {
                 await addProperty(data);
                 showToast('物件を追加しました', 'success');
+            }
+            // **点検情報の正本は業務システム（biz）。** 物件の保存と同時にあちらへ送る
+            // （2026-09-19 切り替え）。ここが失敗すると点検案内に反映されないので、
+            // 物件の保存が成功していても明確にエラーを出す
+            try {
+                await saveInspectionsToBiz(propertyCode, currentPropertyEquipment);
+            } catch (e) {
+                console.error('Failed to save inspections to biz:', e);
+                showToast('点検情報の保存に失敗しました。もう一度保存してください', 'error');
             }
             // 設備情報で選んだ保守会社を紐付け管理にも反映する（0913 依頼②）。
             // 失敗しても物件の保存自体は成功しているので、警告だけ出して続ける

@@ -77,6 +77,8 @@ export async function getAllMasterData() {
         property_code: code,
         property_name: p.property_name,
         terminals: [],
+        // **点検情報の正本は業務システム（biz）側。** ここで読む jsonb は移行前の名残で、
+        // 下の overlayInspections() が RPC の結果で上書きする（2026-09-19 切り替え）
         equipment: Array.isArray(p.equipment) ? p.equipment : []
       });
     }
@@ -94,6 +96,9 @@ export async function getAllMasterData() {
       });
     }
   });
+
+  // 点検情報を業務システム（biz）から取り直す。正本はあちら（2026-09-19 切り替え）
+  await overlayInspections(propertiesMap);
 
   const properties = Array.from(propertiesMap.values());
   return { properties, vendors, inspectionTypes, categories, templateImages };
@@ -166,4 +171,39 @@ export async function getAllMasterDataCamelCase() {
     notices,
     templateImages: templateImages || []
   };
+}
+
+/**
+ * 点検情報を業務システム（biz）側から取り直して被せる（2026-09-19 の統合切り替え）。
+ *
+ * **正本は biz.property_inspections。** signage_master_properties.equipment は
+ * 移行前の名残で、以後は読まない（書き込みも RPC 経由になる）。
+ *
+ * **RPC が失敗したら jsonb のまま残す。** 点検案内が作れなくなるより、
+ * 少し古い情報で動き続けるほうがまし。失敗はコンソールに出す。
+ */
+export async function overlayInspections(propertiesMap) {
+  try {
+    const { data, error } = await supabase.rpc('inspections_all');
+    if (error) throw error;
+    // RPC が返した物件だけ差し替える。返らなかった物件は「点検なし」が正しい
+    const byCode = new Map();
+    (data || []).forEach(r => {
+      const list = byCode.get(r.property_code) || [];
+      list.push({
+        inspection_type_id: r.inspection_type_id,
+        vendor_id: r.vendor_id,
+        inspection_months: Array.isArray(r.inspection_months) ? r.inspection_months : [],
+        remarks: r.remarks || '',
+        remarks2: r.remarks2 || ''
+      });
+      byCode.set(r.property_code, list);
+    });
+    propertiesMap.forEach((prop, code) => {
+      prop.equipment = byCode.get(code) || [];
+    });
+  } catch (e) {
+    console.error('[inspections] 業務システムからの取得に失敗しました。移行前の情報で続行します:', e);
+  }
+  return propertiesMap;
 }
