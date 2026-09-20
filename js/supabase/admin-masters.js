@@ -3,15 +3,20 @@
 import { supabase } from './client.js';
 
 // 物件
+//
+// **equipment は書かない（2026-09-20 の凍結）。** 点検情報の正本は業務システムの
+// biz.property_inspections に移っており、こちらは saveInspectionsToBiz() が送る。
+// DB 側のトリガー（signage.block_equipment_write）が equipment の変更を拒否するので、
+// ここで送ると物件の保存そのものが失敗する。
 export async function addProperty(property) {
-  const record = { property_code: property.property_code, property_name: property.property_name, terminals: property.terminals, equipment: property.equipment ?? [] };
+  const record = { property_code: property.property_code, property_name: property.property_name, terminals: property.terminals };
   const { data, error } = await supabase.from('signage_master_properties').insert(record).select().single();
   if (error) throw error;
   return data;
 }
 
 export async function updateProperty(id, property) {
-  const record = { property_code: property.property_code, property_name: property.property_name, terminals: property.terminals, equipment: property.equipment ?? [] };
+  const record = { property_code: property.property_code, property_name: property.property_name, terminals: property.terminals };
   const { data, error } = await supabase.from('signage_master_properties').update(record).eq('id', id).select().single();
   if (error) throw error;
   return data;
