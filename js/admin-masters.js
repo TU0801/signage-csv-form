@@ -1035,11 +1035,13 @@ export async function handleMasterFormSubmit(e, masterData, showToast, updateSta
                 return;
             }
 
+            // **equipment は渡さない（2026-09-20 の凍結）。** 点検情報は下の
+            // saveInspectionsToBiz() が業務システムへ送る。ここに残しても
+            // addProperty/updateProperty が捨てるだけで、読む人を迷わせる
             const data = {
                 property_code: propertyCode,
                 property_name: document.getElementById('propertyName').value,
                 terminals: terminals,
-                equipment: currentPropertyEquipment,
             };
             if (id) {
                 await updateProperty(id, data);

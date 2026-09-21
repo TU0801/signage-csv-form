@@ -70,6 +70,10 @@ const TAB = '\t';
 
 test.describe.configure({ mode: 'parallel' });
 
+// 期待する物件コードは **サフィックス付きの実データ形式**（120409-00）。
+// 2026-09 に Supabase を統合プロジェクトへ移した際にマスタの形式が変わり、
+// テストだけ旧形式（120406）のまま残っていて4件が落ち続けていた。
+// アプリ側の解析は当時から正しく、貼り付け結果は status: OK になっている。
 test.describe('一括入力 Excel貼り付け（値反映・バリデーション）', () => {
 
   // ── 正常系 ──
@@ -85,11 +89,11 @@ test.describe('一括入力 Excel貼り付け（値反映・バリデーショ�
     console.log('A:', JSON.stringify(rows));
     expect(rows.length).toBe(2);
     expect(rows[0]).toMatchObject({
-      property: '120406', terminal: 'z1003A01', inspection: 'エレベーター定期点検',
+      property: '120409-00', terminal: 'z1003A01', inspection: 'エレベーター定期点検',
       startDate: '2025-01-15', endDate: '2025-01-15', remarks: '午前中', status: 'OK',
     });
     expect(rows[1]).toMatchObject({
-      property: '120410', terminal: 'z1001A01', inspection: '消防設備点検',
+      property: '120410-00', terminal: 'z1001A01', inspection: '消防設備点検',
       startDate: '2025-02-01', endDate: '2025-02-03', remarks: '', status: 'OK',
     });
   });
@@ -105,7 +109,7 @@ test.describe('一括入力 Excel貼り付け（値反映・バリデーショ�
     const rows = await dumpRows(page);
     console.log('C:', JSON.stringify(rows));
     expect(rows.length).toBe(1);
-    expect(rows[0]).toMatchObject({ property: '120406', startDate: '2025-03-01', status: 'OK' });
+    expect(rows[0]).toMatchObject({ property: '120409-00', startDate: '2025-03-01', status: 'OK' });
   });
 
   test('D: 各種日付フォーマットがISO形式に正規化されOK判定', async ({ page }) => {
@@ -132,7 +136,7 @@ test.describe('一括入力 Excel貼り付け（値反映・バリデーショ�
     console.log('G:', JSON.stringify(rows));
     expect(rows.length).toBe(1);
     expect(rows[0]).toMatchObject({
-      property: '120406', terminal: 'z1003A01', inspection: 'エレベーター定期点検',
+      property: '120409-00', terminal: 'z1003A01', inspection: 'エレベーター定期点検',
       startDate: '2025-01-15', remarks: '午前中', status: 'OK',
     });
   });
@@ -146,7 +150,7 @@ test.describe('一括入力 Excel貼り付け（値反映・バリデーショ�
     const rows = await dumpRows(page);
     console.log('B:', JSON.stringify(rows));
     expect(rows.length).toBe(1);
-    expect(rows[0].property).toBe('120410');
+    expect(rows[0].property).toBe('120410-00');
     // 物件の実端末(z1001A01)に黙って差し替えず、空のまま
     expect(rows[0].terminal).toBe('');
     expect(rows[0].status).toBe('エラー');
