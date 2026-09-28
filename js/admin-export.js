@@ -261,9 +261,8 @@ export async function downloadCustomImages(entries) {
             try {
                 const response = await fetch(entry.poster_image);
                 const blob = await response.blob();
-                // ファイル名: 物件コード_点検種別_ID先頭8文字.拡張子（CSVの点検案内TPLNoと一致させる）
-                const ext = /\.png($|\?)/i.test(entry.poster_image) ? 'png' : 'jpg';
-                const filename = `${customImageBaseName(entry)}.${ext}`;
+                // ファイル名: 物件コード_点検種別_ID先頭8文字.jpg（拡張子を除いた部分をCSVの点検案内TPLNoと一致させる）
+                const filename = `${customImageBaseName(entry)}.jpg`;
                 zip.file(filename, blob);
             } catch (err) {
                 console.error(`Failed to fetch image for entry ${entry.id}:`, err);
