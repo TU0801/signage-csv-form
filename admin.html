@@ -261,7 +261,6 @@
                     <button class="admin-tab" data-master="vendors">👥 保守会社</button>
                     <button class="admin-tab" data-master="inspections">🔧 点検種別</button>
                     <button class="admin-tab" data-master="categories">📁 カテゴリ</button>
-                    <button class="admin-tab" data-master="templateImages">🖼️ テンプレート画像</button>
                     <button class="admin-tab" data-master="settings">⚙️ 設定</button>
                 </div>
 
@@ -282,7 +281,7 @@
                         <div class="master-search-inline">
                             <input type="text" id="vendorSearch" placeholder="保守会社名で検索...">
                         </div>
-                        <button class="btn btn-primary master-add-btn" id="addVendorBtn">+ 新規追加</button>
+                        <span class="master-biz-note">保守会社は業務システムの取引先で編集します（<a href="https://system.1984.jp/companies?kind=maintenance" target="_blank" rel="noopener">取引先一覧を開く</a>）</span>
                     </div>
                     <div class="master-list" id="vendorsList"></div>
                 </div>
@@ -293,6 +292,7 @@
                         <div class="master-search-inline">
                             <input type="text" id="inspectionSearch" placeholder="点検種別名で検索...">
                         </div>
+                        <span class="master-biz-note">テンプレート画像は業務システムの設定で編集します（<a href="https://system.1984.jp/settings?tab=template-images" target="_blank" rel="noopener">設定を開く</a>）</span>
                         <button class="btn btn-primary master-add-btn" id="addInspectionBtn">+ 新規追加</button>
                     </div>
                     <div class="master-list" id="inspectionsList"></div>
@@ -307,41 +307,6 @@
                         <button class="btn btn-primary master-add-btn" id="addCategoryBtn">+ 新規追加</button>
                     </div>
                     <div class="master-list" id="categoriesList"></div>
-                </div>
-
-                <div id="master-templateImages" class="master-content" style="display: none;">
-                    <div class="master-toolbar">
-                        <span class="master-count"><span id="templateImageCount">0</span>件</span>
-                        <div class="master-search-inline">
-                            <input type="text" id="templateImageSearch" placeholder="画像キー・表示名で検索...">
-                        </div>
-                        <button class="btn btn-primary master-add-btn" id="addTemplateImageBtn">+ 新規追加</button>
-                    </div>
-                    <!-- 画像区分タブ -->
-                    <div class="category-tabs" style="display: flex; gap: 1.5rem; margin-bottom: 1.5rem; padding-bottom: 0.75rem; border-bottom: 1px solid #e2e8f0;">
-                        <button class="category-tab" data-template-category="点検" style="background: none; border: none; padding: 0; cursor: pointer; font-size: 0.9375rem; color: #64748b; transition: color 0.2s;" id="cat点検">
-                            <span class="cat-label">点検</span> <span class="cat-count">(0)</span>
-                        </button>
-                        <button class="category-tab" data-template-category="工事" style="background: none; border: none; padding: 0; cursor: pointer; font-size: 0.9375rem; color: #64748b; transition: color 0.2s;" id="cat工事">
-                            <span class="cat-label">工事</span> <span class="cat-count">(0)</span>
-                        </button>
-                        <button class="category-tab" data-template-category="清掃" style="background: none; border: none; padding: 0; cursor: pointer; font-size: 0.9375rem; color: #64748b; transition: color 0.2s;" id="cat清掃">
-                            <span class="cat-label">清掃</span> <span class="cat-count">(0)</span>
-                        </button>
-                        <button class="category-tab" data-template-category="消毒" style="background: none; border: none; padding: 0; cursor: pointer; font-size: 0.9375rem; color: #64748b; transition: color 0.2s;" id="cat消毒">
-                            <span class="cat-label">消毒</span> <span class="cat-count">(0)</span>
-                        </button>
-                        <button class="category-tab" data-template-category="設備" style="background: none; border: none; padding: 0; cursor: pointer; font-size: 0.9375rem; color: #64748b; transition: color 0.2s;" id="cat設備">
-                            <span class="cat-label">設備</span> <span class="cat-count">(0)</span>
-                        </button>
-                        <button class="category-tab" data-template-category="その他" style="background: none; border: none; padding: 0; cursor: pointer; font-size: 0.9375rem; color: #64748b; transition: color 0.2s;" id="catその他">
-                            <span class="cat-label">その他</span> <span class="cat-count">(0)</span>
-                        </button>
-                        <button class="category-tab active" data-template-category="" style="background: none; border: none; padding: 0; cursor: pointer; font-size: 0.9375rem; color: #64748b; transition: color 0.2s;" id="catAll">
-                            <span class="cat-label">すべて</span> <span class="cat-count">(60)</span>
-                        </button>
-                    </div>
-                    <div class="master-list template-image-grid" id="templateImagesList"></div>
                 </div>
 
                 <div id="master-settings" class="master-content" style="display: none;">
@@ -564,27 +529,6 @@
                         </div>
                     </div>
 
-                    <!-- 保守会社用フィールド -->
-                    <div id="vendorFields" style="display:none;">
-                        <div class="form-group">
-                            <label>保守会社名 *</label>
-                            <input type="text" id="vendorName" required>
-                        </div>
-                        <div class="form-group">
-                            <label>緊急連絡先</label>
-                            <input type="tel" id="emergencyContact">
-                        </div>
-                        <div class="form-group">
-                            <label>カテゴリ</label>
-                            <select id="vendorCategory">
-                                <option value="点検">点検</option>
-                                <option value="工事">工事</option>
-                                <option value="清掃">清掃</option>
-                                <option value="その他">その他</option>
-                            </select>
-                        </div>
-                    </div>
-
                     <!-- 点検種別用フィールド -->
                     <div id="inspectionFields" style="display:none;">
                         <div class="form-group">
@@ -605,6 +549,7 @@
                             <div id="templatePreview" style="margin-top: 0.5rem; text-align: center; min-height: 80px; background: #f8fafc; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
                                 <span style="color: #94a3b8; font-size: 0.875rem;">プレビュー</span>
                             </div>
+                            <small>画像の追加・差し替えは業務システムの設定で行います（<a href="https://system.1984.jp/settings?tab=template-images" target="_blank" rel="noopener">設定を開く</a>）</small>
                         </div>
                         <div class="form-group">
                             <label>案内文</label>
@@ -627,47 +572,6 @@
                         <div class="form-group">
                             <label>表示順序</label>
                             <input type="number" id="categorySortOrder" min="0" value="0">
-                        </div>
-                    </div>
-
-                    <!-- テンプレート画像用フィールド -->
-                    <div id="templateImageFields" style="display:none;">
-                        <div class="form-group">
-                            <label>画像キー *</label>
-                            <input type="text" id="templateImageKey" required pattern="[a-z0-9_]+" title="英小文字、数字、アンダースコアのみ">
-                            <small>例: elevator_inspection（英小文字、数字、アンダースコアのみ）</small>
-                        </div>
-                        <div class="form-group">
-                            <label>表示名 *</label>
-                            <input type="text" id="templateImageDisplayName" required>
-                            <small>例: エレベーター点検</small>
-                        </div>
-                        <div class="form-group">
-                            <label>画像区分</label>
-                            <select id="templateImageCategory">
-                                <option value="">未分類</option>
-                                <option value="点検">点検</option>
-                                <option value="工事">工事</option>
-                                <option value="清掃">清掃</option>
-                                <option value="消毒">消毒</option>
-                                <option value="設備">設備</option>
-                                <option value="その他">その他</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>表示順序</label>
-                            <input type="number" id="templateImageSortOrder" min="0" value="0">
-                        </div>
-                        <div class="form-group">
-                            <label>画像ファイル *</label>
-                            <input type="file" id="templateImageFile" accept=".png,.jpg,.jpeg">
-                            <small>PNG、JPG形式（5MB以下）</small>
-                        </div>
-                        <div class="form-group">
-                            <label>画像プレビュー</label>
-                            <div id="templateImagePreview" style="margin-top: 0.5rem; text-align: center; min-height: 120px; background: #f8fafc; border-radius: 8px; display: flex; align-items: center; justify-content: center; border: 2px dashed #e2e8f0;">
-                                <span style="color: #94a3b8; font-size: 0.875rem;">画像を選択するとプレビュー表示</span>
-                            </div>
                         </div>
                     </div>
                 </div>

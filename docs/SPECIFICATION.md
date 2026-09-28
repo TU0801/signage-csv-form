@@ -346,11 +346,9 @@ Excelからのコピー＆ペーストで複数データを一括入力する画
 ##### 受注先マスター
 | 機能 | 説明 |
 |-----|------|
-| 一覧表示 | 受注先一覧 |
+| 一覧表示 | 受注先一覧（読み取りのみ） |
 | 検索 | 名称で検索 |
-| 新規追加 | 受注先追加モーダル |
-| 編集 | 緊急連絡先・カテゴリ編集 |
-| 削除 | 削除処理 |
+| 追加・編集・削除 | しない。業務システムの取引先（保守会社）で編集し、biz.maintainers からトリガーで signage_master_vendors に写る（2026-09-29） |
 
 ##### 点検種別マスター
 | 機能 | 説明 |
@@ -370,13 +368,8 @@ Excelからのコピー＆ペーストで複数データを一括入力する画
 | 削除 | 削除処理 |
 
 ##### テンプレート画像マスター
-| 機能 | 説明 |
-|-----|------|
-| グリッド表示 | サムネイル付きカード |
-| 検索 | キー・表示名で検索 |
-| 新規追加 | 画像アップロード |
-| 編集 | 画像差し替え可能 |
-| 削除 | Storage連動削除 |
+管理タブは廃止（2026-09-29）。正本は業務システムの biz.template_images で、業務システムの設定（テンプレート画像）で編集する。
+signage は RPC signage.template_images_master() で読み、失敗したら旧表 signage_master_template_images を読む。
 
 ##### 設定
 | 設定項目 | ID | デフォルト |
@@ -430,17 +423,14 @@ Excelからのコピー＆ペーストで複数データを一括入力する画
 | renderVendors(masterData, filter) | 受注先描画 |
 | renderInspections(masterData, filter) | 点検種別描画 |
 | renderCategories(masterData, filter) | カテゴリ描画 |
-| renderTemplateImages(masterData, filter) | テンプレート画像描画 |
 | openMasterModal(type, masterData, data) | マスターモーダル開く |
 | closeMasterModal() | マスターモーダル閉じる |
 | handleMasterFormSubmit(e, masterData, ...) | マスター保存 |
 | addTerminalField(terminal) | 端末フィールド追加 |
 | updateTemplatePreview(key) | テンプレートプレビュー |
 | deleteMasterPropertyAction(...) | 物件削除 |
-| deleteMasterVendorAction(...) | 受注先削除 |
 | deleteMasterInspectionAction(...) | 点検種別削除 |
 | deleteMasterCategoryAction(...) | カテゴリ削除 |
-| deleteMasterTemplateImageAction(...) | テンプレート画像削除 |
 
 ---
 
@@ -556,7 +546,7 @@ Excelからのコピー＆ペーストで複数データを一括入力する画
 | getMasterVendors() | 受注先一覧取得 |
 | getMasterInspectionTypes() | 点検種別一覧取得 |
 | getMasterCategories() | カテゴリ一覧取得 |
-| getMasterTemplateImages() | テンプレート画像一覧取得 |
+| getMasterTemplateImages() | テンプレート画像一覧取得（RPC template_images_master、失敗時は旧表） |
 | getAllMasterData() | 全マスター並列取得 |
 | getAllMasterDataCamelCase() | キャメルケース形式で取得 |
 
@@ -588,18 +578,12 @@ Excelからのコピー＆ペーストで複数データを一括入力する画
 | addProperty(property) | 物件追加 |
 | updateProperty(id, property) | 物件更新 |
 | deleteProperty(id) | 物件削除 |
-| addVendor(vendor) | 受注先追加 |
-| updateVendor(id, vendor) | 受注先更新 |
-| deleteVendor(id) | 受注先削除 |
 | addInspectionType(type) | 点検種別追加 |
 | updateInspectionType(id, type) | 点検種別更新 |
 | deleteInspectionType(id) | 点検種別削除 |
 | addCategory(category) | カテゴリ追加 |
 | updateCategory(id, category) | カテゴリ更新 |
 | deleteCategory(id) | カテゴリ削除 |
-| addTemplateImage(image) | テンプレート画像追加 |
-| updateTemplateImage(id, image) | テンプレート画像更新 |
-| deleteTemplateImage(id) | テンプレート画像削除 |
 
 ### 7.6 Storage API
 
@@ -607,8 +591,6 @@ Excelからのコピー＆ペーストで複数データを一括入力する画
 |-----|------|
 | uploadPosterImage(base64Data) | カスタム画像アップロード |
 | deletePosterImage(imageUrl) | カスタム画像削除 |
-| uploadTemplateImageFile(file, key) | テンプレート画像アップロード |
-| deleteTemplateImageFile(imageUrl) | テンプレート画像削除 |
 
 ### 7.7 ユーザー管理API
 
@@ -692,10 +674,8 @@ Excelからのコピー＆ペーストで複数データを一括入力する画
 | markExportedBtn | click | updateEntriesStatus('exported') |
 | markSubmittedBtn | click | updateEntriesStatus('submitted') |
 | addPropertyBtn | click | openMasterModal('property') |
-| addVendorBtn | click | openMasterModal('vendor') |
 | addInspectionBtn | click | openMasterModal('inspection') |
 | addCategoryBtn | click | openMasterModal('category') |
-| addTemplateImageBtn | click | openMasterModal('templateImage') |
 | masterForm | submit | handleMasterFormSubmit() |
 | addUserBtn | click | openUserModal() |
 | userForm | submit | handleUserFormSubmit() |
@@ -750,16 +730,14 @@ Excelからのコピー＆ペーストで複数データを一括入力する画
         │   └─ 追加/編集/削除（複数端末対応）
         │
         ├─ 受注先マスター
-        │   └─ 追加/編集/削除
+        │   └─ 一覧のみ（編集は業務システムの取引先）
         │
         ├─ 点検種別マスター
         │   └─ 追加/編集/削除（テンプレート画像連携）
         │
-        ├─ カテゴリマスター
-        │   └─ 追加/編集/削除
-        │
-        └─ テンプレート画像マスター
-            └─ 追加/編集/削除（Storage連携）
+        └─ カテゴリマスター
+            └─ 追加/編集/削除
+        （テンプレート画像は業務システムの設定で編集）
 ```
 
 ### 9.3 CSV出力フォーマット

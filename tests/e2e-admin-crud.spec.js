@@ -48,10 +48,12 @@ test.describe('マスター管理タブ', () => {
     await page.click('.sidebar-nav-link[data-tab="master"]');
     await page.waitForTimeout(500);
 
-    const subTabs = ['properties', 'vendors', 'inspections', 'categories', 'templateImages', 'settings'];
+    const subTabs = ['properties', 'vendors', 'inspections', 'categories', 'settings'];
     for (const tab of subTabs) {
       await expect(page.locator(`.admin-tab[data-master="${tab}"]`)).toBeAttached();
     }
+    // テンプレート画像は業務システムの設定で編集する（2026-09-29）
+    await expect(page.locator('.admin-tab[data-master="templateImages"]')).toHaveCount(0);
   });
 
   test('物件サブタブでリストと追加ボタンが表示される', async ({ page }) => {
@@ -60,10 +62,13 @@ test.describe('マスター管理タブ', () => {
     await expect(page.locator('#propertiesList')).toBeAttached();
   });
 
-  test('保守会社サブタブでリストと追加ボタンが表示される', async ({ page }) => {
+  // 保守会社は業務システムの取引先で編集する（2026-09-29）。一覧は読み取りだけ
+  test('保守会社サブタブでリストと業務システムへの案内が表示される', async ({ page }) => {
     await clickMasterSubTab(page, 'vendors');
-    await expect(page.locator('#addVendorBtn')).toBeVisible();
+    await expect(page.locator('#addVendorBtn')).toHaveCount(0);
     await expect(page.locator('#vendorsList')).toBeAttached();
+    await expect(page.locator('#master-vendors a[href="https://system.1984.jp/companies?kind=maintenance"]')).toBeVisible();
+    await expect(page.locator('#vendorsList [data-action="edit"], #vendorsList [data-action="delete"]')).toHaveCount(0);
   });
 
   test('点検種別サブタブでリストと追加ボタンが表示される', async ({ page }) => {
@@ -186,109 +191,6 @@ test.describe('カテゴリCRUD', () => {
           if (cat.category_name.includes('テストカテゴリ_test_') ||
               cat.category_name.includes('編集済カテゴリ_test_')) {
             await deleteCategory(cat.id);
-          }
-        }
-      });
-    } finally {
-      await context.close();
-    }
-  });
-});
-
-// ============================================
-// マスター管理: 保守会社CRUD
-// ============================================
-test.describe('保守会社CRUD', () => {
-  const vendorName = `テスト保守会社_${TEST_ID}`;
-  const vendorNameEdited = `編集済会社_${TEST_ID}`;
-
-  test.beforeEach(async ({ page }) => {
-    await loginAsAdminAndGoToAdmin(page);
-    await clickMasterSubTab(page, 'vendors');
-  });
-
-  test('保守会社を追加できる', async ({ page }) => {
-    page.on('dialog', async (dialog) => {
-      await dialog.accept();
-    });
-
-    await page.click('#addVendorBtn');
-    await page.waitForTimeout(300);
-
-    await expect(page.locator('#masterModal')).toBeVisible();
-    await expect(page.locator('#vendorFields')).toBeVisible();
-
-    await page.fill('#vendorName', vendorName);
-    await page.fill('#emergencyContact', '03-1234-5678');
-
-    await page.click('#masterForm button[type="submit"]');
-    await page.waitForTimeout(2000);
-
-    await expect(page.locator('#vendorsList')).toContainText(vendorName);
-  });
-
-  test('保守会社を編集できる', async ({ page }) => {
-    page.on('dialog', async (dialog) => {
-      await dialog.accept();
-    });
-
-    await page.waitForTimeout(1000);
-
-    const vendorItem = page.locator('#vendorsList').locator(`text=${vendorName}`).first();
-    if (await vendorItem.isVisible()) {
-      const card = vendorItem.locator('..').locator('..');
-      const editBtn = card.locator('button:has-text("✏")').first();
-
-      if (await editBtn.isVisible()) {
-        await editBtn.click();
-        await page.waitForTimeout(500);
-
-        await page.fill('#vendorName', vendorNameEdited);
-        await page.click('#masterForm button[type="submit"]');
-        await page.waitForTimeout(2000);
-
-        await expect(page.locator('#vendorsList')).toContainText(vendorNameEdited);
-      }
-    }
-  });
-
-  test('保守会社を削除できる', async ({ page }) => {
-    page.on('dialog', async (dialog) => {
-      await dialog.accept();
-    });
-
-    await page.waitForTimeout(1000);
-
-    const searchName = vendorNameEdited;
-    const vendorItem = page.locator('#vendorsList').locator(`text=${searchName}`).first();
-
-    if (await vendorItem.isVisible()) {
-      const card = vendorItem.locator('..').locator('..');
-      const deleteBtn = card.locator('button:has-text("🗑")').first();
-
-      if (await deleteBtn.isVisible()) {
-        await deleteBtn.click();
-        await page.waitForTimeout(2000);
-
-        await expect(page.locator('#vendorsList')).not.toContainText(searchName);
-      }
-    }
-  });
-
-  // テストデータのクリーンアップ（テスト失敗時の残留データ対策）
-  // UI操作ではなくSupabase APIを直接呼び出し、確実に削除する
-  test.afterAll(async ({ browser }) => {
-    const context = await browser.newContext();
-    const page = await context.newPage();
-    try {
-      await loginAsAdminAndGoToAdmin(page);
-      await page.evaluate(async () => {
-        const { getMasterVendors, deleteVendor } = await import('./js/supabase-client.js');
-        const vendors = await getMasterVendors();
-        for (const v of vendors) {
-          if (v.vendor_name.includes('テスト保守会社_test_') ||
-              v.vendor_name.includes('編集済会社_test_')) {
-            await deleteVendor(v.id);
           }
         }
       });

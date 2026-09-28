@@ -40,7 +40,22 @@ export async function getMasterCategories() {
   return data;
 }
 
+/**
+ * テンプレート画像の一覧。**正本は業務システムの biz.template_images**（2026-09-29 切り替え）。
+ * 窓口の RPC signage.template_images_master() から読む。画像ファイルは poster-images/templates/ のまま。
+ *
+ * **RPC が失敗したら旧表 signage_master_template_images を読む。** 点検案内が作れなくなるより、
+ * 少し古い情報で動き続けるほうがまし（点検の切り替えと同じ方針）。RPC の migration を当てる前は
+ * こちらが通常の経路になるので、console.error ではなく console.warn で出す。
+ */
 export async function getMasterTemplateImages() {
+  try {
+    const { data, error } = await supabase.rpc('template_images_master');
+    if (error) throw error;
+    return data || [];
+  } catch (e) {
+    console.warn('[template-images] 業務システムからの取得に失敗しました。旧表で続行します:', e);
+  }
   const { data, error } = await supabase
     .from('signage_master_template_images')
     .select('*')

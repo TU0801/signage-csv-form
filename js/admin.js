@@ -19,15 +19,12 @@ import {
     renderVendors,
     renderInspections,
     renderCategories,
-    renderTemplateImages,
     openMasterModal,
     closeMasterModal,
     handleMasterFormSubmit,
     deleteMasterPropertyAction,
-    deleteMasterVendorAction,
     deleteMasterInspectionAction,
     deleteMasterCategoryAction,
-    deleteMasterTemplateImageAction,
     initAdSlotsAdmin
 } from './admin-masters.js';
 
@@ -338,16 +335,6 @@ function setupEventListeners() {
         });
     });
 
-    // テンプレート画像カテゴリータブ切り替え
-    document.querySelectorAll('.category-tab[data-template-category]').forEach(tab => {
-        tab.addEventListener('click', () => {
-            document.querySelectorAll('.category-tab[data-template-category]').forEach(t => t.classList.remove('active'));
-            tab.classList.add('active');
-            const category = tab.dataset.templateCategory;
-            renderTemplateImages(masterData, '', category);
-        });
-    });
-
     // 検索
     document.getElementById('searchBtn').addEventListener('click', loadEntries);
 
@@ -370,10 +357,8 @@ function setupEventListeners() {
 
     // マスター追加ボタン
     document.getElementById('addPropertyBtn').addEventListener('click', () => openMasterModal('property', masterData));
-    document.getElementById('addVendorBtn').addEventListener('click', () => openMasterModal('vendor', masterData));
     document.getElementById('addInspectionBtn').addEventListener('click', () => openMasterModal('inspection', masterData));
     document.getElementById('addCategoryBtn')?.addEventListener('click', () => openMasterModal('category', masterData));
-    document.getElementById('addTemplateImageBtn')?.addEventListener('click', () => openMasterModal('templateImage', masterData));
 
     // マスター検索
     document.getElementById('propertySearch')?.addEventListener('input', (e) => {
@@ -387,11 +372,6 @@ function setupEventListeners() {
     });
     document.getElementById('categorySearch')?.addEventListener('input', (e) => {
         renderCategories(masterData, e.target.value);
-    });
-    document.getElementById('templateImageSearch')?.addEventListener('input', (e) => {
-        const activeTab = document.querySelector('.category-tab[data-template-category].active');
-        const category = activeTab?.dataset.templateCategory || '';
-        renderTemplateImages(masterData, e.target.value, category);
     });
 
     // 設定保存ボタン
@@ -542,11 +522,6 @@ window.editProperty = function(id) {
     if (property) openMasterModal('property', masterData, property);
 };
 
-window.editVendor = function(id) {
-    const vendor = masterData.vendors.find(v => v.id === id);
-    if (vendor) openMasterModal('vendor', masterData, vendor);
-};
-
 window.editInspection = function(id) {
     const inspection = masterData.inspectionTypes.find(i => i.id === id);
     if (inspection) openMasterModal('inspection', masterData, inspection);
@@ -561,25 +536,12 @@ window.deleteMasterProperty = async function(id) {
     await deleteMasterPropertyAction(id, masterData, entries, showToast, updateStats);
 };
 
-window.deleteMasterVendor = async function(id) {
-    await deleteMasterVendorAction(id, masterData, showToast);
-};
-
 window.deleteMasterInspection = async function(id) {
     await deleteMasterInspectionAction(id, masterData, entries, showToast);
 };
 
 window.deleteMasterCategory = async function(id) {
     await deleteMasterCategoryAction(id, masterData, showToast);
-};
-
-window.editTemplateImage = function(id) {
-    const templateImage = (masterData.templateImages || []).find(ti => ti.id === id);
-    if (templateImage) openMasterModal('templateImage', masterData, templateImage);
-};
-
-window.deleteMasterTemplateImage = async function(id) {
-    await deleteMasterTemplateImageAction(id, masterData, showToast);
 };
 
 window.closeMasterModal = closeMasterModal;

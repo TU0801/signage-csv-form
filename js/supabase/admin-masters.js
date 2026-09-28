@@ -28,22 +28,9 @@ export async function deleteProperty(id) {
 }
 
 // 保守会社
-export async function addVendor(vendor) {
-  const { data, error } = await supabase.from('signage_master_vendors').insert(vendor).select().single();
-  if (error) throw error;
-  return data;
-}
-
-export async function updateVendor(id, vendor) {
-  const { data, error } = await supabase.from('signage_master_vendors').update(vendor).eq('id', id).select().single();
-  if (error) throw error;
-  return data;
-}
-
-export async function deleteVendor(id) {
-  const { error } = await supabase.from('signage_master_vendors').delete().eq('id', id);
-  if (error) throw error;
-}
+//
+// **追加・編集・削除はしない（2026-09-29）。** 保守会社は業務システムの取引先に統合され、
+// biz.maintainers からトリガーで signage_master_vendors に写る。こちらからの直接書き込みは DB が拒否する。
 
 // 点検種別
 export async function addInspectionType(inspectionType) {
@@ -82,19 +69,6 @@ export async function deleteCategory(id) {
 }
 
 // テンプレート画像
-export async function addTemplateImage(templateImage) {
-  const { data, error } = await supabase.from('signage_master_template_images').insert(templateImage).select().single();
-  if (error) throw error;
-  return data;
-}
-
-export async function updateTemplateImage(id, templateImage) {
-  const { data, error } = await supabase.from('signage_master_template_images').update(templateImage).eq('id', id).select().single();
-  if (error) throw error;
-  return data;
-}
-
-export async function deleteTemplateImage(id) {
-  const { error } = await supabase.from('signage_master_template_images').delete().eq('id', id);
-  if (error) throw error;
-}
+//
+// **追加・編集・削除はしない（2026-09-29）。** 正本は業務システムの biz.template_images で、
+// 編集は業務システムの設定（テンプレート画像）で行う。読み取りは master-data.js の getMasterTemplateImages()。

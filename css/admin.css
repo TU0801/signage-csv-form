@@ -946,6 +946,16 @@
     white-space: nowrap;
 }
 
+/* 業務システム側で編集する項目の案内（保守会社・テンプレート画像。2026-09-29） */
+.master-biz-note {
+    margin-left: auto;
+    font-size: 0.8125rem;
+    color: #64748b;
+}
+.master-biz-note + .master-add-btn {
+    margin-left: 0;
+}
+
 .master-search-inline input {
     width: 100%;
     padding: 0.75rem 1rem 0.75rem 2.5rem;

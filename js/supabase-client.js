@@ -49,10 +49,8 @@ export {
 // マスターデータ管理
 export {
   addProperty, updateProperty, deleteProperty,
-  addVendor, updateVendor, deleteVendor,
   addInspectionType, updateInspectionType, deleteInspectionType,
-  addCategory, updateCategory, deleteCategory,
-  addTemplateImage, updateTemplateImage, deleteTemplateImage
+  addCategory, updateCategory, deleteCategory
 } from './supabase/admin-masters.js';
 
 // ユーザー管理
@@ -72,8 +70,7 @@ export { getSettings, getSetting, updateSetting, updateSettings } from './supaba
 
 // Storage
 export {
-  uploadPosterImage, deletePosterImage,
-  uploadTemplateImageFile, deleteTemplateImageFile
+  uploadPosterImage, deletePosterImage
 } from './supabase/storage.js';
 
 // 広告枠
