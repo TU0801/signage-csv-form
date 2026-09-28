@@ -255,6 +255,10 @@ export async function saveInspectionsToBiz(propertyCode, equipment) {
     }
   }
 
+  // 保守会社用の設備コードは業務システム側の物件マスターで入力する（signage の画面には欄が無い）。
+  // null を送ると RPC の on conflict で消えるので、今の値を引き継ぐ
+  const currentCode = new Map((current || []).map(r => [r.inspection_type_id, r.maintainer_equipment_code]));
+
   for (const e of list) {
     if (!e || !e.inspection_type_id) continue;
     const months = Array.isArray(e.inspection_months) ? e.inspection_months.map(Number).filter(n => n >= 1 && n <= 12) : [];
@@ -263,7 +267,7 @@ export async function saveInspectionsToBiz(propertyCode, equipment) {
       p_inspection_type_id: e.inspection_type_id,
       p_maintainer_id: e.vendor_id || null,
       p_inspection_months: months,
-      p_maintainer_equipment_code: null,
+      p_maintainer_equipment_code: e.maintainer_equipment_code ?? currentCode.get(e.inspection_type_id) ?? null,
       p_remarks: e.remarks || null,
       p_remarks2: e.remarks2 || null
     });
