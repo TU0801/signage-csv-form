@@ -5,6 +5,18 @@ import { getAppSettings } from './admin-settings.js';
 import { normalizeTerminalId, CSV_HEADERS, escapeCSVField } from './shared-utils.js';
 
 /**
+ * 追加画像のファイル名（拡張子なし）: 物件コード_点検種別_ID先頭8文字
+ * 「追加画像DL」のZIP内ファイル名とCSVの点検案内TPLNoはこの関数で揃える
+ * （サイネージ側はCSVの画像名とファイル名の一致で登録するため）
+ * @param {Object} entry
+ * @returns {string}
+ */
+export function customImageBaseName(entry) {
+    const safe = (v) => (v || 'unknown').replace(/[/\\:*?"<>|]/g, '_');
+    return `${safe(entry.property_code)}_${safe(entry.inspection_type)}_${String(entry.id || '').slice(0, 8)}`;
+}
+
+/**
  * CSV文字列を生成
  * @param {Array} data - エントリ配列
  * @returns {string} CSV文字列
@@ -39,8 +51,11 @@ export function generateCSV(data) {
         const remarksText = (entry.remarks || '').replace(/\n/g, '\r\n');
         const noticeText = (entry.announcement || '').replace(/\n/g, '\r\n');
 
-        // TRUE/False（poster_type が template の場合は TRUE）
-        const showOnBoard = entry.poster_type === 'template' ? 'TRUE' : 'False';
+        // 追加画像は画像そのものを表示する。点検工事案内・日付・備考・案内文を入れると
+        // サイネージ側で画像に文字が合成されるため空にする
+        const isCustom = entry.poster_type === 'custom';
+
+        const showOnBoard = 'TRUE';
 
         // 貼紙区分
         const posterTypeText = entry.poster_type === 'template' ? 'テンプレート' : '追加';
@@ -54,13 +69,13 @@ export function generateCSV(data) {
             entry.property_code || '',                   // 物件コード
             entry.vendor_name || '',                     // 保守会社名
             entry.emergency_contact || '',               // 緊急連絡先番号
-            entry.inspection_type || '',                 // 点検工事案内
+            isCustom ? '' : (entry.inspection_type || ''), // 点検工事案内
             showOnBoard,                                 // 掲示板に表示する
-            entry.template_no || '',                     // 点検案内TPLNo
-            sd,                                          // 点検開始日
-            ed,                                          // 点検完了日
-            remarksText,                                 // 掲示備考
-            noticeText,                                  // 掲示板用案内文
+            isCustom ? customImageBaseName(entry) : (entry.template_no || ''), // 点検案内TPLNo
+            isCustom ? '' : sd,                          // 点検開始日
+            isCustom ? '' : ed,                          // 点検完了日
+            isCustom ? '' : remarksText,                 // 掲示備考
+            isCustom ? '' : noticeText,                  // 掲示板用案内文
             frameNo,                                     // frame_No
             dsd,                                         // 表示開始日
             ded,                                         // 表示終了日
@@ -246,10 +261,9 @@ export async function downloadCustomImages(entries) {
             try {
                 const response = await fetch(entry.poster_image);
                 const blob = await response.blob();
-                // ファイル名: 物件コード_点検種別_ID先頭8文字.jpg
-                const safePropertyCode = (entry.property_code || 'unknown').replace(/[/\\:*?"<>|]/g, '_');
-                const safeInspectionType = (entry.inspection_type || 'unknown').replace(/[/\\:*?"<>|]/g, '_');
-                const filename = `${safePropertyCode}_${safeInspectionType}_${entry.id.slice(0, 8)}.jpg`;
+                // ファイル名: 物件コード_点検種別_ID先頭8文字.拡張子（CSVの点検案内TPLNoと一致させる）
+                const ext = /\.png($|\?)/i.test(entry.poster_image) ? 'png' : 'jpg';
+                const filename = `${customImageBaseName(entry)}.${ext}`;
                 zip.file(filename, blob);
             } catch (err) {
                 console.error(`Failed to fetch image for entry ${entry.id}:`, err);

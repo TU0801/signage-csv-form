@@ -714,3 +714,75 @@ test.describe('修正依頼0913: エラーログ保存', () => {
     expect(posted[0].user_id).toBeTruthy();
   });
 });
+
+// ========================================
+// 修正依頼0926: 追加画像の行の CSV
+//   F・I・J・K・L 列は空（入れると画像に文字が合成される）、G 列は TRUE、
+//   H 列は「追加画像DL」のファイル名（拡張子なし＝テンプレートの TPLNo と同じ形式）
+// ========================================
+test.describe('0926: 入力フォームの物件コード「サイネージ設置物件のみ」フィルター', () => {
+  test('既定 OFF は未設置物件も含む全件、ON で端末のある物件だけになる', async ({ page }) => {
+    await loginAsUser(page);
+    await page.goto(`${baseUrl}/index.html`);
+    await page.waitForLoadState('networkidle');
+    await expect.poll(() => page.locator('#property option').count(), { timeout: 15000 }).toBeGreaterThan(1);
+
+    const optionValues = () => page.$$eval('#property option', opts => opts.map(o => o.value).filter(v => v));
+    const { all, withTerminal } = await page.evaluate(() => ({
+      all: [...new Set(window.masterData.properties.map(p => String(p.propertyCode)))],
+      withTerminal: [...new Set(window.masterData.properties.filter(p => p.terminalId).map(p => String(p.propertyCode)))],
+    }));
+    // 実データには未設置物件がある前提（0913 時点で 248 件中 97 件）
+    expect(all.length).toBeGreaterThan(withTerminal.length);
+
+    await expect(page.locator('#signageOnlyFilter')).not.toBeChecked();
+    expect((await optionValues()).sort()).toEqual([...all].sort());
+
+    await page.locator('#signageOnlyFilter').check();
+    expect((await optionValues()).sort()).toEqual([...withTerminal].sort());
+  });
+});
+
+test.describe('0926: 物件保存で業務システムの設備コードを消さない', () => {
+  test('saveInspectionsToBiz は biz 側の maintainer_equipment_code を引き継いで送る', async ({ page }) => {
+    await loginAsUser(page);
+    await page.goto(`${baseUrl}/admin.html`);
+    await page.waitForLoadState('networkidle');
+    // 実 DB に書かないよう RPC を差し替え、送られた値だけを見る
+    const upserts = [];
+    await page.route('**/rest/v1/rpc/inspections_for_property', route => route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify([{ id: 'x', inspection_type_id: 'type-1', maintainer_equipment_code: 'EQ-001' }]),
+    }));
+    await page.route('**/rest/v1/rpc/upsert_property_inspection', route => {
+      upserts.push(route.request().postDataJSON());
+      return route.fulfill({ status: 200, contentType: 'application/json', body: '"x"' });
+    });
+    await page.evaluate(async () => {
+      const { saveInspectionsToBiz } = await import('/js/supabase/relationships.js');
+      await saveInspectionsToBiz('000000-00', [{ inspection_type_id: 'type-1', vendor_id: null, inspection_months: [4] }]);
+    });
+    expect(upserts).toHaveLength(1);
+    expect(upserts[0].p_maintainer_equipment_code).toBe('EQ-001');
+  });
+});
+
+test.describe('0926: 追加画像の CSV 出力', () => {
+  test('追加画像の行は F/I/J/K/L 空・G=TRUE・H=ZIP 内ファイル名になる', async ({ page }) => {
+    await loginAsUser(page);
+    await page.goto(`${baseUrl}/admin.html`);
+    await page.waitForLoadState('networkidle');
+    const rows = await page.evaluate(async () => {
+      const { generateCSV } = await import('/js/admin-export.js');
+      const base = { property_code: '000000-00', vendor_name: 'V', inspection_start: '2026-09-18', inspection_end: '2026-09-19', remarks: 'R', announcement: 'A' };
+      const csv = generateCSV([
+        { ...base, id: '4715216d-aaaa', poster_type: 'custom', inspection_type: '追加画像', template_no: 'syoubou_hinan.jpg', poster_image: 'https://x/1.jpg' },
+        { ...base, id: 'bbbbbbbb-bbbb', poster_type: 'template', inspection_type: 'エレベーター定期点検', template_no: 'elevator_inspection' },
+      ]);
+      return csv.split('\n').slice(1).map(l => l.split(','));
+    });
+    const [custom, template] = rows;
+    expect(custom.slice(5, 12)).toEqual(['', 'TRUE', '000000-00_追加画像_4715216d', '', '', '', '']);
+    expect(template.slice(5, 12)).toEqual(['エレベーター定期点検', 'TRUE', 'elevator_inspection', '2026/09/18', '2026/09/19', 'R', 'A']);
+  });
+});

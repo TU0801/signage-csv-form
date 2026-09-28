@@ -41,6 +41,8 @@ test.describe('スモーク: 一般ユーザー', () => {
     // 3. 物件選択が動作する
     const propertyOptions = await page.locator('#property option').count();
     if (propertyOptions > 1) {
+      // 端末のある物件に絞ってから選択（0926 以降は既定でサイネージ未設置の物件も一覧に出る）
+      await page.check('#signageOnlyFilter');
       await page.selectOption('#property', { index: 1 });
       await page.waitForTimeout(300);
       const terminalValue = await page.locator('#terminal').inputValue();

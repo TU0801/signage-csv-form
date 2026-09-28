@@ -76,9 +76,13 @@ let adminVendorChangeSeq = 0;
 
         function populatePropertySelect() {
             const select = document.getElementById('property');
+            const prevValue = select.value;
             // #4: 既存optionをクリアしてから追加（フィルター時の重複防止）
             select.innerHTML = '<option value="">選択してください</option>';
             const seen = new Set();
+            // 0926: 「サイネージ設置物件のみ」ON のときは端末のある物件だけ。既定 OFF で未設置物件も含め全件
+            const signageOnly = document.getElementById('signageOnlyFilter')?.checked;
+            const withTerminal = new Set(masterData.properties.filter(p => p.terminalId).map(p => String(p.propertyCode)));
             // 物件コードは数値想定のため数値昇順でソート（非数値は文字列昇順にフォールバック）
             const sorted = [...masterData.properties].sort((a, b) => {
                 const na = parseInt(a.propertyCode, 10);
@@ -87,6 +91,7 @@ let adminVendorChangeSeq = 0;
                 return String(a.propertyCode).localeCompare(String(b.propertyCode));
             });
             sorted.forEach(p => {
+                if (signageOnly && !withTerminal.has(String(p.propertyCode))) return;
                 if (!seen.has(p.propertyCode)) {
                     seen.add(p.propertyCode);
                     const opt = document.createElement('option');
@@ -95,6 +100,9 @@ let adminVendorChangeSeq = 0;
                     select.appendChild(opt);
                 }
             });
+            // フィルター切替で選択中の物件が残っていれば選択を保つ（消えたら端末欄もリセット）
+            select.value = prevValue;
+            if (select.value !== prevValue) onPropertyChange();
         }
 
         function onPropertyChange() {
@@ -103,7 +111,8 @@ let adminVendorChangeSeq = 0;
             terminalSelect.innerHTML = '<option value="">選択してください</option>';
             if (code) {
                 // propertyCodeは文字列なので、codeも文字列で比較
-                const terminals = masterData.properties.filter(p => String(p.propertyCode) === String(code));
+                // 端末未設置の物件は terminalId='' の行だけなので、空の選択肢を作らない
+                const terminals = masterData.properties.filter(p => String(p.propertyCode) === String(code) && p.terminalId);
                 terminals.forEach(t => {
                     const opt = document.createElement('option');
                     opt.value = t.terminalId;
@@ -916,6 +925,7 @@ let adminVendorChangeSeq = 0;
 
         // HTMLのonchange/onclick属性から呼び出される関数をグローバルスコープに公開
         window.onPropertyChange = onPropertyChange;
+        window.populatePropertySelect = populatePropertySelect;
         window.onVendorChange = onVendorChange;
         window.onCategoryChange = onCategoryChange;
         window.onInspectionTypeChange = onInspectionTypeChange;
@@ -930,7 +940,7 @@ let adminVendorChangeSeq = 0;
             if (!vendorId) {
                 selectedVendorIdForAdmin = null;
                 // マスターデータを元に戻す（全データ）
-                const freshData = await window.getAllMasterDataCamelCase();
+                const freshData = await window.getAllMasterDataCamelCase({ includeNoTerminal: true });
                 if (mySeq !== adminVendorChangeSeq) return; // 後続の選択に追い越された → 中止
                 window.masterData = freshData;
                 populatePropertySelect();
@@ -1060,7 +1070,7 @@ let adminVendorChangeSeq = 0;
                 // マスターデータを再読み込み（承認後に表示されるように）
                 setTimeout(async () => {
                     try {
-                        const freshData = await window.getAllMasterDataCamelCase();
+                        const freshData = await window.getAllMasterDataCamelCase({ includeNoTerminal: true });
                         window.masterData = freshData;
                         populatePropertySelect();
                     } catch (error) {

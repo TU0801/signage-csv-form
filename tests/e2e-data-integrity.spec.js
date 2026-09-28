@@ -188,6 +188,8 @@ test.describe('一件入力 CSV生成', () => {
       return;
     }
 
+    // 端末のある物件に絞ってから選択（0926 以降は既定でサイネージ未設置の物件も一覧に出る）
+    await page.check('#signageOnlyFilter');
     await page.selectOption('#property', { index: 1 });
     await page.waitForTimeout(300);
 

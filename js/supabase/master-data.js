@@ -104,7 +104,12 @@ export async function getAllMasterData() {
   return { properties, vendors, inspectionTypes, categories, templateImages };
 }
 
-export async function getAllMasterDataCamelCase() {
+/**
+ * @param {Object} [options]
+ * @param {boolean} [options.includeNoTerminal=false] 端末（サイネージ）未設置の物件も terminalId='' の1行として含める。
+ *   入力フォーム（index.html）は未設置物件も選べる必要があるため true で呼ぶ（0926 依頼）
+ */
+export async function getAllMasterDataCamelCase({ includeNoTerminal = false } = {}) {
   const profile = await getProfile();
   let propertiesRaw;
   if (profile && profile.role === 'admin') {
@@ -126,7 +131,16 @@ export async function getAllMasterDataCamelCase() {
   propertiesRaw.forEach(p => {
     const terminals = Array.isArray(p.terminals) ? p.terminals : [];
     if (terminals.length === 0) {
-      console.warn('⚠️ No terminals for property:', p.property_code);
+      if (includeNoTerminal) {
+        properties.push({
+          propertyCode: p.property_code,
+          propertyName: p.property_name,
+          terminalId: '',
+          supplement: '',
+          address: p.address || ''
+        });
+      }
+      return;
     }
     terminals.forEach(t => {
       properties.push({

@@ -42,7 +42,11 @@
                     <div class="form-grid">
                         <!-- 物件・端末 -->
                         <div class="form-group">
-                            <label>物件コード <span class="required">*</span></label>
+                            <label>物件コード <span class="required">*</span>
+                                <label style="display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; font-weight: normal; font-size: 12px;">
+                                    <input type="checkbox" id="signageOnlyFilter" onchange="populatePropertySelect()">サイネージ設置物件のみ
+                                </label>
+                            </label>
                             <select id="property" onchange="onPropertyChange()">
                                 <option value="">選択してください</option>
                             </select>
@@ -313,7 +317,7 @@
 
                 // マスターデータを読み込み（Supabaseから動的に取得）
                 try {
-                    const freshMasterData = await getAllMasterDataCamelCase();
+                    const freshMasterData = await getAllMasterDataCamelCase({ includeNoTerminal: true });
                     // script.jsのmasterDataをSupabaseから取得したデータで上書き
                     if (window.masterData) {
                         window.masterData = freshMasterData;

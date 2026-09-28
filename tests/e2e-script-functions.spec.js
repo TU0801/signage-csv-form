@@ -169,7 +169,8 @@ test.describe('エントリ管理', () => {
   test('全項目入力後にaddEntryでエントリが追加される', async ({ page }) => {
     await loginAndGoToIndex(page);
 
-    // 必要な項目を入力
+    // 必要な項目を入力（端末のある物件に絞る。0926 以降は既定でサイネージ未設置の物件も一覧に出る）
+    await page.check('#signageOnlyFilter');
     const propertyOpt = await page.locator('#property option:not([value=""])').first();
     const propVal = await propertyOpt.getAttribute('value');
     if (propVal) {
@@ -229,7 +230,8 @@ test.describe('CSV生成', () => {
   test('エントリ追加後にCSVが生成できる', async ({ page }) => {
     await loginAndGoToIndex(page);
 
-    // エントリを追加
+    // エントリを追加（端末のある物件に絞る。0926 以降は既定でサイネージ未設置の物件も一覧に出る）
+    await page.check('#signageOnlyFilter');
     const propertyOpt = await page.locator('#property option:not([value=""])').first();
     const propVal = await propertyOpt.getAttribute('value');
     if (propVal) {
