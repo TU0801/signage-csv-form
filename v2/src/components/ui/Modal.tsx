@@ -11,6 +11,8 @@ interface ModalProps {
 
 export function Modal({ open, onClose, title, children, className }: ModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  // 押したのも背景のときだけ閉じる（入力欄の文字を選択したまま背景で離したときに閉じない）
+  const pressedOnBackdrop = useRef(false);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -26,8 +28,20 @@ export function Modal({ open, onClose, title, children, className }: ModalProps)
     <dialog
       ref={dialogRef}
       onClose={onClose}
+      // 背景（::backdrop）のクリックは dialog 自身への click になる。中身は内側の div が受けるので閉じない
+      // （dialog に padding を付けると余白のクリックでも閉じるため p-0 のままにする）。v1: 各モーダルの overlay click
+      onMouseDown={(e) => {
+        pressedOnBackdrop.current = e.target === e.currentTarget;
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && pressedOnBackdrop.current) onClose();
+        pressedOnBackdrop.current = false;
+      }}
+      // m-auto: preflight と親の space-y-* が dialog 既定の margin:auto を消すので中央寄せを明示する
+      // max-w-lg は呼び出し側が max-w-* を渡さないときだけ（cn は結合のみで、両方あると CSS の並び順で max-w-lg が勝つ）
       className={cn(
-        'rounded-lg shadow-xl backdrop:bg-black/50 p-0 max-w-lg w-full',
+        'm-auto rounded-lg shadow-xl backdrop:bg-black/50 p-0 w-full',
+        !/(^|\s)max-w-/.test(className ?? '') && 'max-w-lg',
         className,
       )}
     >

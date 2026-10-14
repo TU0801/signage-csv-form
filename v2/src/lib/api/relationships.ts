@@ -52,10 +52,22 @@ export async function getAssignedBuildings(
   return (data ?? []) as DbProperty[];
 }
 
+/** 一般ユーザーの申請が UNIQUE(property_code, vendor_id) に当たったとき（申請中・解除済みの行は一般ユーザーから見えない） */
+export const BUILDING_REQUEST_DUPLICATE_MESSAGE =
+  'この物件は既にリクエスト済みか、以前に紐付けを解除された物件です。管理者にお問い合わせください';
+
 /**
  * 物件と保守会社を紐付ける。UNIQUE(property_code, vendor_id) があるので、
- * 解除済み（deleted）・申請中（pending）の既存行は INSERT せず UPDATE で再有効化する。
- * 管理者は active、一般ユーザーは pending（RLS が一般ユーザーの INSERT に pending と requested_by=本人を求める）。
+ * 管理者は解除済み（deleted）・申請中（pending）の既存行を INSERT せず UPDATE で active に戻す。
+ *
+ * 一般ユーザーは pending で INSERT するだけ（RLS が pending と requested_by=本人を求める）。RLS の SELECT は
+ * 一般ユーザーに自社の active 行しか見せないので:
+ * - INSERT に .select() を付けると RETURNING が SELECT ポリシーに阻まれて 42501 になる → 付けずに入れ、null を返す
+ * - 申請中・解除済みの既存行は見つけられず INSERT が 23505 になる → 日本語の案内にする
+ * - UPDATE で戻す経路は、行が見えず（0 行一致）、UPDATE の条件（status='deleted' のまま）も満たせないので使わない
+ * v1 も同じ実装で同じく失敗する（v1 は一般ユーザーの申請画面が呼ばれていない）。
+ *
+ * 戻り値: 管理者は紐付けの行、一般ユーザーは null（行を読み返せないため。呼び出し側は成否だけを使う）。
  */
 // v1: js/supabase/relationships.js addBuildingVendor
 export async function addBuildingVendor(params: {
@@ -63,7 +75,7 @@ export async function addBuildingVendor(params: {
   /** 省略時はプロファイルの vendor_id */
   vendorId?: string | null;
   profile: Pick<DbProfile, 'id' | 'role' | 'vendor_id'> | null;
-}): Promise<DbBuildingVendor> {
+}): Promise<DbBuildingVendor | null> {
   const { propertyCode, profile } = params;
   if (!profile) throw new Error('ログインが必要です');
   const isAdminUser = profile.role === 'admin';
@@ -84,6 +96,8 @@ export async function addBuildingVendor(params: {
     if (row.status === BuildingVendorStatus.ACTIVE) {
       throw new Error('この物件は既に追加されています');
     }
+    // 今の RLS では一般ユーザーに active 以外の行は見えないが、見えても自分では戻せない
+    if (!isAdminUser) throw new Error(BUILDING_REQUEST_DUPLICATE_MESSAGE);
     const { data, error } = await supabase
       .from(TABLES.buildingVendors)
       .update({
@@ -99,16 +113,27 @@ export async function addBuildingVendor(params: {
     return data as DbBuildingVendor;
   }
 
+  const insertRow = {
+    property_code: propertyCode,
+    vendor_id: finalVendorId,
+    status: newStatus,
+    requested_by: profile.id,
+    approved_by: isAdminUser ? profile.id : null,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (!isAdminUser) {
+    const { error } = await supabase.from(TABLES.buildingVendors).insert(insertRow);
+    if (error) {
+      if (error.code === '23505') throw new Error(BUILDING_REQUEST_DUPLICATE_MESSAGE);
+      throw error;
+    }
+    return null;
+  }
+
   const { data, error } = await supabase
     .from(TABLES.buildingVendors)
-    .insert({
-      property_code: propertyCode,
-      vendor_id: finalVendorId,
-      status: newStatus,
-      requested_by: profile.id,
-      approved_by: isAdminUser ? profile.id : null,
-      updated_at: new Date().toISOString(),
-    })
+    .insert(insertRow)
     .select()
     .single();
   if (error) throw error;

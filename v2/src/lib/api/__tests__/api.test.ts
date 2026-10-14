@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { normalizeTerminalId, toTerminal } from '@/lib/terminal';
 import { diffUnitInspections, unitManagedTypeIds } from '../inspections';
 import { rpcAllRows, overlayInspections } from '../masterData';
-import { getAssignedBuildings } from '../relationships';
+import { addBuildingVendor, BUILDING_REQUEST_DUPLICATE_MESSAGE, getAssignedBuildings } from '../relationships';
 import type { MasterProperty, PropertyUnit } from '@/types/app';
 
 const mockRpc = vi.fn();
@@ -171,5 +171,37 @@ describe('getAssignedBuildings (v1 relationships.js)', () => {
   it('returns nothing for a general user without a vendor', async () => {
     expect(await getAssignedBuildings({ role: 'user', vendor_id: null })).toEqual([]);
     expect(mockFrom).not.toHaveBeenCalled();
+  });
+});
+
+describe('addBuildingVendor（一般ユーザーの申請。v1 relationships.js addBuildingVendor）', () => {
+  beforeEach(() => vi.clearAllMocks());
+  const user = { id: 'u1', role: 'user' as const, vendor_id: 'v1' };
+
+  // 一般ユーザーには申請中・解除済みの行が見えない（RLS の SELECT は自社の active だけ）ので既存行は見つからない
+  const mockTable = (insertResult: { error: { code: string; message: string } | null }) => {
+    const insert = vi.fn().mockResolvedValue(insertResult);
+    mockFrom.mockReturnValue({
+      select: () => ({
+        eq: () => ({ eq: () => ({ single: async () => ({ data: null, error: { code: 'PGRST116' } }) }) }),
+      }),
+      insert,
+    });
+    return insert;
+  };
+
+  it('pending で INSERT し、RETURNING（.select()）を付けない（付けると SELECT ポリシーで 42501 になる）', async () => {
+    const insert = mockTable({ error: null });
+    await expect(addBuildingVendor({ propertyCode: 'A', profile: user })).resolves.toBeNull();
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({ property_code: 'A', vendor_id: 'v1', status: 'pending', requested_by: 'u1', approved_by: null }),
+    );
+  });
+
+  it('以前に申請・解除した組み合わせ（23505）は日本語で案内する', async () => {
+    mockTable({ error: { code: '23505', message: 'duplicate key value violates unique constraint' } });
+    await expect(addBuildingVendor({ propertyCode: 'A', profile: user })).rejects.toThrow(
+      BUILDING_REQUEST_DUPLICATE_MESSAGE,
+    );
   });
 });

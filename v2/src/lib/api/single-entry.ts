@@ -75,11 +75,11 @@ export async function fetchLinkedInspectionIds(vendorId: string): Promise<Set<st
 }
 
 /**
- * 今月の初め（端末の時刻で1日 0:00）の ISO 文字列。
- * v1 は toISOString().split('T')[0] で日付だけにしていたため、日本時間では前月末日から拾っていた（不具合候補として報告）。
+ * 今月の初め（v1 と同じ値）。端末の時刻の1日 0:00 を UTC の日付にしたもの（YYYY-MM-DD）。
+ * 日本時間では前月末日から拾う（10月なら '2026-09-30' = 日本時間 9/30 9:00 以降。v1 の不具合候補。直さない）。
  */
 export function startOfMonthIso(now: Date = new Date()): string {
-  return new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]!;
 }
 
 /** 自分が今月登録したエントリー（新しい順）。失敗したら空 */

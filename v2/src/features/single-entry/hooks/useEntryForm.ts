@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { validateImageFile } from '@/lib/storage';
+import { todayUtc } from '@/lib/utils';
 import type { AppSettings } from '@/lib/api/single-entry';
 import type { MasterProperty } from '@/types/app';
 import type { DbInspectionType } from '@/types/database';
@@ -14,7 +15,6 @@ import {
   applyVendorCleared,
   duplicateValues,
   initialValues,
-  localToday,
   valuesFromEntry,
 } from '../lib/entryLogic';
 
@@ -36,7 +36,7 @@ function readAsDataUrl(file: File): Promise<string> {
 
 /** 1件入力フォームの値と、v1 script.js の各 onchange に当たる操作 */
 export function useEntryForm({ settings, properties, inspectionTypes, linkedIds }: UseEntryFormArgs) {
-  const [values, setValues] = useState<SingleEntryValues>(() => initialValues(settings, localToday()));
+  const [values, setValues] = useState<SingleEntryValues>(() => initialValues(settings, todayUtc()));
   const [customImage, setCustomImage] = useState<CustomImage | null>(null);
 
   const setField = useCallback(
@@ -103,7 +103,7 @@ export function useEntryForm({ settings, properties, inspectionTypes, linkedIds 
   /** クリア（カテゴリは残す。v1 clearForm と同じ） */
   // v1: js/script.js clearForm
   const clear = useCallback(() => {
-    setValues((v) => ({ ...initialValues(settings, localToday()), category: v.category }));
+    setValues((v) => ({ ...initialValues(settings, todayUtc()), category: v.category }));
     setCustomImage(null);
   }, [settings]);
 

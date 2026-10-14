@@ -7,8 +7,9 @@ import { useToast } from '@/components/ui/Toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useMasterData } from '@/hooks/useMasterData';
 import { useAuth } from '@/hooks/useAuth';
-import { getPublicUrl, uploadPosterImage } from '@/lib/storage';
-import { cn } from '@/lib/utils';
+import { uploadPosterImage } from '@/lib/storage';
+import { templateFileUrl } from '@/lib/templateStorage';
+import { cn, todayUtc } from '@/lib/utils';
 import { PosterType } from '@/lib/constants';
 import { insertEntries, type AppSettings } from '@/lib/api/single-entry';
 import type { MasterData } from '@/types/app';
@@ -28,14 +29,11 @@ import {
   buildPropertyOptions,
   filterInspectionTypes,
   formatPosterDate,
-  localToday,
   terminalsOf,
   toInsertRow,
 } from '@/features/single-entry/lib/entryLogic';
 import type { LocalEntry } from '@/features/single-entry/types';
 
-/** 固定表のファイル名 → Storage の公開 URL（poster-images/templates/。features/single-entry/lib/templateImages.ts 参照） */
-const templateFileUrl = (fileName: string) => getPublicUrl(`templates/${fileName}`);
 
 function errorMessage(err: unknown): string {
   if (err && typeof err === 'object' && 'message' in err) return String((err as { message: unknown }).message ?? '');
@@ -217,7 +215,7 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
           });
         }),
       );
-      const today = localToday();
+      const today = todayUtc();
       await insertEntries(localEntries.map((e, i) => toInsertRow(e, urls[i] ?? null, user.id, settings, today)));
       addToast(`${localEntries.length}件のデータを確定しました`, 'success');
       setLocalEntries([]);

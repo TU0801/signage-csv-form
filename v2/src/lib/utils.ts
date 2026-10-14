@@ -13,11 +13,10 @@ export function escapeHtml(str: string): string {
     .replace(/'/g, '&#039;');
 }
 
-/** YYYY-MM-DD 形式 */
-export function formatDateISO(date: Date | string): string {
-  const d = typeof date === 'string' ? new Date(date) : date;
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+/**
+ * 今日（YYYY-MM-DD）。v1 と同じく UTC の日付（`new Date().toISOString().split('T')[0]`）。
+ * そのため日本時間 0〜9 時は前日になる（v1 の不具合候補。v1 と同じ結果を保つため直さない）。
+ */
+export function todayUtc(now: Date = new Date()): string {
+  return now.toISOString().split('T')[0]!;
 }

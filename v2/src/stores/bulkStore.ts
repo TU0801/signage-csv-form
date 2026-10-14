@@ -15,6 +15,7 @@ import {
 } from '@/features/bulk-entry/utils/bulkMaster';
 import { validateBulkRow } from '@/features/bulk-entry/utils/validateBulkRow';
 import { AUTO_SAVE_DELAY_MS, writeAutoSave } from '@/features/bulk-entry/utils/bulkAutoSave';
+import { todayUtc } from '@/lib/utils';
 
 /** 行の詳細設定モーダルで変える項目 */
 export type BulkRowDetail = Pick<
@@ -22,10 +23,6 @@ export type BulkRowDetail = Pick<
   'noticeText' | 'displayStartDate' | 'displayStartTime' | 'displayEndDate' | 'displayEndTime' | 'displayTime' | 'position'
 >;
 
-/** 今日（UTC の日付。v1 の `new Date().toISOString().split('T')[0]` と同じ） */
-function todayUtc(): string {
-  return new Date().toISOString().split('T')[0]!;
-}
 
 let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
 

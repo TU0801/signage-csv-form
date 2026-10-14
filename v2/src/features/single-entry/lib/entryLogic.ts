@@ -1,4 +1,3 @@
-import { formatDateISO } from '@/lib/utils';
 import { EntryStatus, PosterType } from '@/lib/constants';
 import type { AppSettings, EntryInsertRow } from '@/lib/api/single-entry';
 import type { MasterProperty } from '@/types/app';
@@ -18,11 +17,6 @@ export const POSITION_OPTIONS = [
 ] as const;
 
 export const DEFAULT_FRAME_NO = 2;
-
-/** 端末の時刻での今日（YYYY-MM-DD）。v1 は toISOString（UTC）だったため日本時間 0〜9 時は前日になっていた */
-export function localToday(now: Date = new Date()): string {
-  return formatDateISO(now);
-}
 
 /** フォームの初期値（v1 script.js init / clearForm） */
 export function initialValues(settings: AppSettings, today: string): SingleEntryValues {

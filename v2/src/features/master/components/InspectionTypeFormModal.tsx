@@ -6,6 +6,8 @@ import { TextArea } from '@/components/ui/TextArea';
 import type { DbCategory, DbInspectionType, DbTemplateImage } from '@/types/database';
 import type { InspectionTypeInput } from '@/lib/api/admin-masters';
 import { buildTemplateOptions, resolveTemplateKey } from '../lib/inspectionTypes';
+import { resolveTemplateImageUrl } from '@/features/single-entry/lib/templateImages';
+import { templateFileUrl } from '@/lib/templateStorage';
 
 const BIZ_TEMPLATE_SETTINGS_URL = 'https://system.1984.jp/settings?tab=template-images';
 
@@ -42,6 +44,10 @@ export function InspectionTypeFormModal({
   const [imageError, setImageError] = useState(false);
 
   const selected = groups.flatMap((g) => g.options).find((o) => o.value === templateNo);
+  // 選択肢の画像 → DB の image_key → 固定表（末尾一致を含む）の順。v1 は固定表を images/ から読む
+  const previewUrl = templateNo
+    ? selected?.imageUrl || resolveTemplateImageUrl(templateNo, templateImages, templateFileUrl)
+    : null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -130,14 +136,14 @@ export function InspectionTypeFormModal({
           <div className="mt-2 flex min-h-20 items-center justify-center rounded-lg bg-slate-50 p-2 text-sm">
             {!templateNo ? (
               <span className="text-slate-400">プレビュー</span>
-            ) : selected?.imageUrl && !imageError ? (
+            ) : previewUrl && !imageError ? (
               <img
-                src={selected.imageUrl}
-                alt={selected.label}
+                src={previewUrl}
+                alt={selected?.label ?? templateNo}
                 className="max-h-[120px] max-w-full rounded"
                 onError={() => setImageError(true)}
               />
-            ) : selected?.imageUrl ? (
+            ) : previewUrl ? (
               <span className="text-red-500">画像が見つかりません</span>
             ) : (
               <span className="text-slate-400">{templateNo}</span>

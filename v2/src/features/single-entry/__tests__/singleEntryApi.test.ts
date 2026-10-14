@@ -76,14 +76,15 @@ describe('紐付け点検種別（v1 relationships.js getVendorInspections）', 
 });
 
 describe('今月の自分のエントリー（v1 entries.js getUserEntriesCurrentMonth）', () => {
-  it('自分の行を端末の時刻で今月1日 0:00 以降、新しい順に読む', async () => {
+  it('自分の行を v1 と同じ「今月1日」（端末の1日 0:00 を UTC の日付にしたもの）以降、新しい順に読む', async () => {
     const { b, calls } = builder({ data: [{ id: 'e1' }], error: null });
     mockFrom.mockReturnValueOnce(b);
     const now = new Date(2026, 9, 15, 8, 0); // JST 2026-10-15 08:00
     expect(await fetchMyEntriesThisMonth('u1', now)).toEqual([{ id: 'e1' }]);
-    expect(startOfMonthIso(now)).toBe('2026-09-30T15:00:00.000Z'); // = JST 10/1 0:00
+    // JST 10/1 0:00 は UTC 9/30 なので前月末日になる（v1 の不具合候補。v1 と同じ値を保つ）
+    expect(startOfMonthIso(now)).toBe('2026-09-30');
     expect(calls).toContainEqual(['eq', 'user_id', 'u1']);
-    expect(calls).toContainEqual(['gte', 'created_at', '2026-09-30T15:00:00.000Z']);
+    expect(calls).toContainEqual(['gte', 'created_at', '2026-09-30']);
     expect(calls).toContainEqual(['order', 'created_at', { ascending: false }]);
   });
 });

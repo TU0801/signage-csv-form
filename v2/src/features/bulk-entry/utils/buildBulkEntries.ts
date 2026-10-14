@@ -1,4 +1,5 @@
 import { normalizeTerminalId } from '@/lib/terminal';
+import { todayUtc } from '@/lib/utils';
 import type { BulkEntryInsert } from '@/lib/api/bulk-entry';
 import type { BulkEntryRow, BulkMasterData, BulkSettings, BulkVendorSelection } from '../types';
 
@@ -19,7 +20,7 @@ export function buildBulkEntries(
     .map((row) => {
       const vendor = masterData.vendors.find((v) => v.vendorName === currentVendor.name);
       const inspection = masterData.notices.find((i) => i.inspectionType === row.inspectionType);
-      const today = new Date().toISOString().split('T')[0]!;
+      const today = todayUtc();
 
       return {
         property_code: String(row.propertyCode),

@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import type { AdminEntryFilters } from '@/lib/api/admin-entries';
+import { todayUtc } from '@/lib/utils';
 
 export type EntriesFilters = AdminEntryFilters;
 
@@ -13,7 +14,7 @@ const emptyFilters: EntriesFilters = {
 /** v1 と同じ「今日」。toISOString の日付部分（UTC。v1 の split('T')[0] と同じ値）なので、JST 0〜9時は前日になる */
 // v1: js/admin.js loadAllData（const today = new Date().toISOString().split('T')[0]）
 export function todayForFilter(now: Date = new Date()): string {
-  return now.toISOString().slice(0, 10);
+  return todayUtc(now);
 }
 
 /**

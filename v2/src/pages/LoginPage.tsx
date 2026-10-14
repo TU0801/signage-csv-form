@@ -71,9 +71,14 @@ export function LoginPage() {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 h-full flex flex-col justify-center">
-              <h1 className="text-2xl font-bold text-center text-gray-900 mb-6">
-                サイネージCMS
-              </h1>
+              {/* v1: login.html .login-header（見出し・副題・#appVersion） */}
+              <div className="text-center mb-6">
+                <h1 className="text-2xl font-bold text-gray-900">📋 点検日入力フォーム</h1>
+                <p className="mt-1 text-sm text-gray-500">アカウントにログインしてください</p>
+                <span className="mt-2 inline-block rounded bg-slate-200 px-2 py-0.5 text-xs text-slate-500">
+                  v{__APP_VERSION__}
+                </span>
+              </div>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <Input
                   label="メールアドレス"
@@ -99,6 +104,10 @@ export function LoginPage() {
                   {loading ? 'ログイン中...' : 'ログイン'}
                 </Button>
               </form>
+              {/* v1: login.html .login-footer */}
+              <p className="mt-6 text-center text-xs text-slate-500">
+                パスワードを忘れた場合は管理者にお問い合わせください
+              </p>
             </div>
           </div>
 
@@ -112,7 +121,8 @@ export function LoginPage() {
   );
 }
 
-function AdSlotCell({ slot }: { slot?: { image_url: string | null; caption: string | null; link_url: string | null } }) {
+// v1: login.html loadAdSlots（画像だけを出し、キャプションは出さない。alt も空）
+function AdSlotCell({ slot }: { slot?: { image_url: string | null; link_url: string | null } }) {
   if (!slot || !slot.image_url) {
     return (
       <div className="bg-gray-100 rounded-lg border border-gray-200 flex items-center justify-center min-h-[120px]">
@@ -122,19 +132,8 @@ function AdSlotCell({ slot }: { slot?: { image_url: string | null; caption: stri
   }
 
   const content = (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden h-full flex flex-col">
-      <div className="flex-1 flex items-center justify-center p-1">
-        <img
-          src={slot.image_url}
-          alt={slot.caption ?? ''}
-          className="max-w-full max-h-[100px] object-contain"
-        />
-      </div>
-      {slot.caption && (
-        <div className="px-2 py-1 text-xs text-gray-600 text-center border-t border-gray-100 truncate">
-          {slot.caption}
-        </div>
-      )}
+    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden h-full flex items-center justify-center p-1">
+      <img src={slot.image_url} alt="" className="max-w-full max-h-[100px] object-contain" />
     </div>
   );
 

@@ -1,15 +1,33 @@
-import { useContext } from 'react';
+import { useContext, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useAuthStore } from '@/stores/authStore';
+import { useBulkStore } from '@/stores/bulkStore';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { cn } from '@/lib/utils';
 import { HeaderSlotContext } from './HeaderSlot';
+
+/**
+ * 一括入力に行があるときのログアウト確認。v1 はログアウトでページを移るときの beforeunload（js/bulk.js、
+ * returnValue='' で文言はブラウザ既定）で確認していたので、Chrome の日本語の既定文言に合わせる。
+ */
+export const BULK_LOGOUT_CONFIRM_MESSAGE = 'このサイトを離れますか？\n行った変更が保存されない可能性があります。';
 
 export function AppHeader() {
   const { profile, isAdmin } = useAuth();
   const signOut = useAuthStore((s) => s.signOut);
   const location = useLocation();
   const { setTarget } = useContext(HeaderSlotContext);
+  const [confirmingLogout, setConfirmingLogout] = useState(false);
+
+  // 一括入力の行は画面を移っても store に残るので、どの画面からのログアウトでも確認する
+  const handleLogout = () => {
+    if (useBulkStore.getState().rows.length > 0) {
+      setConfirmingLogout(true);
+      return;
+    }
+    void signOut();
+  };
 
   const navItems = [
     { to: '/', label: '1件入力' },
@@ -63,7 +81,7 @@ export function AppHeader() {
           <div className="flex items-center gap-4">
             <span className="text-sm text-gray-500">{profile?.email}</span>
             <button
-              onClick={signOut}
+              onClick={handleLogout}
               className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
             >
               ログアウト
@@ -71,6 +89,14 @@ export function AppHeader() {
           </div>
         </div>
       </div>
+      <ConfirmDialog
+        open={confirmingLogout}
+        onClose={() => setConfirmingLogout(false)}
+        onConfirm={() => void signOut()}
+        title="確認"
+        message={BULK_LOGOUT_CONFIRM_MESSAGE}
+        confirmLabel="ログアウト"
+      />
     </header>
   );
 }
