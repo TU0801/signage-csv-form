@@ -16,7 +16,13 @@ import {
 } from './supabase-client.js';
 
 import { escapeHtml, showToast } from './ui-utils.js';
-import { syncBuildingVendorsFromEquipment, saveInspectionsToBiz } from './supabase/relationships.js';
+import {
+    syncBuildingVendorsFromEquipment,
+    saveInspectionsToBiz,
+    unitManagedTypeIds,
+    diffUnitInspections,
+    saveUnitInspectionsToBiz,
+} from './supabase/relationships.js';
 
 // ========================================
 // テンプレート画像マッピング
@@ -429,12 +435,13 @@ let currentPropertyEquipment = [];
 // 編集中の行の位置。null なら「追加」モード（0913 依頼③: 一度登録した設備種類が削除しかできなかった）
 let editingEquipmentIndex = null;
 
-// 設備の種類・保守会社セレクトを初期化
+// 設備の種類・保守会社セレクトを初期化。
+// 台ごとに管理している点検種別（currentUnitManagedTypeIds）は選択肢に出さない（ここから足しても業務システムが断る）
 function populatePropertyEquipmentSelects(masterData) {
     const typeSelect = document.getElementById('propEquipmentType');
     if (typeSelect) {
         typeSelect.innerHTML = '<option value="">選択...</option>' +
-            (masterData.inspectionTypes || []).filter(t => t.category === '点検')
+            (masterData.inspectionTypes || []).filter(t => t.category === '点検' && !currentUnitManagedTypeIds.has(t.id))
                 .map(t => `<option value="${escapeHtml(t.id)}">${escapeHtml(t.inspection_name)}</option>`).join('');
     }
     const vendorSelect = document.getElementById('propEquipmentVendor');
@@ -555,6 +562,159 @@ function addPropertyEquipmentRow(masterData) {
     renderPropertyEquipment(masterData);
 }
 
+// ========================================
+// 物件モーダル: 台ごとの保守（業務システムで台を登録した大分類。2026-10-14）
+// ========================================
+//
+// **台を登録した大分類の保守（点検種別・保守会社・点検月・検査月）は台ごとに持つ。** 上の設備情報の表
+// （物件×点検種別）からは書けないので、その大分類の点検種別は上の表から外し、ここで台ごとに編集する。
+// 編集できるのは既にある台の保守だけ。台そのもの（追加・削除・保守会社固有コード・設置場所・金額）は業務システムで編集する。
+// 設備情報と同じく、ローカルの配列で編集して物件「保存」時にまとめて送る（送るのは差分だけ）。
+
+// 物件モーダルで編集中の台と台ごとの保守（masterData の prop.units の写し）
+let currentPropertyUnits = [];
+
+// モーダルを開いたときの状態。保存時に currentPropertyUnits と突き合わせて差分を出す
+let originalPropertyUnits = [];
+
+// その物件で台ごとに管理している点検種別の id。設備情報の表・選択肢・保存の対象から外す
+let currentUnitManagedTypeIds = new Set();
+
+function clonePropertyUnits(units) {
+    return (Array.isArray(units) ? units : []).map(u => ({
+        ...u,
+        inspections: (u.inspections || []).map(i => ({
+            ...i,
+            inspection_months: Array.isArray(i.inspection_months) ? [...i.inspection_months] : []
+        }))
+    }));
+}
+
+// 台ごとの保守の表を描画（currentPropertyUnits を表示）。台が無い物件では節ごと隠す
+function renderPropertyUnitInspections(masterData) {
+    const section = document.getElementById('propUnitInspectionSection');
+    const tbody = document.getElementById('propUnitInspectionTableBody');
+    if (!section || !tbody) return;
+    tbody.innerHTML = '';
+    section.style.display = currentPropertyUnits.length ? '' : 'none';
+
+    const vendors = masterData.vendors || [];
+    let lastCategory = null;
+    currentPropertyUnits.forEach(unit => {
+        if (unit.category_code !== lastCategory) {
+            lastCategory = unit.category_code;
+            const head = document.createElement('tr');
+            head.className = 'unit-category-row';
+            head.innerHTML = `<td colspan="6">${escapeHtml(unit.category_label || unit.category_code)}</td>`;
+            tbody.appendChild(head);
+        }
+
+        // 台のセルは、その台の保守の行数ぶん縦に結合する（保守が無い台も1行）
+        const unitCell = document.createElement('td');
+        unitCell.className = 'unit-cell';
+        unitCell.rowSpan = Math.max(1, unit.inspections.length);
+        const remarks = [unit.unit_remarks, unit.unit_remarks2].filter(Boolean).join(' ／ ');
+        unitCell.innerHTML = `
+            <div class="unit-code">${escapeHtml(unit.unit_code) || '<span class="unit-empty">（コードなし）</span>'}</div>
+            ${unit.unit_location ? `<div class="unit-sub">${escapeHtml(unit.unit_location)}</div>` : ''}
+            ${remarks ? `<div class="unit-sub">${escapeHtml(remarks)}</div>` : ''}
+            <button type="button" class="btn btn-outline btn-sm unit-add-btn">＋ 点検種別</button>
+        `;
+        unitCell.querySelector('.unit-add-btn').addEventListener('click', () => {
+            unit.inspections.push({ inspection_id: null, inspection_type_id: '', vendor_id: null, inspection_months: [], inspected_on: null });
+            renderPropertyUnitInspections(masterData);
+        });
+
+        if (!unit.inspections.length) {
+            const tr = document.createElement('tr');
+            tr.appendChild(unitCell);
+            const empty = document.createElement('td');
+            empty.colSpan = 5;
+            empty.className = 'unit-empty';
+            empty.textContent = '保守は登録されていません';
+            tr.appendChild(empty);
+            tbody.appendChild(tr);
+            return;
+        }
+
+        // その台の大分類の点検種別だけを選べる
+        const typeOptions = (masterData.unitInspectionTypes || []).filter(t => t.category_code === unit.category_code);
+        unit.inspections.forEach((insp, i) => {
+            const tr = document.createElement('tr');
+            if (i === 0) tr.appendChild(unitCell);
+            const months = Array.isArray(insp.inspection_months) ? insp.inspection_months.map(Number) : [];
+
+            // 点検種別: 登録済みの行は名称だけ（種別を替えるときは外して足し直す）。新しい行は選択
+            let typeCell;
+            if (insp.inspection_id) {
+                const legacy = [insp.legacy_remarks, insp.legacy_remarks2].filter(Boolean).join(' ／ ');
+                typeCell = `${escapeHtml(insp.inspection_type_label || '-')}${legacy ? `<div class="unit-sub">切替前の備考: ${escapeHtml(legacy)}</div>` : ''}`;
+            } else {
+                typeCell = `<select class="unit-insp-type"><option value="">選択...</option>${typeOptions.map(t =>
+                    `<option value="${escapeHtml(t.inspection_type_id)}"${t.inspection_type_id === insp.inspection_type_id ? ' selected' : ''}>${escapeHtml(t.inspection_type_label)}</option>`).join('')}</select>`;
+            }
+            // 保守会社: 一覧に無い会社が付いている行は、その会社を選択肢に足して値を保つ
+            const vendorKnown = !insp.vendor_id || vendors.some(v => v.id === insp.vendor_id);
+            const vendorOptions = '<option value="">なし</option>' +
+                (vendorKnown ? '' : `<option value="${escapeHtml(insp.vendor_id)}" selected>${escapeHtml(insp.vendor_name || '（一覧に無い保守会社）')}</option>`) +
+                vendors.map(v => `<option value="${escapeHtml(v.id)}"${v.id === insp.vendor_id ? ' selected' : ''}>${escapeHtml(v.vendor_name)}</option>`).join('');
+            const monthBoxes = Array.from({ length: 12 }, (_, m) => m + 1).map(m =>
+                `<label><input type="checkbox" value="${m}"${months.includes(m) ? ' checked' : ''}>${m}</label>`).join('');
+
+            tr.insertAdjacentHTML('beforeend', `
+                <td class="unit-type-cell">${typeCell}</td>
+                <td><select class="unit-insp-vendor">${vendorOptions}</select></td>
+                <td><div class="unit-months">${monthBoxes}</div></td>
+                <td><input type="month" class="unit-insp-month" value="${escapeHtml(insp.inspected_on ? String(insp.inspected_on).slice(0, 7) : '')}"></td>
+                <td><button type="button" class="btn btn-danger btn-sm unit-remove-btn">外す</button></td>
+            `);
+
+            const typeSelect = tr.querySelector('.unit-insp-type');
+            if (typeSelect) {
+                typeSelect.addEventListener('change', () => {
+                    // 同じ台に同じ点検種別は1つ（送ると後の行で上書きされるだけなので、ここで弾く）
+                    if (typeSelect.value && unit.inspections.some(x => x !== insp && x.inspection_type_id === typeSelect.value)) {
+                        showToast('この台には同じ点検種別が既に登録されています', 'error');
+                        typeSelect.value = insp.inspection_type_id || '';
+                        return;
+                    }
+                    insp.inspection_type_id = typeSelect.value;
+                });
+            }
+            tr.querySelector('.unit-insp-vendor').addEventListener('change', e => {
+                insp.vendor_id = e.target.value || null;
+            });
+            tr.querySelector('.unit-months').addEventListener('change', () => {
+                insp.inspection_months = [...tr.querySelectorAll('.unit-months input:checked')].map(cb => parseInt(cb.value, 10));
+            });
+            tr.querySelector('.unit-insp-month').addEventListener('change', e => {
+                insp.inspected_on = e.target.value || null;
+            });
+            tr.querySelector('.unit-remove-btn').addEventListener('click', () => {
+                unit.inspections.splice(unit.inspections.indexOf(insp), 1);
+                renderPropertyUnitInspections(masterData);
+            });
+            tbody.appendChild(tr);
+        });
+    });
+}
+
+// 保存の前の確認。**物件の保存より前に呼ぶ**（後だと物件だけ保存されて台の保守が残る）
+function validatePropertyUnitInspections() {
+    for (const unit of currentPropertyUnits) {
+        const ids = unit.inspections.map(i => i.inspection_type_id);
+        if (ids.some(id => !id)) {
+            showToast('台ごとの保守に、点検種別を選んでいない行があります（選ぶか、行を外してください）', 'error');
+            return false;
+        }
+        if (new Set(ids).size !== ids.length) {
+            showToast('台ごとの保守で、同じ台に同じ点検種別が2行あります', 'error');
+            return false;
+        }
+    }
+    return true;
+}
+
 export function openMasterModal(type, masterData, data = null) {
     const modal = document.getElementById('masterModal');
     const title = document.getElementById('masterModalTitle');
@@ -625,6 +785,12 @@ export function openMasterModal(type, masterData, data = null) {
             addTerminalField();
         }
 
+        // 台ごとの保守を初期化（masterData 側を直接書き換えないようクローンして保持。開いたときの状態も取っておく）
+        originalPropertyUnits = clonePropertyUnits(data?.units);
+        currentPropertyUnits = clonePropertyUnits(data?.units);
+        currentUnitManagedTypeIds = unitManagedTypeIds(currentPropertyUnits, masterData.unitInspectionTypes);
+        renderPropertyUnitInspections(masterData);
+
         // 設備情報を初期化（ローカル配列で編集し、保存時にまとめて永続化）
         populatePropertyEquipmentSelects(masterData);
         resetPropertyEquipmentForm();
@@ -632,8 +798,12 @@ export function openMasterModal(type, masterData, data = null) {
         if (typeof equipment === 'string') {
             try { equipment = JSON.parse(equipment); } catch (e) { equipment = []; }
         }
-        // masterData 側のオブジェクトを直接書き換えないようクローンして保持
-        currentPropertyEquipment = Array.isArray(equipment) ? equipment.map(e => ({ ...e })) : [];
+        // masterData 側のオブジェクトを直接書き換えないようクローンして保持。
+        // **台ごとに管理している点検種別の行は外す**（その保守は下の「台ごとの保守」で編集する。
+        // 一覧には台の保守の集計が1行で返ってくるが、ここから直すと業務システムが断る）
+        currentPropertyEquipment = Array.isArray(equipment)
+            ? equipment.filter(e => !currentUnitManagedTypeIds.has(e.inspection_type_id)).map(e => ({ ...e }))
+            : [];
         // **モーダルを開くたびに編集モードを解除する。** 残すと前回の編集位置のまま
         // 別の物件を開いて、無関係な行を上書きする
         resetPropertyEquipmentForm();
@@ -849,6 +1019,7 @@ export async function handleMasterFormSubmit(e, masterData, showToast, updateSta
                 showToast('物件コードを入力してください', 'error');
                 return;
             }
+            if (!validatePropertyUnitInspections()) return;
 
             // **equipment は渡さない（2026-09-20 の凍結）。** 点検情報は下の
             // saveInspectionsToBiz() が業務システムへ送る。ここに残しても
@@ -867,22 +1038,39 @@ export async function handleMasterFormSubmit(e, masterData, showToast, updateSta
             }
             // **点検情報の正本は業務システム（biz）。** 物件の保存と同時にあちらへ送る
             // （2026-09-19 切り替え）。ここが失敗すると点検案内に反映されないので、
-            // 物件の保存が成功していても明確にエラーを出す
+            // 物件の保存が成功していても明確にエラーを出す。
+            // **業務システムが断った理由（RPC の文言）をそのまま出す**（定型文だと、何を直せばよいか分からない）。
+            // トーストは1つしか出せないので、ここでは溜めておき、後ろの成功のトーストで消えないよう最後に出す
+            const saveErrors = [];
             try {
-                await saveInspectionsToBiz(propertyCode, currentPropertyEquipment);
+                await saveInspectionsToBiz(propertyCode, currentPropertyEquipment, currentUnitManagedTypeIds);
             } catch (e) {
                 console.error('Failed to save inspections to biz:', e);
-                showToast('点検情報の保存に失敗しました。もう一度保存してください', 'error');
+                saveErrors.push(`点検情報の保存に失敗しました: ${e?.message || e}`);
             }
-            // 設備情報で選んだ保守会社を紐付け管理にも反映する（0913 依頼②）。
+            // 台ごとの保守は、開いたときとの差分だけを送る（変えていなければ何も送らない）
+            try {
+                const unitDiff = diffUnitInspections(originalPropertyUnits, currentPropertyUnits);
+                const result = await saveUnitInspectionsToBiz(unitDiff);
+                if (result.errors.length > 0) {
+                    console.error('Failed to save unit inspections to biz:', result.errors);
+                    saveErrors.push(`台ごとの保守 ${result.errors.length} 件の保存に失敗しました: ${[...new Set(result.errors)].join(' ／ ')}`);
+                }
+            } catch (e) {
+                console.error('Failed to save unit inspections to biz:', e);
+                saveErrors.push(`台ごとの保守の保存に失敗しました: ${e?.message || e}`);
+            }
+            // 設備情報で選んだ保守会社を紐付け管理にも反映する（0913 依頼②。台ごとの保守で選んだ保守会社も含める）。
             // 失敗しても物件の保存自体は成功しているので、警告だけ出して続ける
             try {
-                const synced = await syncBuildingVendorsFromEquipment(propertyCode, currentPropertyEquipment);
+                const unitInspections = currentPropertyUnits.flatMap(u => u.inspections);
+                const synced = await syncBuildingVendorsFromEquipment(propertyCode, [...currentPropertyEquipment, ...unitInspections]);
                 if (synced.added > 0) showToast(`保守会社 ${synced.added} 件を紐付け管理にも追加しました`, 'success');
             } catch (e) {
                 console.error('Failed to sync building vendors:', e);
-                showToast('紐付け管理への反映に失敗しました（物件は保存済みです）', 'error');
+                saveErrors.push('紐付け管理への反映に失敗しました（物件は保存済みです）');
             }
+            if (saveErrors.length > 0) showToast(saveErrors.join(' ／ '), 'error');
         } else if (type === 'inspection') {
             const data = {
                 inspection_name: document.getElementById('inspectionName').value,

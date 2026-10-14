@@ -339,4 +339,63 @@ test.describe('ビル設備', () => {
       expect(Array.isArray(p.equipment)).toBe(true);
     }
   });
+
+  test('getAllMasterData の各物件が units 配列を持つ（台ごとの保守。RPC が無い DB でも空配列）', async ({ page }) => {
+    await loginAsAdmin(page);
+    const data = await callSupabaseFunction(page, 'getAllMasterData');
+    expect(Array.isArray(data.unitInspectionTypes)).toBe(true);
+    for (const p of data.properties) {
+      expect(Array.isArray(p.units)).toBe(true);
+    }
+  });
+});
+
+// ============================================
+// 台ごとの保守（DB を読まない計算だけを確かめる）
+// ============================================
+test.describe('台ごとの保守', () => {
+  const units = [
+    { unit_id: 'u1', category_code: 'signage', inspections: [
+      { inspection_id: 'i1', inspection_type_id: 't-sig', vendor_id: 'v1', inspection_months: [1, 7], inspected_on: '2026-03-01' },
+      { inspection_id: 'i2', inspection_type_id: 't-old', vendor_id: null, inspection_months: [], inspected_on: null },
+    ] },
+    { unit_id: 'u2', category_code: 'signage', inspections: [] },
+  ];
+
+  async function callRelationships(page, functionName, args) {
+    await page.goto(`${baseUrl}/login.html`);
+    return await page.evaluate(async ({ fn, args }) => {
+      const mod = await import('./js/supabase/relationships.js');
+      const result = mod[fn](...args);
+      return result instanceof Set ? [...result] : result;
+    }, { fn: functionName, args });
+  }
+
+  test('unitManagedTypeIds は台がある大分類の種別と、台に付いている種別を返す', async ({ page }) => {
+    const typeOptions = [
+      { category_code: 'signage', inspection_type_id: 't-sig' },
+      { category_code: 'signage', inspection_type_id: 't-sig2' },
+      { category_code: 'elevator_inspection', inspection_type_id: 't-ev' },
+    ];
+    const ids = await callRelationships(page, 'unitManagedTypeIds', [units, typeOptions]);
+    // t-old は無効にした種別（選択肢に出ない）。t-ev は台が無い大分類なので従来の表に残る
+    expect(ids.sort()).toEqual(['t-old', 't-sig', 't-sig2']);
+  });
+
+  test('diffUnitInspections は変えた行・足した行・外した行だけを返す', async ({ page }) => {
+    const edited = [
+      { unit_id: 'u1', category_code: 'signage', inspections: [
+        // 点検月の並び違い・検査月の YYYY-MM は「変更なし」
+        { inspection_id: 'i1', inspection_type_id: 't-sig', vendor_id: 'v1', inspection_months: [7, 1], inspected_on: '2026-03' },
+      ] },
+      { unit_id: 'u2', category_code: 'signage', inspections: [
+        { inspection_id: null, inspection_type_id: 't-sig', vendor_id: 'v2', inspection_months: [12, 3, 3], inspected_on: '2026-05' },
+      ] },
+    ];
+    const diff = await callRelationships(page, 'diffUnitInspections', [units, edited]);
+    expect(diff.deletes).toEqual([{ inspection_id: 'i2' }]);
+    expect(diff.upserts).toEqual([
+      { unit_id: 'u2', inspection_type_id: 't-sig', vendor_id: 'v2', inspection_months: [3, 12], inspected_on: '2026-05-01' },
+    ]);
+  });
 });

@@ -527,6 +527,26 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- 台ごとの保守（業務システムで台を登録した大分類。台がある物件のときだけ出す） -->
+                        <div class="equipment-section" id="propUnitInspectionSection" style="display: none;">
+                            <div class="section-title">台ごとの保守</div>
+                            <p class="unit-inspection-note">台を登録した設備の保守は、台ごとに編集します（上の設備情報の表には出ません）。台の追加・削除、保守会社固有コード・設置場所・金額の変更は業務システムで行います（<a href="https://system.1984.jp/properties" target="_blank" rel="noopener">業務システムを開く</a>）</p>
+                            <table class="equipment-table unit-inspection-table">
+                                <thead>
+                                    <tr>
+                                        <th>台（保守会社固有コード／設置場所）</th>
+                                        <th>点検種別</th>
+                                        <th>保守会社</th>
+                                        <th>点検月</th>
+                                        <th>検査月</th>
+                                        <th style="width: 48px;">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="propUnitInspectionTableBody">
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
 
                     <!-- 点検種別用フィールド -->

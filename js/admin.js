@@ -474,7 +474,8 @@ window.editPropertyByCode = function(propertyCode) {
         property_name: property.property_name,
         address: property.address || '',
         terminals: property.terminals || [],
-        equipment: property.equipment || []
+        equipment: property.equipment || [],
+        units: property.units || []
     };
 
     console.log('Opening property modal with data:', propertyData);

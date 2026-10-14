@@ -239,9 +239,17 @@ export async function syncBuildingVendorsFromEquipment(propertyCode, equipment) 
  *
  * 画面で消された行は biz 側からも消す必要があるので、
  * **「今ある一覧」と「送られた一覧」を突き合わせて差分を出す**。
+ *
+ * **台がある大分類の点検種別（skipTypeIds）は、ここでは消しも送りもしない**（2026-10-14）。
+ * その保守は台ごとに持ち、saveUnitInspectionsToBiz() が送る。「今ある一覧」には台の保守の集計が
+ * 1行で返ってくるが、画面の一覧からは外してあるので、飛ばさないと「画面から消えた点検」に見える。
+ *
+ * @param {string} propertyCode
+ * @param {Array} equipment 物件×点検種別の一覧（台がある大分類の点検種別を外した後のもの）
+ * @param {Set<string>} [skipTypeIds] 台ごとに管理している点検種別の id（unitManagedTypeIds() の結果）
  */
-export async function saveInspectionsToBiz(propertyCode, equipment) {
-  const list = Array.isArray(equipment) ? equipment : [];
+export async function saveInspectionsToBiz(propertyCode, equipment, skipTypeIds = new Set()) {
+  const list = (Array.isArray(equipment) ? equipment : []).filter(e => !(e && skipTypeIds.has(e.inspection_type_id)));
 
   const { data: current, error: readErr } = await supabase.rpc('inspections_for_property', { p_property_code: String(propertyCode) });
   if (readErr) throw readErr;
@@ -249,6 +257,7 @@ export async function saveInspectionsToBiz(propertyCode, equipment) {
   const wantIds = new Set(list.map(e => e && e.inspection_type_id).filter(Boolean));
   // 画面から消えた点検を削除する。**残すと消したはずの案内が出続ける**
   for (const row of current || []) {
+    if (skipTypeIds.has(row.inspection_type_id)) continue;
     if (!wantIds.has(row.inspection_type_id)) {
       const { error } = await supabase.rpc('delete_property_inspection', { p_id: row.id });
       if (error) throw error;
@@ -274,4 +283,135 @@ export async function saveInspectionsToBiz(propertyCode, equipment) {
     if (error) throw error;
   }
   return { saved: list.length };
+}
+
+// ========================================
+// 台ごとの保守（業務システムで台を登録した大分類。2026-10-14）
+// ========================================
+
+/**
+ * その物件で「台ごとに管理している点検種別」の id の集合。
+ *
+ * 台がある大分類の点検種別は、物件×点検種別の表（従来の編集表）からは書けない
+ * （RPC が「この点検は台ごとに管理しています…」で断る）。従来の表と保存の対象から外すために使う。
+ *
+ * - 台がある大分類に属する点検種別（typeOptions から。まだどの台にも付いていない種別も含む）
+ * - 台に既に付いている点検種別（**無効にした種別は typeOptions に出ない**ので、台の側からも拾う）
+ *
+ * @param {Array} units 物件の台（prop.units）
+ * @param {Array} typeOptions 台に付けられる点検種別の選択肢（masterData.unitInspectionTypes）
+ * @returns {Set<string>}
+ */
+export function unitManagedTypeIds(units, typeOptions) {
+  const list = Array.isArray(units) ? units : [];
+  const categories = new Set(list.map(u => u.category_code));
+  const ids = new Set();
+  (typeOptions || []).forEach(t => {
+    if (categories.has(t.category_code)) ids.add(t.inspection_type_id);
+  });
+  list.forEach(u => (u.inspections || []).forEach(i => {
+    if (i.inspection_type_id) ids.add(i.inspection_type_id);
+  }));
+  return ids;
+}
+
+// 点検月を重複なしの昇順にする（DB もこの形で持つ。並びや重複の違いを「変更あり」にしない）
+function normalizeMonths(months) {
+  const list = Array.isArray(months) ? months.map(Number).filter(n => n >= 1 && n <= 12) : [];
+  return [...new Set(list)].sort((a, b) => a - b);
+}
+
+// 検査月を YYYY-MM にそろえる（DB は月初の日付 YYYY-MM-01、画面の入力欄は YYYY-MM）
+function normalizeInspectedMonth(value) {
+  return value ? String(value).slice(0, 7) : '';
+}
+
+/**
+ * 台ごとの保守の、開いたときの状態と編集後の状態の差分を出す。
+ *
+ * **送るのは差分だけ**（全行の消して入れ直しはしない。変えていない行に触ると、ほかの人が同時に直した値を巻き戻す）。
+ * キーは 台×点検種別（DB の一意制約と同じ）。
+ * - deletes: 開いたときにあって、編集後に無い行（台の保守の id）
+ * - upserts: 編集後にあって、開いたときに無い行／保守会社・点検月・検査月のどれかが違う行
+ *
+ * @param {Array} original 開いたときの台（prop.units の写し）
+ * @param {Array} edited 編集後の台（同じ形。新しい行は inspection_id が無い）
+ * @returns {{ upserts: Array, deletes: Array }}
+ */
+export function diffUnitInspections(original, edited) {
+  const before = new Map();
+  (original || []).forEach(u => (u.inspections || []).forEach(i => {
+    before.set(`${u.unit_id}|${i.inspection_type_id}`, i);
+  }));
+
+  const upserts = [];
+  const seen = new Set();
+  (edited || []).forEach(u => (u.inspections || []).forEach(i => {
+    if (!i.inspection_type_id) return;
+    const key = `${u.unit_id}|${i.inspection_type_id}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    const months = normalizeMonths(i.inspection_months);
+    const inspectedMonth = normalizeInspectedMonth(i.inspected_on);
+    const old = before.get(key);
+    if (old
+      && (old.vendor_id || null) === (i.vendor_id || null)
+      && normalizeMonths(old.inspection_months).join(',') === months.join(',')
+      && normalizeInspectedMonth(old.inspected_on) === inspectedMonth) {
+      return;
+    }
+    upserts.push({
+      unit_id: u.unit_id,
+      inspection_type_id: i.inspection_type_id,
+      vendor_id: i.vendor_id || null,
+      inspection_months: months,
+      // RPC は date で受ける。**YYYY-MM のままでは通らない**ので月初の日付にして送る
+      inspected_on: inspectedMonth ? `${inspectedMonth}-01` : null
+    });
+  }));
+
+  const deletes = [];
+  before.forEach((i, key) => {
+    if (!seen.has(key) && i.inspection_id) deletes.push({ inspection_id: i.inspection_id });
+  });
+  return { upserts, deletes };
+}
+
+/**
+ * 台ごとの保守の差分を業務システム（biz）へ保存する。
+ *
+ * 窓口は signage スキーマの RPC（upsert_unit_inspection / delete_unit_inspection。signage の管理者だけ）。
+ * 台に付けられる点検種別の規則などは業務システム側の DB が確かめ、断るときはその文言を返す。
+ *
+ * **1行ずつ別々に呼ぶ。** 同じ物件の台の保守を1つのトランザクションで続けて書くと、
+ * 業務システムの画面からの保存と deadlock になり得る（RPC も1回で1行しか書かない）。
+ *
+ * **途中で失敗しても残りの行は続けて送る**（行どうしは独立している。物件モーダルは保存の後に閉じるので、
+ * 最初の失敗で止めると後ろの行の入力が失われる）。失敗は errors に DB の文言のまま入れて返す。
+ *
+ * @param {{ upserts: Array, deletes: Array }} diff diffUnitInspections() の結果
+ * @returns {Promise<{ saved: number, errors: string[] }>}
+ */
+export async function saveUnitInspectionsToBiz(diff) {
+  let saved = 0;
+  const errors = [];
+  const run = async (fn, args) => {
+    const { error } = await supabase.rpc(fn, args);
+    if (error) errors.push(error.message || String(error));
+    else saved += 1;
+  };
+
+  for (const d of diff.deletes || []) {
+    await run('delete_unit_inspection', { p_id: d.inspection_id });
+  }
+  for (const u of diff.upserts || []) {
+    await run('upsert_unit_inspection', {
+      p_unit_id: u.unit_id,
+      p_inspection_type_id: u.inspection_type_id,
+      p_maintainer_id: u.vendor_id,
+      p_inspection_months: u.inspection_months,
+      p_inspected_on: u.inspected_on
+    });
+  }
+  return { saved, errors };
 }

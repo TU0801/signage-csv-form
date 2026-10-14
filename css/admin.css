@@ -280,6 +280,105 @@
 .equipment-table th {
     white-space: nowrap;
 }
+
+/* トーストはモーダルより手前に出す（モーダルと同じ z-index だと、開いている間のエラーが暗い幕の裏に隠れる） */
+.toast {
+    z-index: 1100;
+    max-width: 90vw;
+}
+
+/* 物件編集モーダル: 台ごとの保守（行の中で直接編集する。余白を詰めて1画面に多く出す） */
+#masterModal .unit-inspection-note {
+    margin: -0.5rem 0 0.75rem;
+    font-size: 0.8125rem;
+    color: #64748b;
+}
+.unit-inspection-table {
+    margin-bottom: 0;
+}
+.unit-inspection-table th,
+.unit-inspection-table td {
+    padding: 0.375rem 0.5rem;
+    font-size: 0.8125rem;
+    vertical-align: top;
+}
+.unit-inspection-table tbody tr:hover {
+    background: transparent;
+}
+.unit-inspection-table .unit-category-row td {
+    background: #f1f5f9;
+    font-weight: 600;
+    color: #334155;
+}
+.unit-inspection-table th:first-child {
+    white-space: normal;
+}
+.unit-inspection-table .unit-cell {
+    min-width: 110px;
+}
+.unit-inspection-table .unit-type-cell {
+    min-width: 9.5em;
+}
+.unit-inspection-table .unit-code {
+    font-weight: 600;
+    color: #1e293b;
+}
+.unit-inspection-table .unit-sub {
+    font-size: 0.75rem;
+    color: #64748b;
+    word-break: break-all;
+}
+.unit-inspection-table .unit-empty {
+    color: #94a3b8;
+}
+#masterModal .unit-inspection-table select,
+#masterModal .unit-inspection-table input[type="month"] {
+    width: 100%;
+    min-width: 7rem;
+    padding: 0.25rem 0.375rem;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 0.8125rem;
+    margin: 0;
+}
+.unit-inspection-table .unit-months {
+    display: grid;
+    grid-template-columns: repeat(6, auto);
+    gap: 0.125rem 0.375rem;
+    justify-content: start;
+}
+.unit-inspection-table .unit-months label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.125rem;
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: #475569;
+    margin: 0;
+    cursor: pointer;
+    white-space: nowrap;
+}
+#masterModal .unit-inspection-table .unit-months input {
+    width: 13px;
+    height: 13px;
+    margin: 0;
+}
+.unit-inspection-table .unit-add-btn {
+    margin-top: 0.25rem;
+    padding: 0.125rem 0.5rem;
+    font-size: 0.75rem;
+}
+.unit-inspection-table .unit-remove-btn {
+    padding: 0.125rem 0.5rem;
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+@media (max-width: 640px) {
+    #masterModal .unit-inspection-table {
+        display: block;
+        overflow-x: auto;
+    }
+}
 @media (max-width: 640px) {
     #masterModal .property-grid {
         grid-template-columns: 1fr;

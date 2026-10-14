@@ -6,6 +6,10 @@
 // escapeHtml は shared-utils.js に移動。後方互換のため re-export
 export { escapeHtml } from './shared-utils.js';
 
+// 直前のトーストを消すタイマー。**次のトーストを出すときに止める**（止めないと、先に出した成功のトーストの
+// タイマーが、後から出したエラーのトーストを途中で消す。物件の保存は「更新しました」の直後にエラーを出すことがある）
+let toastTimer = null;
+
 /**
  * トースト通知を表示
  * @param {string} message - 表示メッセージ
@@ -17,7 +21,8 @@ export function showToast(message, type = 'info') {
     toast.textContent = message;
     toast.className = `toast ${type} show`;
     const duration = type === 'error' ? 5000 : 2500;
-    setTimeout(() => {
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
         toast.classList.remove('show');
     }, duration);
 }
