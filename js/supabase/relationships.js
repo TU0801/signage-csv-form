@@ -377,6 +377,17 @@ export function diffUnitInspections(original, edited) {
   return { upserts, deletes };
 }
 
+/** 台の保守の保存の失敗の文言。ほかの操作と重なった中断（英語の文言）だけ日本語にする */
+function unitInspectionErrorMessage(error) {
+  if (error.code === '40P01' || error.code === '55P03') {
+    return 'ほかの操作と重なったため保存できませんでした。もう一度お試しください';
+  }
+  if (error.code === '57014') {
+    return '時間内に終わらなかったため保存できませんでした（ほかの操作と重なった可能性があります）。もう一度お試しください';
+  }
+  return error.message || String(error);
+}
+
 /**
  * 台ごとの保守の差分を業務システム（biz）へ保存する。
  *
@@ -388,6 +399,8 @@ export function diffUnitInspections(original, edited) {
  *
  * **途中で失敗しても残りの行は続けて送る**（行どうしは独立している。物件モーダルは保存の後に閉じるので、
  * 最初の失敗で止めると後ろの行の入力が失われる）。失敗は errors に DB の文言のまま入れて返す。
+ * ただし、ほかの操作と重なって DB が中断したとき（40P01 = deadlock、55P03 = ロック待ちの時間切れ、57014 = 文の時間切れ）は
+ * 英語の文言なので、日本語に置き換える（どれもその行は何も書かれていないので、やり直せば通る）。
  *
  * @param {{ upserts: Array, deletes: Array }} diff diffUnitInspections() の結果
  * @returns {Promise<{ saved: number, errors: string[] }>}
@@ -397,7 +410,7 @@ export async function saveUnitInspectionsToBiz(diff) {
   const errors = [];
   const run = async (fn, args) => {
     const { error } = await supabase.rpc(fn, args);
-    if (error) errors.push(error.message || String(error));
+    if (error) errors.push(unitInspectionErrorMessage(error));
     else saved += 1;
   };
 
