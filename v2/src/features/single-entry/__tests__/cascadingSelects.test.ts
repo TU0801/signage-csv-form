@@ -2,26 +2,26 @@ import { describe, it, expect, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useCascadingSelects } from '../hooks/useCascadingSelects';
 import type { UseFormSetValue } from 'react-hook-form';
-import type { EntryFormData } from '@/types/app';
-import type { DbProperty, DbVendor, DbInspectionType, DbCategory } from '@/types/database';
+import type { EntryFormData, MasterProperty } from '@/types/app';
+import type { DbVendor, DbInspectionType, DbCategory } from '@/types/database';
 
-const mockProperties: DbProperty[] = [
+const mockProperties: MasterProperty[] = [
   {
     id: '1',
     property_code: 'P001',
     property_name: 'テストマンション',
     terminals: [
-      { id: 'T001', supplement: '1F' },
-      { id: 'T002', supplement: '2F' },
+      { terminal_id: 'T001', supplement: '1F' },
+      { terminal_id: 'T002', supplement: '2F' },
     ],
-    created_at: null,
+    inspections: [],
   },
   {
     id: '2',
     property_code: 'P002',
     property_name: 'サンプルビル',
-    terminals: [{ id: 'T003' }],
-    created_at: null,
+    terminals: [{ terminal_id: 'T003', supplement: '' }],
+    inspections: [],
   },
 ];
 
@@ -112,8 +112,8 @@ describe('useCascadingSelects', () => {
   });
 
   it('should clear terminalId for property with no terminals', () => {
-    const noTerminalProperties: DbProperty[] = [
-      { id: '3', property_code: 'P003', property_name: '端末なし物件', terminals: [], created_at: null },
+    const noTerminalProperties: MasterProperty[] = [
+      { id: '3', property_code: 'P003', property_name: '端末なし物件', terminals: [], inspections: [] },
     ];
     const setValue = createMockSetValue();
     const { result } = renderHook(() =>
@@ -275,7 +275,7 @@ describe('useCascadingSelects', () => {
 
     const terminals = result.current.getTerminals('P001');
     expect(terminals).toHaveLength(2);
-    expect(terminals[0]!.id).toBe('T001');
+    expect(terminals[0]!.terminal_id).toBe('T001');
   });
 
   it('should return empty array for unknown property', () => {

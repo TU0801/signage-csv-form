@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, TABLES } from '@/lib/supabase';
+import { MAX_AD_SLOTS } from '@/lib/constants';
 import type { DbAdSlot } from '@/types/database';
-
-const SLOT_COUNT = 7;
 
 export function useAdSlots({ activeOnly = false } = {}) {
   const [slots, setSlots] = useState<DbAdSlot[]>([]);
@@ -22,7 +21,8 @@ export function useAdSlots({ activeOnly = false } = {}) {
       }
       const { data, error: err } = await query;
       if (err) throw err;
-      setSlots((data ?? []) as DbAdSlot[]);
+      // 使う枠は 1〜MAX_AD_SLOTS だけ（v1: login.html / admin-masters-ads.js）
+      setSlots(((data ?? []) as DbAdSlot[]).filter((s) => s.slot_index <= MAX_AD_SLOTS));
     } catch (err) {
       setError(err instanceof Error ? err.message : '広告枠の取得に失敗しました');
     } finally {
@@ -32,25 +32,6 @@ export function useAdSlots({ activeOnly = false } = {}) {
 
   useEffect(() => {
     fetchSlots();
-  }, [fetchSlots]);
-
-  const ensureSlots = useCallback(async () => {
-    const { data, error: err } = await supabase
-      .from(TABLES.adSlots)
-      .select('slot_index');
-    if (err) throw err;
-    const existingIndices = new Set((data ?? []).map((d: { slot_index: number }) => d.slot_index));
-    const missing: { slot_index: number; is_active: boolean; sort_order: number }[] = [];
-    for (let i = 1; i <= SLOT_COUNT; i++) {
-      if (!existingIndices.has(i)) {
-        missing.push({ slot_index: i, is_active: false, sort_order: i });
-      }
-    }
-    if (missing.length > 0) {
-      const { error: insertErr } = await supabase.from(TABLES.adSlots).insert(missing);
-      if (insertErr) throw insertErr;
-    }
-    await fetchSlots();
   }, [fetchSlots]);
 
   const updateSlot = useCallback(
@@ -78,7 +59,6 @@ export function useAdSlots({ activeOnly = false } = {}) {
     loading,
     error,
     refetch: fetchSlots,
-    ensureSlots,
     updateSlot,
   };
 }

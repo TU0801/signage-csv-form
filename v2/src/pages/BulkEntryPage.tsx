@@ -75,9 +75,11 @@ export function BulkEntryPage() {
     addToast('保存しました', 'success');
   }, [saveToStorage, addToast]);
 
-  // キーボードショートカット（selectedIds をrefで参照してリスナー再登録を抑制）
+  // キーボードショートカット（selectedIds をrefで参照してリスナー再登録を抑制。ref の更新は描画後に行う）
   const selectedIdsRef = useRef(selectedIds);
-  selectedIdsRef.current = selectedIds;
+  useEffect(() => {
+    selectedIdsRef.current = selectedIds;
+  }, [selectedIds]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

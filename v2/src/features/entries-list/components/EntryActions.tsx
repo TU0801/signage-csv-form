@@ -4,10 +4,13 @@ import { Select } from '@/components/ui/Select';
 import { useToast } from '@/components/ui/Toast';
 import { supabase, TABLES } from '@/lib/supabase';
 import { EntryStatus } from '@/lib/constants';
-import { generateCsv, downloadCsv, copyCsvToClipboard } from '@/lib/csv';
-import type { CsvEntry } from '@/lib/csv';
+import {
+  generateAdminCsv,
+  filterApprovedEntries,
+  downloadCsv,
+  copyCsvToClipboard,
+} from '@/lib/csv';
 import type { DbEntry, DbProperty } from '@/types/database';
-import { formatDateISO } from '@/lib/utils';
 
 interface EntryActionsProps {
   selectedEntries: DbEntry[];
@@ -15,28 +18,23 @@ interface EntryActionsProps {
   onClearSelection: () => void;
 }
 
-function dbEntryToCsvEntry(entry: DbEntry): CsvEntry {
-  return {
-    inspectionCo: entry.inspection_co,
-    terminalId: entry.terminal_id,
-    propertyCode: entry.property_code,
-    vendorName: entry.vendor_name,
-    emergencyContact: entry.emergency_contact ?? '',
-    inspectionType: entry.inspection_type,
-    showOnBoard: true,
-    templateNo: entry.template_no ?? '',
-    startDate: entry.inspection_start ?? '',
-    endDate: entry.inspection_end ?? '',
-    remarks: entry.remarks ?? '',
-    noticeText: entry.announcement ?? '',
-    frameNo: entry.frame_no ?? '',
-    displayStartDate: entry.display_start_date ?? '',
-    displayEndDate: entry.display_end_date ?? '',
-    displayStartTime: entry.display_start_time ?? '',
-    displayEndTime: entry.display_end_time ?? '',
-    displayDuration: entry.display_duration ?? 0,
-    posterType: entry.poster_type ?? '',
-  };
+/**
+ * 設定 display_time_default（text）。v1 admin-settings.js loadAppSettings と同じく、
+ * 読めなければ undefined を返し generateAdminCsv 側の既定 6 秒にする
+ */
+async function fetchDisplayTimeDefault(): Promise<string | undefined> {
+  const { data, error } = await supabase
+    .from(TABLES.settings)
+    .select('setting_value')
+    .eq('setting_key', 'display_time_default')
+    .maybeSingle();
+  if (error) return undefined;
+  return (data as { setting_value: string } | null)?.setting_value ?? undefined;
+}
+
+/** 本番CSV（v1 admin-export.js と同じ）。出力は承認済み（ready/exported）だけ */
+async function buildAdminCsv(entries: DbEntry[]): Promise<string> {
+  return generateAdminCsv(filterApprovedEntries(entries), await fetchDisplayTimeDefault());
 }
 
 const statusOptions = [
@@ -54,16 +52,20 @@ export function EntryActions({
   const { addToast } = useToast();
   const [downloading, setDownloading] = useState(false);
 
-  const handleExportCsv = useCallback(() => {
+  const handleExportCsv = useCallback(async () => {
     if (selectedEntries.length === 0) {
       addToast('エクスポートするエントリーを選択してください', 'warning');
       return;
     }
-    const csvEntries = selectedEntries.map(dbEntryToCsvEntry);
-    const csv = generateCsv(csvEntries);
-    const filename = `signage_entries_${formatDateISO(new Date())}.csv`;
-    downloadCsv(csv, filename);
-    addToast(`${selectedEntries.length}件をCSVエクスポートしました`, 'success');
+    const csv = await buildAdminCsv(selectedEntries);
+    if (!csv) {
+      addToast('エクスポートするデータがありません（承認済みのみ出力されます）', 'error');
+      return;
+    }
+    // v1 exportCSV と同じファイル名
+    const timestamp = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15);
+    downloadCsv(csv, `admin-export-${timestamp}.csv`);
+    addToast('CSVをダウンロードしました', 'success');
   }, [selectedEntries, addToast]);
 
   const handleCopyCsv = useCallback(async () => {
@@ -72,12 +74,15 @@ export function EntryActions({
       return;
     }
     try {
-      const csvEntries = selectedEntries.map(dbEntryToCsvEntry);
-      const csv = generateCsv(csvEntries);
+      const csv = await buildAdminCsv(selectedEntries);
+      if (!csv) {
+        addToast('コピーするデータがありません（承認済みのみ出力されます）', 'error');
+        return;
+      }
       await copyCsvToClipboard(csv);
-      addToast(`${selectedEntries.length}件をクリップボードにコピーしました`, 'success');
+      addToast('CSVをクリップボードにコピーしました', 'success');
     } catch {
-      addToast('クリップボードへのコピーに失敗しました', 'error');
+      addToast('コピーに失敗しました', 'error');
     }
   }, [selectedEntries, addToast]);
 
@@ -169,4 +174,3 @@ export function EntryActions({
   );
 }
 
-export { dbEntryToCsvEntry };

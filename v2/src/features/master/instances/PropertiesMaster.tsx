@@ -2,7 +2,8 @@ import { useCallback } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { TABLES } from '@/lib/supabase';
-import type { DbProperty, Terminal } from '@/types/database';
+import { toTerminal } from '@/lib/terminal';
+import type { DbProperty, DbTerminal, Terminal } from '@/types/database';
 import type { MasterConfig, FormFieldDef } from '../types/masterConfig';
 import type { useForm } from 'react-hook-form';
 import { MasterListPage } from '../components/MasterListPage';
@@ -30,17 +31,33 @@ const config: MasterConfig<PropertyRecord> = {
     property_name: '',
     terminals: [],
   } as Partial<PropertyRecord>,
+  // v1 js/supabase/admin-masters.js addProperty / updateProperty と同じ3列だけ送る。
+  // equipment は block_equipment_write トリガーが変更を拒否するので送らない（id・created_at も送らない）。
+  // 端末IDが空の行は保存しない（v1 handleMasterFormSubmit。空の端末が選択肢に出るのを防ぐ）
+  toPayload: (data) =>
+    ({
+      property_code: String(data.property_code ?? '').trim(),
+      property_name: data.property_name,
+      terminals: ((data.terminals as DbTerminal[] | undefined) ?? [])
+        .map(toTerminal)
+        .map((t) => ({ terminal_id: t.terminal_id.trim(), supplement: t.supplement.trim() }))
+        .filter((t) => t.terminal_id),
+    }) as Partial<PropertyRecord>,
 };
 
+// 既存データは terminalId / terminal_id が混在する。読むときに正規化し、書くときは v1 と同じ terminal_id にそろえる
+// （v1: js/admin-masters.js handleMasterFormSubmit。{id} 形式で書くと v1 の画面から端末が見えなくなる）
 function TerminalEditor({
-  value,
+  value: rawValue,
   onChange,
 }: {
-  value: Terminal[];
+  value: DbTerminal[];
   onChange: (terminals: Terminal[]) => void;
 }) {
+  const value = rawValue.map(toTerminal);
+
   const addTerminal = () => {
-    onChange([...value, { id: `T${value.length + 1}`, supplement: '' }]);
+    onChange([...value, { terminal_id: `T${value.length + 1}`, supplement: '' }]);
   };
 
   const removeTerminal = (index: number) => {
@@ -59,13 +76,13 @@ function TerminalEditor({
         <div key={index} className="flex items-center gap-2">
           <Input
             placeholder="端末ID"
-            value={terminal.id}
-            onChange={(e) => updateTerminal(index, 'id', e.target.value)}
+            value={terminal.terminal_id}
+            onChange={(e) => updateTerminal(index, 'terminal_id', e.target.value)}
             className="flex-1"
           />
           <Input
             placeholder="補足"
-            value={terminal.supplement ?? ''}
+            value={terminal.supplement}
             onChange={(e) => updateTerminal(index, 'supplement', e.target.value)}
             className="flex-1"
           />
@@ -92,7 +109,7 @@ export function PropertiesMaster() {
   const renderCustomField = useCallback(
     (field: FormFieldDef, form: ReturnType<typeof useForm>) => {
       if (field.name === 'terminals') {
-        const terminals = (form.watch('terminals') as Terminal[]) ?? [];
+        const terminals = (form.watch('terminals') as DbTerminal[]) ?? [];
         return (
           <TerminalEditor
             value={terminals}

@@ -6,6 +6,8 @@ import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
 import { AdminRoute } from '@/components/layout/AdminRoute';
 import { UserLayout } from '@/components/layout/UserLayout';
 import { AdminLayout } from '@/components/layout/AdminLayout';
+import { SessionChangedOverlay } from '@/components/layout/SessionChangedOverlay';
+import { installErrorLogging } from '@/lib/api/errorLog';
 import { LoginPage } from '@/pages/LoginPage';
 import { SingleEntryPage } from '@/pages/SingleEntryPage';
 import { BulkEntryPage } from '@/pages/BulkEntryPage';
@@ -16,6 +18,9 @@ import { RelationshipsPage } from '@/pages/admin/RelationshipsPage';
 import { UsersPage } from '@/pages/admin/UsersPage';
 import { AdSlotsPage } from '@/pages/admin/AdSlotsPage';
 import { SettingsPage } from '@/pages/admin/SettingsPage';
+
+// エラーを signage_error_logs に保存する（v1 は error-handler.js を他のモジュールより先に読み込む）
+installErrorLogging();
 
 export default function App() {
   const initialize = useAuthStore((s) => s.initialize);
@@ -29,6 +34,7 @@ export default function App() {
 
   return (
     <ToastProvider>
+      <SessionChangedOverlay />
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />

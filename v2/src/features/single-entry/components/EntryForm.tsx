@@ -6,14 +6,13 @@ import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { validateImageFile } from '@/lib/storage';
-import type { EntryFormData } from '@/types/app';
-import type { DbProperty, DbVendor, DbInspectionType } from '@/types/database';
-import type { Terminal } from '@/types/database';
+import type { EntryFormData, MasterProperty } from '@/types/app';
+import type { DbVendor, DbInspectionType, Terminal } from '@/types/database';
 import { CascadingSelects } from './CascadingSelects';
 
 interface EntryFormProps {
   form: UseFormReturn<EntryFormData>;
-  properties: DbProperty[];
+  properties: MasterProperty[];
   vendors: DbVendor[];
   filteredInspectionTypes: DbInspectionType[];
   categoryOptions: { value: string; label: string }[];
@@ -75,15 +74,16 @@ export function EntryForm({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // posterType 変更時にカスタム画像をクリア + URL リーク防止
-  useEffect(() => {
+  // posterType 変更時にカスタム画像をクリア（描画中に前回値と比べて調整する。
+  // URL の解放は下の previewUrl の effect が、ファイル欄は custom 以外で外れるので自然にリセットされる）
+  const [prevPosterType, setPrevPosterType] = useState(posterType);
+  if (posterType !== prevPosterType) {
+    setPrevPosterType(posterType);
     if (posterType !== 'custom' && previewUrl) {
-      URL.revokeObjectURL(previewUrl);
       setPreviewUrl(null);
       setCustomImageFile(null);
-      if (fileInputRef.current) fileInputRef.current.value = '';
     }
-  }, [posterType]); // eslint-disable-line react-hooks/exhaustive-deps
+  }
 
   // アンマウント時の URL リーク防止
   useEffect(() => {
@@ -127,7 +127,7 @@ export function EntryForm({
   };
 
   return (
-    <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
+    <form onSubmit={(e) => void handleSubmit(handleFormSubmit)(e)} className="space-y-6">
       {/* 連動セレクト */}
       <fieldset className="space-y-4">
         <legend className="text-sm font-semibold text-gray-900 mb-2">物件・保守会社・点検種別</legend>

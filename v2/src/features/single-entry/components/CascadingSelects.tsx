@@ -1,13 +1,12 @@
 import type { UseFormReturn } from 'react-hook-form';
 import { Select } from '@/components/ui/Select';
 import { Input } from '@/components/ui/Input';
-import type { EntryFormData } from '@/types/app';
-import type { DbProperty, DbInspectionType, DbVendor } from '@/types/database';
-import type { Terminal } from '@/types/database';
+import type { EntryFormData, MasterProperty } from '@/types/app';
+import type { DbInspectionType, DbVendor, Terminal } from '@/types/database';
 
 interface CascadingSelectsProps {
   form: UseFormReturn<EntryFormData>;
-  properties: DbProperty[];
+  properties: MasterProperty[];
   vendors: DbVendor[];
   filteredInspectionTypes: DbInspectionType[];
   categoryOptions: { value: string; label: string }[];
@@ -46,8 +45,8 @@ export function CascadingSelects({
   }));
 
   const terminalOptions = terminals.map((t) => ({
-    value: t.id,
-    label: t.supplement ? `${t.id} (${t.supplement})` : t.id,
+    value: t.terminal_id,
+    label: t.supplement ? `${t.terminal_id} (${t.supplement})` : t.terminal_id,
   }));
 
   const vendorOptions = vendors.map((v) => ({

@@ -1,7 +1,13 @@
 import { create } from 'zustand';
 import type { User, Session } from '@supabase/supabase-js';
 import type { DbProfile } from '@/types/database';
-import { supabase, TABLES } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
+import {
+  fetchProfileAccess,
+  accessMessage,
+  LOGIN_FAILED_MESSAGE,
+  PROFILE_UNKNOWN_MESSAGE,
+} from '@/lib/api/auth';
 
 interface AuthState {
   user: User | null;
@@ -9,10 +15,16 @@ interface AuthState {
   profile: DbProfile | null;
   loading: boolean;
   initialized: boolean;
-  setSession: (session: Session | null) => void;
-  fetchProfile: () => Promise<void>;
-  signIn: (email: string, password: string) => Promise<void>;
+  /** ログイン画面に出す案内（無効化・プロファイル無しで戻されたとき。v1 の sessionStorage loginNotice） */
+  notice: string | null;
+  /** 別タブでログアウト・別アカウントでログインされた（v1 の window.sessionUserChanged） */
+  sessionChanged: boolean;
+  /** ログインし、使えるアカウントならプロファイルを返す。使えなければこの端末のセッションを破棄して日本語の Error を投げる */
+  signIn: (email: string, password: string) => Promise<DbProfile>;
   signOut: () => Promise<void>;
+  /** プロファイルを確認できないセッションを、この端末だけ破棄してログイン画面に案内を出す */
+  rejectUnknownSession: () => Promise<void>;
+  clearNotice: () => void;
   initialize: () => Promise<() => void>;
 }
 
@@ -22,55 +34,88 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   profile: null,
   loading: true,
   initialized: false,
+  notice: null,
+  sessionChanged: false,
 
-  setSession: (session) => {
-    set({ session, user: session?.user ?? null });
-  },
-
-  fetchProfile: async () => {
-    const { user } = get();
-    if (!user) {
-      set({ profile: null });
-      return;
-    }
-    const { data } = await supabase
-      .from(TABLES.profiles)
-      .select('*')
-      .eq('id', user.id)
-      .single();
-    set({ profile: data as DbProfile | null });
-  },
-
+  // v1: login.html redirectByProfile（ログイン直後は判定不能も入れない）
   signIn: async (email, password) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+    set({ notice: null });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error || !data.user) throw new Error(LOGIN_FAILED_MESSAGE);
+    const { profile, access } = await fetchProfileAccess(data.user.id);
+    if (access !== 'active' || !profile) {
+      await supabase.auth.signOut({ scope: 'local' });
+      throw new Error(accessMessage(access === 'active' ? 'unknown' : access));
+    }
+    set({ session: data.session, user: data.user, profile });
+    return profile;
   },
 
   signOut: async () => {
-    await supabase.auth.signOut();
+    // 先に画面のユーザーを外す（自分のログアウトを別タブでの切り替えと取り違えない）
     set({ user: null, session: null, profile: null });
+    await supabase.auth.signOut();
   },
+
+  // v1: login.html checkAuth → redirectByProfile（判定不能は scope:'local' で破棄）
+  rejectUnknownSession: async () => {
+    set({ user: null, session: null, profile: null, notice: PROFILE_UNKNOWN_MESSAGE });
+    await supabase.auth.signOut({ scope: 'local' });
+  },
+
+  clearNotice: () => set({ notice: null }),
 
   initialize: async () => {
     const {
       data: { session },
     } = await supabase.auth.getSession();
-    set({ session, user: session?.user ?? null, loading: false, initialized: true });
 
     if (session?.user) {
-      await get().fetchProfile();
+      // v1: js/supabase/auth.js rejectInactiveUser（画面を開いたときは、無効化・プロファイル無しだけ戻す。
+      // 通信エラー等で判定できない場合は戻さない＝データは RLS が保護している）
+      const { profile, access } = await fetchProfileAccess(session.user.id);
+      if (access === 'inactive' || access === 'no_profile') {
+        await supabase.auth.signOut({ scope: 'local' });
+        set({ notice: accessMessage(access) });
+      } else {
+        set({ session, user: session.user, profile });
+      }
     }
+    // プロファイルの確認を終えてから初期化済みにする（管理者の再読み込みで一瞬 '/' へ飛ばされないように）
+    set({ loading: false, initialized: true });
 
+    // v1: js/supabase/auth.js watchSessionUser
+    // コールバック内で auth API や DB を await するとロック待ちになるため、抜けてから現在のセッションを確認する
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      set({ session, user: session?.user ?? null });
-      if (session?.user) {
-        await get().fetchProfile();
-      } else {
-        set({ profile: null });
-      }
+    } = supabase.auth.onAuthStateChange(() => {
+      setTimeout(() => {
+        void handleAuthChange();
+      }, 0);
     });
+
+    async function handleAuthChange() {
+      const {
+        data: { session: current },
+      } = await supabase.auth.getSession();
+      const currentId = current?.user?.id ?? null;
+      const shownId = get().user?.id ?? null;
+      if (currentId === shownId) {
+        // トークン更新など、同じユーザーのままのイベント
+        if (currentId) set({ session: current });
+        return;
+      }
+      // ログイン画面での新しいログインは signIn が受け持つ
+      if (!shownId) return;
+      if (currentId) {
+        // 別アカウントに切り替わった: 画面を塞いで開き直す（別人の権限で操作を続けさせない）
+        set({ sessionChanged: true });
+        window.location.reload();
+      } else {
+        // 別タブでログアウトされた: 未ログイン状態にしてログイン画面へ（ルートガードが遷移させる）
+        set({ user: null, session: null, profile: null });
+      }
+    }
 
     return () => subscription.unsubscribe();
   },

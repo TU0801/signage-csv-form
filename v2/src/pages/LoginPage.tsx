@@ -1,9 +1,17 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { useAdSlots } from '@/features/ad-slots/hooks/useAdSlots';
+import { MAX_AD_SLOTS } from '@/lib/constants';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Spinner } from '@/components/ui/Spinner';
+import type { DbProfile } from '@/types/database';
+
+/** v1: login.html redirectByProfile（管理者は管理画面、それ以外は入力画面） */
+function homePathFor(profile: Pick<DbProfile, 'role'>): string {
+  return profile.role === 'admin' ? '/admin' : '/';
+}
 
 export function LoginPage() {
   const [email, setEmail] = useState('');
@@ -11,17 +19,41 @@ export function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const signIn = useAuthStore((s) => s.signIn);
+  const notice = useAuthStore((s) => s.notice);
+  const clearNotice = useAuthStore((s) => s.clearNotice);
+  const rejectUnknownSession = useAuthStore((s) => s.rejectUnknownSession);
+  const initialized = useAuthStore((s) => s.initialized);
+  const user = useAuthStore((s) => s.user);
+  const profile = useAuthStore((s) => s.profile);
   const navigate = useNavigate();
   const { slots } = useAdSlots({ activeOnly: true });
+
+  // 既にログイン済みでもプロファイルを確認できないセッションは、この端末だけ破棄する（v1: login.html checkAuth）
+  useEffect(() => {
+    if (initialized && user && !profile) void rejectUnknownSession();
+  }, [initialized, user, profile, rejectUnknownSession]);
+
+  if (!initialized) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+
+  if (user && profile && !loading) {
+    return <Navigate to={homePathFor(profile)} replace />;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    clearNotice();
     setLoading(true);
 
     try {
-      await signIn(email, password);
-      navigate('/', { replace: true });
+      const signedIn = await signIn(email, password);
+      navigate(homePathFor(signedIn), { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'ログインに失敗しました');
     } finally {
@@ -29,12 +61,15 @@ export function LoginPage() {
     }
   };
 
+  // 各画面から無効化で戻された場合の案内
+  const message = error || notice || '';
+
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="w-full max-w-4xl">
-        <div className="grid grid-cols-4 grid-rows-2 gap-3">
-          {/* 左上: ログインフォーム（2列分） */}
-          <div className="col-span-2 row-span-1">
+        {/* 2×2: 左上ログインフォーム＋広告枠1〜3（v1: login.html） */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 h-full flex flex-col justify-center">
               <h1 className="text-2xl font-bold text-center text-gray-900 mb-6">
                 サイネージCMS
@@ -57,8 +92,8 @@ export function LoginPage() {
                   required
                   autoComplete="current-password"
                 />
-                {error && (
-                  <p className="text-sm text-red-600 bg-red-50 rounded-md px-3 py-2">{error}</p>
+                {message && (
+                  <p className="text-sm text-red-600 bg-red-50 rounded-md px-3 py-2">{message}</p>
                 )}
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? 'ログイン中...' : 'ログイン'}
@@ -67,23 +102,11 @@ export function LoginPage() {
             </div>
           </div>
 
-          {/* 広告枠 1-2 (上段右2枠) */}
-          {[0, 1].map((i) => (
-            <AdSlotCell key={`top-${i}`} slot={slots[i]} />
-          ))}
-
-          {/* 広告枠 3-6 (下段4枠) */}
-          {[2, 3, 4, 5].map((i) => (
-            <AdSlotCell key={`bottom-${i}`} slot={slots[i]} />
+          {/* 広告枠は配列の位置ではなく slot_index で置く（v1: login.html loadAdSlots の data-slot） */}
+          {Array.from({ length: MAX_AD_SLOTS }, (_, i) => i + 1).map((slotIndex) => (
+            <AdSlotCell key={slotIndex} slot={slots.find((s) => s.slot_index === slotIndex)} />
           ))}
         </div>
-
-        {/* 7枠目が余れば下に表示 */}
-        {slots.length > 6 && (
-          <div className="mt-3 grid grid-cols-4 gap-3">
-            <AdSlotCell slot={slots[6]} />
-          </div>
-        )}
       </div>
     </div>
   );

@@ -1,14 +1,10 @@
-import { useEffect } from 'react';
 import { Spinner } from '@/components/ui/Spinner';
 import { useAdSlots } from '../hooks/useAdSlots';
 import { AdSlotCard } from './AdSlotCard';
 
 export function AdSlotsContent() {
-  const { slots, loading, error, ensureSlots, updateSlot } = useAdSlots();
-
-  useEffect(() => {
-    ensureSlots();
-  }, [ensureSlots]);
+  // 枠の行は DB に既にある（v1 は UPDATE だけで INSERT しない）
+  const { slots, loading, error, updateSlot } = useAdSlots();
 
   if (loading) {
     return (

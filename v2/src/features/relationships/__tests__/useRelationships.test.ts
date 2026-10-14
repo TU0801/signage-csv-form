@@ -9,6 +9,10 @@ const mockDelete = vi.fn();
 const mockUpdate = vi.fn();
 const mockEq = vi.fn();
 const mockOrder = vi.fn();
+const mockNeq = vi.fn();
+const mockApiAddBuildingVendor = vi.fn();
+const mockApiRemoveBuildingVendor = vi.fn();
+const mockProfile = { id: 'u1', role: 'admin', vendor_id: null };
 
 vi.mock('@/lib/supabase', () => ({
   supabase: {
@@ -20,9 +24,19 @@ vi.mock('@/lib/supabase', () => ({
     })),
   },
   TABLES: {
-    buildingVendors: 'building_vendors',
+    buildingVendors: 'signage_building_vendors',
     vendorInspections: 'signage_vendor_inspections',
   },
+}));
+
+vi.mock('@/lib/api/relationships', () => ({
+  addBuildingVendor: (...args: unknown[]) => mockApiAddBuildingVendor(...args),
+  removeBuildingVendor: (...args: unknown[]) => mockApiRemoveBuildingVendor(...args),
+}));
+
+vi.mock('@/stores/authStore', () => ({
+  useAuthStore: (selector: (s: { profile: typeof mockProfile }) => unknown) =>
+    selector({ profile: mockProfile }),
 }));
 
 describe('useRelationships', () => {
@@ -47,8 +61,12 @@ describe('useRelationships', () => {
     mockEq.mockImplementation(() => ({
       order: mockOrder,
       eq: mockEq,
+      neq: mockNeq,
     }));
+    mockNeq.mockReturnValue({ order: mockOrder });
     mockOrder.mockResolvedValue({ data: [], error: null });
+    mockApiAddBuildingVendor.mockResolvedValue({});
+    mockApiRemoveBuildingVendor.mockResolvedValue({});
   });
 
   it('returns empty arrays when vendorId is null', async () => {
@@ -101,7 +119,7 @@ describe('useRelationships', () => {
     expect(result.current.error).toBeTruthy();
   });
 
-  it('addBuildingVendor calls insert and refetches', async () => {
+  it('addBuildingVendor goes through lib/api (re-activates soft-deleted rows) and excludes deleted on fetch', async () => {
     mockOrder.mockResolvedValue({ data: [], error: null });
 
     const { result } = renderHook(() => useRelationships('v1'));
@@ -114,11 +132,28 @@ describe('useRelationships', () => {
       await result.current.addBuildingVendor('P001');
     });
 
-    expect(mockInsert).toHaveBeenCalledWith({
-      property_code: 'P001',
-      vendor_id: 'v1',
-      status: 'active',
+    expect(mockApiAddBuildingVendor).toHaveBeenCalledWith({
+      propertyCode: 'P001',
+      vendorId: 'v1',
+      profile: mockProfile,
     });
+    expect(mockInsert).not.toHaveBeenCalled();
+    expect(mockNeq).toHaveBeenCalledWith('status', 'deleted');
+  });
+
+  it('removeBuildingVendor soft-deletes via lib/api instead of a physical delete', async () => {
+    const { result } = renderHook(() => useRelationships('v1'));
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    await act(async () => {
+      await result.current.removeBuildingVendor('bv1');
+    });
+
+    expect(mockApiRemoveBuildingVendor).toHaveBeenCalledWith('bv1');
+    expect(mockDelete).not.toHaveBeenCalled();
   });
 
   it('addVendorInspection calls insert and refetches', async () => {

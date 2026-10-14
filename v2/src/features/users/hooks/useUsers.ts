@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, TABLES } from '@/lib/supabase';
+import { createUser } from '@/lib/api/users';
 import type { DbProfile } from '@/types/database';
 
 export function useUsers() {
@@ -28,35 +29,37 @@ export function useUsers() {
     fetchUsers();
   }, [fetchUsers]);
 
+  // 認証ユーザーとプロファイルは Edge Function が作る（profiles には INSERT ポリシーが無い）
   const addUser = useCallback(
-    async (params: { id: string; email: string; role: DbProfile['role']; vendor_id: string | null }) => {
-      const { error: err } = await supabase.from(TABLES.profiles).insert({
-        id: params.id,
+    async (params: {
+      email: string;
+      password: string;
+      role: DbProfile['role'];
+      vendor_id: string | null;
+    }) => {
+      await createUser({
         email: params.email,
+        password: params.password,
         role: params.role,
-        vendor_id: params.vendor_id || null,
+        vendorId: params.vendor_id || null,
       });
-      if (err) throw err;
       await fetchUsers();
     },
     [fetchUsers],
   );
 
   const updateUser = useCallback(
-    async (id: string, params: { role?: DbProfile['role']; vendor_id?: string | null }) => {
+    async (
+      id: string,
+      params: { role?: DbProfile['role']; vendor_id?: string | null; status?: DbProfile['status'] },
+    ) => {
+      // RLS で UPDATE が素通り（0行）になったときもエラーにする（v1 users.js updateUserStatus と同じ select().single()）
       const { error: err } = await supabase
         .from(TABLES.profiles)
         .update(params)
-        .eq('id', id);
-      if (err) throw err;
-      await fetchUsers();
-    },
-    [fetchUsers],
-  );
-
-  const deleteUser = useCallback(
-    async (id: string) => {
-      const { error: err } = await supabase.from(TABLES.profiles).delete().eq('id', id);
+        .eq('id', id)
+        .select()
+        .single();
       if (err) throw err;
       await fetchUsers();
     },
@@ -70,6 +73,5 @@ export function useUsers() {
     refetch: fetchUsers,
     addUser,
     updateUser,
-    deleteUser,
   };
 }

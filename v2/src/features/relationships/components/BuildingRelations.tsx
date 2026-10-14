@@ -4,11 +4,12 @@ import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
-import type { DbBuildingVendor, DbProperty } from '@/types/database';
+import type { DbBuildingVendor } from '@/types/database';
+import type { MasterProperty } from '@/types/app';
 
 interface BuildingRelationsProps {
   buildingVendors: DbBuildingVendor[];
-  properties: DbProperty[];
+  properties: MasterProperty[];
   onAdd: (propertyCode: string) => Promise<void>;
   onRemove: (id: string) => Promise<void>;
 }

@@ -1,8 +1,12 @@
 import type { DbEntry } from '@/types/database';
+import { customImageBaseName, filterApprovedEntries } from './csv';
 
-/** カスタムポスター画像をZIPでダウンロード */
+/**
+ * 追加画像をZIPでダウンロード（承認済みのみ。v1 admin-export.js downloadCustomImages と同じ対象・ファイル名）
+ * ZIP内ファイル名の拡張子を除いた部分は CSV の点検案内TPLNo と一致する（拡張子は .jpg 固定）
+ */
 export async function downloadCustomImages(entries: DbEntry[]): Promise<number> {
-  const customEntries = entries.filter(
+  const customEntries = filterApprovedEntries(entries).filter(
     (e) => e.poster_type === 'custom' && e.poster_image,
   );
 
@@ -21,9 +25,7 @@ export async function downloadCustomImages(entries: DbEntry[]): Promise<number> 
     customEntries.map(async (entry) => {
       const response = await fetch(entry.poster_image!);
       const blob = await response.blob();
-      const safeCode = (entry.property_code || 'unknown').replace(/[/\\:*?"<>|]/g, '_');
-      const safeType = (entry.inspection_type || 'unknown').replace(/[/\\:*?"<>|]/g, '_');
-      const filename = `${safeCode}_${safeType}_${entry.id.slice(0, 8)}.jpg`;
+      const filename = `${customImageBaseName(entry)}.jpg`;
       return { filename, blob };
     }),
   );

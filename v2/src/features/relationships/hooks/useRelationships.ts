@@ -1,8 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, TABLES } from '@/lib/supabase';
+import { BuildingVendorStatus } from '@/lib/constants';
+import {
+  addBuildingVendor as apiAddBuildingVendor,
+  removeBuildingVendor as apiRemoveBuildingVendor,
+} from '@/lib/api/relationships';
+import { useAuthStore } from '@/stores/authStore';
 import type { DbBuildingVendor, DbVendorInspection } from '@/types/database';
 
 export function useRelationships(vendorId: string | null) {
+  const profile = useAuthStore((s) => s.profile);
   const [buildingVendors, setBuildingVendors] = useState<DbBuildingVendor[]>([]);
   const [vendorInspections, setVendorInspections] = useState<DbVendorInspection[]>([]);
   const [loading, setLoading] = useState(false);
@@ -13,10 +20,12 @@ export function useRelationships(vendorId: string | null) {
       setBuildingVendors([]);
       return;
     }
+    // 解除済み（deleted）は出さない。v1 admin-relationships.js も active / pending だけを扱う
     const { data, error: err } = await supabase
       .from(TABLES.buildingVendors)
       .select('*')
       .eq('vendor_id', vendorId)
+      .neq('status', BuildingVendorStatus.DELETED)
       .order('created_at');
     if (err) throw err;
     setBuildingVendors((data ?? []) as DbBuildingVendor[]);
@@ -58,24 +67,19 @@ export function useRelationships(vendorId: string | null) {
   }, [fetchAll]);
 
   // Building-vendor CRUD
+  // 追加は解除済みの行を UPDATE で戻し、解除はソフトデリート（v1 と同じ。UNIQUE(property_code, vendor_id) がある）
   const addBuildingVendor = useCallback(
     async (propertyCode: string) => {
       if (!vendorId) throw new Error('保守会社が選択されていません');
-      const { error: err } = await supabase.from(TABLES.buildingVendors).insert({
-        property_code: propertyCode,
-        vendor_id: vendorId,
-        status: 'active',
-      });
-      if (err) throw err;
+      await apiAddBuildingVendor({ propertyCode, vendorId, profile });
       await fetchBuildingVendors();
     },
-    [vendorId, fetchBuildingVendors],
+    [vendorId, profile, fetchBuildingVendors],
   );
 
   const removeBuildingVendor = useCallback(
     async (id: string) => {
-      const { error: err } = await supabase.from(TABLES.buildingVendors).delete().eq('id', id);
-      if (err) throw err;
+      await apiRemoveBuildingVendor(id);
       await fetchBuildingVendors();
     },
     [fetchBuildingVendors],

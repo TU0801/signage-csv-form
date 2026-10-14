@@ -1,11 +1,11 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { UseFormSetValue } from 'react-hook-form';
-import type { EntryFormData } from '@/types/app';
-import type { DbProperty, DbVendor, DbInspectionType, DbCategory } from '@/types/database';
+import type { EntryFormData, MasterProperty } from '@/types/app';
+import type { DbVendor, DbInspectionType, DbCategory } from '@/types/database';
 
 interface UseCascadingSelectsArgs {
   setValue: UseFormSetValue<EntryFormData>;
-  properties: DbProperty[];
+  properties: MasterProperty[];
   vendors: DbVendor[];
   inspectionTypes: DbInspectionType[];
   categories: DbCategory[];
@@ -20,13 +20,13 @@ export function useCascadingSelects({
 }: UseCascadingSelectsArgs) {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
 
-  /** 物件選択時: terminals[0].id を terminalId にセット */
+  /** 物件選択時: terminals[0].terminal_id を terminalId にセット */
   const handlePropertyChange = useCallback(
     (propertyCode: string) => {
       setValue('propertyCode', propertyCode);
       const property = properties.find((p) => p.property_code === propertyCode);
       if (property?.terminals?.length) {
-        setValue('terminalId', property.terminals[0]!.id);
+        setValue('terminalId', property.terminals[0]!.terminal_id);
       } else {
         setValue('terminalId', '');
       }

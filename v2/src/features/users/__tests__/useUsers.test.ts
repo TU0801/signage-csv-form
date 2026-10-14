@@ -3,18 +3,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useUsers } from '../hooks/useUsers';
 
 const mockSelect = vi.fn();
-const mockInsert = vi.fn();
-const mockDelete = vi.fn();
 const mockUpdate = vi.fn();
+const mockCreateUser = vi.fn();
 const mockEq = vi.fn();
 const mockOrder = vi.fn();
+const mockSingle = vi.fn();
 
 vi.mock('@/lib/supabase', () => ({
   supabase: {
     from: vi.fn(() => ({
       select: mockSelect,
-      insert: mockInsert,
-      delete: mockDelete,
       update: mockUpdate,
     })),
   },
@@ -23,18 +21,23 @@ vi.mock('@/lib/supabase', () => ({
   },
 }));
 
+vi.mock('@/lib/api/users', () => ({
+  createUser: (...args: unknown[]) => mockCreateUser(...args),
+}));
+
 describe('useUsers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
     mockSelect.mockReturnValue({ order: mockOrder });
     mockOrder.mockResolvedValue({ data: [], error: null });
-    mockInsert.mockResolvedValue({ error: null });
-    mockDelete.mockReturnValue({ eq: mockEq });
+    mockCreateUser.mockResolvedValue({ id: 'u2' });
     mockUpdate.mockReturnValue({ eq: mockEq });
+    mockSingle.mockResolvedValue({ data: { id: 'u1' }, error: null });
     mockEq.mockImplementation(() => ({
       order: mockOrder,
       eq: mockEq,
+      select: () => ({ single: mockSingle }),
     }));
   });
 
@@ -66,7 +69,7 @@ describe('useUsers', () => {
     expect(result.current.error).toBeTruthy();
   });
 
-  it('addUser calls insert and refetches', async () => {
+  it('addUser creates the account through the Edge Function (no direct profiles insert)', async () => {
     const { result } = renderHook(() => useUsers());
 
     await waitFor(() => {
@@ -75,27 +78,22 @@ describe('useUsers', () => {
 
     await act(async () => {
       await result.current.addUser({
-        id: 'u2',
         email: 'new@test.com',
+        password: 'secret123',
         role: 'user',
         vendor_id: 'v1',
       });
     });
 
-    expect(mockInsert).toHaveBeenCalledWith({
-      id: 'u2',
+    expect(mockCreateUser).toHaveBeenCalledWith({
       email: 'new@test.com',
+      password: 'secret123',
       role: 'user',
-      vendor_id: 'v1',
+      vendorId: 'v1',
     });
   });
 
   it('updateUser calls update with params', async () => {
-    mockEq.mockImplementation(() => ({
-      order: mockOrder,
-      eq: mockEq,
-    }));
-
     const { result } = renderHook(() => useUsers());
 
     await waitFor(() => {
@@ -109,11 +107,8 @@ describe('useUsers', () => {
     expect(mockUpdate).toHaveBeenCalledWith({ role: 'admin' });
   });
 
-  it('deleteUser calls delete and refetches', async () => {
-    mockEq.mockImplementation(() => ({
-      order: mockOrder,
-      eq: mockEq,
-    }));
+  it('updateUser throws when RLS skips the UPDATE (0 rows)', async () => {
+    mockSingle.mockResolvedValue({ data: null, error: { code: 'PGRST116', message: '0 rows' } });
 
     const { result } = renderHook(() => useUsers());
 
@@ -121,10 +116,8 @@ describe('useUsers', () => {
       expect(result.current.loading).toBe(false);
     });
 
-    await act(async () => {
-      await result.current.deleteUser('u1');
+    await expect(result.current.updateUser('u1', { status: 'inactive' })).rejects.toMatchObject({
+      code: 'PGRST116',
     });
-
-    expect(mockDelete).toHaveBeenCalled();
   });
 });

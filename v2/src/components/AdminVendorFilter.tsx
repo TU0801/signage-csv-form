@@ -1,9 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Select } from '@/components/ui/Select';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase, TABLES } from '@/lib/supabase';
-import { BuildingVendorStatus } from '@/lib/constants';
-import type { DbVendor, DbProperty } from '@/types/database';
+import { fetchActivePropertyCodes } from '@/lib/api/relationships';
+import type { DbVendor } from '@/types/database';
 
 interface AdminVendorFilterProps {
   vendors: DbVendor[];
@@ -39,31 +38,26 @@ export function AdminVendorFilter({ vendors, onVendorFilter }: AdminVendorFilter
 }
 
 /**
- * 管理者が保守会社を選択した場合、building_vendorsテーブルから
- * 当該会社に紐付く物件コードを取得するフック。
+ * 管理者が保守会社を選択した場合、signage_building_vendors から
+ * 当該会社に active で紐付く物件コードを取得するフック。
  */
 export function useAdminVendorFilter() {
   const { isAdmin } = useAuth();
   const [selectedVendorId, setSelectedVendorId] = useState('');
-  const [filteredPropertyCodes, setFilteredPropertyCodes] = useState<Set<string> | null>(null);
+  // 取得結果はどの保守会社のものかと一緒に持つ（選択を外した・切り替えた直後に古い結果で絞らない）
+  const [fetched, setFetched] = useState<{ vendorId: string; codes: Set<string> } | null>(null);
 
   useEffect(() => {
-    if (!isAdmin || !selectedVendorId) {
-      setFilteredPropertyCodes(null);
-      return;
-    }
+    if (!isAdmin || !selectedVendorId) return;
 
     let cancelled = false;
 
     (async () => {
-      const { data } = await supabase
-        .from(TABLES.buildingVendors)
-        .select('property_code')
-        .eq('vendor_id', selectedVendorId)
-        .eq('status', BuildingVendorStatus.ACTIVE);
-
-      if (!cancelled && data) {
-        setFilteredPropertyCodes(new Set(data.map((d) => d.property_code)));
+      try {
+        const codes = await fetchActivePropertyCodes(selectedVendorId);
+        if (!cancelled) setFetched({ vendorId: selectedVendorId, codes: new Set(codes) });
+      } catch (err) {
+        console.error('保守会社の担当物件の取得に失敗しました', err);
       }
     })();
 
@@ -72,8 +66,11 @@ export function useAdminVendorFilter() {
     };
   }, [isAdmin, selectedVendorId]);
 
+  const filteredPropertyCodes =
+    isAdmin && selectedVendorId && fetched?.vendorId === selectedVendorId ? fetched.codes : null;
+
   const filterProperties = useCallback(
-    (properties: DbProperty[]): DbProperty[] => {
+    <T extends { property_code: string }>(properties: T[]): T[] => {
       if (!filteredPropertyCodes) return properties;
       return properties.filter((p) => filteredPropertyCodes.has(p.property_code));
     },

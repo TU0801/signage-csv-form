@@ -40,12 +40,6 @@ export function uploadPosterImage(file: File, userId: string): Promise<string> {
   return uploadImage(file, path, false, '画像のアップロードに失敗しました');
 }
 
-/** テンプレート画像をアップロード（upsert） */
-export function uploadTemplateImage(file: File, imageKey: string): Promise<string> {
-  const path = `templates/${imageKey}.${getExtension(file)}`;
-  return uploadImage(file, path, true, 'テンプレート画像のアップロードに失敗しました');
-}
-
 /** 広告枠画像をアップロード（upsert） */
 export function uploadAdImage(file: File, slotIndex: number): Promise<string> {
   const path = `ads/slot_${slotIndex}.${getExtension(file)}`;

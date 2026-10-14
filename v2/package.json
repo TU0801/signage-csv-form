@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "lint": "eslint src --max-warnings 0",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "check:schema": "node scripts/check-schema.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

@@ -4,16 +4,13 @@ import { PropertiesMaster } from '@/features/master/instances/PropertiesMaster';
 import { VendorsMaster } from '@/features/master/instances/VendorsMaster';
 import { InspectionTypesMaster } from '@/features/master/instances/InspectionTypesMaster';
 import { CategoriesMaster } from '@/features/master/instances/CategoriesMaster';
-import { TemplateImagesMaster } from '@/features/master/instances/TemplateImagesMaster';
-import { EquipmentPanel } from '@/features/equipment';
 
+// テンプレート画像（v1.34.0 で業務システムへ移管）と設備管理（signage_building_equipment は廃止表）のタブは無い
 const tabs = [
   { key: 'properties', label: '物件', component: PropertiesMaster },
   { key: 'vendors', label: '保守会社', component: VendorsMaster },
   { key: 'inspectionTypes', label: '点検種別', component: InspectionTypesMaster },
   { key: 'categories', label: 'カテゴリ', component: CategoriesMaster },
-  { key: 'templateImages', label: 'テンプレート画像', component: TemplateImagesMaster },
-  { key: 'equipment', label: '設備管理', component: EquipmentPanel },
 ] as const;
 
 type TabKey = (typeof tabs)[number]['key'];

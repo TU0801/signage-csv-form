@@ -1,14 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase, TABLES } from '@/lib/supabase';
+import { useAuthStore } from '@/stores/authStore';
+import { fetchAllMasterData } from '@/lib/api/masterData';
 import type { MasterData } from '@/types/app';
-import type { DbProperty, DbVendor, DbInspectionType, DbCategory } from '@/types/database';
 
+/**
+ * マスターデータ一括取得（lib/api 経由）。
+ * 一般ユーザーは担当物件だけ、点検情報は biz（overlayInspections）、テンプレ画像は template_images_master。
+ */
 export function useMasterData() {
+  const role = useAuthStore((s) => s.profile?.role ?? null);
+  const vendorId = useAuthStore((s) => s.profile?.vendor_id ?? null);
   const [data, setData] = useState<MasterData>({
     properties: [],
     vendors: [],
     inspectionTypes: [],
     categories: [],
+    templateImages: [],
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -17,30 +24,13 @@ export function useMasterData() {
     setLoading(true);
     setError(null);
     try {
-      const [propertiesRes, vendorsRes, inspectionTypesRes, categoriesRes] = await Promise.all([
-        supabase.from(TABLES.properties).select('*').order('property_code'),
-        supabase.from(TABLES.vendors).select('*').order('vendor_name'),
-        supabase.from(TABLES.inspectionTypes).select('*').order('sort_order'),
-        supabase.from(TABLES.categories).select('*').order('sort_order'),
-      ]);
-
-      if (propertiesRes.error) throw propertiesRes.error;
-      if (vendorsRes.error) throw vendorsRes.error;
-      if (inspectionTypesRes.error) throw inspectionTypesRes.error;
-      if (categoriesRes.error) throw categoriesRes.error;
-
-      setData({
-        properties: propertiesRes.data as DbProperty[],
-        vendors: vendorsRes.data as DbVendor[],
-        inspectionTypes: inspectionTypesRes.data as DbInspectionType[],
-        categories: categoriesRes.data as DbCategory[],
-      });
+      setData(await fetchAllMasterData(role ? { role, vendor_id: vendorId } : null));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'マスターデータの取得に失敗しました');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [role, vendorId]);
 
   useEffect(() => {
     fetchAll();

@@ -82,14 +82,10 @@ export function useBuildingRequests() {
     setRequests((prev) => prev.filter((r) => r.id !== id));
   }, []);
 
+  // 却下は物理削除（v1 rejectBuildingRequest と同じ）。deleted で残すと、一般ユーザーの RLS からは見えず
+  // 再申請が INSERT に回って UNIQUE(property_code, vendor_id) に当たる
   const rejectRequest = useCallback(async (id: string) => {
-    const { error } = await supabase
-      .from(TABLES.buildingVendors)
-      .update({
-        status: BuildingVendorStatus.DELETED,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id);
+    const { error } = await supabase.from(TABLES.buildingVendors).delete().eq('id', id);
     if (error) throw error;
     setRequests((prev) => prev.filter((r) => r.id !== id));
   }, []);

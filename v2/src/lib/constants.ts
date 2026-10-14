@@ -37,4 +37,5 @@ export const DISPLAY_TIME_MAX = 30;
 export const REMARKS_MAX_LINES = 5;
 export const REMARKS_MAX_CHARS_PER_LINE = 25;
 export const NOTICE_TEXT_MAX_CHARS = 200;
-export const MAX_AD_SLOTS = 7;
+/** ログイン画面の広告枠数（v1.27.0 で3枠。DB の slot_index は 1〜7 まで許すが 4〜7 は使わない） */
+export const MAX_AD_SLOTS = 3;

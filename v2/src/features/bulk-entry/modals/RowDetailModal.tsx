@@ -22,6 +22,13 @@ export function RowDetailModal({ open, onClose, rowId }: RowDetailModalProps) {
   const { properties, vendors, inspectionTypes } = useMasterData();
 
   const row = rowId ? rows.find((r) => r._id === rowId) : undefined;
+  const rowPropertyCode = row?.propertyCode;
+
+  // フックは早期 return より前で呼ぶ（row の有無で呼び出し順が変わるとクラッシュする）
+  const terminalOptions = useMemo(() => {
+    const selectedProperty = properties.find((p) => p.property_code === rowPropertyCode);
+    return buildTerminalOptions(selectedProperty?.terminals ?? []);
+  }, [properties, rowPropertyCode]);
 
   if (!row) {
     return (
@@ -39,7 +46,7 @@ export function RowDetailModal({ open, onClose, rowId }: RowDetailModalProps) {
     handleChange('propertyCode', propertyCode);
     const property = properties.find((p) => p.property_code === propertyCode);
     if (property?.terminals?.length) {
-      handleChange('terminalId', property.terminals[0]!.id);
+      handleChange('terminalId', property.terminals[0]!.terminal_id);
     } else {
       handleChange('terminalId', '');
     }
@@ -49,11 +56,6 @@ export function RowDetailModal({ open, onClose, rowId }: RowDetailModalProps) {
     value: p.property_code,
     label: `${p.property_code} - ${p.property_name}`,
   }));
-
-  const terminalOptions = useMemo(() => {
-    const selectedProperty = properties.find((p) => p.property_code === row.propertyCode);
-    return buildTerminalOptions(selectedProperty?.terminals ?? []);
-  }, [properties, row.propertyCode]);
 
   const vendorOptions = vendors.map((v) => ({
     value: v.vendor_name,

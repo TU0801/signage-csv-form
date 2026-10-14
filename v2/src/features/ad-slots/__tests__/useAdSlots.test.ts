@@ -3,7 +3,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useAdSlots } from '../hooks/useAdSlots';
 
 const mockSelect = vi.fn();
-const mockInsert = vi.fn();
 const mockUpdate = vi.fn();
 const mockEq = vi.fn();
 const mockOrder = vi.fn();
@@ -12,7 +11,6 @@ vi.mock('@/lib/supabase', () => ({
   supabase: {
     from: vi.fn(() => ({
       select: mockSelect,
-      insert: mockInsert,
       update: mockUpdate,
     })),
   },
@@ -27,7 +25,6 @@ describe('useAdSlots', () => {
 
     mockSelect.mockReturnValue({ order: mockOrder });
     mockOrder.mockResolvedValue({ data: [], error: null });
-    mockInsert.mockResolvedValue({ error: null });
     mockUpdate.mockReturnValue({ eq: mockEq });
     mockEq.mockResolvedValue({ error: null });
   });
@@ -47,6 +44,26 @@ describe('useAdSlots', () => {
     expect(result.current.slots).toEqual(mockSlots);
   });
 
+  it('keeps only slots 1-3 (login ads are 3 slots since v1.27.0)', async () => {
+    const mockSlots = [1, 2, 3, 4, 7].map((i) => ({
+      id: `s${i}`,
+      slot_index: i,
+      image_url: null,
+      caption: null,
+      link_url: null,
+      is_active: false,
+    }));
+    mockOrder.mockResolvedValue({ data: mockSlots, error: null });
+
+    const { result } = renderHook(() => useAdSlots());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.slots.map((s) => s.slot_index)).toEqual([1, 2, 3]);
+  });
+
   it('handles fetch error', async () => {
     mockOrder.mockResolvedValue({ data: null, error: { message: 'DB error' } });
 
@@ -57,33 +74,6 @@ describe('useAdSlots', () => {
     });
 
     expect(result.current.error).toBeTruthy();
-  });
-
-  it('ensureSlots inserts missing slots', async () => {
-    // First call for fetchSlots (order), second for ensureSlots (select without order)
-    mockSelect.mockImplementation(() => ({
-      order: mockOrder,
-    }));
-    mockOrder.mockResolvedValue({ data: [], error: null });
-
-    const { result } = renderHook(() => useAdSlots());
-
-    await waitFor(() => {
-      expect(result.current.loading).toBe(false);
-    });
-
-    // Override for ensureSlots: select returns only slot_index, no order
-    mockSelect.mockReturnValueOnce(
-      Promise.resolve({ data: [{ slot_index: 1 }, { slot_index: 2 }], error: null }),
-    );
-    mockOrder.mockResolvedValue({ data: [], error: null });
-
-    await act(async () => {
-      await result.current.ensureSlots();
-    });
-
-    // Should insert 5 missing slots (3-7)
-    expect(mockInsert).toHaveBeenCalled();
   });
 
   it('updateSlot calls update with params', async () => {

@@ -2,8 +2,6 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { useToast } from '@/components/ui/Toast';
 import { useMasterData } from '@/hooks/useMasterData';
 import { useAuth } from '@/hooks/useAuth';
 import { useUsers } from '../hooks/useUsers';
@@ -12,28 +10,14 @@ import { EditUserModal } from './EditUserModal';
 import type { DbProfile } from '@/types/database';
 
 export function UsersContent() {
-  const { addToast } = useToast();
   const { vendors } = useMasterData();
   const { user: currentUser } = useAuth();
-  const { users, loading, addUser, updateUser, deleteUser } = useUsers();
+  const { users, loading, addUser, updateUser } = useUsers();
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [editTarget, setEditTarget] = useState<DbProfile | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const vendorMap = new Map(vendors.map((v) => [v.id, v.vendor_name]));
-
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    try {
-      await deleteUser(deleteTarget);
-      addToast('ユーザーを削除しました', 'success');
-    } catch (err) {
-      addToast(err instanceof Error ? err.message : '削除に失敗しました', 'error');
-    } finally {
-      setDeleteTarget(null);
-    }
-  };
 
   if (loading) {
     return (
@@ -87,20 +71,16 @@ export function UsersContent() {
                     {user.vendor_id ? vendorMap.get(user.vendor_id) ?? '-' : '-'}
                   </td>
                   <td className="py-2 px-3">
-                    <Badge variant={user.is_active !== false ? 'success' : 'default'}>
-                      {user.is_active !== false ? '有効' : '無効'}
+                    <Badge variant={user.status === 'active' ? 'success' : 'default'}>
+                      {user.status === 'active' ? '有効' : '無効'}
                     </Badge>
                   </td>
                   <td className="py-2 px-3 flex gap-2">
+                    {/* 削除は無い（v1 にも無く、profiles に DELETE ポリシーも無い。使わせないときは無効化する） */}
                     {!isSelf && (
-                      <>
-                        <Button variant="ghost" size="sm" onClick={() => setEditTarget(user)}>
-                          編集
-                        </Button>
-                        <Button variant="danger" size="sm" onClick={() => setDeleteTarget(user.id)}>
-                          削除
-                        </Button>
-                      </>
+                      <Button variant="ghost" size="sm" onClick={() => setEditTarget(user)}>
+                        編集
+                      </Button>
                     )}
                   </td>
                 </tr>
@@ -123,16 +103,6 @@ export function UsersContent() {
         user={editTarget}
         vendors={vendors}
         onUpdate={updateUser}
-      />
-
-      <ConfirmDialog
-        open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={handleDelete}
-        title="ユーザー削除"
-        message="このユーザーを削除しますか？"
-        confirmLabel="削除"
-        variant="danger"
       />
     </div>
   );

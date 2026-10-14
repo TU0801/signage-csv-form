@@ -40,7 +40,8 @@ export function MasterListPage<T extends Record<string, unknown>>({
   }, []);
 
   const handleFormSubmit = useCallback(
-    async (data: Partial<T>) => {
+    async (formData: Partial<T>) => {
+      const data = config.toPayload ? config.toPayload(formData) : formData;
       try {
         if (editItem) {
           await updateItem(editItem['id'] as string, data);
@@ -54,7 +55,7 @@ export function MasterListPage<T extends Record<string, unknown>>({
         throw err;
       }
     },
-    [editItem, updateItem, addItem, addToast, config.displayName],
+    [editItem, updateItem, addItem, addToast, config],
   );
 
   const handleDelete = useCallback(async () => {
@@ -87,8 +88,12 @@ export function MasterListPage<T extends Record<string, unknown>>({
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <Button onClick={handleAdd}>追加</Button>
+        {!config.readOnly && <Button onClick={handleAdd}>追加</Button>}
       </div>
+
+      {config.readOnly && config.readOnlyNote && (
+        <p className="text-sm text-gray-500">{config.readOnlyNote}</p>
+      )}
 
       <MasterTable
         config={config}

@@ -10,7 +10,10 @@ interface EditUserModalProps {
   onClose: () => void;
   user: DbProfile | null;
   vendors: DbVendor[];
-  onUpdate: (id: string, params: { role?: DbProfile['role']; vendor_id?: string | null; is_active?: boolean }) => Promise<void>;
+  onUpdate: (
+    id: string,
+    params: { role?: DbProfile['role']; vendor_id?: string | null; status?: DbProfile['status'] },
+  ) => Promise<void>;
 }
 
 export function EditUserModal({ open, onClose, user, vendors, onUpdate }: EditUserModalProps) {
@@ -24,7 +27,7 @@ export function EditUserModal({ open, onClose, user, vendors, onUpdate }: EditUs
     if (user) {
       setRole(user.role);
       setVendorId(user.vendor_id ?? '');
-      setIsActive(user.is_active ?? true);
+      setIsActive(user.status === 'active');
     }
   }, [user]);
 
@@ -35,7 +38,7 @@ export function EditUserModal({ open, onClose, user, vendors, onUpdate }: EditUs
       await onUpdate(user.id, {
         role,
         vendor_id: vendorId || null,
-        is_active: isActive,
+        status: isActive ? 'active' : 'inactive',
       });
       addToast('ユーザーを更新しました', 'success');
       onClose();

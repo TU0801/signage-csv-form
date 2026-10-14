@@ -11,7 +11,6 @@ import { useCascadingSelects } from '@/features/single-entry/hooks/useCascadingS
 import { usePreview } from '@/features/single-entry/hooks/usePreview';
 import { EntryForm } from '@/features/single-entry/components/EntryForm';
 import { EntryDataList } from '@/features/single-entry/components/EntryDataList';
-import { CsvActions } from '@/features/single-entry/components/CsvActions';
 import { PosterPreview } from '@/features/single-entry/components/PosterPreview';
 import { uploadPosterImage } from '@/lib/storage';
 import { useAuthStore } from '@/stores/authStore';
@@ -328,7 +327,6 @@ export function SingleEntryPage() {
                 >
                   {submitting ? '送信中...' : `申請する (${localEntries.length}件)`}
                 </Button>
-                <CsvActions entries={localEntries} />
               </div>
             </CardContent>
           </Card>

@@ -11,8 +11,8 @@ interface AddUserModalProps {
   onClose: () => void;
   vendors: DbVendor[];
   onAdd: (params: {
-    id: string;
     email: string;
+    password: string;
     role: DbProfile['role'];
     vendor_id: string | null;
   }) => Promise<void>;
@@ -20,29 +20,29 @@ interface AddUserModalProps {
 
 export function AddUserModal({ open, onClose, vendors, onAdd }: AddUserModalProps) {
   const { addToast } = useToast();
-  const [id, setId] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [role, setRole] = useState<DbProfile['role']>('user');
   const [vendorId, setVendorId] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const resetForm = () => {
-    setId('');
     setEmail('');
+    setPassword('');
     setRole('user');
     setVendorId('');
   };
 
   const handleSubmit = async () => {
-    if (!id.trim() || !email.trim()) {
-      addToast('IDとメールアドレスは必須です', 'error');
+    if (!email.trim() || !password) {
+      addToast('メールアドレスとパスワードは必須です', 'error');
       return;
     }
     setSubmitting(true);
     try {
       await onAdd({
-        id: id.trim(),
         email: email.trim(),
+        password,
         role,
         vendor_id: vendorId || null,
       });
@@ -60,17 +60,18 @@ export function AddUserModal({ open, onClose, vendors, onAdd }: AddUserModalProp
     <Modal open={open} onClose={onClose} title="ユーザー追加">
       <div className="space-y-4">
         <Input
-          label="ユーザーID (Auth User ID)"
-          value={id}
-          onChange={(e) => setId(e.target.value)}
-          placeholder="既存のAuth User IDを入力"
-        />
-        <Input
           label="メールアドレス"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="example@example.com"
+        />
+        <Input
+          label="初期パスワード"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="new-password"
         />
         <Select
           label="役割"
