@@ -1,4 +1,4 @@
-import { formatDateSlash, formatDateTime, formatDisplayTime } from './utils';
+import { normalizeTerminalId } from './terminal';
 
 /**
  * CSV 28列ヘッダー（固定順序）
@@ -33,98 +33,6 @@ export const CSV_HEADERS = [
   '表示日時',
   '貼紙区分',
 ] as const;
-
-/**
- * CSV生成用エントリー型（旧経路）
- * @deprecated 本番出力は generateAdminCsv（v1 admin-export.js 準拠）を使う
- */
-export interface CsvEntry {
-  inspectionCo: number;
-  terminalId: string;
-  propertyCode: string;
-  vendorName: string;
-  emergencyContact: string;
-  inspectionType: string;
-  showOnBoard: boolean;
-  templateNo: string;
-  startDate: string;
-  endDate: string;
-  remarks: string;
-  noticeText: string;
-  frameNo: string;
-  displayStartDate: string;
-  displayEndDate: string;
-  displayStartTime: string;
-  displayEndTime: string;
-  displayDuration: number;
-  posterType: string;
-}
-
-/** CSV値エスケープ（ダブルクォート対応） */
-function escapeCsvValue(value: string): string {
-  if (value.includes(',') || value.includes('"') || value.includes('\n')) {
-    return `"${value.replace(/"/g, '""')}"`;
-  }
-  return value;
-}
-
-/**
- * エントリーを28列のCSV行配列に変換（旧経路）
- * @deprecated generateAdminCsv を使う
- */
-export function entryToCsvRow(entry: CsvEntry): string[] {
-  const now = new Date();
-  const exportDate = formatDateSlash(now);
-  const changeDatetime = formatDateTime(now);
-  const inspectionDatetime = entry.startDate
-    ? `${formatDateSlash(entry.startDate)} [00:00:00]`
-    : '';
-  const displayDatetime = entry.displayStartDate
-    ? `${formatDateSlash(entry.displayStartDate)} [00:00:00]`
-    : '';
-  const posterLabel = entry.posterType === 'custom' ? '追加' : 'テンプレート';
-
-  return [
-    String(entry.inspectionCo),
-    entry.terminalId,
-    entry.propertyCode,
-    entry.vendorName,
-    entry.emergencyContact,
-    entry.inspectionType,
-    entry.showOnBoard ? 'TRUE' : 'False',
-    entry.templateNo,
-    entry.startDate ? formatDateSlash(entry.startDate) : '',
-    entry.endDate ? formatDateSlash(entry.endDate) : '',
-    entry.remarks,
-    entry.noticeText,
-    entry.frameNo,
-    entry.displayStartDate ? formatDateSlash(entry.displayStartDate) : '',
-    entry.displayEndDate ? formatDateSlash(entry.displayEndDate) : '',
-    entry.displayStartTime,
-    entry.displayEndTime,
-    formatDisplayTime(entry.displayDuration),
-    '', // 統合ポリシー（空）
-    '', // 制御（空）
-    exportDate,
-    '', // 変更時刻（空）
-    '', // 最終エクスポート日時（空）
-    '', // ID（空）
-    changeDatetime,
-    inspectionDatetime,
-    displayDatetime,
-    posterLabel,
-  ];
-}
-
-/**
- * 複数エントリーからCSV文字列を生成（旧経路）
- * @deprecated generateAdminCsv を使う（行区切り・掲示板表示・追加画像行などが v1 本番出力と異なる）
- */
-export function generateCsv(entries: CsvEntry[]): string {
-  const headerLine = CSV_HEADERS.map(escapeCsvValue).join(',');
-  const dataLines = entries.map((entry) => entryToCsvRow(entry).map(escapeCsvValue).join(','));
-  return [headerLine, ...dataLines].join('\r\n');
-}
 
 /** CSVをBlobとしてダウンロード（BOM付き UTF-8。v1 admin-export.js exportCSV と同じ組み立て） */
 export function downloadCsv(csv: string, filename: string): void {
@@ -191,27 +99,6 @@ export function customImageBaseName(
 ): string {
   const safe = (v: string | null | undefined) => (v || 'unknown').replace(/[/\\:*?"<>|]/g, '_');
   return `${safe(entry.property_code)}_${safe(entry.inspection_type)}_${String(entry.id || '').slice(0, 8)}`;
-}
-
-/** terminal_id 正規化（JSON文字列・オブジェクトなら terminalId/terminal_id/id を取り出す。v1 shared-utils と同じ） */
-export function normalizeTerminalId(terminalId: unknown): string {
-  if (!terminalId) return '';
-  if (typeof terminalId === 'string') {
-    if (terminalId.startsWith('{')) {
-      try {
-        const parsed = JSON.parse(terminalId);
-        return parsed.terminalId || parsed.terminal_id || parsed.id || terminalId;
-      } catch {
-        return terminalId;
-      }
-    }
-    return terminalId;
-  }
-  if (typeof terminalId === 'object') {
-    const o = terminalId as Record<string, string | undefined>;
-    return o.terminalId || o.terminal_id || o.id || '';
-  }
-  return String(terminalId);
 }
 
 /** CSVフィールドのエスケープ（カンマ・ダブルクォート・LF を含む場合だけクォート。v1 escapeCSVField） */

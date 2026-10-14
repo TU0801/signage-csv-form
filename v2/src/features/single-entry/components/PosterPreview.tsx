@@ -1,103 +1,85 @@
-import { Modal } from '@/components/ui/Modal';
-import { cn } from '@/lib/utils';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { computePosterSize } from '../lib/entryLogic';
+import './posterPreview.css';
 
 interface PosterPreviewProps {
-  open: boolean;
-  onClose: () => void;
-  imageUrl: string | null;
+  /** テンプレート画像の URL（解決できなければ null） */
+  templateImageUrl: string | null;
   templateNo: string;
-  posterPosition: string;
-  onPositionChange: (position: string) => void;
+  /** 追加（カスタム）貼紙のとき true */
+  isCustom: boolean;
+  customImageUrl: string | null;
+  noticeText: string;
+  dateText: string;
+  remarks: string;
+  vendorName: string;
+  emergencyContact: string;
 }
+
+const placeholderClass = 'flex h-48 items-center justify-center rounded-md bg-slate-50 text-xs text-gray-500';
 
 /**
- * ポスター位置グリッド
- * 0 = 全面表示
- * 1 = 左上, 2 = 右上, 3 = 左下, 4 = 右下
+ * 張紙プレビュー。テンプレート画像に案内文・日付・備考・保守会社・電話番号を重ねる。
+ * 枠を画像の縦横比に合わせ（幅は親の幅、高さは画面の 60% まで）、文字の大きさを枠の幅から決める。
  */
-const positions = [
-  { value: '0', label: '全面', gridArea: '1 / 1 / 3 / 3' },
-  { value: '1', label: '左上', gridArea: '1 / 1 / 2 / 2' },
-  { value: '2', label: '右上', gridArea: '1 / 2 / 2 / 3' },
-  { value: '3', label: '左下', gridArea: '2 / 1 / 3 / 2' },
-  { value: '4', label: '右下', gridArea: '2 / 2 / 3 / 3' },
-];
-
-function PositionGrid({
-  selected,
-  onChange,
-}: {
-  selected: string;
-  onChange: (pos: string) => void;
-}) {
-  return (
-    <div className="space-y-2">
-      <p className="text-sm font-medium text-gray-700">ポスター位置</p>
-      <div className="grid grid-cols-2 gap-1 w-40 h-40 border border-gray-300 rounded p-1">
-        {positions
-          .filter((p) => p.value !== '0')
-          .map((pos) => (
-            <button
-              key={pos.value}
-              type="button"
-              onClick={() => onChange(pos.value)}
-              className={cn(
-                'border rounded text-xs flex items-center justify-center transition-colors',
-                selected === pos.value
-                  ? 'bg-blue-500 text-white border-blue-600'
-                  : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100',
-              )}
-            >
-              {pos.label}
-            </button>
-          ))}
-      </div>
-      <button
-        type="button"
-        onClick={() => onChange('0')}
-        className={cn(
-          'w-40 py-1.5 border rounded text-xs transition-colors',
-          selected === '0'
-            ? 'bg-blue-500 text-white border-blue-600'
-            : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100',
-        )}
-      >
-        全面表示
-      </button>
-    </div>
-  );
-}
-
+// v1: js/script.js updatePreview / updateCustomImagePreview
 export function PosterPreview({
-  open,
-  onClose,
-  imageUrl,
+  templateImageUrl,
   templateNo,
-  posterPosition,
-  onPositionChange,
+  isCustom,
+  customImageUrl,
+  noticeText,
+  dateText,
+  remarks,
+  vendorName,
+  emergencyContact,
 }: PosterPreviewProps) {
-  return (
-    <Modal open={open} onClose={onClose} title="テンプレートプレビュー" className="max-w-2xl">
-      <div className="flex gap-6">
-        {/* プレビュー画像 */}
-        <div className="flex-1">
-          {imageUrl ? (
-            <img
-              src={imageUrl}
-              alt={`テンプレート ${templateNo}`}
-              className="w-full rounded border border-gray-200"
-            />
-          ) : (
-            <div className="w-full h-48 bg-gray-100 rounded border border-gray-200 flex items-center justify-center text-gray-400 text-sm">
-              テンプレート画像なし
-            </div>
-          )}
-          <p className="mt-2 text-sm text-gray-500 text-center">テンプレートNo: {templateNo}</p>
-        </div>
+  const containerRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [size, setSize] = useState<{ url: string; width: number; height: number } | null>(null);
 
-        {/* ポスター位置グリッド */}
-        <PositionGrid selected={posterPosition} onChange={onPositionChange} />
+  // v1: updatePreview の fitContainer
+  const fit = useCallback(() => {
+    const img = imgRef.current;
+    const parent = containerRef.current?.parentElement;
+    if (!img || !parent) return;
+    const s = computePosterSize(img.naturalWidth, img.naturalHeight, parent.clientWidth, window.innerHeight * 0.6);
+    if (s) setSize({ url: img.getAttribute('src') ?? '', ...s });
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [fit]);
+
+  if (isCustom) {
+    if (!customImageUrl) return <div className={placeholderClass}>画像を選択してください</div>;
+    return (
+      <div className="se-poster-preview">
+        <img src={customImageUrl} alt="カスタム貼紙" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
       </div>
-    </Modal>
+    );
+  }
+
+  if (!templateImageUrl) return <div className={placeholderClass}>点検工事案内を選択</div>;
+
+  const fitted = size && size.url === templateImageUrl ? size : null;
+  const style = fitted
+    ? ({ width: `${fitted.width}px`, height: `${fitted.height}px`, '--pw': fitted.width } as React.CSSProperties)
+    : undefined;
+
+  return (
+    <div ref={containerRef} className="se-poster-preview" style={style} data-testid="poster-preview">
+      <img key={templateImageUrl} ref={imgRef} src={templateImageUrl} alt={templateNo} onLoad={fit} />
+      <div className="se-poster-overlay">
+        <div className="se-poster-notice-text">{noticeText}</div>
+        <div className="se-poster-date-text">{dateText}</div>
+        <div className="se-poster-remarks-text">{remarks}</div>
+        <div className="se-poster-vendor-text">
+          <span>{vendorName}</span>
+          <span>{emergencyContact}</span>
+        </div>
+      </div>
+    </div>
   );
 }

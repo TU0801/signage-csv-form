@@ -1,194 +1,135 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { TextArea } from '@/components/ui/TextArea';
 import { Button } from '@/components/ui/Button';
-import { EntryStatus, PosterType } from '@/lib/constants';
+import { useToast } from '@/components/ui/Toast';
+import { entryErrorReason, updateEntryDisplaySettings } from '@/lib/api/admin-entries';
+import { normalizeTerminalId } from '@/lib/terminal';
 import type { DbEntry } from '@/types/database';
+import {
+  POSTER_POSITION_OPTIONS,
+  buildEditUpdates,
+  toEditForm,
+  type EntryEditForm,
+  type EntryEditMode,
+} from '../lib/entries';
 
 interface EntryEditModalProps {
-  open: boolean;
-  onClose: () => void;
   entry: DbEntry | null;
-  onSave: (id: string, updates: Partial<DbEntry>) => Promise<void>;
+  mode: EntryEditMode;
+  onClose: () => void;
+  /** 保存後に一覧を読み直す */
+  onSaved: () => void | Promise<void>;
+  propertyNames: Map<string, string>;
+  displayDefault: number;
 }
 
-const statusOptions = [
-  { value: EntryStatus.PENDING, label: 'pending' },
-  { value: EntryStatus.DRAFT, label: 'draft' },
-  { value: EntryStatus.READY, label: 'ready' },
-  { value: EntryStatus.EXPORTED, label: 'exported' },
-];
+/**
+ * 表示設定だけを編集する（基本情報は参照のみ）。承認待ちからの保存は承認、取込済みの保存は未取込に戻す。
+ * 値はすべて React のテキストとして描画する（v1 は innerHTML に escapeHtml して埋めていた）
+ */
+// v1: js/admin-entry-edit.js editEntry / saveEditedEntry
+export function EntryEditModal(props: EntryEditModalProps) {
+  if (!props.entry) return null;
+  // 開くたびに初期値を作り直す（v1 は開くたびにモーダルを作り直していた）
+  return <EntryEditDialog key={props.entry.id} {...props} entry={props.entry} />;
+}
 
-const posterTypeOptions = [
-  { value: PosterType.TEMPLATE, label: 'テンプレート' },
-  { value: PosterType.CUSTOM, label: '追加' },
-];
-
-export function EntryEditModal({ open, onClose, entry, onSave }: EntryEditModalProps) {
-  const [formData, setFormData] = useState<Partial<DbEntry>>({});
+function EntryEditDialog({
+  entry,
+  mode,
+  onClose,
+  onSaved,
+  propertyNames,
+  displayDefault,
+}: EntryEditModalProps & { entry: DbEntry }) {
+  const { addToast } = useToast();
+  const [form, setForm] = useState<EntryEditForm>(() => toEditForm(entry, displayDefault));
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (entry) {
-      setFormData({
-        property_code: entry.property_code,
-        terminal_id: entry.terminal_id,
-        vendor_name: entry.vendor_name,
-        emergency_contact: entry.emergency_contact,
-        inspection_type: entry.inspection_type,
-        template_no: entry.template_no,
-        inspection_start: entry.inspection_start,
-        inspection_end: entry.inspection_end,
-        display_start_date: entry.display_start_date,
-        display_start_time: entry.display_start_time,
-        display_end_date: entry.display_end_date,
-        display_end_time: entry.display_end_time,
-        display_duration: entry.display_duration,
-        announcement: entry.announcement,
-        remarks: entry.remarks,
-        poster_type: entry.poster_type,
-        frame_no: entry.frame_no,
-        status: entry.status,
-      });
-    }
-  }, [entry]);
-
-  const handleChange = (field: keyof DbEntry, value: string | number | null) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-  };
+  const set = (key: keyof EntryEditForm, value: string) =>
+    setForm((prev) => ({ ...prev, [key]: value }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!entry) return;
     setSaving(true);
     try {
-      await onSave(entry.id, formData);
+      await updateEntryDisplaySettings(
+        entry.id,
+        buildEditUpdates(form, mode, entry.status, displayDefault),
+      );
+      addToast('編集しました', 'success');
       onClose();
+      await onSaved();
+    } catch (error) {
+      console.error('Failed to update entry:', error);
+      addToast(`編集に失敗しました: ${entryErrorReason(error)}`, 'error');
     } finally {
       setSaving(false);
     }
   };
 
-  if (!entry) return null;
+  const propertyDisplay = `${entry.property_code || '-'} ${propertyNames.get(entry.property_code) || ''}`;
 
   return (
-    <Modal open={open} onClose={onClose} title="エントリー編集" className="max-w-2xl">
-      <form onSubmit={handleSubmit} className="space-y-4">
+    <Modal open onClose={onClose} title="表示設定を編集" className="max-w-xl">
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="rounded-md bg-gray-100 p-4 text-sm">
+          <h4 className="mb-3 text-sm font-bold text-gray-500">基本情報（参照のみ）</h4>
+          <dl className="space-y-2">
+            <InfoRow label="物件" value={propertyDisplay} />
+            <InfoRow label="端末" value={normalizeTerminalId(entry.terminal_id) || '-'} />
+            <InfoRow label="保守会社" value={entry.vendor_name || '-'} />
+            <InfoRow label="点検種別" value={entry.inspection_type || '-'} />
+            <div className="grid grid-cols-2 gap-2">
+              <InfoRow label="点検開始" value={entry.inspection_start || '-'} />
+              <InfoRow label="点検終了" value={entry.inspection_end || '-'} />
+            </div>
+          </dl>
+        </div>
+
+        <h4 className="text-sm font-bold text-gray-900">表示設定</h4>
         <div className="grid grid-cols-2 gap-4">
-          <Input
-            label="物件コード"
-            value={formData.property_code ?? ''}
-            onChange={(e) => handleChange('property_code', e.target.value)}
-          />
-          <Input
-            label="端末ID"
-            value={formData.terminal_id ?? ''}
-            onChange={(e) => handleChange('terminal_id', e.target.value)}
-          />
-          <Input
-            label="保守会社"
-            value={formData.vendor_name ?? ''}
-            onChange={(e) => handleChange('vendor_name', e.target.value)}
-          />
-          <Input
-            label="緊急連絡先"
-            value={formData.emergency_contact ?? ''}
-            onChange={(e) => handleChange('emergency_contact', e.target.value || null)}
-          />
-          <Input
-            label="点検種別"
-            value={formData.inspection_type ?? ''}
-            onChange={(e) => handleChange('inspection_type', e.target.value)}
-          />
-          <Input
-            label="テンプレートNo"
-            value={formData.template_no ?? ''}
-            onChange={(e) => handleChange('template_no', e.target.value || null)}
-          />
-          <Input
-            label="点検開始日"
-            type="date"
-            value={formData.inspection_start ?? ''}
-            onChange={(e) => handleChange('inspection_start', e.target.value || null)}
-          />
-          <Input
-            label="点検終了日"
-            type="date"
-            value={formData.inspection_end ?? ''}
-            onChange={(e) => handleChange('inspection_end', e.target.value || null)}
-          />
           <Input
             label="表示開始日"
             type="date"
-            value={formData.display_start_date ?? ''}
-            onChange={(e) => handleChange('display_start_date', e.target.value || null)}
+            value={form.displayStartDate}
+            onChange={(e) => set('displayStartDate', e.target.value)}
+          />
+          <Input
+            label="表示開始時間"
+            type="time"
+            value={form.displayStartTime}
+            onChange={(e) => set('displayStartTime', e.target.value)}
           />
           <Input
             label="表示終了日"
             type="date"
-            value={formData.display_end_date ?? ''}
-            onChange={(e) => handleChange('display_end_date', e.target.value || null)}
+            value={form.displayEndDate}
+            onChange={(e) => set('displayEndDate', e.target.value)}
           />
           <Input
-            label="表示開始時刻"
+            label="表示終了時間"
             type="time"
-            value={formData.display_start_time ?? ''}
-            onChange={(e) => handleChange('display_start_time', e.target.value || null)}
+            value={form.displayEndTime}
+            onChange={(e) => set('displayEndTime', e.target.value)}
           />
           <Input
-            label="表示終了時刻"
-            type="time"
-            value={formData.display_end_time ?? ''}
-            onChange={(e) => handleChange('display_end_time', e.target.value || null)}
-          />
-          <Input
-            label="表示時間(秒)"
+            label="表示時間（秒）"
             type="number"
-            value={formData.display_duration ?? ''}
-            onChange={(e) =>
-              handleChange(
-                'display_duration',
-                e.target.value ? Number(e.target.value) : null,
-              )
-            }
-          />
-          <Input
-            label="フレームNo"
-            value={formData.frame_no ?? ''}
-            onChange={(e) => handleChange('frame_no', e.target.value || null)}
+            min={1}
+            max={60}
+            value={form.displayDuration}
+            onChange={(e) => set('displayDuration', e.target.value)}
           />
           <Select
-            label="貼紙区分"
-            options={posterTypeOptions}
-            placeholder="選択"
-            value={formData.poster_type ?? ''}
-            onChange={(e) =>
-              handleChange('poster_type', (e.target.value || null) as DbEntry['poster_type'])
-            }
-          />
-          <Select
-            label="ステータス"
-            options={statusOptions}
-            value={formData.status ?? ''}
-            onChange={(e) =>
-              handleChange('status', (e.target.value || null) as DbEntry['status'])
-            }
+            label="表示位置"
+            options={POSTER_POSITION_OPTIONS}
+            value={form.posterPosition}
+            onChange={(e) => set('posterPosition', e.target.value)}
           />
         </div>
-        <TextArea
-          label="案内文"
-          value={formData.announcement ?? ''}
-          onChange={(e) => handleChange('announcement', e.target.value || null)}
-          rows={3}
-        />
-        <TextArea
-          label="備考"
-          value={formData.remarks ?? ''}
-          onChange={(e) => handleChange('remarks', e.target.value || null)}
-          rows={2}
-        />
         <div className="flex justify-end gap-3 pt-2">
           <Button variant="secondary" type="button" onClick={onClose}>
             キャンセル
@@ -199,5 +140,16 @@ export function EntryEditModal({ open, onClose, entry, onSave }: EntryEditModalP
         </div>
       </form>
     </Modal>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex gap-2">
+      <dt className="shrink-0 text-gray-500">{label}：</dt>
+      <dd className="truncate font-semibold text-gray-900" title={value}>
+        {value}
+      </dd>
+    </div>
   );
 }

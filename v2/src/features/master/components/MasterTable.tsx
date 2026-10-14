@@ -2,11 +2,13 @@ import { Button } from '@/components/ui/Button';
 import type { MasterConfig } from '../types/masterConfig';
 
 interface MasterTableProps<T extends Record<string, unknown>> {
-  config: MasterConfig<T>;
+  config: Pick<MasterConfig<T>, 'columns' | 'readOnly'>;
   items: T[];
   onEdit: (item: T) => void;
   onDelete: (item: T) => void;
   renderCell?: (key: string, value: unknown, item: T) => React.ReactNode;
+  /** 0件のときの文言（v1: 検索中は「検索結果がありません」） */
+  emptyMessage?: string;
 }
 
 export function MasterTable<T extends Record<string, unknown>>({
@@ -15,6 +17,7 @@ export function MasterTable<T extends Record<string, unknown>>({
   onEdit,
   onDelete,
   renderCell,
+  emptyMessage = 'データがありません',
 }: MasterTableProps<T>) {
   return (
     <div className="overflow-x-auto">
@@ -42,7 +45,7 @@ export function MasterTable<T extends Record<string, unknown>>({
                 colSpan={config.columns.length + (config.readOnly ? 0 : 1)}
                 className="py-8 text-center text-gray-400"
               >
-                データがありません
+                {emptyMessage}
               </td>
             </tr>
           ) : (

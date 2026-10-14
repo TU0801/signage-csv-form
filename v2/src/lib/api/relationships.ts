@@ -14,6 +14,17 @@ export async function fetchActivePropertyCodes(vendorId: string): Promise<string
   return ((data ?? []) as { property_code: string }[]).map((r) => r.property_code);
 }
 
+/** ビル追加リクエスト（status=pending）の件数（管理画面サイドバー） */
+// v1: js/admin.js updateSidebarCounts の pendingBuildingRequests.length（getPendingBuildingRequests）
+export async function countPendingBuildingRequests(): Promise<number> {
+  const { count, error } = await supabase
+    .from(TABLES.buildingVendors)
+    .select('id', { count: 'exact', head: true })
+    .eq('status', BuildingVendorStatus.PENDING);
+  if (error) throw error;
+  return count ?? 0;
+}
+
 /**
  * ログイン中のユーザーが扱える物件。管理者は全物件、一般ユーザーは自社に active で紐付いた物件だけ
  * （RLS は有効メンバーに全物件の SELECT を許しているので、絞り込みはここで行う）。

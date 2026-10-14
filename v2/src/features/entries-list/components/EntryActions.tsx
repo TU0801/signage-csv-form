@@ -1,176 +1,184 @@
 import { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/Button';
-import { Select } from '@/components/ui/Select';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
-import { supabase, TABLES } from '@/lib/supabase';
-import { EntryStatus } from '@/lib/constants';
 import {
   generateAdminCsv,
   filterApprovedEntries,
   downloadCsv,
   copyCsvToClipboard,
 } from '@/lib/csv';
-import type { DbEntry, DbProperty } from '@/types/database';
+import type { AdminEntryStatus } from '@/lib/api/admin-entries';
+import type { DbEntry } from '@/types/database';
+import type { EntriesFilters } from '../hooks/useEntriesFilters';
+import { bulkStatusLabel, filterExportEntries } from '../lib/entries';
 
 interface EntryActionsProps {
+  /** 一覧に読み込んだ行（承認済みのみ）。CSV・コピー・追加画像DL の対象はここから選ぶ（選択行ではない） */
+  entries: DbEntry[];
+  /** チェックした行。一括削除・ステータス変更・点検レポートの対象 */
   selectedEntries: DbEntry[];
-  onStatusChange: (ids: string[], status: EntryStatus) => Promise<void>;
-  onClearSelection: () => void;
+  filters: EntriesFilters;
+  propertyNames: Map<string, string>;
+  displayTimeDefault: string | undefined;
+  onStatusChange: (ids: string[], status: AdminEntryStatus) => Promise<void>;
+  onBulkDelete: (ids: string[]) => Promise<void>;
 }
 
-/**
- * 設定 display_time_default（text）。v1 admin-settings.js loadAppSettings と同じく、
- * 読めなければ undefined を返し generateAdminCsv 側の既定 6 秒にする
- */
-async function fetchDisplayTimeDefault(): Promise<string | undefined> {
-  const { data, error } = await supabase
-    .from(TABLES.settings)
-    .select('setting_value')
-    .eq('setting_key', 'display_time_default')
-    .maybeSingle();
-  if (error) return undefined;
-  return (data as { setting_value: string } | null)?.setting_value ?? undefined;
-}
+type PendingConfirm = { kind: 'status'; status: AdminEntryStatus } | { kind: 'delete' };
 
-/** 本番CSV（v1 admin-export.js と同じ）。出力は承認済み（ready/exported）だけ */
-async function buildAdminCsv(entries: DbEntry[]): Promise<string> {
-  return generateAdminCsv(filterApprovedEntries(entries), await fetchDisplayTimeDefault());
-}
-
-const statusOptions = [
-  { value: EntryStatus.PENDING, label: 'pending' },
-  { value: EntryStatus.DRAFT, label: 'draft' },
-  { value: EntryStatus.READY, label: 'ready' },
-  { value: EntryStatus.EXPORTED, label: 'exported' },
-];
-
+// v1: admin.html #tab-entries .action-bar / js/admin-entries.js / js/admin-export.js
 export function EntryActions({
+  entries,
   selectedEntries,
+  filters,
+  propertyNames,
+  displayTimeDefault,
   onStatusChange,
-  onClearSelection,
+  onBulkDelete,
 }: EntryActionsProps) {
   const { addToast } = useToast();
   const [downloading, setDownloading] = useState(false);
+  const [confirm, setConfirm] = useState<PendingConfirm | null>(null);
+  const hasSelection = selectedEntries.length > 0;
+  const selectedIds = selectedEntries.map((e) => e.id);
 
-  const handleExportCsv = useCallback(async () => {
-    if (selectedEntries.length === 0) {
-      addToast('エクスポートするエントリーを選択してください', 'warning');
-      return;
-    }
-    const csv = await buildAdminCsv(selectedEntries);
+  // v1: js/admin-export.js exportCSV
+  const handleExportCsv = useCallback(() => {
+    const csv = generateAdminCsv(filterExportEntries(entries, filters), displayTimeDefault);
     if (!csv) {
-      addToast('エクスポートするデータがありません（承認済みのみ出力されます）', 'error');
+      addToast('エクスポートするデータがありません', 'error');
       return;
     }
-    // v1 exportCSV と同じファイル名
     const timestamp = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15);
     downloadCsv(csv, `admin-export-${timestamp}.csv`);
     addToast('CSVをダウンロードしました', 'success');
-  }, [selectedEntries, addToast]);
+  }, [entries, filters, displayTimeDefault, addToast]);
 
+  // v1: js/admin-export.js copyCSV
   const handleCopyCsv = useCallback(async () => {
-    if (selectedEntries.length === 0) {
-      addToast('コピーするエントリーを選択してください', 'warning');
+    const csv = generateAdminCsv(filterExportEntries(entries, filters), displayTimeDefault);
+    if (!csv) {
+      addToast('コピーするデータがありません', 'error');
       return;
     }
     try {
-      const csv = await buildAdminCsv(selectedEntries);
-      if (!csv) {
-        addToast('コピーするデータがありません（承認済みのみ出力されます）', 'error');
-        return;
-      }
       await copyCsvToClipboard(csv);
       addToast('CSVをクリップボードにコピーしました', 'success');
     } catch {
       addToast('コピーに失敗しました', 'error');
     }
-  }, [selectedEntries, addToast]);
+  }, [entries, filters, displayTimeDefault, addToast]);
 
-  const handleStatusChange = useCallback(
-    async (e: React.ChangeEvent<HTMLSelectElement>) => {
-      const newStatus = e.target.value as EntryStatus;
-      if (!newStatus || selectedEntries.length === 0) return;
-      try {
-        const ids = selectedEntries.map((entry) => entry.id);
-        await onStatusChange(ids, newStatus);
-        onClearSelection();
-        addToast(`${ids.length}件のステータスを変更しました`, 'success');
-      } catch {
-        addToast('ステータスの変更に失敗しました', 'error');
-      }
-    },
-    [selectedEntries, onStatusChange, onClearSelection, addToast],
-  );
-
+  // v1: js/admin-export.js exportInspectionReport
   const handleExportReport = useCallback(async () => {
-    if (selectedEntries.length === 0) {
-      addToast('レポート対象を選択してください', 'warning');
+    if (!hasSelection) {
+      addToast('レポート対象を選択してください', 'error');
       return;
     }
     try {
-      const [{ exportInspectionReport }, { data }] = await Promise.all([
-        import('@/lib/report'),
-        supabase.from(TABLES.properties).select('*').order('property_code'),
-      ]);
-      exportInspectionReport(selectedEntries, (data ?? []) as DbProperty[]);
+      const { downloadInspectionReport } = await import('../lib/inspectionReport');
+      await downloadInspectionReport(selectedEntries, propertyNames);
       addToast('点検レポートをダウンロードしました', 'success');
-    } catch {
-      addToast('レポートの生成に失敗しました', 'error');
+    } catch (error) {
+      console.error('Failed to export report:', error);
+      addToast('点検レポートの出力に失敗しました', 'error');
     }
-  }, [selectedEntries, addToast]);
+  }, [hasSelection, selectedEntries, propertyNames, addToast]);
 
+  // v1: js/admin-export.js downloadCustomImages（承認済みの追加画像すべて。ZIP 内は customImageBaseName + .jpg）
   const handleDownloadImages = useCallback(async () => {
-    if (selectedEntries.length === 0) {
-      addToast('ダウンロード対象を選択してください', 'warning');
+    const count = filterApprovedEntries(entries).filter(
+      (e) => e.poster_type === 'custom' && e.poster_image,
+    ).length;
+    if (count === 0) {
+      addToast('ダウンロード対象の追加画像がありません', 'info');
       return;
     }
+    addToast(`${count}件の画像をダウンロード中...`, 'info');
     setDownloading(true);
     try {
       const { downloadCustomImages } = await import('@/lib/zipDownload');
-      const count = await downloadCustomImages(selectedEntries);
-      if (count === 0) {
-        addToast('ダウンロード対象の追加画像がありません', 'info');
-      } else {
-        addToast(`${count}件の画像をダウンロードしました`, 'success');
-      }
-    } catch {
+      const done = await downloadCustomImages(entries);
+      addToast(`${done}件の画像をダウンロードしました`, 'success');
+    } catch (error) {
+      console.error('Failed to download images:', error);
       addToast('画像のダウンロードに失敗しました', 'error');
     } finally {
       setDownloading(false);
     }
-  }, [selectedEntries, addToast]);
+  }, [entries, addToast]);
 
-  if (selectedEntries.length === 0) return null;
+  const confirmMessage =
+    confirm?.kind === 'delete'
+      ? `選択した${selectedIds.length}件のデータを完全に削除してもよろしいですか？ この操作は取り消せません。`
+      : confirm?.kind === 'status'
+        ? `選択した${selectedIds.length}件を「${bulkStatusLabel(confirm.status)}」に変更しますか？`
+        : '';
 
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-md bg-blue-50 px-4 py-2">
-      <span className="text-sm font-medium text-blue-800">
-        {selectedEntries.length}件選択中
-      </span>
-      <div className="w-40">
-        <Select
-          options={statusOptions}
-          placeholder="ステータス変更"
-          value=""
-          onChange={handleStatusChange}
-        />
-      </div>
-      <Button size="sm" variant="primary" onClick={handleExportCsv}>
-        CSVエクスポート
+    <div className="flex flex-wrap items-center gap-2">
+      {hasSelection && (
+        <span className="text-sm font-medium text-blue-800">{selectedEntries.length}件選択中</span>
+      )}
+      <Button
+        size="sm"
+        variant="danger"
+        disabled={!hasSelection}
+        onClick={() => setConfirm({ kind: 'delete' })}
+      >
+        一括削除
+      </Button>
+      <Button
+        size="sm"
+        variant="secondary"
+        disabled={!hasSelection}
+        onClick={() => setConfirm({ kind: 'status', status: 'exported' })}
+      >
+        ✓ 取込済みにする
+      </Button>
+      <Button
+        size="sm"
+        variant="secondary"
+        disabled={!hasSelection}
+        onClick={() => setConfirm({ kind: 'status', status: 'ready' })}
+      >
+        ↩ 未取込に戻す
+      </Button>
+      <Button
+        size="sm"
+        variant="secondary"
+        disabled={!hasSelection}
+        onClick={() => setConfirm({ kind: 'status', status: 'pending' })}
+      >
+        未申請に戻す
+      </Button>
+      <Button size="sm" variant="success" onClick={handleExportReport}>
+        点検レポート
+      </Button>
+      <Button size="sm" variant="success" onClick={handleExportCsv}>
+        CSV
       </Button>
       <Button size="sm" variant="secondary" onClick={handleCopyCsv}>
-        CSVコピー
-      </Button>
-      <Button size="sm" variant="secondary" onClick={handleExportReport}>
-        点検レポート
+        コピー
       </Button>
       <Button size="sm" variant="secondary" onClick={handleDownloadImages} disabled={downloading}>
         {downloading ? 'DL中...' : '追加画像DL'}
       </Button>
-      <Button size="sm" variant="ghost" onClick={onClearSelection}>
-        選択解除
-      </Button>
+
+      <ConfirmDialog
+        open={confirm !== null}
+        onClose={() => setConfirm(null)}
+        onConfirm={() => {
+          if (!confirm) return;
+          if (confirm.kind === 'delete') void onBulkDelete(selectedIds);
+          else void onStatusChange(selectedIds, confirm.status);
+        }}
+        title={confirm?.kind === 'delete' ? '一括削除' : 'ステータス変更'}
+        message={confirmMessage}
+        confirmLabel={confirm?.kind === 'delete' ? '削除する' : '変更する'}
+        variant={confirm?.kind === 'delete' ? 'danger' : 'primary'}
+      />
     </div>
   );
 }
-

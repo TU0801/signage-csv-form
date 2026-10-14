@@ -41,8 +41,13 @@ export function MasterFormModal<T extends Record<string, unknown>>({
     }
   }, [open, editItem, config.defaultValues, reset]);
 
+  // 失敗したらモーダルを開いたままにする（v1 handleMasterFormSubmit も失敗時は閉じない。文言は onSubmit 側で出す）
   const onFormSubmit = handleSubmit(async (data) => {
-    await onSubmit(data as Partial<T>);
+    try {
+      await onSubmit(data as Partial<T>);
+    } catch {
+      return;
+    }
     onClose();
   });
 

@@ -1,112 +1,56 @@
 import { describe, it, expect } from 'vitest';
 import { validateBulkRow } from '../utils/validateBulkRow';
-import type { EntryFormData } from '@/types/app';
-import { DEFAULT_DISPLAY_DURATION } from '@/lib/constants';
+import { applySettings, DEFAULT_BULK_SETTINGS } from '../utils/bulkMaster';
+import type { BulkProperty } from '../types';
 
-function createValidRow(): EntryFormData {
-  return {
-    propertyCode: 'P001',
-    terminalId: 'T01',
-    vendorName: 'ABC保守',
-    emergencyContact: '090-1234-5678',
-    inspectionType: '電気点検',
-    templateNo: 'TPL001',
-    startDate: '2025-01-01',
-    endDate: '2025-01-31',
-    displayStartDate: '2025-01-01',
-    displayStartTime: '09:00',
-    displayEndDate: '2025-01-31',
-    displayEndTime: '18:00',
-    displayDuration: DEFAULT_DISPLAY_DURATION,
-    noticeText: 'テスト案内',
-    remarks: '備考',
-    posterType: 'template',
-    posterPosition: '',
-    frameNo: '',
-    showOnBoard: true,
-  };
-}
+const properties: BulkProperty[] = [
+  { propertyCode: 'z0001A01', propertyName: '物件A', terminalId: 'T-A1', supplement: '' },
+];
 
-describe('validateBulkRow', () => {
-  it('returns no errors for a valid row', () => {
-    const errors = validateBulkRow(createValidRow());
-    expect(Object.keys(errors)).toHaveLength(0);
+// 実DB signage_master_settings の setting_key / setting_value（文字列）を v1 setAppSettings と同じく取り込む
+const settings = applySettings(DEFAULT_BULK_SETTINGS, [
+  { setting_key: 'display_time_max', setting_value: '20' },
+  { setting_key: 'remarks_max_lines', setting_value: '2' },
+  { setting_key: 'remarks_chars_per_line', setting_value: '5' },
+  { setting_key: 'notice_text_max_chars', setting_value: '10' },
+]);
+
+/** 必須項目がそろった行（これだけならエラー無し） */
+const base = {
+  propertyCode: 'z0001A01',
+  terminalId: 'T-A1',
+  inspectionType: '消防設備点検',
+  startDate: '2026-10-01',
+  endDate: '2026-10-01',
+  displayStartDate: '',
+  displayEndDate: '',
+  displayTime: 10,
+  remarks: '',
+  noticeText: '',
+};
+
+const errorsOf = (patch: Partial<typeof base>) => validateBulkRow({ ...base, ...patch }, properties, settings);
+
+describe('validateBulkRow (v1 js/bulk-table.js validateRow)', () => {
+  it('end dates must not be before start dates (inspection and display)', () => {
+    expect(errorsOf({})).toEqual([]);
+    expect(errorsOf({ startDate: '2026-10-02', endDate: '2026-10-01' })).toEqual(['点検終了日は開始日以降']);
+    expect(errorsOf({ displayStartDate: '2026-10-05', displayEndDate: '2026-10-04' })).toEqual(['表示終了日は開始日以降']);
   });
 
-  it('reports missing required fields', () => {
-    const row: EntryFormData = {
-      ...createValidRow(),
-      propertyCode: '',
-      terminalId: '',
-      vendorName: '',
-      inspectionType: '',
-    };
-    const errors = validateBulkRow(row);
-    expect(errors['propertyCode']).toBeDefined();
-    expect(errors['terminalId']).toBeDefined();
-    expect(errors['vendorName']).toBeDefined();
-    expect(errors['inspectionType']).toBeDefined();
+  it('display time must not exceed display_time_max', () => {
+    expect(errorsOf({ displayTime: 20 })).toEqual([]);
+    expect(errorsOf({ displayTime: 21 })).toEqual(['表示時間(20秒以下)']);
   });
 
-  it('reports missing date fields', () => {
-    const row: EntryFormData = {
-      ...createValidRow(),
-      startDate: '',
-      endDate: '',
-      displayStartDate: '',
-      displayEndDate: '',
-    };
-    const errors = validateBulkRow(row);
-    expect(errors['startDate']).toBeDefined();
-    expect(errors['endDate']).toBeDefined();
-    expect(errors['displayStartDate']).toBeDefined();
-    expect(errors['displayEndDate']).toBeDefined();
+  it('remarks are limited by line count and characters per line', () => {
+    expect(errorsOf({ remarks: '12345\n12345' })).toEqual([]);
+    expect(errorsOf({ remarks: 'a\nb\nc' })).toEqual(['備考行数(2行以下)']);
+    expect(errorsOf({ remarks: '123456' })).toEqual(['備考文字数(1行5文字以下)']);
   });
 
-  it('reports invalid date format', () => {
-    const row: EntryFormData = {
-      ...createValidRow(),
-      startDate: '2025/01/01',
-    };
-    const errors = validateBulkRow(row);
-    expect(errors['startDate']).toContain('YYYY-MM-DD');
-  });
-
-  it('reports endDate before startDate', () => {
-    const row: EntryFormData = {
-      ...createValidRow(),
-      startDate: '2025-02-01',
-      endDate: '2025-01-01',
-    };
-    const errors = validateBulkRow(row);
-    expect(errors['endDate']).toContain('開始日以降');
-  });
-
-  it('reports displayEndDate before displayStartDate', () => {
-    const row: EntryFormData = {
-      ...createValidRow(),
-      displayStartDate: '2025-02-01',
-      displayEndDate: '2025-01-01',
-    };
-    const errors = validateBulkRow(row);
-    expect(errors['displayEndDate']).toContain('表示開始日以降');
-  });
-
-  it('reports negative displayDuration', () => {
-    const row: EntryFormData = {
-      ...createValidRow(),
-      displayDuration: -1,
-    };
-    const errors = validateBulkRow(row);
-    expect(errors['displayDuration']).toBeDefined();
-  });
-
-  it('accepts zero displayDuration', () => {
-    const row: EntryFormData = {
-      ...createValidRow(),
-      displayDuration: 0,
-    };
-    const errors = validateBulkRow(row);
-    expect(errors['displayDuration']).toBeUndefined();
+  it('notice text is limited by notice_text_max_chars', () => {
+    expect(errorsOf({ noticeText: '1234567890' })).toEqual([]);
+    expect(errorsOf({ noticeText: '12345678901' })).toEqual(['案内文(10文字以下)']);
   });
 });

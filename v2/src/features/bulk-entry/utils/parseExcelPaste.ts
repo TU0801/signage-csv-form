@@ -1,145 +1,91 @@
-import type { EntryFormData } from '@/types/app';
-import { DEFAULT_ENTRY_FORM_DATA } from '@/features/single-entry/hooks/useEntryForm';
+import type { BulkProperty, BulkRowInput } from '../types';
 
-/**
- * TSVカラムヘッダーと EntryFormData フィールドのマッピング
- */
-const COLUMN_MAP: Record<string, keyof EntryFormData> = {
-  '物件コード': 'propertyCode',
-  '端末ID': 'terminalId',
-  '保守会社名': 'vendorName',
-  '緊急連絡先': 'emergencyContact',
-  '点検種別': 'inspectionType',
-  '開始日': 'startDate',
-  '終了日': 'endDate',
-  '表示開始日': 'displayStartDate',
-  '表示終了日': 'displayEndDate',
-  '表示開始時刻': 'displayStartTime',
-  '表示終了時刻': 'displayEndTime',
-  '備考': 'remarks',
-  '案内文': 'noticeText',
-  'テンプレートNo': 'templateNo',
-  '貼紙区分': 'posterType',
-  '貼紙位置': 'posterPosition',
-  'frame_No': 'frameNo',
-  'frameNo': 'frameNo',
-  // English aliases
-  propertyCode: 'propertyCode',
-  terminalId: 'terminalId',
-  vendorName: 'vendorName',
-  inspectionType: 'inspectionType',
-  startDate: 'startDate',
-  endDate: 'endDate',
-  displayStartDate: 'displayStartDate',
-  displayEndDate: 'displayEndDate',
-  remarks: 'remarks',
-};
+/** 貼り付けの列（6列固定。v1.29.2 で統一）。テンプレートCSVとヘルプ表示もこの順 */
+export const PASTE_COLUMNS = ['物件名', '端末ID', '点検種別', '開始日', '終了日', '備考'] as const;
 
-function createEmptyFormData(): EntryFormData {
-  return { ...DEFAULT_ENTRY_FORM_DATA };
+/** 先頭行をヘッダーとみなす語（1列目か2列目が一致したら飛ばす） */
+const HEADER_KEYWORDS = ['物件コード', '物件名', '物件', 'property', '端末id', '端末', 'terminal', '保守会社', '業者', 'vendor'];
+
+export interface PasteResult {
+  rows: BulkRowInput[];
+  /** 物件名・物件コードがマスターに無かった行の数（行は物件エラーで残す） */
+  unresolvedCount: number;
+  /** 物件・端末・点検種別がどれも無く、空白でもない行の数（飛ばす） */
+  errorCount: number;
 }
 
-/** ヘッダーなし時のデフォルトカラム順序（PasteModalでも参照） */
-export const DEFAULT_PASTE_COLUMNS: readonly (keyof EntryFormData)[] = [
-  'propertyCode',
-  'terminalId',
-  'vendorName',
-  'inspectionType',
-  'startDate',
-  'endDate',
-  'displayStartDate',
-  'displayEndDate',
-  'remarks',
-];
-
-/**
- * Normalize date strings: YYYY/MM/DD -> YYYY-MM-DD
- */
-function normalizeDate(value: string): string {
-  const trimmed = value.trim();
-  // YYYY/MM/DD -> YYYY-MM-DD
-  const slashMatch = trimmed.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
-  if (slashMatch) {
-    const [, y, m, d] = slashMatch;
-    return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+/** YYYY/M/D・YYYY-M-D を YYYY-MM-DD にする。読めなければ空。v1: js/bulk-modals.js formatDateForInput */
+export function formatDateForInput(dateStr: string): string {
+  if (!dateStr) return '';
+  const match = dateStr.match(/(\d{4})[/-](\d{1,2})[/-](\d{1,2})/);
+  if (match) {
+    return `${match[1]}-${match[2]!.padStart(2, '0')}-${match[3]!.padStart(2, '0')}`;
   }
-  return trimmed;
+  return '';
 }
 
 /**
- * TSV（タブ区切り）テキストをパースして EntryFormData の配列を返す。
- * 先頭行がヘッダー行の場合はマッピングに使用する。
- * ヘッダーなしの場合はデフォルトカラム順序を使用する。
+ * Excel から貼り付けたタブ区切りテキストを行にする。
+ * 列: 0 物件名/物件コード, 1 端末ID, 2 点検種別, 3 開始日, 4 終了日, 5 備考（6・7列目に案内文・表示位置があれば読む）。
+ * - 全体を trim しない（先頭セルが空の行で列がずれないように）。末尾の空行だけ落とす
+ * - 物件は名前とコードの両方で照合し、見つからなければ空にして行は残す（黙って取り込まない）
+ * v1: js/bulk-modals.js importFromPaste
  */
-export function parseExcelPaste(text: string): Partial<EntryFormData>[] {
-  const trimmedText = text.trim();
-  if (!trimmedText) return [];
+export function parseExcelPaste(raw: string, properties: BulkProperty[]): PasteResult {
+  const lines = raw.split(/\r?\n/);
+  while (lines.length > 0 && lines[lines.length - 1]!.trim() === '') lines.pop();
 
-  const lines = trimmedText.split(/\r?\n/);
-  if (lines.length === 0) return [];
+  let startIndex = 0;
+  const firstCols = (lines[0] || '').split('\t');
+  const firstColLower = (firstCols[0] || '').toLowerCase().trim();
+  const secondColLower = (firstCols[1] || '').toLowerCase().trim();
+  const isHeaderRow = HEADER_KEYWORDS.some(
+    (keyword) => firstColLower === keyword.toLowerCase() || secondColLower === keyword.toLowerCase(),
+  );
+  if (isHeaderRow) startIndex = 1;
 
-  const firstLine = lines[0]!;
-  const firstLineCells = firstLine.split('\t');
+  const rows: BulkRowInput[] = [];
+  let errorCount = 0;
+  let unresolvedCount = 0;
 
-  // Detect whether first line is a header
-  const hasHeader = firstLineCells.some((cell) => {
-    const trimmed = cell.trim();
-    return trimmed in COLUMN_MAP;
-  });
+  for (let i = startIndex; i < lines.length; i++) {
+    const line = lines[i]!;
+    const cols = line.split('\t');
+    const propValue = cols[0]?.trim() || '';
+    const terminalId = cols[1]?.trim() || '';
+    const inspectionType = cols[2]?.trim() || '';
 
-  const DEFAULT_COLUMNS = DEFAULT_PASTE_COLUMNS;
-
-  let columnMapping: (keyof EntryFormData | null)[];
-  let dataLines: string[];
-
-  if (hasHeader) {
-    columnMapping = firstLineCells.map((cell) => {
-      const trimmed = cell.trim();
-      return COLUMN_MAP[trimmed] ?? null;
-    });
-    dataLines = lines.slice(1);
-  } else {
-    columnMapping = DEFAULT_COLUMNS.map((col, i) => (i < firstLineCells.length ? col : null));
-    dataLines = lines;
-  }
-
-  const dateFields: Set<keyof EntryFormData> = new Set([
-    'startDate',
-    'endDate',
-    'displayStartDate',
-    'displayEndDate',
-  ]);
-
-  const results: Partial<EntryFormData>[] = [];
-
-  for (const line of dataLines) {
-    if (!line.trim()) continue;
-
-    const cells = line.split('\t');
-    const row: Partial<EntryFormData> = { ...createEmptyFormData() };
-
-    for (let i = 0; i < columnMapping.length; i++) {
-      const field = columnMapping[i];
-      if (!field) continue;
-
-      const rawValue = cells[i]?.trim() ?? '';
-      if (!rawValue) continue;
-
-      if (dateFields.has(field)) {
-        (row as Record<string, unknown>)[field] = normalizeDate(rawValue);
-      } else if (field === 'posterType') {
-        (row as Record<string, unknown>)[field] =
-          rawValue === '追加' || rawValue === 'custom' ? 'custom' : 'template';
-      } else if (field === 'showOnBoard') {
-        (row as Record<string, unknown>)[field] =
-          rawValue.toLowerCase() === 'true' || rawValue === '1' || rawValue === 'TRUE';
-      } else {
-        (row as Record<string, unknown>)[field] = rawValue;
-      }
+    if (!propValue && !terminalId && !inspectionType) {
+      if (line.trim() !== '') errorCount++;
+      continue;
     }
 
-    results.push(row);
+    const property = properties.find(
+      (p) => p.propertyName === propValue || String(p.propertyCode) === String(propValue),
+    );
+    if (!property && propValue) unresolvedCount++;
+
+    rows.push({
+      propertyCode: property?.propertyCode || '',
+      terminalId,
+      inspectionType,
+      startDate: formatDateForInput(cols[3]?.trim() || ''),
+      endDate: formatDateForInput(cols[4]?.trim() || ''),
+      remarks: cols[5]?.trim() || '',
+      noticeText: cols[6]?.trim() || '',
+      position: cols[7] ? parseInt(cols[7]) : 2,
+    });
   }
 
-  return results;
+  return { rows, unresolvedCount, errorCount };
+}
+
+/**
+ * 貼り付け用テンプレートCSV（BOM付き UTF-8、カンマ区切り、LF）。
+ * v1: js/bulk-modals.js downloadExcelTemplate
+ */
+export function buildPasteTemplateCsv(): string {
+  const example1 = ['アソシアグロッツォ天神サウス', 'z1003A01', 'エレベーター定期点検', '2025/1/15', '2025/1/15', '午前中'];
+  const example2 = ['アソシアグロッツォタイムズスイート博多', 'h0001A00', '消防設備点検', '2025/2/1', '2025/2/3', ''];
+  return [[...PASTE_COLUMNS], example1, example2].map((row) => row.join(',')).join('\n');
 }

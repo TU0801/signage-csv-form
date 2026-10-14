@@ -95,13 +95,6 @@ export interface MasterData {
   templateImages: DbTemplateImage[];
 }
 
-/** 一括入力行 */
-export interface BulkRow extends EntryFormData {
-  _id: string;
-  _errors: Record<string, string>;
-  _isValid: boolean;
-}
-
 /** トースト通知 */
 export interface Toast {
   id: string;

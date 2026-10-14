@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
 import type { MasterConfig } from '../types/masterConfig';
 
 interface UseMasterCRUDReturn<T extends Record<string, unknown>> {
   items: T[];
   filteredItems: T[];
   loading: boolean;
+  /** 一覧の取得に失敗したときの文言。null なら成功 */
+  error: string | null;
   search: string;
   setSearch: (value: string) => void;
   reload: () => Promise<void>;
@@ -14,72 +15,78 @@ interface UseMasterCRUDReturn<T extends Record<string, unknown>> {
   deleteItem: (id: string) => Promise<void>;
 }
 
+/** 検索語を含むか（v1 render* の filter: 対象列を空白でつなぎ、大文字小文字を区別せず部分一致） */
+// v1: js/admin-masters.js renderProperties / renderInspections / renderCategories / renderVendors の filter
+export function matchesSearch<T extends Record<string, unknown>>(
+  item: T,
+  fields: (keyof T & string)[],
+  search: string,
+): boolean {
+  if (!search) return true;
+  const text = fields.map((f) => String(item[f] ?? '')).join(' ');
+  return text.toLowerCase().includes(search.toLowerCase());
+}
+
 export function useMasterCRUD<T extends Record<string, unknown>>(
   config: MasterConfig<T>,
 ): UseMasterCRUDReturn<T> {
+  const { api } = config;
   const [items, setItems] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 
   const reload = useCallback(async () => {
-    setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from(config.tableName)
-        .select('*')
-        .order(config.defaultSort, { ascending: true });
-
-      if (error) throw error;
-      setItems((data as T[]) ?? []);
+      setItems(await api.list());
+      setError(null);
+    } catch (err) {
+      // v1: js/admin.js loadAllData（取得に失敗したら「一部データの取得に失敗しました」を出す）
+      console.error(`Failed to load ${config.displayName}:`, err);
+      setError(`${config.displayName}の取得に失敗しました`);
     } finally {
       setLoading(false);
     }
-  }, [config.tableName, config.defaultSort]);
+  }, [api, config.displayName]);
 
   useEffect(() => {
     void reload();
   }, [reload]);
 
-  const filteredItems = items.filter((item) => {
-    if (!search) return true;
-    const value = item[config.searchField];
-    if (typeof value === 'string') {
-      return value.toLowerCase().includes(search.toLowerCase());
-    }
-    return true;
-  });
+  const filteredItems = items.filter((item) => matchesSearch(item, config.searchFields, search));
 
   const addItem = useCallback(
     async (data: Partial<T>) => {
-      const { error } = await supabase.from(config.tableName).insert(data);
-      if (error) throw new Error(error.message);
+      if (!api.add) throw new Error('追加できないマスターです');
+      await api.add(data);
       await reload();
     },
-    [config.tableName, reload],
+    [api, reload],
   );
 
   const updateItem = useCallback(
     async (id: string, data: Partial<T>) => {
-      const { error } = await supabase.from(config.tableName).update(data).eq('id', id);
-      if (error) throw new Error(error.message);
+      if (!api.update) throw new Error('更新できないマスターです');
+      await api.update(id, data);
       await reload();
     },
-    [config.tableName, reload],
+    [api, reload],
   );
 
   const deleteItem = useCallback(
     async (id: string) => {
-      const { error } = await supabase.from(config.tableName).delete().eq('id', id);
-      if (error) throw new Error(error.message);
+      if (!api.remove) throw new Error('削除できないマスターです');
+      await api.remove(id);
       await reload();
     },
-    [config.tableName, reload],
+    [api, reload],
   );
 
   return {
     items,
     filteredItems,
     loading,
+    error,
     search,
     setSearch,
     reload,

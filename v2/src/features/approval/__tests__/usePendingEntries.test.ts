@@ -1,131 +1,63 @@
-import { describe, it, expect } from 'vitest';
-import { EntryStatus, BuildingVendorStatus } from '@/lib/constants';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { renderHook, act } from '@testing-library/react';
+import { usePendingEntries } from '../hooks/usePendingEntries';
+import type { DbEntry } from '@/types/database';
+import {
+  getSessionFiltersForTest,
+  resetSessionFiltersForTest,
+  todayForFilter,
+} from '@/features/entries-list/hooks/useEntriesFilters';
 
-describe('usePendingEntries business logic', () => {
-  describe('EntryStatus constants', () => {
-    it('DRAFT is "draft"', () => {
-      expect(EntryStatus.DRAFT).toBe('draft');
-    });
+const api = vi.hoisted(() => ({
+  fetchPendingEntries: vi.fn(),
+  approveEntry: vi.fn(),
+  approveEntries: vi.fn(),
+  rejectEntry: vi.fn(),
+}));
 
-    it('READY is "ready"', () => {
-      expect(EntryStatus.READY).toBe('ready');
-    });
+vi.mock('@/lib/api/admin-entries', () => api);
 
-    it('PENDING is "pending"', () => {
-      expect(EntryStatus.PENDING).toBe('pending');
-    });
+const draft = (id: string) => ({ id, status: 'draft' }) as DbEntry;
 
-    it('EXPORTED is "exported"', () => {
-      expect(EntryStatus.EXPORTED).toBe('exported');
-    });
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+describe('usePendingEntries (v1 admin-pending.js)', () => {
+  it('approves (status ready via API), reloads the draft list and sets the list start date to today', async () => {
+    resetSessionFiltersForTest();
+    api.fetchPendingEntries.mockResolvedValueOnce([draft('1'), draft('2')]).mockResolvedValueOnce([draft('2')]);
+    api.approveEntry.mockResolvedValue({ id: '1', status: 'ready' });
+    const { result } = renderHook(() => usePendingEntries());
+
+    await act(() => result.current.fetchPendingEntries());
+    expect(result.current.entries.map((e) => e.id)).toEqual(['1', '2']);
+
+    await act(() => result.current.approveEntry('1'));
+    expect(api.approveEntry).toHaveBeenCalledWith('1');
+    expect(result.current.entries.map((e) => e.id)).toEqual(['2']);
+    // v1: 承認のあと loadAllData が #filterStartDate（空なら）に今日を入れる
+    expect(getSessionFiltersForTest()?.startDate).toBe(todayForFilter());
   });
 
-  describe('BuildingVendorStatus constants', () => {
-    it('ACTIVE is "active"', () => {
-      expect(BuildingVendorStatus.ACTIVE).toBe('active');
-    });
+  it('rejects by deleting and propagates the DB error so the screen can show it', async () => {
+    api.fetchPendingEntries.mockResolvedValue([draft('1')]);
+    api.rejectEntry.mockRejectedValue({ code: '42501', message: '承認済みのデータは削除できません（管理者にお問い合わせください）' });
+    const { result } = renderHook(() => usePendingEntries());
 
-    it('PENDING is "pending"', () => {
-      expect(BuildingVendorStatus.PENDING).toBe('pending');
-    });
-
-    it('DELETED is "deleted"', () => {
-      expect(BuildingVendorStatus.DELETED).toBe('deleted');
-    });
+    await expect(act(() => result.current.rejectEntry('1'))).rejects.toMatchObject({ code: '42501' });
+    expect(api.rejectEntry).toHaveBeenCalledWith('1');
   });
 
-  describe('approval logic', () => {
-    it('should filter out approved entry from list', () => {
-      const entries = [
-        { id: '1', status: 'draft' as const },
-        { id: '2', status: 'draft' as const },
-        { id: '3', status: 'draft' as const },
-      ];
-      const approvedId = '2';
-      const remaining = entries.filter((e) => e.id !== approvedId);
-      expect(remaining).toHaveLength(2);
-      expect(remaining.map((e) => e.id)).toEqual(['1', '3']);
-    });
+  it('bulk approve sends the selected ids in one call and skips an empty selection', async () => {
+    api.fetchPendingEntries.mockResolvedValue([]);
+    api.approveEntries.mockResolvedValue([]);
+    const { result } = renderHook(() => usePendingEntries());
 
-    it('should filter out rejected entry from list', () => {
-      const entries = [
-        { id: '1', status: 'draft' as const },
-        { id: '2', status: 'draft' as const },
-      ];
-      const rejectedId = '1';
-      const remaining = entries.filter((e) => e.id !== rejectedId);
-      expect(remaining).toHaveLength(1);
-      expect(remaining[0]!.id).toBe('2');
-    });
-
-    it('should filter out bulk approved entries from list', () => {
-      const entries = [
-        { id: '1', status: 'draft' as const },
-        { id: '2', status: 'draft' as const },
-        { id: '3', status: 'draft' as const },
-        { id: '4', status: 'draft' as const },
-      ];
-      const approvedIds = new Set(['1', '3']);
-      const remaining = entries.filter((e) => !approvedIds.has(e.id));
-      expect(remaining).toHaveLength(2);
-      expect(remaining.map((e) => e.id)).toEqual(['2', '4']);
-    });
-
-    it('should not filter anything when no ids match', () => {
-      const entries = [
-        { id: '1', status: 'draft' as const },
-        { id: '2', status: 'draft' as const },
-      ];
-      const approvedIds = new Set(['99']);
-      const remaining = entries.filter((e) => !approvedIds.has(e.id));
-      expect(remaining).toHaveLength(2);
-    });
-
-    it('approval changes status from draft to ready', () => {
-      const entry = { id: '1', status: EntryStatus.DRAFT };
-      const updated = { ...entry, status: EntryStatus.READY };
-      expect(updated.status).toBe('ready');
-    });
-
-    it('rejection removes the entry', () => {
-      const entries = [{ id: '1' }, { id: '2' }];
-      const afterDelete = entries.filter((e) => e.id !== '1');
-      expect(afterDelete).toHaveLength(1);
-      expect(afterDelete[0]!.id).toBe('2');
-    });
-  });
-
-  describe('select all logic', () => {
-    it('select all should include all entry ids', () => {
-      const entries = [{ id: '1' }, { id: '2' }, { id: '3' }];
-      const allIds = new Set(entries.map((e) => e.id));
-      expect(allIds.size).toBe(entries.length);
-      expect(allIds.has('1')).toBe(true);
-      expect(allIds.has('2')).toBe(true);
-      expect(allIds.has('3')).toBe(true);
-    });
-
-    it('deselect all should clear selection', () => {
-      const selected = new Set(['1', '2', '3']);
-      const cleared = new Set<string>();
-      expect(cleared.size).toBe(0);
-      expect(selected.size).toBe(3);
-    });
-
-    it('toggle select should add/remove single item', () => {
-      const selected = new Set(['1', '3']);
-
-      // Toggle on
-      const withTwo = new Set(selected);
-      withTwo.add('2');
-      expect(withTwo.has('2')).toBe(true);
-      expect(withTwo.size).toBe(3);
-
-      // Toggle off
-      const withoutOne = new Set(selected);
-      withoutOne.delete('1');
-      expect(withoutOne.has('1')).toBe(false);
-      expect(withoutOne.size).toBe(1);
-    });
+    await act(() => result.current.approveBulk([]));
+    expect(api.approveEntries).not.toHaveBeenCalled();
+    await act(() => result.current.approveBulk(['1', '3']));
+    expect(api.approveEntries).toHaveBeenCalledWith(['1', '3']);
+    expect(api.fetchPendingEntries).toHaveBeenCalledTimes(1);
   });
 });

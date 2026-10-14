@@ -1,35 +1,26 @@
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { Button } from '@/components/ui/Button';
-import { EntryStatus } from '@/lib/constants';
-import { useMasterData } from '@/hooks/useMasterData';
+import type { DbVendor } from '@/types/database';
 import type { EntriesFilters as EntriesFiltersType } from '../hooks/useEntriesFilters';
 
 interface EntriesFiltersProps {
   filters: EntriesFiltersType;
   onUpdateFilter: <K extends keyof EntriesFiltersType>(key: K, value: EntriesFiltersType[K]) => void;
-  onReset: () => void;
-  hasActiveFilters: boolean;
+  properties: { property_code: string; property_name: string }[];
+  vendors: DbVendor[];
 }
 
-const statusOptions = [
-  { value: EntryStatus.PENDING, label: 'pending' },
-  { value: EntryStatus.DRAFT, label: 'draft' },
-  { value: EntryStatus.READY, label: 'ready' },
-  { value: EntryStatus.EXPORTED, label: 'exported' },
-];
-
+/** 物件・点検開始日（期間）・保守会社で絞り込む。ステータスの絞り込みとリセットボタンは無い（v1 と同じ） */
+// v1: admin.html #tab-entries のフィルター / js/admin-entries.js populateFilters
 export function EntriesFilters({
   filters,
   onUpdateFilter,
-  onReset,
-  hasActiveFilters,
+  properties,
+  vendors,
 }: EntriesFiltersProps) {
-  const { properties, vendors } = useMasterData();
-
   const propertyOptions = properties.map((p) => ({
     value: p.property_code,
-    label: `${p.property_code} - ${p.property_name}`,
+    label: `${p.property_code} ${p.property_name}`,
   }));
 
   const vendorOptions = vendors.map((v) => ({
@@ -41,11 +32,27 @@ export function EntriesFilters({
     <div className="flex flex-wrap items-end gap-4">
       <div className="w-64">
         <Select
-          label="物件コード"
+          label="物件"
           options={propertyOptions}
           placeholder="すべて"
           value={filters.propertyCode}
           onChange={(e) => onUpdateFilter('propertyCode', e.target.value)}
+        />
+      </div>
+      <div className="w-44">
+        <Input
+          label="期間（開始）"
+          type="date"
+          value={filters.startDate}
+          onChange={(e) => onUpdateFilter('startDate', e.target.value)}
+        />
+      </div>
+      <div className="w-44">
+        <Input
+          label="期間（終了）"
+          type="date"
+          value={filters.endDate}
+          onChange={(e) => onUpdateFilter('endDate', e.target.value)}
         />
       </div>
       <div className="w-48">
@@ -57,36 +64,6 @@ export function EntriesFilters({
           onChange={(e) => onUpdateFilter('vendorName', e.target.value)}
         />
       </div>
-      <div className="w-40">
-        <Select
-          label="ステータス"
-          options={statusOptions}
-          placeholder="すべて"
-          value={filters.status}
-          onChange={(e) => onUpdateFilter('status', e.target.value as EntriesFiltersType['status'])}
-        />
-      </div>
-      <div className="w-44">
-        <Input
-          label="表示開始日(from)"
-          type="date"
-          value={filters.dateFrom}
-          onChange={(e) => onUpdateFilter('dateFrom', e.target.value)}
-        />
-      </div>
-      <div className="w-44">
-        <Input
-          label="表示終了日(to)"
-          type="date"
-          value={filters.dateTo}
-          onChange={(e) => onUpdateFilter('dateTo', e.target.value)}
-        />
-      </div>
-      {hasActiveFilters && (
-        <Button variant="ghost" size="sm" onClick={onReset}>
-          フィルタをリセット
-        </Button>
-      )}
     </div>
   );
 }

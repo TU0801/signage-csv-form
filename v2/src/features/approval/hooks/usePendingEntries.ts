@@ -1,63 +1,70 @@
 import { useState, useCallback } from 'react';
-import { supabase, TABLES } from '@/lib/supabase';
+import {
+  approveEntries,
+  approveEntry as apiApproveEntry,
+  fetchPendingEntries as apiFetchPendingEntries,
+  rejectEntry as apiRejectEntry,
+} from '@/lib/api/admin-entries';
 import type { DbEntry } from '@/types/database';
-import { EntryStatus } from '@/lib/constants';
+import { applyDefaultStartDate } from '@/features/entries-list/hooks/useEntriesFilters';
+import { useAdminCountsStore } from '@/stores/adminCountsStore';
 
+/** 承認待ち（申請済み = draft）のエントリ。承認・却下・一括承認のあとは一覧を読み直す */
+// v1: js/admin-pending.js
 export function usePendingEntries() {
   const [entries, setEntries] = useState<DbEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // v1: js/admin-pending.js loadPendingEntries
   const fetchPendingEntries = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const { data, error: queryError } = await supabase
-        .from(TABLES.entries)
-        .select('*')
-        .eq('status', EntryStatus.DRAFT)
-        .order('created_at', { ascending: false });
-      if (queryError) throw queryError;
-      setEntries(data as DbEntry[]);
+      const rows = await apiFetchPendingEntries();
+      setEntries(rows);
+      // v1: js/admin-pending.js → updateSidebarCounts
+      useAdminCountsStore.getState().setPendingEntries(rows.length);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '承認待ちエントリーの取得に失敗しました');
+      console.error('Failed to load pending entries:', err);
+      setError('承認待ちデータの取得に失敗しました');
     } finally {
       setLoading(false);
     }
   }, []);
 
+  // v1: js/admin-pending.js approveSingle
   const approveEntry = useCallback(
     async (id: string) => {
-      const { error } = await supabase
-        .from(TABLES.entries)
-        .update({ status: EntryStatus.READY, updated_at: new Date().toISOString() })
-        .eq('id', id);
-      if (error) throw error;
-      setEntries((prev) => prev.filter((e) => e.id !== id));
+      await apiApproveEntry(id);
+      // v1: js/admin-pending.js → js/admin.js loadAllData（データ一覧の開始日が空なら今日を入れる）
+      applyDefaultStartDate();
+      await fetchPendingEntries();
     },
-    [],
+    [fetchPendingEntries],
   );
 
+  // v1: js/admin-pending.js rejectSingle（却下 = 削除）
   const rejectEntry = useCallback(
     async (id: string) => {
-      const { error } = await supabase.from(TABLES.entries).delete().eq('id', id);
-      if (error) throw error;
-      setEntries((prev) => prev.filter((e) => e.id !== id));
+      await apiRejectEntry(id);
+      // v1: js/admin-pending.js → js/admin.js loadAllData（データ一覧の開始日が空なら今日を入れる）
+      applyDefaultStartDate();
+      await fetchPendingEntries();
     },
-    [],
+    [fetchPendingEntries],
   );
 
+  // v1: js/admin-pending.js approveSelected
   const approveBulk = useCallback(
     async (ids: string[]) => {
       if (ids.length === 0) return;
-      const { error } = await supabase
-        .from(TABLES.entries)
-        .update({ status: EntryStatus.READY, updated_at: new Date().toISOString() })
-        .in('id', ids);
-      if (error) throw error;
-      setEntries((prev) => prev.filter((e) => !ids.includes(e.id)));
+      await approveEntries(ids);
+      // v1: js/admin-pending.js → js/admin.js loadAllData（データ一覧の開始日が空なら今日を入れる）
+      applyDefaultStartDate();
+      await fetchPendingEntries();
     },
-    [],
+    [fetchPendingEntries],
   );
 
   return {

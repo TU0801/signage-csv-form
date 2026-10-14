@@ -1,10 +1,13 @@
 import { useEffect, useRef } from 'react';
+import { cn } from '@/lib/utils';
 
 interface ContextMenuItem {
   label: string;
-  onClick: () => void;
+  onClick: () => void | Promise<void>;
   disabled?: boolean;
   danger?: boolean;
+  /** この項目の上に区切り線を入れる */
+  divider?: boolean;
 }
 
 interface ContextMenuProps {
@@ -14,6 +17,7 @@ interface ContextMenuProps {
   onClose: () => void;
 }
 
+/** 行の右クリックメニュー。外側のクリック・Escape で閉じる。v1: js/bulk-modals.js createContextMenu */
 export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -42,23 +46,27 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
       style={{ left: x, top: y }}
     >
       {items.map((item) => (
-        <button
-          key={item.label}
-          onClick={() => {
-            item.onClick();
-            onClose();
-          }}
-          disabled={item.disabled}
-          className={`w-full px-4 py-1.5 text-left text-sm ${
-            item.disabled
-              ? 'text-gray-300 cursor-not-allowed'
-              : item.danger
-                ? 'text-red-600 hover:bg-red-50'
-                : 'text-gray-700 hover:bg-gray-100'
-          }`}
-        >
-          {item.label}
-        </button>
+        <div key={item.label}>
+          {item.divider && <div className="my-1 border-t border-gray-100" />}
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              void item.onClick();
+            }}
+            disabled={item.disabled}
+            className={cn(
+              'w-full px-4 py-1.5 text-left text-sm',
+              item.disabled
+                ? 'cursor-not-allowed text-gray-300'
+                : item.danger
+                  ? 'text-red-600 hover:bg-red-50'
+                  : 'text-gray-700 hover:bg-gray-100',
+            )}
+          >
+            {item.label}
+          </button>
+        </div>
       ))}
     </div>
   );

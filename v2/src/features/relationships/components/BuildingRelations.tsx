@@ -1,136 +1,139 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
-import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
-import type { DbBuildingVendor } from '@/types/database';
-import type { MasterProperty } from '@/types/app';
+import type { DbBuildingVendor, DbProperty } from '@/types/database';
+import type { AddSummary } from '../api';
+import { PillSelectModal, type PillOption } from './PillSelectModal';
 
 interface BuildingRelationsProps {
+  /** active の紐付けだけ */
   buildingVendors: DbBuildingVendor[];
-  properties: MasterProperty[];
-  onAdd: (propertyCode: string) => Promise<void>;
+  properties: Pick<DbProperty, 'property_code' | 'property_name'>[];
+  loadAvailableProperties: () => Promise<Pick<DbProperty, 'property_code' | 'property_name'>[]>;
+  onAdd: (propertyCodes: string[]) => Promise<AddSummary>;
   onRemove: (id: string) => Promise<void>;
 }
 
+// v1: js/admin-relationships.js renderBuildingVendorRelationships
 export function BuildingRelations({
   buildingVendors,
   properties,
+  loadAvailableProperties,
   onAdd,
   onRemove,
 }: BuildingRelationsProps) {
   const { addToast } = useToast();
-  const [selectedProperty, setSelectedProperty] = useState('');
-  const [adding, setAdding] = useState(false);
+  const [options, setOptions] = useState<PillOption[]>([]);
+  const [modalOpen, setModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
-  const assignedCodes = new Set(buildingVendors.map((bv) => bv.property_code));
-  const availableProperties = properties.filter((p) => !assignedCodes.has(p.property_code));
+  const propertyMap = new Map(properties.map((p) => [String(p.property_code), p.property_name]));
 
-  const propertyMap = new Map(properties.map((p) => [p.property_code, p.property_name]));
-
-  const handleAdd = async () => {
-    if (!selectedProperty) return;
-    setAdding(true);
+  // v1: js/admin-relationships.js openAddBuildingModal
+  const openModal = async () => {
     try {
-      await onAdd(selectedProperty);
-      setSelectedProperty('');
-      addToast('ビルを追加しました', 'success');
-    } catch (err) {
-      addToast(err instanceof Error ? err.message : '追加に失敗しました', 'error');
-    } finally {
-      setAdding(false);
+      const available = await loadAvailableProperties();
+      if (available.length === 0) {
+        addToast('すべての物件が既に紐付けられています', 'info');
+        return;
+      }
+      setOptions(
+        available.map((p) => ({
+          value: String(p.property_code),
+          label: `${p.property_name}（${p.property_code}）`,
+        })),
+      );
+      setModalOpen(true);
+    } catch {
+      addToast('物件の取得に失敗しました', 'error');
     }
   };
 
+  // v1: js/admin-relationships.js confirmBuildingSelection
+  const handleConfirm = async (codes: string[]) => {
+    setModalOpen(false);
+    try {
+      const summary = await onAdd(codes);
+      addToast(summary.message, summary.type);
+    } catch {
+      addToast('追加に失敗しました', 'error');
+    }
+  };
+
+  // v1: js/admin-relationships.js handleRemoveBuildingVendor
   const handleRemove = async () => {
     if (!deleteTarget) return;
+    const id = deleteTarget;
+    setDeleteTarget(null);
     try {
-      await onRemove(deleteTarget);
-      addToast('ビルを削除しました', 'success');
-    } catch (err) {
-      addToast(err instanceof Error ? err.message : '削除に失敗しました', 'error');
-    } finally {
-      setDeleteTarget(null);
+      await onRemove(id);
+      addToast('紐付けを削除しました', 'success');
+    } catch {
+      addToast('削除に失敗しました', 'error');
     }
   };
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-3 items-end">
-        <div className="flex-1">
-          <Select
-            label="ビルを追加"
-            options={availableProperties.map((p) => ({
-              value: p.property_code,
-              label: `${p.property_code} - ${p.property_name}`,
-            }))}
-            placeholder="物件を選択..."
-            value={selectedProperty}
-            onChange={(e) => setSelectedProperty(e.target.value)}
-          />
-        </div>
-        <Button onClick={handleAdd} disabled={!selectedProperty || adding} size="sm">
-          追加
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-gray-500">{buildingVendors.length}件の物件が紐付けられています</p>
+        <Button size="sm" onClick={openModal}>
+          ＋ ビルを追加
         </Button>
       </div>
 
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-gray-200 text-left">
-            <th className="py-2 px-3 font-medium text-gray-700">物件コード</th>
-            <th className="py-2 px-3 font-medium text-gray-700">物件名</th>
-            <th className="py-2 px-3 font-medium text-gray-700">ステータス</th>
-            <th className="py-2 px-3 font-medium text-gray-700">操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          {buildingVendors.length === 0 ? (
-            <tr>
-              <td colSpan={4} className="py-8 text-center text-gray-400">
-                紐付けされたビルはありません
-              </td>
+      {buildingVendors.length === 0 ? (
+        <p className="py-8 text-center text-sm text-gray-500">紐付けがありません</p>
+      ) : (
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-200 text-left">
+              <th className="py-2 px-3 font-medium text-gray-700">物件コード</th>
+              <th className="py-2 px-3 font-medium text-gray-700">物件名</th>
+              <th className="py-2 px-3 font-medium text-gray-700">ステータス</th>
+              <th className="py-2 px-3 font-medium text-gray-700">登録日</th>
+              <th className="py-2 px-3 font-medium text-gray-700">操作</th>
             </tr>
-          ) : (
-            buildingVendors.map((bv) => (
+          </thead>
+          <tbody>
+            {buildingVendors.map((bv) => (
               <tr key={bv.id} className="border-b border-gray-100 hover:bg-gray-50">
                 <td className="py-2 px-3">{bv.property_code}</td>
-                <td className="py-2 px-3">{propertyMap.get(bv.property_code) ?? '-'}</td>
+                <td className="py-2 px-3">{propertyMap.get(String(bv.property_code)) || '-'}</td>
                 <td className="py-2 px-3">
-                  <Badge
-                    variant={
-                      bv.status === 'active'
-                        ? 'success'
-                        : bv.status === 'pending'
-                          ? 'warning'
-                          : 'danger'
-                    }
-                  >
-                    {bv.status}
-                  </Badge>
+                  <Badge variant="success">有効</Badge>
                 </td>
                 <td className="py-2 px-3">
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    onClick={() => setDeleteTarget(bv.id)}
-                  >
+                  {bv.created_at ? new Date(bv.created_at).toLocaleDateString('ja-JP') : '-'}
+                </td>
+                <td className="py-2 px-3">
+                  <Button variant="danger" size="sm" onClick={() => setDeleteTarget(bv.id)}>
                     削除
                   </Button>
                 </td>
               </tr>
-            ))
-          )}
-        </tbody>
-      </table>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <PillSelectModal
+        open={modalOpen}
+        title="物件を追加"
+        description="追加する物件を選択してください（複数選択可）"
+        options={options}
+        onClose={() => setModalOpen(false)}
+        onConfirm={handleConfirm}
+      />
 
       <ConfirmDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleRemove}
-        title="ビル紐付け削除"
-        message="このビルの紐付けを削除しますか？"
+        title="紐付けの削除"
+        message="この紐付けを削除してもよろしいですか？"
         confirmLabel="削除"
         variant="danger"
       />

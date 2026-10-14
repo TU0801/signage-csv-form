@@ -5,6 +5,9 @@ import path from 'path';
 process.env.TZ = 'Asia/Tokyo';
 
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify('test'),
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

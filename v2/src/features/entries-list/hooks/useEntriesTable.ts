@@ -1,56 +1,46 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { supabase, TABLES } from '@/lib/supabase';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { fetchApprovedEntries } from '@/lib/api/admin-entries';
 import type { DbEntry } from '@/types/database';
+import { useAdminCountsStore } from '@/stores/adminCountsStore';
 import type { EntriesFilters } from './useEntriesFilters';
 
+/** データ一覧（承認済みのみ）を絞り込みに合わせて取得する */
+// v1: js/admin-entries.js loadEntries
 export function useEntriesTable(filters: EntriesFilters) {
   const [entries, setEntries] = useState<DbEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 絞り込みを続けて変えたとき、古い応答があとに届いても反映しない（最新の依頼の番号だけを受け付ける）
+  const requestSeq = useRef(0);
 
   const fetchEntries = useCallback(async () => {
+    const seq = ++requestSeq.current;
     setLoading(true);
     setError(null);
     try {
-      let query = supabase.from(TABLES.entries).select('*').order('created_at', { ascending: false });
-
-      if (filters.propertyCode) {
-        query = query.eq('property_code', filters.propertyCode);
+      const rows = await fetchApprovedEntries({
+        propertyCode: filters.propertyCode,
+        startDate: filters.startDate,
+        endDate: filters.endDate,
+        vendorName: filters.vendorName,
+      });
+      if (seq === requestSeq.current) {
+        setEntries(rows);
+        // v1: js/admin-entries.js loadEntries → updateSidebarCounts
+        useAdminCountsStore.getState().setApproved(rows.length);
       }
-      if (filters.vendorName) {
-        query = query.eq('vendor_name', filters.vendorName);
-      }
-      if (filters.status) {
-        query = query.eq('status', filters.status);
-      }
-      if (filters.dateFrom) {
-        query = query.gte('display_start_date', filters.dateFrom);
-      }
-      if (filters.dateTo) {
-        query = query.lte('display_end_date', filters.dateTo);
-      }
-
-      const { data, error: queryError } = await query;
-      if (queryError) throw queryError;
-      setEntries(data as DbEntry[]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'エントリーの取得に失敗しました');
+      if (seq !== requestSeq.current) return;
+      console.error('Failed to load entries:', err);
+      setError('データの取得に失敗しました');
     } finally {
-      setLoading(false);
+      if (seq === requestSeq.current) setLoading(false);
     }
-  }, [filters.propertyCode, filters.vendorName, filters.status, filters.dateFrom, filters.dateTo]);
+  }, [filters.propertyCode, filters.startDate, filters.endDate, filters.vendorName]);
 
   useEffect(() => {
     fetchEntries();
   }, [fetchEntries]);
 
-  const entryCount = useMemo(() => entries.length, [entries]);
-
-  return {
-    entries,
-    loading,
-    error,
-    entryCount,
-    refetch: fetchEntries,
-  };
+  return { entries, loading, error, refetch: fetchEntries };
 }

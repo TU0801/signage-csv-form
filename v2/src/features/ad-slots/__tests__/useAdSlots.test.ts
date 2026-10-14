@@ -1,6 +1,6 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { useAdSlots } from '../hooks/useAdSlots';
+import { useAdSlots, uploadAdImageV1 } from '../hooks/useAdSlots';
 
 const mockSelect = vi.fn();
 const mockUpdate = vi.fn();
@@ -18,6 +18,25 @@ vi.mock('@/lib/supabase', () => ({
     adSlots: 'signage_ad_slots',
   },
 }));
+
+const mockUploadAdImage = vi.fn();
+vi.mock('@/lib/storage', () => ({
+  uploadAdImage: (...args: unknown[]) => mockUploadAdImage(...args),
+}));
+
+/** signage_ad_slots の実列（本番の slot 3 と同じ形） */
+const slot3 = {
+  id: 's3',
+  slot_index: 3,
+  image_url:
+    'https://pdouwmjyswswfmzpfjzf.supabase.co/storage/v1/object/public/poster-images/ads/slot_3.png',
+  caption: '',
+  link_url: 'https://baran-ev.com/',
+  is_active: false,
+  sort_order: 0,
+  created_at: null,
+  updated_at: null,
+};
 
 describe('useAdSlots', () => {
   beforeEach(() => {
@@ -76,22 +95,73 @@ describe('useAdSlots', () => {
     expect(result.current.error).toBeTruthy();
   });
 
-  it('updateSlot calls update with params', async () => {
-    mockOrder.mockResolvedValue({ data: [], error: null });
-    mockEq.mockImplementation(() => ({
-      order: mockOrder,
-    }));
-
+  it('saveSlot updates image/caption/link/active together by slot_index and keeps the image without a file', async () => {
     const { result } = renderHook(() => useAdSlots());
-
-    await waitFor(() => {
-      expect(result.current.loading).toBe(false);
-    });
+    await waitFor(() => expect(result.current.loading).toBe(false));
 
     await act(async () => {
-      await result.current.updateSlot('s1', { is_active: true });
+      await result.current.saveSlot(slot3, {
+        caption: ' 鍵の案内 ',
+        linkUrl: 'https://example.com/ ',
+        isActive: true,
+      });
     });
 
-    expect(mockUpdate).toHaveBeenCalledWith({ is_active: true });
+    expect(mockUploadAdImage).not.toHaveBeenCalled();
+    expect(mockUpdate).toHaveBeenCalledWith({
+      image_url: slot3.image_url,
+      caption: '鍵の案内',
+      link_url: 'https://example.com/',
+      is_active: true,
+      updated_at: expect.any(String),
+    });
+    expect(mockEq).toHaveBeenCalledWith('slot_index', 3);
+  });
+
+  it('saveSlot uploads the chosen image to ads/ first and saves its URL', async () => {
+    const newUrl =
+      'https://pdouwmjyswswfmzpfjzf.supabase.co/storage/v1/object/public/poster-images/ads/slot_3.jpg';
+    mockUploadAdImage.mockResolvedValue(newUrl);
+    const file = new File(['x'], 'ad.jpg', { type: 'image/jpeg' });
+
+    const { result } = renderHook(() => useAdSlots());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.saveSlot(slot3, { imageFile: file, caption: '', linkUrl: '', isActive: false });
+    });
+
+    expect(mockUploadAdImage).toHaveBeenCalledWith(file, 3);
+    expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ image_url: newUrl }));
+  });
+
+  it('saveSlot does not update the row when the upload fails', async () => {
+    mockUploadAdImage.mockRejectedValue(new Error('広告画像のアップロードに失敗しました: The resource already exists'));
+    const file = new File(['x'], 'ad.png', { type: 'image/png' });
+
+    const { result } = renderHook(() => useAdSlots());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await expect(
+      result.current.saveSlot(slot3, { imageFile: file, caption: '', linkUrl: '', isActive: true }),
+    ).rejects.toThrow('画像のアップロードに失敗しました: The resource already exists');
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe('uploadAdImageV1', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('rejects other extensions and files over 5MB with the v1 wording before uploading', async () => {
+    const gif = new File(['x'], 'ad.gif', { type: 'image/gif' });
+    await expect(uploadAdImageV1(gif, 1)).rejects.toThrow('PNG、JPG形式の画像のみアップロードできます');
+
+    const big = new File(['x'], 'big.JPEG', { type: 'image/jpeg' });
+    Object.defineProperty(big, 'size', { value: 5 * 1024 * 1024 + 1 });
+    await expect(uploadAdImageV1(big, 1)).rejects.toThrow('ファイルサイズは5MB以下にしてください');
+
+    expect(mockUploadAdImage).not.toHaveBeenCalled();
   });
 });

@@ -1,16 +1,17 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Spinner } from '@/components/ui/Spinner';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
 import { useToast } from '@/components/ui/Toast';
-import { useAuth } from '@/hooks/useAuth';
 import { useBuildingRequests } from '../hooks/useBuildingRequests';
 
+// v1: js/admin-relationships.js renderPendingBuildingRequests（admin.html #approval-buildings）
 export function BuildingRequestsList() {
   const { requests, loading, error, fetchPendingRequests, approveRequest, rejectRequest } =
     useBuildingRequests();
   const { addToast } = useToast();
-  const { user } = useAuth();
+  const [rejectTarget, setRejectTarget] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPendingRequests();
@@ -19,26 +20,27 @@ export function BuildingRequestsList() {
   const handleApprove = useCallback(
     async (id: string) => {
       try {
-        await approveRequest(id, user?.id ?? '');
+        await approveRequest(id);
         addToast('ビル追加リクエストを承認しました', 'success');
       } catch {
         addToast('承認に失敗しました', 'error');
       }
     },
-    [approveRequest, addToast, user],
+    [approveRequest, addToast],
   );
 
-  const handleReject = useCallback(
-    async (id: string) => {
-      try {
-        await rejectRequest(id);
-        addToast('ビル追加リクエストを却下しました', 'success');
-      } catch {
-        addToast('却下に失敗しました', 'error');
-      }
-    },
-    [rejectRequest, addToast],
-  );
+  // 却下は確認してから（v1 は confirm()。承認には確認が無い）
+  const handleReject = useCallback(async () => {
+    if (!rejectTarget) return;
+    const id = rejectTarget;
+    setRejectTarget(null);
+    try {
+      await rejectRequest(id);
+      addToast('ビル追加リクエストを却下しました', 'success');
+    } catch {
+      addToast('却下に失敗しました', 'error');
+    }
+  }, [rejectTarget, rejectRequest, addToast]);
 
   if (loading) {
     return (
@@ -78,29 +80,23 @@ export function BuildingRequestsList() {
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50">
-                  <th className="px-4 py-3 text-xs font-medium uppercase text-gray-500">
-                    物件名
-                  </th>
-                  <th className="px-4 py-3 text-xs font-medium uppercase text-gray-500">
-                    物件コード
-                  </th>
-                  <th className="px-4 py-3 text-xs font-medium uppercase text-gray-500">
-                    保守会社
-                  </th>
-                  <th className="px-4 py-3 text-xs font-medium uppercase text-gray-500">
-                    申請日
-                  </th>
+                  <th className="px-4 py-3 text-xs font-medium uppercase text-gray-500">物件コード</th>
+                  <th className="px-4 py-3 text-xs font-medium uppercase text-gray-500">物件名</th>
+                  <th className="px-4 py-3 text-xs font-medium uppercase text-gray-500">保守会社</th>
+                  <th className="px-4 py-3 text-xs font-medium uppercase text-gray-500">申請者</th>
+                  <th className="px-4 py-3 text-xs font-medium uppercase text-gray-500">申請日時</th>
                   <th className="px-4 py-3 text-xs font-medium uppercase text-gray-500">操作</th>
                 </tr>
               </thead>
               <tbody>
                 {requests.map((req) => (
                   <tr key={req.id} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm text-gray-900">{req.propertyName}</td>
                     <td className="px-4 py-3 text-sm text-gray-500">{req.property_code}</td>
+                    <td className="px-4 py-3 text-sm text-gray-900">{req.propertyName}</td>
                     <td className="px-4 py-3 text-sm text-gray-900">{req.vendorName}</td>
+                    <td className="px-4 py-3 text-sm text-gray-500">{req.requesterEmail}</td>
                     <td className="px-4 py-3 text-sm text-gray-500">
-                      {req.created_at ? new Date(req.created_at).toLocaleDateString('ja-JP') : '-'}
+                      {req.created_at ? new Date(req.created_at).toLocaleString('ja-JP') : '-'}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
@@ -111,7 +107,7 @@ export function BuildingRequestsList() {
                         >
                           承認
                         </Button>
-                        <Button size="sm" variant="danger" onClick={() => handleReject(req.id)}>
+                        <Button size="sm" variant="danger" onClick={() => setRejectTarget(req.id)}>
                           却下
                         </Button>
                       </div>
@@ -123,6 +119,15 @@ export function BuildingRequestsList() {
           </div>
         )}
       </CardContent>
+      <ConfirmDialog
+        open={!!rejectTarget}
+        onClose={() => setRejectTarget(null)}
+        onConfirm={handleReject}
+        title="ビル追加リクエストの却下"
+        message="このリクエストを却下してもよろしいですか？"
+        confirmLabel="却下"
+        variant="danger"
+      />
     </Card>
   );
 }

@@ -1,42 +1,25 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useMasterCRUD } from '../hooks/useMasterCRUD';
 import type { MasterConfig } from '../types/masterConfig';
 
-// Mock supabase
-const mockSelect = vi.fn();
-const mockInsert = vi.fn();
-const mockUpdate = vi.fn();
-const mockDeleteFn = vi.fn();
-const mockOrder = vi.fn();
-const mockEq = vi.fn();
-
-vi.mock('@/lib/supabase', () => ({
-  supabase: {
-    from: () => ({
-      select: mockSelect,
-      insert: mockInsert,
-      update: mockUpdate,
-      delete: mockDeleteFn,
-    }),
-  },
-  TABLES: {
-    categories: 'signage_master_categories',
-  },
-}));
-
 interface TestItem extends Record<string, unknown> {
   id: string;
   name: string;
+  code: string;
   sort_order: number | null;
 }
 
+const mockList = vi.fn();
+const mockAdd = vi.fn();
+const mockUpdate = vi.fn();
+const mockRemove = vi.fn();
+
 const testConfig: MasterConfig<TestItem> = {
-  tableName: 'signage_master_categories',
+  api: { list: mockList, add: mockAdd, update: mockUpdate, remove: mockRemove },
   displayName: 'テストマスター',
-  searchField: 'name',
-  uniqueField: 'name',
-  defaultSort: 'sort_order',
+  searchFields: ['code', 'name'],
+  labelField: 'name',
   columns: [
     { key: 'name', label: '名前' },
     { key: 'sort_order', label: '表示順' },
@@ -49,9 +32,9 @@ const testConfig: MasterConfig<TestItem> = {
 };
 
 const mockItems: TestItem[] = [
-  { id: '1', name: 'アイテム1', sort_order: 1 },
-  { id: '2', name: 'アイテム2', sort_order: 2 },
-  { id: '3', name: 'テスト3', sort_order: 3 },
+  { id: '1', name: 'アイテム1', code: 'z0023A01', sort_order: 1 },
+  { id: '2', name: 'アイテム2', code: '120273-00', sort_order: 2 },
+  { id: '3', name: 'テスト3', code: 'X3', sort_order: 3 },
 ];
 
 function flushPromises() {
@@ -63,113 +46,74 @@ function flushPromises() {
 describe('useMasterCRUD', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockSelect.mockReturnValue({ order: mockOrder });
-    mockOrder.mockResolvedValue({ data: mockItems, error: null });
-    mockInsert.mockResolvedValue({ error: null });
-    mockUpdate.mockReturnValue({ eq: mockEq });
-    mockDeleteFn.mockReturnValue({ eq: mockEq });
-    mockEq.mockResolvedValue({ error: null });
+    mockList.mockResolvedValue(mockItems);
+    mockAdd.mockResolvedValue(undefined);
+    mockUpdate.mockResolvedValue(undefined);
+    mockRemove.mockResolvedValue(undefined);
   });
 
-  it('loads items on mount', async () => {
-    const { result } = renderHook(() => useMasterCRUD(testConfig));
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
+  it('loads items on mount through config.api.list', async () => {
+    const { result } = renderHook(() => useMasterCRUD(testConfig));
     await flushPromises();
 
     expect(result.current.loading).toBe(false);
     expect(result.current.items).toEqual(mockItems);
-    expect(result.current.filteredItems).toEqual(mockItems);
+    expect(mockList).toHaveBeenCalledTimes(1);
   });
 
-  it('filters items by search text', async () => {
+  // v1 loadAllData: 取得失敗は文言で知らせる（「登録されていません」にしない）
+  it('keeps a load failure as error instead of an unhandled rejection', async () => {
+    mockList.mockRejectedValueOnce(new Error('permission denied'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
     const { result } = renderHook(() => useMasterCRUD(testConfig));
-
     await flushPromises();
 
-    act(() => {
-      result.current.setSearch('テスト');
-    });
-
-    expect(result.current.filteredItems).toEqual([
-      { id: '3', name: 'テスト3', sort_order: 3 },
-    ]);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.items).toEqual([]);
+    expect(result.current.error).toBe('テストマスターの取得に失敗しました');
   });
 
-  it('filters items case-insensitively', async () => {
+  // v1 renderProperties: `${code} ${name}` を大文字小文字を区別せず部分一致
+  it('searches across all searchFields, case-insensitively', async () => {
     const { result } = renderHook(() => useMasterCRUD(testConfig));
-
     await flushPromises();
 
-    act(() => {
-      result.current.setSearch('アイテム');
-    });
+    act(() => result.current.setSearch('z0023a'));
+    expect(result.current.filteredItems.map((i) => i.id)).toEqual(['1']);
 
-    expect(result.current.filteredItems).toHaveLength(2);
+    act(() => result.current.setSearch('テスト'));
+    expect(result.current.filteredItems.map((i) => i.id)).toEqual(['3']);
   });
 
-  it('addItem calls insert and reloads', async () => {
+  it('add / update / remove go through config.api and reload', async () => {
     const { result } = renderHook(() => useMasterCRUD(testConfig));
-
     await flushPromises();
 
     await act(async () => {
-      await result.current.addItem({ name: '新規', sort_order: 4 });
-    });
-
-    expect(mockInsert).toHaveBeenCalledWith({ name: '新規', sort_order: 4 });
-    // reload is called after insert (initial load + reload after insert)
-    expect(mockSelect).toHaveBeenCalledTimes(2);
-  });
-
-  it('updateItem calls update with eq and reloads', async () => {
-    const { result } = renderHook(() => useMasterCRUD(testConfig));
-
-    await flushPromises();
-
-    await act(async () => {
+      await result.current.addItem({ name: '新規' });
       await result.current.updateItem('1', { name: '更新済み' });
-    });
-
-    expect(mockUpdate).toHaveBeenCalledWith({ name: '更新済み' });
-    expect(mockEq).toHaveBeenCalledWith('id', '1');
-  });
-
-  it('deleteItem calls delete with eq and reloads', async () => {
-    const { result } = renderHook(() => useMasterCRUD(testConfig));
-
-    await flushPromises();
-
-    await act(async () => {
       await result.current.deleteItem('2');
     });
 
-    expect(mockDeleteFn).toHaveBeenCalled();
-    expect(mockEq).toHaveBeenCalledWith('id', '2');
+    expect(mockAdd).toHaveBeenCalledWith({ name: '新規' });
+    expect(mockUpdate).toHaveBeenCalledWith('1', { name: '更新済み' });
+    expect(mockRemove).toHaveBeenCalledWith('2');
+    expect(mockList).toHaveBeenCalledTimes(4);
   });
 
-  it('addItem throws on supabase error', async () => {
-    mockInsert.mockResolvedValueOnce({ error: { message: 'duplicate key' } });
-
-    const { result } = renderHook(() => useMasterCRUD(testConfig));
-
+  it('rejects writes on a read-only master (no api.add)', async () => {
+    const readOnly: MasterConfig<TestItem> = { ...testConfig, api: { list: mockList }, readOnly: true };
+    const { result } = renderHook(() => useMasterCRUD(readOnly));
     await flushPromises();
 
     await expect(
       act(async () => {
-        await result.current.addItem({ name: '重複' });
+        await result.current.addItem({ name: 'x' });
       }),
-    ).rejects.toThrow('duplicate key');
-  });
-
-  it('returns all items when search is empty', async () => {
-    const { result } = renderHook(() => useMasterCRUD(testConfig));
-
-    await flushPromises();
-
-    act(() => {
-      result.current.setSearch('');
-    });
-
-    expect(result.current.filteredItems).toEqual(mockItems);
+    ).rejects.toThrow('追加できないマスターです');
   });
 });

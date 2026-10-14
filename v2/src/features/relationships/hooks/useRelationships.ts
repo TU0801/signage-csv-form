@@ -1,140 +1,187 @@
-import { useState, useEffect, useCallback } from 'react';
-import { supabase, TABLES } from '@/lib/supabase';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { BuildingVendorStatus } from '@/lib/constants';
 import {
   addBuildingVendor as apiAddBuildingVendor,
   removeBuildingVendor as apiRemoveBuildingVendor,
 } from '@/lib/api/relationships';
+import { fetchMasterInspectionTypes, fetchMasterProperties } from '@/lib/api/masterData';
 import { useAuthStore } from '@/stores/authStore';
-import type { DbBuildingVendor, DbVendorInspection } from '@/types/database';
+import type { DbBuildingVendor, DbInspectionType, DbProperty } from '@/types/database';
+import {
+  addVendorInspection as apiAddVendorInspection,
+  availablePropertiesForVendor,
+  fetchBuildingVendors,
+  fetchVendorInspections,
+  removeVendorInspection as apiRemoveVendorInspection,
+  summarizeAddResults,
+  type AddSummary,
+  type VendorInspectionWithType,
+} from '../api';
 
-export function useRelationships(vendorId: string | null) {
+export type RelationshipTab = 'buildings' | 'inspections';
+
+/** 読み込み失敗。失敗のたびに新しいオブジェクトを作るので、同じ文言の失敗が続いても毎回通知できる */
+export interface LoadError {
+  message: string;
+}
+
+interface BuildingState {
+  vendorId: string;
+  rels: DbBuildingVendor[];
+  properties: DbProperty[];
+  error: LoadError | null;
+}
+
+interface InspectionState {
+  vendorId: string;
+  rels: VendorInspectionWithType[];
+  error: LoadError | null;
+}
+
+export function useRelationships(vendorId: string | null, activeTab: RelationshipTab = 'buildings') {
   const profile = useAuthStore((s) => s.profile);
-  const [buildingVendors, setBuildingVendors] = useState<DbBuildingVendor[]>([]);
-  const [vendorInspections, setVendorInspections] = useState<DbVendorInspection[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const fetchBuildingVendors = useCallback(async () => {
-    if (!vendorId) {
-      setBuildingVendors([]);
-      return;
-    }
-    // 解除済み（deleted）は出さない。v1 admin-relationships.js も active / pending だけを扱う
-    const { data, error: err } = await supabase
-      .from(TABLES.buildingVendors)
-      .select('*')
-      .eq('vendor_id', vendorId)
-      .neq('status', BuildingVendorStatus.DELETED)
-      .order('created_at');
-    if (err) throw err;
-    setBuildingVendors((data ?? []) as DbBuildingVendor[]);
-  }, [vendorId]);
-
-  const fetchVendorInspections = useCallback(async () => {
-    if (!vendorId) {
-      setVendorInspections([]);
-      return;
-    }
-    const { data, error: err } = await supabase
-      .from(TABLES.vendorInspections)
-      .select('*')
-      .eq('vendor_id', vendorId)
-      .order('created_at');
-    if (err) throw err;
-    setVendorInspections((data ?? []) as DbVendorInspection[]);
-  }, [vendorId]);
-
-  const fetchAll = useCallback(async () => {
-    if (!vendorId) {
-      setBuildingVendors([]);
-      setVendorInspections([]);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      await Promise.all([fetchBuildingVendors(), fetchVendorInspections()]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'データの取得に失敗しました');
-    } finally {
-      setLoading(false);
-    }
-  }, [vendorId, fetchBuildingVendors, fetchVendorInspections]);
-
+  // 取得結果は保守会社の id 付きで持ち、今の保守会社のものだけを返す（切り替え直後に前の保守会社の行を出さない）
+  const [buildingState, setBuildingState] = useState<BuildingState | null>(null);
+  const [inspectionState, setInspectionState] = useState<InspectionState | null>(null);
+  // 保守会社を続けて切り替えたとき、前の保守会社の遅れた応答で上書きしない
+  const latestVendorRef = useRef(vendorId);
   useEffect(() => {
-    fetchAll();
-  }, [fetchAll]);
+    latestVendorRef.current = vendorId;
+  }, [vendorId]);
 
-  // Building-vendor CRUD
-  // 追加は解除済みの行を UPDATE で戻し、解除はソフトデリート（v1 と同じ。UNIQUE(property_code, vendor_id) がある）
-  const addBuildingVendor = useCallback(
-    async (propertyCode: string) => {
+  // v1: js/admin-relationships.js loadBuildingVendorRelationships
+  const loadBuildings = useCallback(async () => {
+    if (!vendorId) return;
+    let next: BuildingState;
+    try {
+      const [rels, properties] = await Promise.all([
+        fetchBuildingVendors(vendorId),
+        fetchMasterProperties(),
+      ]);
+      next = { vendorId, rels, properties, error: null };
+    } catch {
+      next = { vendorId, rels: [], properties: [], error: { message: '紐付け情報の読み込みに失敗しました' } };
+    }
+    if (latestVendorRef.current === vendorId) setBuildingState(next);
+  }, [vendorId]);
+
+  // v1: js/admin-relationships.js loadVendorInspectionRelationships
+  const loadInspections = useCallback(async () => {
+    if (!vendorId) return;
+    let next: InspectionState;
+    try {
+      next = { vendorId, rels: await fetchVendorInspections(vendorId), error: null };
+    } catch {
+      next = { vendorId, rels: [], error: { message: '点検種別紐付け情報の読み込みに失敗しました' } };
+    }
+    if (latestVendorRef.current === vendorId) setInspectionState(next);
+  }, [vendorId]);
+
+  // 表示中のサブタブだけを読み、保守会社やサブタブを切り替えるたびに読み直す
+  // v1: js/admin-relationships.js initRelationshipsTab（data-rel-type クリック）/ loadRelationships
+  useEffect(() => {
+    if (activeTab === 'buildings') loadBuildings();
+    else loadInspections();
+  }, [activeTab, loadBuildings, loadInspections]);
+
+  const currentBuildings = buildingState && buildingState.vendorId === vendorId ? buildingState : null;
+  const currentInspections =
+    inspectionState && inspectionState.vendorId === vendorId ? inspectionState : null;
+  const buildingVendors = currentBuildings?.rels ?? [];
+  const properties = currentBuildings?.properties ?? [];
+  const vendorInspections = currentInspections?.rels ?? [];
+  // 読み直し中は前の表を出したままにする（v1 も描き終わるまで前の表が残る）。初回だけスピナー
+  const loading = !!vendorId && !(activeTab === 'buildings' ? currentBuildings : currentInspections);
+  const buildingError = currentBuildings?.error ?? null;
+  const inspectionError = currentInspections?.error ?? null;
+
+  // 表は active だけ（v1 renderBuildingVendorRelationships の activeRelationships）
+  const activeBuildingVendors = buildingVendors.filter((r) => r.status === BuildingVendorStatus.ACTIVE);
+
+  /** 追加モーダルを開く直前に、物件と紐付けを読み直して候補を返す */
+  // v1: js/admin-relationships.js openAddBuildingModal
+  const loadAvailableProperties = useCallback(async () => {
+    if (!vendorId) return [];
+    const [allProperties, linked] = await Promise.all([
+      fetchMasterProperties(),
+      fetchBuildingVendors(vendorId),
+    ]);
+    return availablePropertiesForVendor(allProperties, linked);
+  }, [vendorId]);
+
+  /** 紐付け済み（active）を除いた点検種別 */
+  // v1: js/admin-relationships.js openAddInspectionModal
+  const loadAvailableInspectionTypes = useCallback(async (): Promise<DbInspectionType[]> => {
+    if (!vendorId) return [];
+    const [all, linked] = await Promise.all([fetchMasterInspectionTypes(), fetchVendorInspections(vendorId)]);
+    const linkedIds = new Set(linked.map((r) => r.inspection_id));
+    return all.filter((i) => !linkedIds.has(i.id));
+  }, [vendorId]);
+
+  // 追加は解除済みの行を UPDATE で戻す（共有 api。UNIQUE(property_code, vendor_id) がある）
+  // v1: js/admin-relationships.js confirmBuildingSelection
+  const addBuildingVendors = useCallback(
+    async (propertyCodes: string[]): Promise<AddSummary> => {
       if (!vendorId) throw new Error('保守会社が選択されていません');
-      await apiAddBuildingVendor({ propertyCode, vendorId, profile });
-      await fetchBuildingVendors();
+      try {
+        const results = await Promise.allSettled(
+          propertyCodes.map((code) => apiAddBuildingVendor({ propertyCode: code, vendorId, profile })),
+        );
+        return summarizeAddResults(results, '物件');
+      } finally {
+        await loadBuildings();
+      }
     },
-    [vendorId, profile, fetchBuildingVendors],
+    [vendorId, profile, loadBuildings],
   );
 
+  // v1: js/admin-relationships.js handleRemoveBuildingVendor
   const removeBuildingVendor = useCallback(
     async (id: string) => {
       await apiRemoveBuildingVendor(id);
-      await fetchBuildingVendors();
+      await loadBuildings();
     },
-    [fetchBuildingVendors],
+    [loadBuildings],
   );
 
-  // Vendor-inspection CRUD
-  const addVendorInspection = useCallback(
-    async (inspectionId: string) => {
+  // v1: js/admin-relationships.js confirmInspectionSelection
+  const addVendorInspections = useCallback(
+    async (inspectionIds: string[]): Promise<AddSummary> => {
       if (!vendorId) throw new Error('保守会社が選択されていません');
-      const { error: err } = await supabase.from(TABLES.vendorInspections).insert({
-        vendor_id: vendorId,
-        inspection_id: inspectionId,
-        status: 'active',
-      });
-      if (err) throw err;
-      await fetchVendorInspections();
+      try {
+        const results = await Promise.allSettled(
+          inspectionIds.map((id) => apiAddVendorInspection(vendorId, id)),
+        );
+        return summarizeAddResults(results, '点検種別');
+      } finally {
+        await loadInspections();
+      }
     },
-    [vendorId, fetchVendorInspections],
+    [vendorId, loadInspections],
   );
 
+  // v1: js/admin-relationships.js handleRemoveVendorInspection
   const removeVendorInspection = useCallback(
     async (id: string) => {
-      const { error: err } = await supabase
-        .from(TABLES.vendorInspections)
-        .delete()
-        .eq('id', id);
-      if (err) throw err;
-      await fetchVendorInspections();
+      await apiRemoveVendorInspection(id);
+      await loadInspections();
     },
-    [fetchVendorInspections],
-  );
-
-  const toggleVendorInspectionStatus = useCallback(
-    async (id: string, currentStatus: 'active' | 'inactive') => {
-      const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
-      const { error: err } = await supabase
-        .from(TABLES.vendorInspections)
-        .update({ status: newStatus })
-        .eq('id', id);
-      if (err) throw err;
-      await fetchVendorInspections();
-    },
-    [fetchVendorInspections],
+    [loadInspections],
   );
 
   return {
     buildingVendors,
+    activeBuildingVendors,
+    properties,
     vendorInspections,
     loading,
-    error,
-    refetch: fetchAll,
-    addBuildingVendor,
+    buildingError,
+    inspectionError,
+    loadAvailableProperties,
+    loadAvailableInspectionTypes,
+    addBuildingVendors,
     removeBuildingVendor,
-    addVendorInspection,
+    addVendorInspections,
     removeVendorInspection,
-    toggleVendorInspectionStatus,
   };
 }

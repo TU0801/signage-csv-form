@@ -2,24 +2,53 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
-import { useMasterData } from '@/hooks/useMasterData';
-import { useAuth } from '@/hooks/useAuth';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useToast } from '@/components/ui/Toast';
 import { useUsers } from '../hooks/useUsers';
 import { AddUserModal } from './AddUserModal';
 import { EditUserModal } from './EditUserModal';
-import type { DbProfile } from '@/types/database';
+import type { DbProfile, DbVendor } from '@/types/database';
 
+/** 保守会社名。見つからなければ ID を出す（v1: js/admin-users.js loadUsers） */
+function vendorLabel(vendorId: string | null, vendors: DbVendor[]): string {
+  if (!vendorId) return '-';
+  const vendor = vendors.find((v) => String(v.id) === String(vendorId));
+  return vendor ? vendor.vendor_name : `Unknown (ID:${vendorId})`;
+}
+
+// v1: js/admin-users.js loadUsers（admin.html #tab-users）
 export function UsersContent() {
-  const { vendors } = useMasterData();
-  const { user: currentUser } = useAuth();
-  const { users, loading, addUser, updateUser } = useUsers();
+  const { addToast } = useToast();
+  const { users, vendors, currentUserId, loading, error, addUser, editUser, updateUserStatus } =
+    useUsers();
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [editTarget, setEditTarget] = useState<DbProfile | null>(null);
+  const [deactivateTarget, setDeactivateTarget] = useState<DbProfile | null>(null);
 
-  const vendorMap = new Map(vendors.map((v) => [v.id, v.vendor_name]));
+  // v1: js/admin-users.js handleDeactivateUser
+  const handleDeactivate = async (user: DbProfile) => {
+    try {
+      await updateUserStatus(user.id, 'inactive');
+      addToast('ユーザーを無効化しました', 'success');
+    } catch (err) {
+      console.error('Failed to deactivate user:', err);
+      addToast('無効化に失敗しました', 'error');
+    }
+  };
 
-  if (loading) {
+  // v1: js/admin-users.js handleActivateUser（確認なし）
+  const handleActivate = async (user: DbProfile) => {
+    try {
+      await updateUserStatus(user.id, 'active');
+      addToast('ユーザーを有効化しました', 'success');
+    } catch (err) {
+      console.error('Failed to activate user:', err);
+      addToast('有効化に失敗しました', 'error');
+    }
+  };
+
+  if (loading && users.length === 0) {
     return (
       <div className="flex justify-center py-12">
         <Spinner />
@@ -36,50 +65,69 @@ export function UsersContent() {
         </Button>
       </div>
 
+      {error && <p className="text-sm text-red-600">{error}</p>}
+
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-gray-200 text-left">
-            <th className="py-2 px-3 font-medium text-gray-700">メール</th>
-            <th className="py-2 px-3 font-medium text-gray-700">役割</th>
+            <th className="py-2 px-3 font-medium text-gray-700">メールアドレス</th>
             <th className="py-2 px-3 font-medium text-gray-700">保守会社</th>
+            <th className="py-2 px-3 font-medium text-gray-700">権限</th>
             <th className="py-2 px-3 font-medium text-gray-700">ステータス</th>
+            <th className="py-2 px-3 font-medium text-gray-700">登録日</th>
             <th className="py-2 px-3 font-medium text-gray-700">操作</th>
           </tr>
         </thead>
         <tbody>
           {users.length === 0 ? (
             <tr>
-              <td colSpan={5} className="py-8 text-center text-gray-400">
+              <td colSpan={6} className="py-8 text-center text-gray-400">
                 ユーザーが登録されていません
               </td>
             </tr>
           ) : (
             users.map((user) => {
-              const isSelf = currentUser?.id === user.id;
+              const isSelf = currentUserId === user.id;
+              const status = user.status || 'active';
               return (
                 <tr key={user.id} className="border-b border-gray-100 hover:bg-gray-50">
                   <td className="py-2 px-3">
                     {user.email}
-                    {isSelf && <span className="ml-1 text-xs text-gray-400">(自分)</span>}
+                    {isSelf && ' (自分)'}
                   </td>
+                  <td className="py-2 px-3">{vendorLabel(user.vendor_id, vendors)}</td>
                   <td className="py-2 px-3">
                     <Badge variant={user.role === 'admin' ? 'danger' : 'default'}>
                       {user.role === 'admin' ? '管理者' : 'ユーザー'}
                     </Badge>
                   </td>
                   <td className="py-2 px-3">
-                    {user.vendor_id ? vendorMap.get(user.vendor_id) ?? '-' : '-'}
+                    <Badge variant={status === 'active' ? 'success' : 'default'}>
+                      {status === 'active' ? '有効' : '無効'}
+                    </Badge>
                   </td>
                   <td className="py-2 px-3">
-                    <Badge variant={user.status === 'active' ? 'success' : 'default'}>
-                      {user.status === 'active' ? '有効' : '無効'}
-                    </Badge>
+                    {user.created_at ? new Date(user.created_at).toLocaleDateString('ja-JP') : '-'}
                   </td>
                   <td className="py-2 px-3 flex gap-2">
                     {/* 削除は無い（v1 にも無く、profiles に DELETE ポリシーも無い。使わせないときは無効化する） */}
-                    {!isSelf && (
-                      <Button variant="ghost" size="sm" onClick={() => setEditTarget(user)}>
-                        編集
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={isSelf}
+                      title={isSelf ? '自分は編集できません' : undefined}
+                      onClick={() => setEditTarget(user)}
+                    >
+                      編集
+                    </Button>
+                    {!isSelf && status === 'active' && (
+                      <Button variant="danger" size="sm" onClick={() => setDeactivateTarget(user)}>
+                        無効化
+                      </Button>
+                    )}
+                    {!isSelf && status === 'inactive' && (
+                      <Button variant="success" size="sm" onClick={() => handleActivate(user)}>
+                        有効化
                       </Button>
                     )}
                   </td>
@@ -102,7 +150,19 @@ export function UsersContent() {
         onClose={() => setEditTarget(null)}
         user={editTarget}
         vendors={vendors}
-        onUpdate={updateUser}
+        onUpdate={editUser}
+      />
+
+      <ConfirmDialog
+        open={!!deactivateTarget}
+        onClose={() => setDeactivateTarget(null)}
+        onConfirm={() => {
+          if (deactivateTarget) handleDeactivate(deactivateTarget);
+        }}
+        title="ユーザーの無効化"
+        message={"このユーザーを無効化してもよろしいですか？\nログインできなくなります。"} // v1: js/admin-users.js handleDeactivateUser
+        confirmLabel="無効化"
+        variant="danger"
       />
     </div>
   );

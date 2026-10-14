@@ -1,175 +1,116 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { useBulkStore } from '@/stores/bulkStore';
-import type { EntryFormData } from '@/types/app';
-import { DEFAULT_DISPLAY_DURATION } from '@/lib/constants';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { useBulkStore, resetBulkSession } from '@/stores/bulkStore';
+import { AUTO_SAVE_TTL_MS, readAutoSave } from '../utils/bulkAutoSave';
+import { applySettings, DEFAULT_BULK_SETTINGS, flattenProperties } from '../utils/bulkMaster';
+import type { BulkMasterData } from '../types';
+import { createMemoryStorage } from './memoryStorage';
 
-function createValidFormData(overrides?: Partial<EntryFormData>): Partial<EntryFormData> {
-  return {
-    propertyCode: 'P001',
-    terminalId: 'T01',
-    vendorName: 'ABC保守',
-    inspectionType: '電気点検',
-    startDate: '2025-01-01',
-    endDate: '2025-01-31',
-    displayStartDate: '2025-01-01',
-    displayEndDate: '2025-01-31',
-    ...overrides,
-  };
-}
+const master: BulkMasterData = {
+  properties: [
+    { propertyCode: 'z0001A01', propertyName: '物件A', terminalId: 'T-A1', supplement: '' },
+    { propertyCode: 'z0001A01', propertyName: '物件A', terminalId: 'T-A2', supplement: '' },
+    { propertyCode: '120442-00', propertyName: '物件B', terminalId: 'T-B1', supplement: '' },
+  ],
+  vendors: [{ id: 'v1', vendorName: 'A社', emergencyContact: '' }],
+  notices: [{ inspectionType: '消防設備点検', templateNo: '7', noticeText: '' }],
+};
 
-describe('bulkStore', () => {
+const s = () => useBulkStore.getState();
+
+describe('bulkStore (v1 js/bulk-table.js / bulk-modals.js の行操作)', () => {
   beforeEach(() => {
-    useBulkStore.getState().clearAll();
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+    vi.setSystemTime(new Date('2026-10-14T15:30:00Z'));
+    vi.stubGlobal('localStorage', createMemoryStorage());
+    resetBulkSession();
+    s().setUserId('user-1');
+    s().setMasterData(master);
+    s().setAppSettings(applySettings(DEFAULT_BULK_SETTINGS, [{ setting_key: 'display_time_default', setting_value: '10' }]));
+    s().setCurrentVendor({ id: 'v1', name: 'A社' });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 
-  describe('addRow', () => {
-    it('adds a new row with default values', () => {
-      useBulkStore.getState().addRow();
-      const { rows } = useBulkStore.getState();
-      expect(rows).toHaveLength(1);
-      expect(rows[0]?._id).toBeTruthy();
-      expect(rows[0]?.displayDuration).toBe(DEFAULT_DISPLAY_DURATION);
-    });
-
-    it('adds a row with partial data', () => {
-      useBulkStore.getState().addRow({ propertyCode: 'P001' });
-      const { rows } = useBulkStore.getState();
-      expect(rows[0]?.propertyCode).toBe('P001');
-    });
-
-    it('validates the row upon creation', () => {
-      useBulkStore.getState().addRow(); // empty row
-      const { rows } = useBulkStore.getState();
-      expect(rows[0]?._isValid).toBe(false);
-      expect(Object.keys(rows[0]?._errors ?? {}).length).toBeGreaterThan(0);
-    });
-
-    it('creates a valid row when all required fields are provided', () => {
-      useBulkStore.getState().addRow(createValidFormData());
-      const { rows } = useBulkStore.getState();
-      expect(rows[0]?._isValid).toBe(true);
+  it('new row defaults: today (UTC date), current vendor, display time from settings, position 2', () => {
+    s().addRow();
+    expect(s().rows[0]).toMatchObject({
+      id: 1,
+      startDate: '2026-10-14',
+      vendorName: 'A社',
+      displayTime: 10,
+      position: 2,
+      showOnBoard: true,
+      isValid: false,
+      errors: ['物件', '点検種別'],
     });
   });
 
-  describe('removeRows', () => {
-    it('removes specified rows', () => {
-      useBulkStore.getState().addRow(createValidFormData());
-      useBulkStore.getState().addRow(createValidFormData({ propertyCode: 'P002' }));
-      const firstId = useBulkStore.getState().rows[0]!._id;
-      useBulkStore.getState().removeRows([firstId]);
-      const { rows } = useBulkStore.getState();
-      expect(rows).toHaveLength(1);
-      expect(rows[0]?.propertyCode).toBe('P002');
-    });
-
-    it('clears selection for removed rows', () => {
-      useBulkStore.getState().addRow(createValidFormData());
-      const id = useBulkStore.getState().rows[0]!._id;
-      useBulkStore.getState().toggleSelection(id);
-      expect(useBulkStore.getState().selectedIds.has(id)).toBe(true);
-      useBulkStore.getState().removeRows([id]);
-      expect(useBulkStore.getState().selectedIds.has(id)).toBe(false);
-    });
+  it('add-row copies the last row except remarks and detail settings', () => {
+    s().addRow({ propertyCode: 'z0001A01', terminalId: 'T-A2', inspectionType: '消防設備点検', remarks: 'x', noticeText: '案内', position: 3 });
+    s().addRowWithCopy();
+    expect(s().rows[1]).toMatchObject({ propertyCode: 'z0001A01', terminalId: 'T-A2', remarks: '', noticeText: '', position: 3, isValid: true });
   });
 
-  describe('updateRow', () => {
-    it('updates a row and revalidates', () => {
-      useBulkStore.getState().addRow();
-      const id = useBulkStore.getState().rows[0]!._id;
-      expect(useBulkStore.getState().rows[0]?._isValid).toBe(false);
-
-      useBulkStore.getState().updateRow(id, createValidFormData());
-      expect(useBulkStore.getState().rows[0]?._isValid).toBe(true);
-    });
+  it('changing the property picks its first terminal; start date fills an empty end date', () => {
+    s().addRow({ propertyCode: 'z0001A01', terminalId: 'T-A2', inspectionType: '消防設備点検' });
+    const id = s().rows[0]!.id;
+    s().changeProperty(id, '120442-00');
+    expect(s().rows[0]!.terminalId).toBe('T-B1');
+    s().changeStartDate(id, '2026-12-01');
+    expect(s().rows[0]).toMatchObject({ startDate: '2026-12-01', endDate: '2026-12-01' });
   });
 
-  describe('duplicateRows', () => {
-    it('duplicates selected rows', () => {
-      useBulkStore.getState().addRow(createValidFormData());
-      const id = useBulkStore.getState().rows[0]!._id;
-      useBulkStore.getState().duplicateRows([id]);
-      const { rows } = useBulkStore.getState();
-      expect(rows).toHaveLength(2);
-      expect(rows[0]?.propertyCode).toBe(rows[1]?.propertyCode);
-      expect(rows[0]?._id).not.toBe(rows[1]?._id);
+  it('a property without terminals stays a terminal error (v1 behaviour, reported as a v1 bug candidate)', () => {
+    s().setMasterData({
+      ...master,
+      properties: flattenProperties([{ property_code: 'NT01', property_name: '端末なし', terminals: [] }], true),
     });
+    s().addRow({ propertyCode: 'NT01', inspectionType: '消防設備点検' });
+    expect(s().rows[0]!.errors).toEqual(['端末']);
   });
 
-  describe('reorderRows', () => {
-    it('reorders rows', () => {
-      useBulkStore.getState().addRow(createValidFormData({ propertyCode: 'P001' }));
-      useBulkStore.getState().addRow(createValidFormData({ propertyCode: 'P002' }));
-      useBulkStore.getState().addRow(createValidFormData({ propertyCode: 'P003' }));
-
-      useBulkStore.getState().reorderRows(0, 2);
-      const codes = useBulkStore.getState().rows.map((r) => r.propertyCode);
-      expect(codes).toEqual(['P002', 'P003', 'P001']);
-    });
+  it('toolbar duplicate keeps the row vendor; menu duplicate uses the current vendor', () => {
+    s().addRow({ propertyCode: 'z0001A01', inspectionType: '消防設備点検', vendorName: '旧社' });
+    const id = s().rows[0]!.id;
+    s().duplicateRows([id]);
+    s().duplicateRowFromMenu(id);
+    expect(s().rows.map((r) => r.vendorName)).toEqual(['旧社', '旧社', 'A社']);
   });
 
-  describe('bulkUpdateField', () => {
-    it('updates a field on multiple rows', () => {
-      useBulkStore.getState().addRow(createValidFormData({ propertyCode: 'P001' }));
-      useBulkStore.getState().addRow(createValidFormData({ propertyCode: 'P002' }));
-      const ids = useBulkStore.getState().rows.map((r) => r._id);
-      useBulkStore.getState().bulkUpdateField(ids, 'vendorName', 'NewVendor');
-      const names = useBulkStore.getState().rows.map((r) => r.vendorName);
-      expect(names).toEqual(['NewVendor', 'NewVendor']);
-    });
+  it('toolbar duplicate appends in table order, not in the order the rows were checked (v1 getSelectedRowIds)', () => {
+    s().addRow({ propertyCode: 'z0001A01', remarks: '上' });
+    s().addRow({ propertyCode: '120442-00', remarks: '下' });
+    const [top, bottom] = s().rows.map((r) => r.id);
+    s().duplicateRows([bottom!, top!]);
+    expect(s().rows.map((r) => r.remarks)).toEqual(['上', '下', '上', '下']);
   });
 
-  describe('selection', () => {
-    it('toggles selection', () => {
-      useBulkStore.getState().addRow(createValidFormData());
-      const id = useBulkStore.getState().rows[0]!._id;
-      useBulkStore.getState().toggleSelection(id);
-      expect(useBulkStore.getState().selectedIds.has(id)).toBe(true);
-      useBulkStore.getState().toggleSelection(id);
-      expect(useBulkStore.getState().selectedIds.has(id)).toBe(false);
-    });
-
-    it('selects all and clears selection', () => {
-      useBulkStore.getState().addRow(createValidFormData());
-      useBulkStore.getState().addRow(createValidFormData());
-      useBulkStore.getState().selectAll();
-      expect(useBulkStore.getState().selectedIds.size).toBe(2);
-      useBulkStore.getState().clearSelection();
-      expect(useBulkStore.getState().selectedIds.size).toBe(0);
-    });
+  it('insert-row adds a blank row (no start date, no vendor) at the index', () => {
+    s().addRow({ propertyCode: 'z0001A01', inspectionType: '消防設備点検' });
+    s().addRow({ propertyCode: '120442-00', inspectionType: '消防設備点検' });
+    s().insertRowAt(1);
+    expect(s().rows.map((r) => r.propertyCode)).toEqual(['z0001A01', '', '120442-00']);
+    expect(s().rows[1]).toMatchObject({ startDate: '', vendorName: '', id: 3 });
   });
 
-  describe('filter', () => {
-    it('sets filter', () => {
-      useBulkStore.getState().setFilter('error');
-      expect(useBulkStore.getState().filter).toBe('error');
-      useBulkStore.getState().setFilter('valid');
-      expect(useBulkStore.getState().filter).toBe('valid');
-    });
+  it('drag and drop moves the row after a lower target and before an upper target', () => {
+    ['z0001A01', '120442-00', 'z0001A01'].forEach((code) => s().addRow({ propertyCode: code }));
+    const [a, b, c] = s().rows.map((r) => r.id);
+    s().reorderRows(a!, c!);
+    expect(s().rows.map((r) => r.id)).toEqual([b, c, a]);
+    s().reorderRows(a!, b!);
+    expect(s().rows.map((r) => r.id)).toEqual([a, b, c]);
   });
 
-  describe('importRows', () => {
-    it('imports multiple rows', () => {
-      useBulkStore.getState().importRows([
-        createValidFormData({ propertyCode: 'P001' }),
-        createValidFormData({ propertyCode: 'P002' }),
-      ]);
-      const { rows } = useBulkStore.getState();
-      expect(rows).toHaveLength(2);
-      expect(rows[0]?.propertyCode).toBe('P001');
-      expect(rows[1]?.propertyCode).toBe('P002');
-    });
-  });
-
-  describe('clearAll', () => {
-    it('clears all rows and selection', () => {
-      useBulkStore.getState().addRow(createValidFormData());
-      useBulkStore.getState().selectAll();
-      useBulkStore.getState().setFilter('error');
-      useBulkStore.getState().clearAll();
-      const state = useBulkStore.getState();
-      expect(state.rows).toHaveLength(0);
-      expect(state.selectedIds.size).toBe(0);
-      expect(state.filter).toBe('all');
-    });
+  it('auto-saves 1 second after the last change and drops data older than 24 hours', () => {
+    s().addRow({ propertyCode: 'z0001A01' });
+    expect(readAutoSave('user-1')).toBeNull();
+    vi.advanceTimersByTime(1000);
+    expect(readAutoSave('user-1')).toMatchObject({ rowIdCounter: 1, rows: [{ propertyCode: 'z0001A01' }] });
+    vi.setSystemTime(new Date(Date.now() + AUTO_SAVE_TTL_MS + 1));
+    expect(readAutoSave('user-1')).toBeNull();
+    expect(localStorage.getItem('bulk_autosave_user-1')).toBeNull();
   });
 });

@@ -1,33 +1,36 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
 import { useSettings } from '../hooks/useSettings';
+import { SETTING_FIELDS, type SettingKey, type SettingValues } from '../settingFields';
 
+// v1: js/admin-settings.js loadAppSettings / saveSettings（admin.html #master-settings）
 export function SettingsContent() {
   const { addToast } = useToast();
-  const { settings, loading, error, updateSetting } = useSettings();
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState('');
+  const { values, loading, error, saveSettings } = useSettings();
+  const [form, setForm] = useState<SettingValues>(values);
+  const [saving, setSaving] = useState(false);
 
-  const startEdit = (id: string, currentValue: string) => {
-    setEditingId(id);
-    setEditValue(currentValue);
+  useEffect(() => {
+    setForm(values);
+  }, [values]);
+
+  const handleChange = (key: SettingKey, value: string) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditValue('');
-  };
-
-  const handleSave = async (id: string) => {
+  const handleSave = async () => {
+    setSaving(true);
     try {
-      await updateSetting(id, editValue);
+      await saveSettings(form);
       addToast('設定を保存しました', 'success');
-      cancelEdit();
     } catch (err) {
-      addToast(err instanceof Error ? err.message : '保存に失敗しました', 'error');
+      console.error('Failed to save settings:', err);
+      addToast('設定の保存に失敗しました', 'error');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -39,74 +42,33 @@ export function SettingsContent() {
     );
   }
 
-  if (error) {
-    return (
-      <div className="text-center py-12 text-red-600">
-        <p>{error}</p>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-bold text-gray-900">設定</h1>
+      <h2 className="text-lg font-semibold text-gray-900">設定</h2>
 
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-gray-200 text-left">
-            <th className="py-2 px-3 font-medium text-gray-700">キー</th>
-            <th className="py-2 px-3 font-medium text-gray-700">値</th>
-            <th className="py-2 px-3 font-medium text-gray-700">説明</th>
-            <th className="py-2 px-3 font-medium text-gray-700">操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          {settings.length === 0 ? (
-            <tr>
-              <td colSpan={4} className="py-8 text-center text-gray-400">
-                設定がありません
-              </td>
-            </tr>
-          ) : (
-            settings.map((setting) => (
-              <tr key={setting.id} className="border-b border-gray-100 hover:bg-gray-50">
-                <td className="py-2 px-3 font-mono text-xs">{setting.setting_key}</td>
-                <td className="py-2 px-3">
-                  {editingId === setting.id ? (
-                    <Input
-                      value={editValue}
-                      onChange={(e) => setEditValue(e.target.value)}
-                    />
-                  ) : (
-                    <span className="text-gray-900">{setting.setting_value}</span>
-                  )}
-                </td>
-                <td className="py-2 px-3 text-gray-500">{setting.description ?? '-'}</td>
-                <td className="py-2 px-3">
-                  {editingId === setting.id ? (
-                    <div className="flex gap-2">
-                      <Button size="sm" onClick={() => handleSave(setting.id)}>
-                        保存
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={cancelEdit}>
-                        キャンセル
-                      </Button>
-                    </div>
-                  ) : (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => startEdit(setting.id, setting.setting_value)}
-                    >
-                      編集
-                    </Button>
-                  )}
-                </td>
-              </tr>
-            ))
-          )}
-        </tbody>
-      </table>
+      {error && <p className="text-sm text-red-600">{error}</p>}
+
+      <div className="max-w-md space-y-4">
+        {SETTING_FIELDS.map((f) => (
+          <div key={f.key} className="space-y-1">
+            <Input
+              label={f.label}
+              id={`setting-${f.key}`}
+              type="number"
+              min={f.min}
+              max={f.max}
+              value={form[f.key]}
+              onChange={(e) => handleChange(f.key, e.target.value)}
+            />
+            {'hint' in f && <p className="text-xs text-gray-500">{f.hint}</p>}
+          </div>
+        ))}
+        <div className="pt-2">
+          <Button type="button" onClick={handleSave} disabled={saving}>
+            設定を保存
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

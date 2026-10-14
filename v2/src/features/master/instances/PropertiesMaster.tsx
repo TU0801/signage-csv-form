@@ -1,132 +1,132 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { TABLES } from '@/lib/supabase';
-import { toTerminal } from '@/lib/terminal';
-import type { DbProperty, DbTerminal, Terminal } from '@/types/database';
-import type { MasterConfig, FormFieldDef } from '../types/masterConfig';
-import type { useForm } from 'react-hook-form';
-import { MasterListPage } from '../components/MasterListPage';
+import { Spinner } from '@/components/ui/Spinner';
+import { useToast } from '@/components/ui/Toast';
+import { countEntriesByPropertyCode, deleteProperty } from '@/lib/api/admin-masters';
+import type { MasterConfig } from '../types/masterConfig';
+import { matchesSearch } from '../hooks/useMasterCRUD';
+import { usePropertyMasterData, type PropertyWithUnits } from '../hooks/usePropertyMasterData';
+import { MasterTable } from '../components/MasterTable';
+import { MasterToolbar } from '../components/MasterToolbar';
+import { MasterDeleteConfirm } from '../components/MasterDeleteConfirm';
+import { PropertyFormModal } from '../components/property/PropertyFormModal';
+import { terminalSummary } from '../lib/propertyForm';
 
-type PropertyRecord = DbProperty & Record<string, unknown>;
+type PropertyRecord = PropertyWithUnits & Record<string, unknown>;
 
-const config: MasterConfig<PropertyRecord> = {
-  tableName: TABLES.properties,
-  displayName: '物件',
-  searchField: 'property_name',
-  uniqueField: 'property_code',
-  defaultSort: 'property_code',
+/** 一覧の列（表示だけ。読み書きは usePropertyMasterData と lib/api/admin-masters） */
+const tableConfig: Pick<MasterConfig<PropertyRecord>, 'columns' | 'readOnly'> = {
   columns: [
     { key: 'property_code', label: '物件コード', width: '140px' },
     { key: 'property_name', label: '物件名' },
-    { key: 'terminals', label: '端末数', width: '100px' },
+    { key: 'terminals', label: '端末' },
   ],
-  formFields: [
-    { name: 'property_code', label: '物件コード', type: 'text', required: true },
-    { name: 'property_name', label: '物件名', type: 'text', required: true },
-    { name: 'terminals', label: '端末一覧', type: 'custom' },
-  ],
-  defaultValues: {
-    property_code: '',
-    property_name: '',
-    terminals: [],
-  } as Partial<PropertyRecord>,
-  // v1 js/supabase/admin-masters.js addProperty / updateProperty と同じ3列だけ送る。
-  // equipment は block_equipment_write トリガーが変更を拒否するので送らない（id・created_at も送らない）。
-  // 端末IDが空の行は保存しない（v1 handleMasterFormSubmit。空の端末が選択肢に出るのを防ぐ）
-  toPayload: (data) =>
-    ({
-      property_code: String(data.property_code ?? '').trim(),
-      property_name: data.property_name,
-      terminals: ((data.terminals as DbTerminal[] | undefined) ?? [])
-        .map(toTerminal)
-        .map((t) => ({ terminal_id: t.terminal_id.trim(), supplement: t.supplement.trim() }))
-        .filter((t) => t.terminal_id),
-    }) as Partial<PropertyRecord>,
 };
 
-// 既存データは terminalId / terminal_id が混在する。読むときに正規化し、書くときは v1 と同じ terminal_id にそろえる
-// （v1: js/admin-masters.js handleMasterFormSubmit。{id} 形式で書くと v1 の画面から端末が見えなくなる）
-function TerminalEditor({
-  value: rawValue,
-  onChange,
-}: {
-  value: DbTerminal[];
-  onChange: (terminals: Terminal[]) => void;
-}) {
-  const value = rawValue.map(toTerminal);
+// 検索は物件コードと物件名（v1 renderProperties）
+const SEARCH_FIELDS: (keyof PropertyRecord & string)[] = ['property_code', 'property_name'];
 
-  const addTerminal = () => {
-    onChange([...value, { terminal_id: `T${value.length + 1}`, supplement: '' }]);
-  };
-
-  const removeTerminal = (index: number) => {
-    onChange(value.filter((_, i) => i !== index));
-  };
-
-  const updateTerminal = (index: number, field: keyof Terminal, val: string) => {
-    const updated = value.map((t, i) => (i === index ? { ...t, [field]: val } : t));
-    onChange(updated);
-  };
-
-  return (
-    <div className="space-y-2">
-      <label className="block text-sm font-medium text-gray-700">端末一覧</label>
-      {value.map((terminal, index) => (
-        <div key={index} className="flex items-center gap-2">
-          <Input
-            placeholder="端末ID"
-            value={terminal.terminal_id}
-            onChange={(e) => updateTerminal(index, 'terminal_id', e.target.value)}
-            className="flex-1"
-          />
-          <Input
-            placeholder="補足"
-            value={terminal.supplement}
-            onChange={(e) => updateTerminal(index, 'supplement', e.target.value)}
-            className="flex-1"
-          />
-          <Button variant="danger" size="sm" type="button" onClick={() => removeTerminal(index)}>
-            削除
-          </Button>
-        </div>
-      ))}
-      <Button variant="secondary" size="sm" type="button" onClick={addTerminal}>
-        端末を追加
-      </Button>
-    </div>
-  );
-}
-
+// v1: js/admin-masters.js renderProperties / js/admin.js editPropertyByCode・deletePropertyByCode
 export function PropertiesMaster() {
-  const renderCell = useCallback((key: string, value: unknown) => {
-    if (key === 'terminals' && Array.isArray(value)) {
-      return `${value.length}件`;
-    }
-    return undefined;
-  }, []);
+  const { addToast } = useToast();
+  const { properties, vendors, inspectionTypes, unitTypeOptions, loading, error, refetch } =
+    usePropertyMasterData();
 
-  const renderCustomField = useCallback(
-    (field: FormFieldDef, form: ReturnType<typeof useForm>) => {
-      if (field.name === 'terminals') {
-        const terminals = (form.watch('terminals') as DbTerminal[]) ?? [];
-        return (
-          <TerminalEditor
-            value={terminals}
-            onChange={(val) => form.setValue('terminals', val, { shouldDirty: true })}
-          />
-        );
+  const [search, setSearch] = useState('');
+  // undefined = 閉じている、null = 追加、物件 = 編集
+  const [formTarget, setFormTarget] = useState<PropertyWithUnits | null | undefined>(undefined);
+  const [deleteTarget, setDeleteTarget] = useState<PropertyWithUnits | null>(null);
+
+  const filtered = (properties as PropertyRecord[]).filter((p) => matchesSearch(p, SEARCH_FIELDS, search));
+
+  // 使用中の物件は消させない
+  // v1: js/admin.js deletePropertyByCode
+  const handleRequestDelete = useCallback(
+    async (item: PropertyWithUnits) => {
+      try {
+        const used = await countEntriesByPropertyCode(item.property_code);
+        if (used > 0) {
+          addToast(`この物件は${used}件のエントリで使用中です`, 'error');
+          return;
+        }
+      } catch (err) {
+        console.error('Failed to check property usage:', err);
+        addToast('削除に失敗しました', 'error');
+        return;
       }
-      return null;
+      setDeleteTarget(item);
     },
-    [],
+    [addToast],
   );
 
+  const handleDelete = useCallback(async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteProperty(deleteTarget.id);
+      addToast('物件を削除しました', 'success');
+      void refetch();
+    } catch (err) {
+      console.error('Failed to delete property:', err);
+      addToast('削除に失敗しました', 'error');
+    } finally {
+      setDeleteTarget(null);
+    }
+  }, [deleteTarget, addToast, refetch]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+
   return (
-    <MasterListPage
-      config={config}
-      renderCell={renderCell}
-      renderCustomField={renderCustomField}
-    />
+    <div className="space-y-4">
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <MasterToolbar
+        count={filtered.length}
+        search={
+          <Input
+            placeholder="物件コード・物件名で検索..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        }
+        action={<Button onClick={() => setFormTarget(null)}>+ 新規追加</Button>}
+      />
+
+      <MasterTable
+        config={tableConfig}
+        items={filtered}
+        onEdit={(item) => setFormTarget(item)}
+        onDelete={(item) => void handleRequestDelete(item)}
+        renderCell={(key, _value, item) =>
+          key === 'terminals' ? terminalSummary(item.terminals) : undefined
+        }
+        emptyMessage={search ? '検索結果がありません' : '物件が登録されていません'}
+      />
+
+      {formTarget !== undefined && (
+        <PropertyFormModal
+          key={formTarget?.id ?? 'new'}
+          property={formTarget}
+          vendors={vendors}
+          inspectionTypes={inspectionTypes}
+          unitTypeOptions={unitTypeOptions}
+          onClose={() => setFormTarget(undefined)}
+          onSaved={() => void refetch()}
+        />
+      )}
+
+      <MasterDeleteConfirm
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        displayName="物件"
+        itemLabel={deleteTarget ? deleteTarget.property_name : undefined}
+      />
+    </div>
   );
 }

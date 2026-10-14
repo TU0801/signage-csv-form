@@ -1,34 +1,62 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Select } from '@/components/ui/Select';
 import { Spinner } from '@/components/ui/Spinner';
-import { useMasterData } from '@/hooks/useMasterData';
-import { useRelationships } from '../hooks/useRelationships';
+import { useToast } from '@/components/ui/Toast';
+import { fetchMasterVendors } from '@/lib/api/masterData';
+import type { DbVendor } from '@/types/database';
+import { useRelationships, type RelationshipTab } from '../hooks/useRelationships';
 import { BuildingRelations } from './BuildingRelations';
 import { InspectionRelations } from './InspectionRelations';
 
-type SubTab = 'buildings' | 'inspections';
+type SubTab = RelationshipTab;
 
+// v1: js/admin-relationships.js initRelationshipsTab / loadRelationships
 export function RelationshipsContent() {
+  const { addToast } = useToast();
+  const [vendors, setVendors] = useState<DbVendor[]>([]);
   const [selectedVendorId, setSelectedVendorId] = useState('');
   const [activeTab, setActiveTab] = useState<SubTab>('buildings');
 
-  const { vendors, properties, inspectionTypes, loading: masterLoading } = useMasterData();
   const {
-    buildingVendors,
+    activeBuildingVendors,
+    properties,
     vendorInspections,
-    loading: relLoading,
-    addBuildingVendor,
+    loading,
+    buildingError,
+    inspectionError,
+    loadAvailableProperties,
+    loadAvailableInspectionTypes,
+    addBuildingVendors,
     removeBuildingVendor,
-    addVendorInspection,
+    addVendorInspections,
     removeVendorInspection,
-    toggleVendorInspectionStatus,
-  } = useRelationships(selectedVendorId || null);
+  } = useRelationships(selectedVendorId || null, activeTab);
 
-  const loading = masterLoading || relLoading;
+  // 保守会社の一覧はこの画面を開くたびに読む（v1 は管理画面の起動時に1回だけ読む。失敗しても画面は出す。v1 は console.error のみ）
+  useEffect(() => {
+    let cancelled = false;
+    fetchMasterVendors()
+      .then((list) => {
+        if (!cancelled) setVendors(list);
+      })
+      .catch((err) => console.error('Failed to load vendors:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // 失敗のたびに新しいエラーオブジェクトが来るので、同じ文言の失敗が続いても毎回出す（v1 は失敗ごとに showToast）
+  useEffect(() => {
+    if (buildingError) addToast(buildingError.message, 'error');
+  }, [buildingError, addToast]);
+
+  useEffect(() => {
+    if (inspectionError) addToast(inspectionError.message, 'error');
+  }, [inspectionError, addToast]);
 
   const tabs: { key: SubTab; label: string }[] = [
-    { key: 'buildings', label: 'ビル紐付け' },
-    { key: 'inspections', label: '点検種別紐付け' },
+    { key: 'buildings', label: '🏢 物件' },
+    { key: 'inspections', label: '🔧 点検種別' },
   ];
 
   return (
@@ -39,19 +67,22 @@ export function RelationshipsContent() {
         <Select
           label="保守会社"
           options={vendors.map((v) => ({ value: v.id, label: v.vendor_name }))}
-          placeholder="保守会社を選択..."
+          placeholder="-- 選択してください --"
           value={selectedVendorId}
           onChange={(e) => setSelectedVendorId(e.target.value)}
         />
       </div>
 
-      {selectedVendorId && (
+      {!selectedVendorId ? (
+        <p className="py-8 text-center text-sm text-gray-500">保守会社を選択してください</p>
+      ) : (
         <>
           <div className="border-b border-gray-200">
             <nav className="flex gap-4">
               {tabs.map((tab) => (
                 <button
                   key={tab.key}
+                  type="button"
                   onClick={() => setActiveTab(tab.key)}
                   className={
                     activeTab === tab.key
@@ -71,18 +102,18 @@ export function RelationshipsContent() {
             </div>
           ) : activeTab === 'buildings' ? (
             <BuildingRelations
-              buildingVendors={buildingVendors}
+              buildingVendors={activeBuildingVendors}
               properties={properties}
-              onAdd={addBuildingVendor}
+              loadAvailableProperties={loadAvailableProperties}
+              onAdd={addBuildingVendors}
               onRemove={removeBuildingVendor}
             />
           ) : (
             <InspectionRelations
               vendorInspections={vendorInspections}
-              inspectionTypes={inspectionTypes}
-              onAdd={addVendorInspection}
+              loadAvailableInspectionTypes={loadAvailableInspectionTypes}
+              onAdd={addVendorInspections}
               onRemove={removeVendorInspection}
-              onToggleStatus={toggleVendorInspectionStatus}
             />
           )}
         </>

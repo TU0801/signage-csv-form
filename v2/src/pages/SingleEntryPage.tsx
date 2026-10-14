@@ -1,235 +1,54 @@
-import { useState, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useMasterData } from '@/hooks/useMasterData';
-import { useEntries } from '@/hooks/useEntries';
+import { useAuth } from '@/hooks/useAuth';
+import { getPublicUrl, uploadPosterImage } from '@/lib/storage';
+import { cn } from '@/lib/utils';
+import { PosterType } from '@/lib/constants';
+import { insertEntries, type AppSettings } from '@/lib/api/single-entry';
+import type { MasterData } from '@/types/app';
+import { useAppSettings } from '@/features/single-entry/hooks/useAppSettings';
 import { useEntryForm } from '@/features/single-entry/hooks/useEntryForm';
-import { useCascadingSelects } from '@/features/single-entry/hooks/useCascadingSelects';
-import { usePreview } from '@/features/single-entry/hooks/usePreview';
+import { useVendorContext } from '@/features/single-entry/hooks/useVendorContext';
+import { useSubmittedEntries } from '@/features/single-entry/hooks/useSubmittedEntries';
 import { EntryForm } from '@/features/single-entry/components/EntryForm';
 import { EntryDataList } from '@/features/single-entry/components/EntryDataList';
 import { PosterPreview } from '@/features/single-entry/components/PosterPreview';
-import { uploadPosterImage } from '@/lib/storage';
-import { useAuthStore } from '@/stores/authStore';
-import { EntryStatus } from '@/lib/constants';
-import { AdminVendorFilter, useAdminVendorFilter } from '@/components/AdminVendorFilter';
-import type { EntryFormData } from '@/types/app';
+import { DisplaySettings } from '@/features/single-entry/components/DisplaySettings';
+import { AdminVendorSelect } from '@/features/single-entry/components/AdminVendorSelect';
+import { HeaderSlot } from '@/components/layout/HeaderSlot';
+import { resolveTemplateImageUrl } from '@/features/single-entry/lib/templateImages';
+import {
+  buildLocalEntry,
+  buildPropertyOptions,
+  filterInspectionTypes,
+  formatPosterDate,
+  localToday,
+  terminalsOf,
+  toInsertRow,
+} from '@/features/single-entry/lib/entryLogic';
+import type { LocalEntry } from '@/features/single-entry/types';
 
-interface LocalEntry extends EntryFormData {
-  _id: string;
+/** 固定表のファイル名 → Storage の公開 URL（poster-images/templates/。features/single-entry/lib/templateImages.ts 参照） */
+const templateFileUrl = (fileName: string) => getPublicUrl(`templates/${fileName}`);
+
+function errorMessage(err: unknown): string {
+  if (err && typeof err === 'object' && 'message' in err) return String((err as { message: unknown }).message ?? '');
+  return '';
 }
 
+/** 1件入力（点検日入力）。マスターデータと設定を読み終えてから入力欄を出す */
+// v1: index.html initAuth（設定 → マスターデータ → initScript の順）
 export function SingleEntryPage() {
-  const { addToast } = useToast();
-  const { properties, vendors, inspectionTypes, categories, loading, error } = useMasterData();
-  const user = useAuthStore((s) => s.user);
-  const { createEntry } = useEntries();
-  const [submitting, setSubmitting] = useState(false);
-  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
-  const adminFilter = useAdminVendorFilter();
+  const master = useMasterData();
+  const settings = useAppSettings();
 
-  // 管理者ベンダーフィルタ適用
-  const filteredProperties = adminFilter.filterProperties(properties);
-
-  const { form, resetForm } = useEntryForm();
-  const { setValue, reset } = form;
-
-  const cascading = useCascadingSelects({
-    setValue,
-    properties: filteredProperties,
-    vendors,
-    inspectionTypes,
-    categories,
-  });
-
-  const preview = usePreview({ inspectionTypes });
-
-  // ローカルエントリー一覧
-  const [localEntries, setLocalEntries] = useState<LocalEntry[]>([]);
-  const [editingId, setEditingId] = useState<string | null>(null);
-
-  /** フォーム送信 → ローカル追加/更新 */
-  const handleFormSubmit = useCallback(
-    async (data: EntryFormData, customImageFile?: File) => {
-      let formData = { ...data };
-
-      // カスタム画像のアップロード
-      if (customImageFile && formData.posterType === 'custom' && user) {
-        try {
-          const url = await uploadPosterImage(customImageFile, user.id);
-          formData = { ...formData, customPosterUrl: url };
-        } catch (err) {
-          addToast(
-            err instanceof Error ? err.message : '画像アップロードに失敗しました',
-            'error',
-          );
-          return;
-        }
-      }
-
-      if (editingId) {
-        setLocalEntries((prev) =>
-          prev.map((e) => (e._id === editingId ? { ...formData, _id: editingId } : e)),
-        );
-        setEditingId(null);
-        addToast('エントリーを更新しました', 'success');
-      } else {
-        const newEntry: LocalEntry = {
-          ...formData,
-          _id: crypto.randomUUID(),
-        };
-        setLocalEntries((prev) => [...prev, newEntry]);
-        addToast('エントリーを追加しました', 'success');
-      }
-      resetForm();
-    },
-    [editingId, resetForm, addToast, user],
-  );
-
-  /** エントリー削除 */
-  const handleRemove = useCallback(
-    (id: string) => {
-      setLocalEntries((prev) => prev.filter((e) => e._id !== id));
-      if (editingId === id) {
-        setEditingId(null);
-        resetForm();
-      }
-      addToast('エントリーを削除しました', 'info');
-    },
-    [editingId, resetForm, addToast],
-  );
-
-  /** エントリー編集 */
-  const handleEdit = useCallback(
-    (id: string) => {
-      const entry = localEntries.find((e) => e._id === id);
-      if (!entry) return;
-      const { _id, ...formData } = entry;
-      reset(formData);
-      setEditingId(_id);
-    },
-    [localEntries, reset],
-  );
-
-  /** リセットボタン */
-  const handleReset = useCallback(() => {
-    resetForm();
-    setEditingId(null);
-  }, [resetForm]);
-
-  /** ポスター位置変更（プレビュー内） */
-  const handlePositionChange = useCallback(
-    (position: string) => {
-      setValue('posterPosition', position);
-    },
-    [setValue],
-  );
-
-  /** 前回を複製 */
-  const handleDuplicate = useCallback(() => {
-    if (localEntries.length === 0) {
-      addToast('複製するエントリーがありません', 'warning');
-      return;
-    }
-    const last = localEntries[localEntries.length - 1]!;
-    const inspType = inspectionTypes.find(
-      (t) => t.inspection_name === last.inspectionType,
-    );
-
-    setValue('propertyCode', last.propertyCode);
-    cascading.handlePropertyChange(last.propertyCode);
-
-    // cascade 連動の完了後にフィールドをセット
-    setTimeout(() => {
-      setValue('terminalId', last.terminalId);
-      setValue('vendorName', last.vendorName);
-
-      const vendor = vendors.find((v) => v.vendor_name === last.vendorName);
-      setValue('emergencyContact', vendor?.emergency_contact ?? '');
-
-      if (inspType?.category_id) {
-        cascading.handleCategoryChange(inspType.category_id);
-      }
-
-      setTimeout(() => {
-        setValue('inspectionType', last.inspectionType);
-        if (inspType) {
-          setValue('templateNo', inspType.template_no);
-        }
-        setValue('startDate', last.startDate);
-        setValue('endDate', last.endDate);
-        setValue('posterType', last.posterType);
-
-        addToast('前回のデータを複製しました', 'info');
-      }, 100);
-    }, 100);
-  }, [localEntries, setValue, cascading, vendors, inspectionTypes, addToast]);
-
-  /** Supabase一括保存（申請する） */
-  const handleBatchSubmit = useCallback(async () => {
-    if (!user) {
-      addToast('ログインが必要です', 'error');
-      return;
-    }
-    if (localEntries.length === 0) {
-      addToast('エントリーがありません', 'warning');
-      return;
-    }
-
-    setSubmitting(true);
-
-    const results = await Promise.allSettled(
-      localEntries.map((entry) =>
-        createEntry({
-          user_id: user.id,
-          property_code: entry.propertyCode,
-          terminal_id: entry.terminalId,
-          vendor_name: entry.vendorName,
-          emergency_contact: entry.emergencyContact || null,
-          inspection_type: entry.inspectionType,
-          template_no: entry.templateNo || null,
-          inspection_start: entry.startDate || null,
-          inspection_end: entry.endDate || null,
-          display_start_date: entry.displayStartDate || null,
-          display_start_time: entry.displayStartTime || null,
-          display_end_date: entry.displayEndDate || null,
-          display_end_time: entry.displayEndTime || null,
-          display_duration: entry.displayDuration || null,
-          announcement: entry.noticeText || null,
-          remarks: entry.remarks || null,
-          poster_type: entry.posterType || null,
-          poster_position: entry.posterPosition || null,
-          frame_no: entry.frameNo || null,
-          status: EntryStatus.DRAFT,
-          poster_image: entry.customPosterUrl || null,
-        }),
-      ),
-    );
-
-    const successCount = results.filter((r) => r.status === 'fulfilled').length;
-    const errorCount = results.filter((r) => r.status === 'rejected').length;
-
-    setSubmitting(false);
-
-    if (successCount > 0) {
-      addToast(`${successCount}件を申請しました`, 'success');
-      if (errorCount === 0) {
-        setLocalEntries([]);
-        setEditingId(null);
-        resetForm();
-      }
-    }
-    if (errorCount > 0) {
-      addToast(`${errorCount}件の申請に失敗しました`, 'error');
-    }
-  }, [user, localEntries, createEntry, addToast, resetForm]);
-
-  const terminals = cascading.getTerminals(form.watch('propertyCode'));
-
-  if (loading) {
+  if (master.loading || !settings) {
     return (
       <div className="flex items-center justify-center py-12">
         <Spinner size="lg" />
@@ -237,120 +56,298 @@ export function SingleEntryPage() {
     );
   }
 
-  if (error) {
+  if (master.error) {
     return (
-      <div className="text-center py-12 text-red-600">
+      <div className="py-12 text-center text-red-600">
         <p>マスターデータの読み込みに失敗しました</p>
-        <p className="text-sm mt-1">{error}</p>
+        <p className="mt-1 text-sm">{master.error}</p>
       </div>
     );
   }
 
+  return <SingleEntryWorkspace master={master} settings={settings} />;
+}
+
+interface WorkspaceProps {
+  master: MasterData;
+  settings: AppSettings;
+}
+
+function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
+  const { addToast } = useToast();
+  const { user, profile, isAdmin } = useAuth();
+  const { properties, vendors, inspectionTypes, templateImages } = master;
+
+  // 紐付けを読み終えたらフォームへ反映する（フォームより先に作るので ref 経由で渡す）
+  const applyLinkedRef = useRef<(ids: ReadonlySet<string>) => void>(() => {});
+  const onLinkedLoaded = useCallback((ids: ReadonlySet<string>) => applyLinkedRef.current(ids), []);
+
+  const vendorCtx = useVendorContext({
+    isAdmin,
+    profileVendorId: profile?.vendor_id ?? null,
+    properties,
+    vendors,
+    onLinkedLoaded,
+  });
+
+  const form = useEntryForm({
+    settings,
+    properties: vendorCtx.visibleProperties,
+    inspectionTypes,
+    linkedIds: vendorCtx.linkedIds,
+  });
+  useEffect(() => {
+    applyLinkedRef.current = form.applyLinked;
+  }, [form.applyLinked]);
+
+  const { values } = form;
+  const submitted = useSubmittedEntries(user?.id ?? null);
+
+  const [signageOnly, setSignageOnly] = useState(false);
+  const [tab, setTab] = useState<'preview' | 'settings'>('preview');
+  const [localEntries, setLocalEntries] = useState<LocalEntry[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [removeId, setRemoveId] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const propertyOptions = useMemo(
+    () => buildPropertyOptions(vendorCtx.visibleProperties, signageOnly),
+    [vendorCtx.visibleProperties, signageOnly],
+  );
+  const terminals = terminalsOf(vendorCtx.visibleProperties, values.propertyCode);
+  const inspectionOptions = useMemo(
+    () => filterInspectionTypes(inspectionTypes, values.category, vendorCtx.linkedIds),
+    [inspectionTypes, values.category, vendorCtx.linkedIds],
+  );
+
+  const templateUrlOf = useCallback(
+    (key: string) => resolveTemplateImageUrl(key, templateImages, templateFileUrl),
+    [templateImages],
+  );
+
+  // v1: js/script.js onAdminVendorChange
+  // v1 は選択を外したときマスターデータを取り直すが、useMasterData.refetch は loading を立てて入力欄ごと
+  // 外す（未送信の行が消える）ため呼ばない。読み込み済みの物件一覧へ戻す（セッション中にマスターが変わらない限り同じ結果）
+  const handleAdminVendorChange = (vendorId: string) => {
+    vendorCtx.selectAdminVendor(vendorId);
+    if (vendorId) form.resetProperty();
+    else form.clearVendor();
+  };
+
+  // v1: js/script.js populatePropertySelect（フィルター切替で消えた物件は選択を外す）
+  const handleSignageOnlyChange = (checked: boolean) => {
+    setSignageOnly(checked);
+    const next = buildPropertyOptions(vendorCtx.visibleProperties, checked);
+    if (values.propertyCode && !next.some((o) => o.value === values.propertyCode)) form.resetProperty();
+  };
+
+  // v1: js/script.js addEntry
+  const handleAdd = () => {
+    const result = buildLocalEntry(values, {
+      properties: vendorCtx.visibleProperties,
+      inspectionTypes,
+      vendor: vendorCtx.vendor,
+      customImage: form.customImage,
+      hasTemplateImage: (key) => templateUrlOf(key) !== null,
+      settings,
+    });
+    if (!result.ok) {
+      addToast(result.message, 'error');
+      return;
+    }
+    if (editingId) {
+      setLocalEntries((prev) => prev.map((e) => (e._id === editingId ? { ...result.entry, _id: editingId } : e)));
+      setEditingId(null);
+      addToast('更新しました', 'success');
+    } else {
+      setLocalEntries((prev) => [...prev, { ...result.entry, _id: crypto.randomUUID() }]);
+      addToast('追加しました', 'success');
+    }
+  };
+
+  // v1: js/script.js editEntry
+  const handleEdit = (id: string) => {
+    const entry = localEntries.find((e) => e._id === id);
+    if (!entry) return;
+    form.loadEntry(entry);
+    setEditingId(id);
+  };
+
+  // v1: js/script.js deleteEntry
+  const handleRemoveConfirmed = () => {
+    if (!removeId) return;
+    setLocalEntries((prev) => prev.filter((e) => e._id !== removeId));
+    if (editingId === removeId) setEditingId(null);
+    setRemoveId(null);
+    addToast('削除しました', 'info');
+  };
+
+  // v1: js/script.js duplicateLastEntry
+  const handleDuplicate = () => {
+    const last = localEntries[localEntries.length - 1];
+    if (!last) return;
+    form.duplicate(last);
+    addToast('前回のデータを複製しました', 'info');
+  };
+
+  // v1: js/script.js clearForm
+  const handleClear = () => {
+    form.clear();
+    setEditingId(null);
+  };
+
+  // v1: js/script.js submitEntries（画像をアップロードしてから、まとめて1回で INSERT。status は draft）
+  const handleSubmit = async () => {
+    if (localEntries.length === 0) {
+      addToast('確定するデータがありません', 'error');
+      return;
+    }
+    if (!user) {
+      addToast('ログインが必要です', 'error');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const urls = await Promise.all(
+        localEntries.map((e) => {
+          if (e.posterType !== PosterType.CUSTOM || !e.customImage) return Promise.resolve(null);
+          return uploadPosterImage(e.customImage.file, user.id).catch((uploadError: unknown) => {
+            console.error('Image upload failed:', uploadError);
+            return Promise.reject(new Error('画像のアップロードに失敗しました'));
+          });
+        }),
+      );
+      const today = localToday();
+      await insertEntries(localEntries.map((e, i) => toInsertRow(e, urls[i] ?? null, user.id, settings, today)));
+      addToast(`${localEntries.length}件のデータを確定しました`, 'success');
+      setLocalEntries([]);
+      setEditingId(null);
+      submitted.refetch();
+    } catch (err) {
+      console.error('Submit failed:', err);
+      addToast(`確定に失敗しました: ${errorMessage(err)}`, 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const isCustom = values.posterType === PosterType.CUSTOM;
+
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-bold text-gray-900">1件入力</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-bold text-gray-900">点検日入力</h1>
+        {/* 管理者の保守会社選択はヘッダーに出す（780f151） */}
+        {isAdmin && (
+          <HeaderSlot>
+            <AdminVendorSelect vendors={vendors} value={vendorCtx.adminVendorId} onChange={handleAdminVendorChange} />
+          </HeaderSlot>
+        )}
+        <Button variant="secondary" size="sm" onClick={handleClear}>
+          クリア
+        </Button>
+      </div>
 
-      <AdminVendorFilter
-        vendors={vendors}
-        onVendorFilter={adminFilter.setSelectedVendorId}
-      />
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 左: フォーム */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-gray-900">
-                {editingId ? 'エントリー編集' : 'エントリー入力'}
-              </h2>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={handleDuplicate}
-                disabled={localEntries.length === 0}
-              >
-                前回を複製
-              </Button>
-            </div>
+            <h2 className="text-base font-semibold text-gray-900">
+              {editingId ? '掲示内容入力（編集中）' : '掲示内容入力'}
+            </h2>
           </CardHeader>
           <CardContent>
             <EntryForm
               form={form}
-              properties={filteredProperties}
-              vendors={vendors}
-              filteredInspectionTypes={cascading.filteredInspectionTypes}
-              categoryOptions={cascading.categoryOptions}
-              selectedCategoryId={cascading.selectedCategoryId}
+              propertyOptions={propertyOptions}
               terminals={terminals}
-              onPropertyChange={cascading.handlePropertyChange}
-              onVendorChange={cascading.handleVendorChange}
-              onCategoryChange={cascading.handleCategoryChange}
-              onInspectionTypeChange={cascading.handleInspectionTypeChange}
-              onPreview={preview.openPreview}
-              onSubmit={handleFormSubmit}
-              onReset={handleReset}
-              isEditing={!!editingId}
+              inspectionTypes={inspectionOptions}
+              signageOnly={signageOnly}
+              onSignageOnlyChange={handleSignageOnlyChange}
+              onAdd={handleAdd}
+              onDuplicate={handleDuplicate}
+              canDuplicate={localEntries.length > 0}
+              onImageError={(m) => addToast(m, 'error')}
             />
           </CardContent>
         </Card>
 
-        {/* 右: 一覧 + CSV */}
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <h2 className="text-base font-semibold text-gray-900">
-                  追加済みエントリー ({localEntries.length}件)
-                </h2>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <EntryDataList
-                entries={localEntries}
-                onRemove={handleRemove}
-                onEdit={handleEdit}
+        <Card>
+          <div className="flex border-b border-gray-200" role="tablist">
+            {(
+              [
+                ['preview', '貼紙プレビュー'],
+                ['settings', '表示設定'],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={tab === key}
+                onClick={() => setTab(key)}
+                className={cn(
+                  'flex-1 px-4 py-3 text-sm font-medium',
+                  tab === key ? 'border-b-2 border-blue-600 text-blue-700' : 'text-gray-600 hover:bg-gray-50',
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <CardContent>
+            {tab === 'preview' ? (
+              <PosterPreview
+                templateImageUrl={templateUrlOf(values.templateNo)}
+                templateNo={values.templateNo}
+                isCustom={isCustom}
+                customImageUrl={form.customImage?.dataUrl ?? null}
+                noticeText={values.noticeText}
+                dateText={formatPosterDate(values.startDate, values.endDate)}
+                remarks={values.remarks}
+                vendorName={vendorCtx.vendor?.vendor_name ?? ''}
+                emergencyContact={vendorCtx.vendor?.emergency_contact ?? ''}
               />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <h2 className="text-base font-semibold text-gray-900">申請・CSV出力</h2>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <Button
-                  variant="primary"
-                  onClick={() => setShowSubmitConfirm(true)}
-                  disabled={localEntries.length === 0 || submitting}
-                  className="w-full"
-                >
-                  {submitting ? '送信中...' : `申請する (${localEntries.length}件)`}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+            ) : (
+              <DisplaySettings form={form} />
+            )}
+          </CardContent>
+        </Card>
       </div>
 
-      {/* テンプレートプレビューモーダル */}
-      <PosterPreview
-        open={preview.previewOpen}
-        onClose={preview.closePreview}
-        imageUrl={preview.previewImageUrl}
-        templateNo={preview.previewTemplateNo}
-        posterPosition={form.watch('posterPosition')}
-        onPositionChange={handlePositionChange}
-      />
+      <Card>
+        <CardHeader>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-semibold text-gray-900">作成データ</h2>
+              <Badge variant="primary">{localEntries.length}</Badge>
+              <Badge>申請済: {submitted.entries.length}</Badge>
+            </div>
+            {localEntries.length > 0 && (
+              <Button variant="success" size="sm" onClick={() => void handleSubmit()} disabled={submitting}>
+                {submitting ? '確定中...' : '申請する'}
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <EntryDataList
+            entries={localEntries}
+            submitted={submitted.entries}
+            properties={properties}
+            onEdit={handleEdit}
+            onRemove={setRemoveId}
+          />
+        </CardContent>
+      </Card>
 
-      {/* 申請確認ダイアログ */}
       <ConfirmDialog
-        open={showSubmitConfirm}
-        onClose={() => setShowSubmitConfirm(false)}
-        onConfirm={handleBatchSubmit}
-        title="申請確認"
-        message={`${localEntries.length}件のエントリーを申請しますか？`}
-        confirmLabel="申請する"
+        open={removeId !== null}
+        onClose={() => setRemoveId(null)}
+        onConfirm={handleRemoveConfirmed}
+        title="削除確認"
+        message="削除しますか？"
+        confirmLabel="削除"
+        variant="danger"
       />
     </div>
   );

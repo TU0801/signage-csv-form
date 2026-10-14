@@ -1,13 +1,53 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, TABLES } from '@/lib/supabase';
 import { MAX_AD_SLOTS } from '@/lib/constants';
+import { uploadAdImage } from '@/lib/storage';
 import type { DbAdSlot } from '@/types/database';
+
+export interface AdSlotInput {
+  /** 差し替える画像。無ければ今の image_url のまま */
+  imageFile?: File | null;
+  caption: string;
+  linkUrl: string;
+  isActive: boolean;
+}
+
+/** v1 と同じ上限（5MB） */
+const AD_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+const AD_IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg'];
+/** lib/storage.ts uploadAdImage がアップロード失敗時に付ける前置き */
+const SHARED_UPLOAD_ERROR_PREFIX = '広告画像のアップロードに失敗しました';
+
+/**
+ * 広告画像を v1 と同じ確認・文言でアップロードする（共有の lib/storage.ts は文言が v1 と違うため包む）。
+ * 拡張子・サイズを先に v1 の文言で断り、アップロード失敗は v1 の前置きに置き換える。
+ */
+// v1: js/supabase/ads.js uploadAdImage
+export async function uploadAdImageV1(file: File, slotIndex: number): Promise<string> {
+  const extension = (file.name.split('.').pop() ?? '').toLowerCase();
+  if (!AD_IMAGE_EXTENSIONS.includes(extension)) {
+    throw new Error('PNG、JPG形式の画像のみアップロードできます');
+  }
+  if (file.size > AD_IMAGE_MAX_BYTES) {
+    throw new Error('ファイルサイズは5MB以下にしてください');
+  }
+  return uploadAdImage(file, slotIndex).catch((err: unknown) => {
+    if (err instanceof Error && err.message.startsWith(SHARED_UPLOAD_ERROR_PREFIX)) {
+      const v1Error = new Error(
+        '画像のアップロードに失敗しました' + err.message.slice(SHARED_UPLOAD_ERROR_PREFIX.length),
+      );
+      throw Object.assign(v1Error, { cause: err });
+    }
+    throw err;
+  });
+}
 
 export function useAdSlots({ activeOnly = false } = {}) {
   const [slots, setSlots] = useState<DbAdSlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // v1: js/supabase/ads.js getAdSlots
   const fetchSlots = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -24,7 +64,8 @@ export function useAdSlots({ activeOnly = false } = {}) {
       // 使う枠は 1〜MAX_AD_SLOTS だけ（v1: login.html / admin-masters-ads.js）
       setSlots(((data ?? []) as DbAdSlot[]).filter((s) => s.slot_index <= MAX_AD_SLOTS));
     } catch (err) {
-      setError(err instanceof Error ? err.message : '広告枠の取得に失敗しました');
+      console.error('広告枠読み込みエラー:', err);
+      setError(err instanceof Error ? err.message : '広告枠の読み込みに失敗しました');
     } finally {
       setLoading(false);
     }
@@ -34,20 +75,27 @@ export function useAdSlots({ activeOnly = false } = {}) {
     fetchSlots();
   }, [fetchSlots]);
 
-  const updateSlot = useCallback(
-    async (
-      id: string,
-      params: {
-        image_url?: string | null;
-        caption?: string | null;
-        link_url?: string | null;
-        is_active?: boolean;
-      },
-    ) => {
+  /**
+   * 1枠を保存する。画像を選んでいれば先に poster-images の ads/slot_{n}.{拡張子} へ上書きアップロードし、
+   * 画像・キャプション・リンク・表示をまとめて UPDATE する（枠の行は DB に既にあり、INSERT はしない）。
+   */
+  // v1: js/admin-masters-ads.js saveAdSlot → js/supabase/ads.js uploadAdImage / upsertAdSlot
+  const saveSlot = useCallback(
+    async (slot: DbAdSlot, input: AdSlotInput) => {
+      let imageUrl = slot.image_url;
+      if (input.imageFile) {
+        imageUrl = await uploadAdImageV1(input.imageFile, slot.slot_index);
+      }
       const { error: err } = await supabase
         .from(TABLES.adSlots)
-        .update(params)
-        .eq('id', id);
+        .update({
+          image_url: imageUrl,
+          caption: input.caption.trim(),
+          link_url: input.linkUrl.trim(),
+          is_active: input.isActive,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('slot_index', slot.slot_index);
       if (err) throw err;
       await fetchSlots();
     },
@@ -59,6 +107,6 @@ export function useAdSlots({ activeOnly = false } = {}) {
     loading,
     error,
     refetch: fetchSlots,
-    updateSlot,
+    saveSlot,
   };
 }

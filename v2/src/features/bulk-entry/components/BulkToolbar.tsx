@@ -1,90 +1,125 @@
-import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { useBulkStore } from '@/stores/bulkStore';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { templateLabel, type BulkTemplate } from '../utils/bulkTemplates';
 
 interface BulkToolbarProps {
+  /** 読み込みが済むまで操作させない（v1: js/bulk.js init は読み込み後にイベントを登録） */
+  disabled?: boolean;
+  templates: BulkTemplate[];
+  onAddRow: () => void;
+  onDuplicate: () => void;
+  onDeleteSelected: () => void;
   onOpenPaste: () => void;
-  onOpenBulkEdit: () => void;
+  onApplyTemplate: (id: string) => void;
+  onOpenSaveTemplate: () => void;
+  onOpenManageTemplate: () => void;
 }
 
-export function BulkToolbar({ onOpenPaste, onOpenBulkEdit }: BulkToolbarProps) {
-  const addRow = useBulkStore((s) => s.addRow);
-  const selectedIds = useBulkStore((s) => s.selectedIds);
-  const duplicateRows = useBulkStore((s) => s.duplicateRows);
-  const removeRows = useBulkStore((s) => s.removeRows);
-  const clearAll = useBulkStore((s) => s.clearAll);
-  const rows = useBulkStore((s) => s.rows);
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+function Stat({ value, label, className }: { value: number; label: string; className?: string }) {
+  return (
+    <div className="flex items-baseline gap-1">
+      <span className={`text-lg font-bold ${className ?? 'text-gray-900'}`}>{value}</span>
+      <span className="text-xs text-gray-500">{label}</span>
+    </div>
+  );
+}
 
-  const selectedArray = [...selectedIds];
-  const hasSelection = selectedArray.length > 0;
+/**
+ * 行操作・データ入出力・件数。
+ * v1: bulk.html .bulk-toolbar / js/bulk-data.js updateStats / js/bulk-table.js updateSelectedCount
+ */
+export function BulkToolbar({
+  disabled = false,
+  templates,
+  onAddRow,
+  onDuplicate,
+  onDeleteSelected,
+  onOpenPaste,
+  onApplyTemplate,
+  onOpenSaveTemplate,
+  onOpenManageTemplate,
+}: BulkToolbarProps) {
+  const rows = useBulkStore((s) => s.rows);
+  const selectedCount = useBulkStore((s) => s.selectedIds.size);
+
+  const total = rows.length;
+  const valid = rows.filter((r) => r.isValid).length;
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <Button size="sm" onClick={() => addRow()}>
-        + 行追加
-      </Button>
-      <Button size="sm" variant="secondary" onClick={onOpenPaste}>
-        Excel貼り付け
-      </Button>
-
-      {hasSelection && (
-        <>
-          <div className="h-5 w-px bg-gray-300" />
+    <div className="flex flex-wrap items-end gap-6 border-b border-gray-200 bg-gray-50 px-4 py-3">
+      <div className="space-y-1">
+        <div className="text-[11px] font-semibold text-gray-500">行操作</div>
+        <div className="flex items-center gap-1.5">
+          <Button size="sm" onClick={onAddRow} disabled={disabled} title="新しい行を追加 (Ctrl+Enter)">
+            + 行を追加
+          </Button>
+          <Button size="sm" variant="secondary" onClick={onDuplicate} disabled={disabled} title="選択した行を複製 (Ctrl+D)">
+            複製
+          </Button>
           <Button
             size="sm"
             variant="secondary"
-            onClick={() => duplicateRows(selectedArray)}
+            onClick={onDeleteSelected}
+            disabled={disabled || selectedCount === 0}
+            title="選択した行を削除 (Delete)"
+            className="text-red-600"
           >
-            複製 ({selectedArray.length})
+            削除
           </Button>
-          <Button size="sm" variant="secondary" onClick={onOpenBulkEdit}>
-            一括編集 ({selectedArray.length})
+        </div>
+      </div>
+
+      <div className="space-y-1">
+        <div className="text-[11px] font-semibold text-gray-500">データ入出力</div>
+        <div className="flex items-center gap-1.5">
+          <Button size="sm" variant="secondary" onClick={onOpenPaste} disabled={disabled} title="Excelからデータを貼り付け">
+            Excelから取込
+          </Button>
+          <div className="mx-1 h-6 w-px bg-gray-300" />
+          <select
+            aria-label="テンプレート"
+            value=""
+            disabled={disabled}
+            onChange={(e) => {
+              if (e.target.value) onApplyTemplate(e.target.value);
+            }}
+            className="rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+          >
+            <option value="">テンプレート</option>
+            {templates.map((t) => (
+              <option key={t.id} value={t.id}>
+                {templateLabel(t)}
+              </option>
+            ))}
+          </select>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={onOpenSaveTemplate}
+            disabled={disabled}
+            title="現在の設定をテンプレートとして保存"
+          >
+            テンプレ保存
           </Button>
           <Button
             size="sm"
-            variant="danger"
-            onClick={() => setShowDeleteConfirm(true)}
+            variant="secondary"
+            onClick={onOpenManageTemplate}
+            disabled={disabled}
+            title="登録済みテンプレートの管理・削除"
           >
-            削除 ({selectedArray.length})
+            管理
           </Button>
-        </>
-      )}
+        </div>
+      </div>
 
-      {rows.length > 0 && (
-        <>
-          <div className="flex-1" />
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setShowClearConfirm(true)}
-          >
-            全クリア
-          </Button>
-        </>
-      )}
-
-      <ConfirmDialog
-        open={showDeleteConfirm}
-        onClose={() => setShowDeleteConfirm(false)}
-        onConfirm={() => removeRows(selectedArray)}
-        title="行の削除"
-        message={`選択した${selectedArray.length}件を削除しますか？`}
-        confirmLabel="削除"
-        variant="danger"
-      />
-
-      <ConfirmDialog
-        open={showClearConfirm}
-        onClose={() => setShowClearConfirm(false)}
-        onConfirm={() => clearAll()}
-        title="全データクリア"
-        message="全ての行を削除しますか？この操作は元に戻せません。"
-        confirmLabel="全クリア"
-        variant="danger"
-      />
+      <div className="ml-auto flex items-center gap-3 rounded-lg bg-white px-4 py-2 shadow-sm">
+        <Stat value={total} label="件" />
+        <div className="h-5 w-px bg-gray-200" />
+        <Stat value={valid} label="有効" className="text-green-600" />
+        <Stat value={total - valid} label="エラー" className="text-red-600" />
+        <Stat value={selectedCount} label="選択中" className="text-blue-600" />
+      </div>
     </div>
   );
 }

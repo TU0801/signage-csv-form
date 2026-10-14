@@ -17,7 +17,6 @@ import { MasterPage } from '@/pages/admin/MasterPage';
 import { RelationshipsPage } from '@/pages/admin/RelationshipsPage';
 import { UsersPage } from '@/pages/admin/UsersPage';
 import { AdSlotsPage } from '@/pages/admin/AdSlotsPage';
-import { SettingsPage } from '@/pages/admin/SettingsPage';
 
 // エラーを signage_error_logs に保存する（v1 は error-handler.js を他のモジュールより先に読み込む）
 installErrorLogging();
@@ -67,7 +66,8 @@ export default function App() {
               <Route path="relationships" element={<RelationshipsPage />} />
               <Route path="users" element={<UsersPage />} />
               <Route path="ad-slots" element={<AdSlotsPage />} />
-              <Route path="settings" element={<SettingsPage />} />
+              {/* 設定は v1 と同じくマスター管理のタブ */}
+              <Route path="settings" element={<Navigate to="/admin/master?tab=settings" replace />} />
             </Route>
           </Route>
 

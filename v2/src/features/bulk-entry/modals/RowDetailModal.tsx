@@ -1,256 +1,149 @@
-import { useMemo } from 'react';
+import { useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
-import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
-import { TextArea } from '@/components/ui/TextArea';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
+import { useToast } from '@/components/ui/Toast';
 import { useBulkStore } from '@/stores/bulkStore';
-import { useMasterData } from '@/hooks/useMasterData';
-import type { EntryFormData } from '@/types/app';
-import { buildTerminalOptions } from '../utils/buildTerminalOptions';
+import type { BulkEntryRow, BulkNotice } from '../types';
 
 interface RowDetailModalProps {
   open: boolean;
   onClose: () => void;
-  rowId: string | null;
+  rowId: number | null;
 }
 
+/** 貼紙表示位置。v1: js/bulk-modals.js createRowDetailModal の detailPosition */
+const POSITIONS = [
+  { value: '1', label: '①上左' },
+  { value: '2', label: '②上中' },
+  { value: '3', label: '③上右' },
+  { value: '4', label: '④中央' },
+  { value: '0', label: '⓪全体' },
+];
+
+const field = 'block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none';
+
+/**
+ * 行の詳細設定（案内文・表示期間・表示時間・貼紙表示位置）。
+ * 開いたとき、案内文が空なら点検種別の定型文、表示期間が空なら点検期間を入れておく。
+ * v1: js/bulk-modals.js openRowDetailModal / applyRowDetail
+ */
 export function RowDetailModal({ open, onClose, rowId }: RowDetailModalProps) {
   const rows = useBulkStore((s) => s.rows);
-  const updateRow = useBulkStore((s) => s.updateRow);
-  const { properties, vendors, inspectionTypes } = useMasterData();
-
-  const row = rowId ? rows.find((r) => r._id === rowId) : undefined;
-  const rowPropertyCode = row?.propertyCode;
-
-  // フックは早期 return より前で呼ぶ（row の有無で呼び出し順が変わるとクラッシュする）
-  const terminalOptions = useMemo(() => {
-    const selectedProperty = properties.find((p) => p.property_code === rowPropertyCode);
-    return buildTerminalOptions(selectedProperty?.terminals ?? []);
-  }, [properties, rowPropertyCode]);
-
-  if (!row) {
-    return (
-      <Modal open={open} onClose={onClose} title="行詳細">
-        <p className="text-sm text-gray-500">行が見つかりません</p>
-      </Modal>
-    );
-  }
-
-  const handleChange = (field: keyof EntryFormData, value: unknown) => {
-    updateRow(row._id, { [field]: value });
-  };
-
-  const handlePropertyChange = (propertyCode: string) => {
-    handleChange('propertyCode', propertyCode);
-    const property = properties.find((p) => p.property_code === propertyCode);
-    if (property?.terminals?.length) {
-      handleChange('terminalId', property.terminals[0]!.terminal_id);
-    } else {
-      handleChange('terminalId', '');
-    }
-  };
-
-  const propertyOptions = properties.map((p) => ({
-    value: p.property_code,
-    label: `${p.property_code} - ${p.property_name}`,
-  }));
-
-  const vendorOptions = vendors.map((v) => ({
-    value: v.vendor_name,
-    label: v.vendor_name,
-  }));
-
-  const inspectionOptions = inspectionTypes.map((t) => ({
-    value: t.inspection_name,
-    label: t.inspection_name,
-  }));
-
-  const errorKeys = Object.keys(row._errors);
+  const notices = useBulkStore((s) => s.masterData.notices);
+  const index = rows.findIndex((r) => r.id === rowId);
+  const row = index >= 0 ? rows[index] : undefined;
 
   return (
-    <Modal open={open} onClose={onClose} title="行詳細編集" className="max-w-2xl">
-      <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
-        {/* Status */}
-        <div className="flex items-center gap-2">
-          <Badge variant={row._isValid ? 'success' : 'danger'}>
-            {row._isValid ? '有効' : 'エラーあり'}
-          </Badge>
-          {errorKeys.length > 0 && (
-            <span className="text-xs text-red-600">
-              {errorKeys.length}件のエラー
-            </span>
-          )}
-        </div>
+    <Modal open={open} onClose={onClose} title={`詳細設定 ${row ? `(行 ${index + 1})` : ''}`} className="max-w-xl">
+      {open && row && <RowDetailForm key={row.id} row={row} notices={notices} onClose={onClose} />}
+    </Modal>
+  );
+}
 
-        {/* Fields */}
-        <div className="grid grid-cols-2 gap-3">
-          <Select
-            label="物件コード"
-            value={row.propertyCode}
-            onChange={(e) => handlePropertyChange(e.target.value)}
-            options={propertyOptions}
-            placeholder="選択してください"
-            error={row._errors['propertyCode']}
-          />
-          {terminalOptions.length > 0 ? (
-            <Select
-              label="端末ID"
-              value={row.terminalId}
-              onChange={(e) => handleChange('terminalId', e.target.value)}
-              options={terminalOptions}
-              placeholder="選択してください"
-              error={row._errors['terminalId']}
-            />
-          ) : (
-            <Input
-              label="端末ID"
-              value={row.terminalId}
-              onChange={(e) => handleChange('terminalId', e.target.value)}
-              error={row._errors['terminalId']}
-            />
-          )}
-          <Select
-            label="保守会社名"
-            value={row.vendorName}
-            onChange={(e) => handleChange('vendorName', e.target.value)}
-            options={vendorOptions}
-            placeholder="選択してください"
-            error={row._errors['vendorName']}
-          />
-          <Input
-            label="緊急連絡先"
-            value={row.emergencyContact}
-            onChange={(e) => handleChange('emergencyContact', e.target.value)}
-          />
-          <Select
-            label="点検種別"
-            value={row.inspectionType}
-            onChange={(e) => handleChange('inspectionType', e.target.value)}
-            options={inspectionOptions}
-            placeholder="選択してください"
-            error={row._errors['inspectionType']}
-          />
-          <Input
-            label="テンプレートNo"
-            value={row.templateNo}
-            onChange={(e) => handleChange('templateNo', e.target.value)}
-          />
-          <Input
-            label="開始日"
-            type="date"
-            value={row.startDate}
-            onChange={(e) => handleChange('startDate', e.target.value)}
-            error={row._errors['startDate']}
-          />
-          <Input
-            label="終了日"
-            type="date"
-            value={row.endDate}
-            onChange={(e) => handleChange('endDate', e.target.value)}
-            error={row._errors['endDate']}
-          />
-          <Input
-            label="表示開始日"
-            type="date"
-            value={row.displayStartDate}
-            onChange={(e) => handleChange('displayStartDate', e.target.value)}
-            error={row._errors['displayStartDate']}
-          />
-          <Input
-            label="表示終了日"
-            type="date"
-            value={row.displayEndDate}
-            onChange={(e) => handleChange('displayEndDate', e.target.value)}
-            error={row._errors['displayEndDate']}
-          />
-          <Input
-            label="表示開始時刻"
-            type="time"
-            value={row.displayStartTime}
-            onChange={(e) => handleChange('displayStartTime', e.target.value)}
-          />
-          <Input
-            label="表示終了時刻"
-            type="time"
-            value={row.displayEndTime}
-            onChange={(e) => handleChange('displayEndTime', e.target.value)}
-          />
-          <Input
-            label="表示時間（秒）"
-            type="number"
-            value={row.displayDuration}
-            onChange={(e) => handleChange('displayDuration', Number(e.target.value))}
-            error={row._errors['displayDuration']}
-          />
-          <Input
-            label="Frame No"
-            value={row.frameNo}
-            onChange={(e) => handleChange('frameNo', e.target.value)}
-          />
-          <Select
-            label="貼紙区分"
-            value={row.posterType}
-            onChange={(e) =>
-              handleChange('posterType', e.target.value as 'template' | 'custom')
-            }
-            options={[
-              { value: 'template', label: 'テンプレート' },
-              { value: 'custom', label: '追加（カスタム）' },
-            ]}
-          />
-          <Input
-            label="貼紙位置"
-            value={row.posterPosition}
-            onChange={(e) => handleChange('posterPosition', e.target.value)}
-          />
-        </div>
+function RowDetailForm({ row, notices, onClose }: { row: BulkEntryRow; notices: BulkNotice[]; onClose: () => void }) {
+  const { addToast } = useToast();
+  const applyRowDetail = useBulkStore((s) => s.applyRowDetail);
 
-        <TextArea
-          label="案内文"
-          value={row.noticeText}
-          onChange={(e) => handleChange('noticeText', e.target.value)}
+  const defaultNotice =
+    row.noticeText || (row.inspectionType ? notices.find((n) => n.inspectionType === row.inspectionType)?.noticeText : '') || '';
+  const [noticeText, setNoticeText] = useState(defaultNotice);
+  const [displayStartDate, setDisplayStartDate] = useState(row.displayStartDate || row.startDate || '');
+  const [displayStartTime, setDisplayStartTime] = useState(row.displayStartTime || '');
+  const [displayEndDate, setDisplayEndDate] = useState(row.displayEndDate || row.endDate || '');
+  const [displayEndTime, setDisplayEndTime] = useState(row.displayEndTime || '');
+  // v1 は window.appSettings（一括入力では未設定）を見るので、行に値が無いときの既定は 6
+  const [displayTime, setDisplayTime] = useState(String(row.displayTime || 6));
+  const [position, setPosition] = useState(() => {
+    const v = row.position !== undefined ? String(row.position) : '2';
+    return POSITIONS.some((p) => p.value === v) ? v : '2';
+  });
+
+  const handleApply = () => {
+    applyRowDetail(row.id, {
+      noticeText,
+      displayStartDate,
+      displayStartTime,
+      displayEndDate,
+      displayEndTime,
+      displayTime: parseInt(displayTime) || 6,
+      position: parseInt(position),
+    });
+    onClose();
+    addToast('詳細設定を保存しました', 'success');
+  };
+
+  return (
+    <div className="space-y-5">
+      <section className="space-y-1">
+        <h4 className="text-sm font-semibold text-gray-800">掲示板用案内文</h4>
+        <textarea
+          value={noticeText}
+          onChange={(e) => setNoticeText(e.target.value)}
           rows={3}
+          maxLength={200}
+          placeholder="例：エレベーター点検のため、一時的に停止いたします。"
+          className={field}
         />
-        <TextArea
-          label="備考"
-          value={row.remarks}
-          onChange={(e) => handleChange('remarks', e.target.value)}
-          rows={2}
-        />
+        <div className="text-right text-xs text-gray-500">{noticeText.length}/200</div>
+      </section>
 
-        <div className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            id="showOnBoard"
-            checked={row.showOnBoard}
-            onChange={(e) => handleChange('showOnBoard', e.target.checked)}
-            className="h-4 w-4 rounded border-gray-300"
-          />
-          <label htmlFor="showOnBoard" className="text-sm text-gray-700">
-            掲示板に表示する
+      <section className="space-y-2">
+        <h4 className="text-sm font-semibold text-gray-800">表示期間</h4>
+        <p className="text-xs text-gray-500">サイネージへの表示開始・終了日時を設定します（任意）</p>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="space-y-1 text-sm text-gray-700">
+            <span>表示開始</span>
+            <div className="flex gap-1">
+              <input type="date" value={displayStartDate} onChange={(e) => setDisplayStartDate(e.target.value)} className={field} />
+              <input type="time" value={displayStartTime} onChange={(e) => setDisplayStartTime(e.target.value)} className={field} />
+            </div>
+          </label>
+          <label className="space-y-1 text-sm text-gray-700">
+            <span>表示終了</span>
+            <div className="flex gap-1">
+              <input type="date" value={displayEndDate} onChange={(e) => setDisplayEndDate(e.target.value)} className={field} />
+              <input type="time" value={displayEndTime} onChange={(e) => setDisplayEndTime(e.target.value)} className={field} />
+            </div>
           </label>
         </div>
+        <label className="block space-y-1 text-sm text-gray-700">
+          <span>表示時間（秒）</span>
+          <input
+            type="number"
+            min={1}
+            max={60}
+            value={displayTime}
+            onChange={(e) => setDisplayTime(e.target.value)}
+            className={`${field} w-24`}
+          />
+        </label>
+      </section>
 
-        {/* Error list */}
-        {errorKeys.length > 0 && (
-          <div className="rounded-md border border-red-200 bg-red-50 p-3">
-            <p className="text-sm font-medium text-red-800 mb-1">エラー一覧</p>
-            <ul className="list-disc list-inside text-xs text-red-600 space-y-0.5">
-              {errorKeys.map((key) => (
-                <li key={key}>{row._errors[key]}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        <div className="flex justify-end pt-2">
-          <Button variant="secondary" onClick={onClose}>
-            閉じる
-          </Button>
+      <section className="space-y-2">
+        <h4 className="text-sm font-semibold text-gray-800">貼紙表示位置</h4>
+        <div className="grid grid-cols-4 gap-2 text-sm">
+          {POSITIONS.map((p) => (
+            <label key={p.value} className={p.value === '0' ? 'col-span-4' : ''}>
+              <input
+                type="radio"
+                name="detailPosition"
+                value={p.value}
+                checked={position === p.value}
+                onChange={() => setPosition(p.value)}
+                className="mr-1"
+              />
+              {p.label}
+            </label>
+          ))}
         </div>
+      </section>
+
+      <div className="flex justify-end gap-3">
+        <Button variant="secondary" onClick={onClose}>
+          キャンセル
+        </Button>
+        <Button onClick={handleApply}>保存</Button>
       </div>
-    </Modal>
+    </div>
   );
 }

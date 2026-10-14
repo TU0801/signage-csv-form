@@ -1,317 +1,243 @@
-import { useState, useRef, useEffect } from 'react';
-import type { UseFormReturn } from 'react-hook-form';
+import { useRef } from 'react';
 import { Input } from '@/components/ui/Input';
 import { TextArea } from '@/components/ui/TextArea';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
-import { useToast } from '@/components/ui/Toast';
-import { validateImageFile } from '@/lib/storage';
-import type { EntryFormData, MasterProperty } from '@/types/app';
-import type { DbVendor, DbInspectionType, Terminal } from '@/types/database';
-import { CascadingSelects } from './CascadingSelects';
+import { PosterType } from '@/lib/constants';
+import type { DbInspectionType, Terminal } from '@/types/database';
+import type { EntryFormApi } from '../hooks/useEntryForm';
+import { CATEGORY_OPTIONS } from '../lib/entryLogic';
 
 interface EntryFormProps {
-  form: UseFormReturn<EntryFormData>;
-  properties: MasterProperty[];
-  vendors: DbVendor[];
-  filteredInspectionTypes: DbInspectionType[];
-  categoryOptions: { value: string; label: string }[];
-  selectedCategoryId: string;
+  form: EntryFormApi;
+  propertyOptions: { value: string; label: string }[];
   terminals: Terminal[];
-  onPropertyChange: (propertyCode: string) => void;
-  onVendorChange: (vendorName: string) => void;
-  onCategoryChange: (categoryId: string) => void;
-  onInspectionTypeChange: (inspectionName: string) => void;
-  onPreview: (templateNo: string) => void;
-  onSubmit: (data: EntryFormData, customImageFile?: File) => void;
-  onReset: () => void;
-  isEditing: boolean;
+  inspectionTypes: DbInspectionType[];
+  signageOnly: boolean;
+  onSignageOnlyChange: (checked: boolean) => void;
+  onAdd: () => void;
+  onDuplicate: () => void;
+  canDuplicate: boolean;
+  onImageError: (message: string) => void;
 }
 
-const posterTypeOptions = [
-  { value: 'template', label: 'テンプレート' },
-  { value: 'custom', label: 'カスタム' },
-];
+const categoryOptions = CATEGORY_OPTIONS.map((c) => ({ value: c, label: c }));
 
-const posterPositionOptions = [
-  { value: '1', label: '①上左' },
-  { value: '2', label: '②上中' },
-  { value: '3', label: '③上右' },
-  { value: '4', label: '④中央' },
-  { value: '0', label: '⓪全体' },
-];
-
+/** 掲示内容入力（v1 index.html .form-section） */
+// v1: index.html 掲示内容入力 / js/script.js onPosterTypeChange
 export function EntryForm({
   form,
-  properties,
-  vendors,
-  filteredInspectionTypes,
-  categoryOptions,
-  selectedCategoryId,
+  propertyOptions,
   terminals,
-  onPropertyChange,
-  onVendorChange,
-  onCategoryChange,
-  onInspectionTypeChange,
-  onPreview,
-  onSubmit,
-  onReset,
-  isEditing,
+  inspectionTypes,
+  signageOnly,
+  onSignageOnlyChange,
+  onAdd,
+  onDuplicate,
+  canDuplicate,
+  onImageError,
 }: EntryFormProps) {
-  const {
-    register,
-    handleSubmit,
-    watch,
-    formState: { errors },
-  } = form;
-  const { addToast } = useToast();
-
-  const templateNo = watch('templateNo');
-  const posterType = watch('posterType');
-
-  // カスタム画像ファイル管理
-  const [customImageFile, setCustomImageFile] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const { values, customImage } = form;
+  const isCustom = values.posterType === PosterType.CUSTOM;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // posterType 変更時にカスタム画像をクリア（描画中に前回値と比べて調整する。
-  // URL の解放は下の previewUrl の effect が、ファイル欄は custom 以外で外れるので自然にリセットされる）
-  const [prevPosterType, setPrevPosterType] = useState(posterType);
-  if (posterType !== prevPosterType) {
-    setPrevPosterType(posterType);
-    if (posterType !== 'custom' && previewUrl) {
-      setPreviewUrl(null);
-      setCustomImageFile(null);
-    }
-  }
+  const terminalOptions = terminals.map((t) => ({
+    value: t.terminal_id,
+    label: t.supplement ? `${t.terminal_id} (${t.supplement})` : t.terminal_id,
+  }));
+  const inspectionOptions = inspectionTypes.map((t) => ({ value: t.id, label: t.inspection_name }));
 
-  // アンマウント時の URL リーク防止
-  useEffect(() => {
-    return () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
-    };
-  }, [previewUrl]);
-
-  const handleImageSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  // v1: js/script.js onImageSelected
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.target;
+    const file = input.files?.[0];
     if (!file) return;
-
-    try {
-      validateImageFile(file);
-    } catch (err) {
-      addToast(err instanceof Error ? err.message : 'ファイルが不正です', 'error');
-      e.target.value = '';
-      return;
+    const error = await form.selectImage(file);
+    if (error) {
+      onImageError(error);
+      input.value = '';
     }
-
-    setCustomImageFile(file);
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPreviewUrl(URL.createObjectURL(file));
   };
 
+  // v1: js/script.js clearCustomImage
   const handleClearImage = () => {
-    setCustomImageFile(null);
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPreviewUrl(null);
+    form.clearImage();
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleFormSubmit = (data: EntryFormData) => {
-    onSubmit(data, customImageFile ?? undefined);
-    handleClearImage();
-  };
-
-  const handleReset = () => {
-    handleClearImage();
-    onReset();
-  };
-
   return (
-    <form onSubmit={(e) => void handleSubmit(handleFormSubmit)(e)} className="space-y-6">
-      {/* 連動セレクト */}
-      <fieldset className="space-y-4">
-        <legend className="text-sm font-semibold text-gray-900 mb-2">物件・保守会社・点検種別</legend>
-        <CascadingSelects
-          form={form}
-          properties={properties}
-          vendors={vendors}
-          filteredInspectionTypes={filteredInspectionTypes}
-          categoryOptions={categoryOptions}
-          selectedCategoryId={selectedCategoryId}
-          terminals={terminals}
-          onPropertyChange={onPropertyChange}
-          onVendorChange={onVendorChange}
-          onCategoryChange={onCategoryChange}
-          onInspectionTypeChange={onInspectionTypeChange}
-        />
-      </fieldset>
-
-      {/* テンプレート */}
-      <fieldset className="space-y-4">
-        <legend className="text-sm font-semibold text-gray-900 mb-2">テンプレート設定</legend>
-        <div className="flex items-end gap-3">
-          <div className="flex-1">
-            <Input
-              label="テンプレートNo"
-              {...register('templateNo')}
-              error={errors.templateNo?.message}
-              readOnly
-            />
-          </div>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => onPreview(templateNo)}
-            disabled={!templateNo}
-          >
-            プレビュー
-          </Button>
-        </div>
-      </fieldset>
-
-      {/* 点検期間 */}
-      <fieldset className="space-y-4">
-        <legend className="text-sm font-semibold text-gray-900 mb-2">点検期間</legend>
-        <div className="grid grid-cols-2 gap-4">
-          <Input
-            label="開始日"
-            type="date"
-            {...register('startDate')}
-            error={errors.startDate?.message}
-          />
-          <Input
-            label="終了日"
-            type="date"
-            {...register('endDate')}
-            error={errors.endDate?.message}
-          />
-        </div>
-      </fieldset>
-
-      {/* 表示期間 */}
-      <fieldset className="space-y-4">
-        <legend className="text-sm font-semibold text-gray-900 mb-2">表示設定</legend>
-        <div className="grid grid-cols-2 gap-4">
-          <Input
-            label="表示開始日"
-            type="date"
-            {...register('displayStartDate')}
-            error={errors.displayStartDate?.message}
-          />
-          <Input
-            label="表示終了日"
-            type="date"
-            {...register('displayEndDate')}
-            error={errors.displayEndDate?.message}
-          />
-          <Input
-            label="表示開始時刻"
-            type="time"
-            {...register('displayStartTime')}
-            error={errors.displayStartTime?.message}
-          />
-          <Input
-            label="表示終了時刻"
-            type="time"
-            {...register('displayEndTime')}
-            error={errors.displayEndTime?.message}
-          />
-        </div>
-        <Input
-          label="表示時間（秒）"
-          type="number"
-          min={1}
-          {...register('displayDuration', { valueAsNumber: true })}
-          error={errors.displayDuration?.message}
-        />
-      </fieldset>
-
-      {/* 貼紙・案内文 */}
-      <fieldset className="space-y-4">
-        <legend className="text-sm font-semibold text-gray-900 mb-2">貼紙・案内文</legend>
-        <Select
-          label="貼紙区分"
-          options={posterTypeOptions}
-          {...register('posterType')}
-          error={errors.posterType?.message}
-        />
-
-        {/* カスタム画像アップロード */}
-        {posterType === 'custom' && (
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">カスタム画像</label>
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      {/* 物件・端末 */}
+      <div className="space-y-1">
+        <div className="flex items-baseline gap-2">
+          <label htmlFor="se-property" className="text-sm font-medium text-gray-700">
+            物件コード <span className="text-red-600">*</span>
+          </label>
+          <label className="inline-flex items-center gap-1 text-xs text-gray-600">
             <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/png,image/jpeg"
-              onChange={handleImageSelected}
-              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+              type="checkbox"
+              checked={signageOnly}
+              onChange={(e) => onSignageOnlyChange(e.target.checked)}
             />
-            {previewUrl && (
-              <div className="relative inline-block">
-                <img
-                  src={previewUrl}
-                  alt="プレビュー"
-                  className="max-h-40 rounded border border-gray-200"
-                />
-                <button
-                  type="button"
-                  onClick={handleClearImage}
-                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
-                >
-                  x
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        <Select
-          label="ポスター位置"
-          options={posterPositionOptions}
-          {...register('posterPosition')}
-          error={errors.posterPosition?.message}
-        />
-        <Input
-          label="フレームNo"
-          {...register('frameNo')}
-          error={errors.frameNo?.message}
-        />
-        <div className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            id="showOnBoard"
-            {...register('showOnBoard')}
-            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-          />
-          <label htmlFor="showOnBoard" className="text-sm text-gray-700">
-            掲示板に表示する
+            サイネージ設置物件のみ
           </label>
         </div>
-        <TextArea
-          label="掲示板用案内文"
-          rows={3}
-          {...register('noticeText')}
-          error={errors.noticeText?.message}
+        <Select
+          id="se-property"
+          placeholder="選択してください"
+          options={propertyOptions}
+          value={values.propertyCode}
+          onChange={(e) => form.changeProperty(e.target.value)}
         />
-        <TextArea
-          label="備考"
-          rows={2}
-          {...register('remarks')}
-          error={errors.remarks?.message}
+      </div>
+      <Select
+        id="se-terminal"
+        label="端末ID"
+        placeholder="選択してください"
+        options={terminalOptions}
+        value={values.terminalId}
+        onChange={(e) => form.setField('terminalId', e.target.value)}
+      />
+
+      {/* 点検内容 */}
+      <Select
+        id="se-category"
+        label="案内カテゴリ"
+        placeholder="全て"
+        options={categoryOptions}
+        value={values.category}
+        onChange={(e) => form.changeCategory(e.target.value)}
+      />
+      {!isCustom && (
+        <Select
+          id="se-inspection-type"
+          label="点検工事案内 *"
+          placeholder="選択してください"
+          options={inspectionOptions}
+          value={values.inspectionTypeId}
+          onChange={(e) => form.changeInspectionType(e.target.value)}
         />
+      )}
+
+      <fieldset className="space-y-1">
+        <legend className="text-sm font-medium text-gray-700">貼紙</legend>
+        <div className="flex gap-4 pt-1 text-sm">
+          <label className="inline-flex items-center gap-1">
+            <input
+              type="radio"
+              name="se-poster-type"
+              value={PosterType.TEMPLATE}
+              checked={!isCustom}
+              onChange={() => form.setField('posterType', PosterType.TEMPLATE)}
+            />
+            テンプレート
+          </label>
+          <label className="inline-flex items-center gap-1">
+            <input
+              type="radio"
+              name="se-poster-type"
+              value={PosterType.CUSTOM}
+              checked={isCustom}
+              onChange={() => form.setField('posterType', PosterType.CUSTOM)}
+            />
+            追加
+          </label>
+        </div>
       </fieldset>
 
-      {/* アクション */}
-      <div className="flex gap-3 pt-2">
-        <Button type="submit" variant="primary">
-          {isEditing ? '更新' : '追加'}
+      {/* 画像アップロード（追加のときだけ） */}
+      {isCustom && (
+        <div className="space-y-1 sm:col-span-2">
+          <p className="text-sm font-medium text-gray-700">
+            貼紙画像 <span className="text-red-600">*</span>
+          </p>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".jpg,.jpeg,.png"
+            onChange={(e) => void handleFile(e)}
+            className="hidden"
+            aria-label="貼紙画像"
+          />
+          {customImage ? (
+            <div className="flex items-center gap-3 rounded-md border border-gray-200 p-2">
+              <img src={customImage.dataUrl} alt="プレビュー" className="max-h-32 rounded" />
+              <Button type="button" variant="danger" size="sm" onClick={handleClearImage}>
+                削除
+              </Button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full rounded-md border-2 border-dashed border-gray-300 p-4 text-center text-sm text-gray-600 hover:bg-gray-50"
+            >
+              クリックして画像を選択
+              <br />
+              <small>JPG, JPEG, PNG形式（5MB以下）</small>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* 案内文（テンプレートのときだけ） */}
+      {!isCustom && (
+        <div className="sm:col-span-2">
+          <TextArea
+            id="se-notice-text"
+            label="掲示板用案内文"
+            rows={2}
+            value={values.noticeText}
+            onChange={(e) => form.setField('noticeText', e.target.value)}
+          />
+        </div>
+      )}
+
+      <p className="border-b border-gray-200 pb-1 text-sm font-semibold text-gray-700 sm:col-span-2">
+        点検期間
+      </p>
+      <Input
+        id="se-start-date"
+        label="点検開始日"
+        type="date"
+        value={values.startDate}
+        onChange={(e) => form.changeStartDate(e.target.value)}
+      />
+      <Input
+        id="se-end-date"
+        label="点検終了日"
+        type="date"
+        value={values.endDate}
+        onChange={(e) => form.changeEndDate(e.target.value)}
+      />
+
+      <div className="sm:col-span-2">
+        <TextArea
+          id="se-remarks"
+          label="作業時間及び備考"
+          rows={2}
+          placeholder="例：10:00〜12:00"
+          value={values.remarks}
+          disabled={isCustom}
+          className={isCustom ? 'bg-gray-200' : undefined}
+          onChange={(e) => form.setField('remarks', e.target.value)}
+        />
+      </div>
+
+      <div className="flex gap-2 border-t border-gray-200 pt-3 sm:col-span-2">
+        <Button type="button" variant="primary" className="flex-1" onClick={onAdd}>
+          データを追加
         </Button>
-        <Button type="button" variant="secondary" onClick={handleReset}>
-          リセット
+        <Button
+          type="button"
+          variant="secondary"
+          className="flex-1"
+          onClick={onDuplicate}
+          disabled={!canDuplicate}
+        >
+          前回を複製
         </Button>
       </div>
-    </form>
+    </div>
   );
 }

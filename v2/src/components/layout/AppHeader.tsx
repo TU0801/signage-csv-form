@@ -1,12 +1,15 @@
+import { useContext } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useAuthStore } from '@/stores/authStore';
 import { cn } from '@/lib/utils';
+import { HeaderSlotContext } from './HeaderSlot';
 
 export function AppHeader() {
   const { profile, isAdmin } = useAuth();
   const signOut = useAuthStore((s) => s.signOut);
   const location = useLocation();
+  const { setTarget } = useContext(HeaderSlotContext);
 
   const navItems = [
     { to: '/', label: '1件入力' },
@@ -18,9 +21,15 @@ export function AppHeader() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-14">
           <div className="flex items-center gap-6">
-            <Link to="/" className="text-lg font-bold text-gray-900">
-              サイネージCMS
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link to="/" className="text-lg font-bold text-gray-900">
+                サイネージCMS
+              </Link>
+              {/* v1: index.html / bulk.html / admin.html の #appVersion（js/version.js APP_VERSION） */}
+              <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">v{__APP_VERSION__}</span>
+            </div>
+            {/* 画面ごとの部品（管理者の保守会社セレクト）。HeaderSlot がここへ描く */}
+            <div ref={setTarget} className="flex items-center empty:hidden" />
             <nav className="flex gap-1">
               {navItems.map((item) => (
                 <Link
