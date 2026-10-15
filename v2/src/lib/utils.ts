@@ -20,3 +20,15 @@ export function escapeHtml(str: string): string {
 export function todayUtc(now: Date = new Date()): string {
   return now.toISOString().split('T')[0]!;
 }
+
+/**
+ * 検索用の文字列の正規化。全角・半角（NFKC）、大文字・小文字、空白、ひらがな・カタカナの違いを無視する。
+ * 業務システム（BARAN）の lib/ui/search-select.ts normSearch と同じ規則。
+ */
+export function normalizeSearch(str: string): string {
+  return str
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/[ぁ-ゖ]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60));
+}

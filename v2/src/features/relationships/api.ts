@@ -110,10 +110,10 @@ export async function fetchProfileEmails(userIds: string[]): Promise<Map<string,
  * 追加モーダルに出す物件。active / pending で紐付いた物件を除き、property_code 単位で1つにまとめる。
  */
 // v1: js/admin-relationships.js openAddBuildingModal（availableProperties の算出）
-export function availablePropertiesForVendor(
-  allProperties: Pick<DbProperty, 'property_code' | 'property_name'>[],
+export function availablePropertiesForVendor<T extends Pick<DbProperty, 'property_code' | 'property_name'>>(
+  allProperties: T[],
   linked: Pick<DbBuildingVendor, 'property_code' | 'status'>[],
-): Pick<DbProperty, 'property_code' | 'property_name'>[] {
+): T[] {
   const linkedCodes = new Set(
     linked
       .filter((r) => r.status === BuildingVendorStatus.ACTIVE || r.status === BuildingVendorStatus.PENDING)
