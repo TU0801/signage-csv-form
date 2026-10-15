@@ -60,3 +60,10 @@ export interface RpcUnitInspectionTypeOption {
   inspection_type_label: string;
   sort: number | null;
 }
+
+/** property_management_companies() の1行（物件ごとの管理会社。未設定は null。有効な管理者以外には0行） */
+export interface RpcPropertyManagementCompanyRow {
+  property_code: string;
+  management_company_id: string | null;
+  management_company_name: string | null;
+}

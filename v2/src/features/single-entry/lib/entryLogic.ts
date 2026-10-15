@@ -2,6 +2,7 @@ import { EntryStatus, PosterType } from '@/lib/constants';
 import type { AppSettings, EntryInsertRow } from '@/lib/api/single-entry';
 import type { MasterProperty } from '@/types/app';
 import type { DbInspectionType, DbVendor, Terminal } from '@/types/database';
+import type { RpcPropertyManagementCompanyRow } from '@/types/rpc';
 import type { CustomImage, LocalEntry, SingleEntryValues } from '../types';
 
 /** 案内カテゴリの選択肢（v1 index.html #inspectionCategory。'' = 全て） */
@@ -69,6 +70,39 @@ export function buildPropertyOptions(
     options.push({ value: p.property_code, label: `${p.property_code} ${p.property_name}` });
   });
   return options;
+}
+
+/** 管理会社フィルターの「未設定」の値（'' = 全て、それ以外は会社 ID） */
+export const MANAGEMENT_COMPANY_NONE = '__none__';
+
+/** 物件コード → 管理会社 ID（未設定は null）と、選択肢にする管理会社（社名順） */
+export interface ManagementCompanyIndex {
+  byCode: Map<string, string | null>;
+  companies: { id: string; name: string }[];
+}
+
+export function buildManagementCompanyIndex(rows: RpcPropertyManagementCompanyRow[]): ManagementCompanyIndex {
+  const byCode = new Map<string, string | null>();
+  const names = new Map<string, string>();
+  rows.forEach((r) => {
+    byCode.set(r.property_code, r.management_company_id);
+    if (r.management_company_id) names.set(r.management_company_id, r.management_company_name ?? '');
+  });
+  const companies = [...names].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+  return { byCode, companies };
+}
+
+/**
+ * 管理会社で物件を絞る。'' は全て。業務システムに結び付いていない物件は「未設定」に入れる。
+ */
+export function filterByManagementCompany<T extends Pick<MasterProperty, 'property_code'>>(
+  properties: T[],
+  index: ManagementCompanyIndex | null,
+  companyId: string,
+): T[] {
+  if (!companyId || !index) return properties;
+  const want = companyId === MANAGEMENT_COMPANY_NONE ? null : companyId;
+  return properties.filter((p) => (index.byCode.get(p.property_code) ?? null) === want);
 }
 
 /** 物件の端末（空の端末は選択肢にしない） */

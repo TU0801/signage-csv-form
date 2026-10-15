@@ -22,11 +22,14 @@ import { EntryDataList } from '@/features/single-entry/components/EntryDataList'
 import { PosterPreview } from '@/features/single-entry/components/PosterPreview';
 import { DisplaySettings } from '@/features/single-entry/components/DisplaySettings';
 import { AdminVendorSelect } from '@/features/single-entry/components/AdminVendorSelect';
+import { ManagementCompanySelect } from '@/features/single-entry/components/ManagementCompanySelect';
+import { useManagementCompanies } from '@/features/single-entry/hooks/useManagementCompanies';
 import { HeaderSlot } from '@/components/layout/HeaderSlot';
 import { resolveTemplateImageUrl } from '@/features/single-entry/lib/templateImages';
 import {
   buildLocalEntry,
   buildPropertyOptions,
+  filterByManagementCompany,
   filterInspectionTypes,
   formatPosterDate,
   terminalsOf,
@@ -102,15 +105,22 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
   const submitted = useSubmittedEntries(user?.id ?? null);
 
   const [signageOnly, setSignageOnly] = useState(false);
+  // 管理者の管理会社フィルター（'' = 全て）。保守会社・サイネージ設置物件のみと AND で効く
+  const managementIndex = useManagementCompanies(isAdmin);
+  const [managementCompanyId, setManagementCompanyId] = useState('');
   const [tab, setTab] = useState<'preview' | 'settings'>('preview');
   const [localEntries, setLocalEntries] = useState<LocalEntry[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [removeId, setRemoveId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const selectableProperties = useMemo(
+    () => filterByManagementCompany(vendorCtx.visibleProperties, managementIndex, managementCompanyId),
+    [vendorCtx.visibleProperties, managementIndex, managementCompanyId],
+  );
   const propertyOptions = useMemo(
-    () => buildPropertyOptions(vendorCtx.visibleProperties, signageOnly),
-    [vendorCtx.visibleProperties, signageOnly],
+    () => buildPropertyOptions(selectableProperties, signageOnly),
+    [selectableProperties, signageOnly],
   );
   const terminals = terminalsOf(vendorCtx.visibleProperties, values.propertyCode);
   const inspectionOptions = useMemo(
@@ -135,8 +145,15 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
   // v1: js/script.js populatePropertySelect（フィルター切替で消えた物件は選択を外す）
   const handleSignageOnlyChange = (checked: boolean) => {
     setSignageOnly(checked);
-    const next = buildPropertyOptions(vendorCtx.visibleProperties, checked);
+    const next = buildPropertyOptions(selectableProperties, checked);
     if (values.propertyCode && !next.some((o) => o.value === values.propertyCode)) form.resetProperty();
+  };
+
+  // 管理会社を切り替えて選択中の物件が外れたら、物件の選択を外す（サイネージ設置物件のみと同じ）
+  const handleManagementCompanyChange = (companyId: string) => {
+    setManagementCompanyId(companyId);
+    const next = filterByManagementCompany(vendorCtx.visibleProperties, managementIndex, companyId);
+    if (values.propertyCode && !next.some((p) => p.property_code === values.propertyCode)) form.resetProperty();
   };
 
   // v1: js/script.js addEntry
@@ -238,7 +255,15 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
       {/* 管理者の保守会社選択はヘッダーに出す（780f151。ポータルなので置き場所はレイアウトに影響しない） */}
       {isAdmin && (
         <HeaderSlot>
-          <AdminVendorSelect vendors={vendors} value={vendorCtx.adminVendorId} onChange={handleAdminVendorChange} />
+          <AdminVendorSelect vendors={vendors} value={vendorCtx.adminVendorId} onChange={handleAdminVendorChange}>
+            {managementIndex && (
+              <ManagementCompanySelect
+                companies={managementIndex.companies}
+                value={managementCompanyId}
+                onChange={handleManagementCompanyChange}
+              />
+            )}
+          </AdminVendorSelect>
         </HeaderSlot>
       )}
 

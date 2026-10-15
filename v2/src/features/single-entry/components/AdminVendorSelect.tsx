@@ -1,16 +1,19 @@
+import type { ReactNode } from 'react';
 import type { DbVendor } from '@/types/database';
 
 interface AdminVendorSelectProps {
   vendors: DbVendor[];
   value: string;
   onChange: (vendorId: string) => void;
+  /** 保守会社の右に並べる管理者用の部品（管理会社フィルター） */
+  children?: ReactNode;
 }
 
 /**
  * 管理者が「どの保守会社として入力するか」を選ぶ。v1 と同じくヘッダーに出す（780f151。SingleEntryPage が HeaderSlot で差し込む）。
  */
 // v1: index.html #adminVendorSelectGroup
-export function AdminVendorSelect({ vendors, value, onChange }: AdminVendorSelectProps) {
+export function AdminVendorSelect({ vendors, value, onChange, children }: AdminVendorSelectProps) {
   return (
     <div className="inline-flex items-center gap-2 rounded-md border-2 border-amber-400 bg-amber-50 px-2 py-1">
       <span className="rounded bg-amber-400 px-1.5 py-0.5 text-xs font-bold text-gray-900 whitespace-nowrap">
@@ -29,6 +32,7 @@ export function AdminVendorSelect({ vendors, value, onChange }: AdminVendorSelec
           </option>
         ))}
       </select>
+      {children}
     </div>
   );
 }

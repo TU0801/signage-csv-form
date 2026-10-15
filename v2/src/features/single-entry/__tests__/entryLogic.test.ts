@@ -6,8 +6,10 @@ import {
   applyEndDateChange,
   applyVendorCleared,
   buildLocalEntry,
+  buildManagementCompanyIndex,
   buildPropertyOptions,
   computePosterSize,
+  filterByManagementCompany,
   duplicateValues,
   filterInspectionTypes,
   formatPosterDate,
@@ -42,6 +44,20 @@ describe('物件の選択肢（v1 populatePropertySelect）', () => {
       { value: 'z0015A01', label: 'z0015A01 未設置' },
     ]);
     expect(buildPropertyOptions(PROPERTIES, true).map((o) => o.value)).toEqual(['2010', '120273-00']);
+  });
+});
+
+describe('管理会社フィルター', () => {
+  it('全て・会社・未設定（業務システムに無い物件を含む）で絞り、選択肢は社名順', () => {
+    const index = buildManagementCompanyIndex([
+      { property_code: '120273-00', management_company_id: 'c-haseko', management_company_name: '株式会社長谷工コミュニティ九州' },
+      { property_code: '2010', management_company_id: 'c-en', management_company_name: '株式会社えん建物管理' },
+    ]);
+    expect(index.companies.map((c) => c.id)).toEqual(['c-en', 'c-haseko']);
+    const codes = (id: string) => filterByManagementCompany(PROPERTIES, index, id).map((p) => p.property_code);
+    expect(codes('')).toEqual(['120273-00', 'z0015A01', '2010']);
+    expect(codes('c-en')).toEqual(['2010']);
+    expect(codes('__none__')).toEqual(['z0015A01']);
   });
 });
 

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { ToastProvider } from '@/components/ui/Toast';
+import { HeaderSlotContext } from '@/components/layout/HeaderSlot';
 import { SingleEntryPage } from '@/pages/SingleEntryPage';
 import { PROPERTIES, SETTINGS, TYPES } from './fixtures';
 import type { DbVendor } from '@/types/database';
@@ -12,6 +13,7 @@ const VENDORS: DbVendor[] = [
 ];
 
 const insertEntries = vi.fn();
+let isAdmin = false;
 
 vi.mock('@/lib/supabase', () => ({ supabase: {}, TABLES: {} }));
 vi.mock('@/lib/storage', () => ({
@@ -22,9 +24,16 @@ vi.mock('@/lib/storage', () => ({
 vi.mock('@/hooks/useAuth', () => ({
   useAuth: () => ({
     user: { id: 'u1' },
-    profile: { id: 'u1', role: 'user', vendor_id: 'v-mine' },
-    isAdmin: false,
+    profile: { id: 'u1', role: isAdmin ? 'admin' : 'user', vendor_id: isAdmin ? null : 'v-mine' },
+    isAdmin,
   }),
+}));
+vi.mock('@/lib/api/masterData', () => ({
+  fetchPropertyManagementCompanies: () =>
+    Promise.resolve([
+      { property_code: '120273-00', management_company_id: 'c-en', management_company_name: '株式会社えん建物管理' },
+      { property_code: '2010', management_company_id: null, management_company_name: null },
+    ]),
 }));
 vi.mock('@/hooks/useMasterData', () => ({
   useMasterData: () => ({
@@ -53,6 +62,7 @@ beforeEach(() => {
   // jsdom には <dialog> の showModal / close が無い（ConfirmDialog が使う）
   HTMLDialogElement.prototype.showModal ??= function () {};
   HTMLDialogElement.prototype.close ??= function () {};
+  isAdmin = false;
   insertEntries.mockReset();
   insertEntries.mockResolvedValue([]);
 });
@@ -90,5 +100,36 @@ describe('1件入力画面（一般ユーザー）', () => {
       display_duration: 10,
       status: 'draft',
     });
+  });
+});
+
+describe('1件入力画面（管理者の管理会社フィルター）', () => {
+  it('既定は全て。管理会社で物件の選択肢を絞り、外れた物件の選択を外す。未設定には業務システムに無い物件も入る', async () => {
+    isAdmin = true;
+    render(
+      <HeaderSlotContext.Provider value={{ target: document.body, setTarget: () => {} }}>
+        <ToastProvider>
+          <SingleEntryPage />
+        </ToastProvider>
+      </HeaderSlotContext.Provider>,
+    );
+
+    const filter = await screen.findByLabelText('管理会社');
+    expect(filter).toHaveValue('');
+    const propertySelect = screen.getByLabelText('物件コード', { exact: false, selector: 'select' });
+    const codes = () =>
+      within(propertySelect)
+        .getAllByRole('option')
+        .map((o) => (o as HTMLOptionElement).value)
+        .filter(Boolean);
+    expect(codes()).toEqual(['2010', '120273-00', 'z0015A01']);
+
+    fireEvent.change(propertySelect, { target: { value: 'z0015A01' } });
+    fireEvent.change(filter, { target: { value: 'c-en' } });
+    expect(codes()).toEqual(['120273-00']);
+    expect(propertySelect).toHaveValue('');
+
+    fireEvent.change(filter, { target: { value: '__none__' } });
+    expect(codes()).toEqual(['2010', 'z0015A01']);
   });
 });

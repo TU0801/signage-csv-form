@@ -15,7 +15,7 @@ import type {
   PropertyUnit,
   UnitInspectionTypeOption,
 } from '@/types/app';
-import type { RpcInspectionRow, RpcUnitInspectionRow } from '@/types/rpc';
+import type { RpcInspectionRow, RpcPropertyManagementCompanyRow, RpcUnitInspectionRow } from '@/types/rpc';
 import { getAssignedBuildings } from './relationships';
 
 // v1: js/supabase/master-data.js getMasterProperties
@@ -102,6 +102,14 @@ export function toMasterProperties(rows: DbProperty[]): MasterProperty[] {
     });
   });
   return Array.from(byCode.values());
+}
+
+/**
+ * 物件ごとの管理会社（1件入力の管理会社フィルター用）。正本は biz.properties.management_company_id。
+ * RPC property_management_companies は有効な管理者にだけ行を返す。
+ */
+export function fetchPropertyManagementCompanies(): Promise<RpcPropertyManagementCompanyRow[]> {
+  return rpcAllRows<RpcPropertyManagementCompanyRow>(RPC.propertyManagementCompanies);
 }
 
 /**

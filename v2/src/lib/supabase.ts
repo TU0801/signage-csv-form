@@ -41,6 +41,7 @@ export const RPC = {
   unitInspectionTypeOptions: 'unit_inspection_type_options',
   upsertUnitInspection: 'upsert_unit_inspection',
   deleteUnitInspection: 'delete_unit_inspection',
+  propertyManagementCompanies: 'property_management_companies',
 } as const;
 
 /** Edge Function（ユーザー作成・パスワード変更。service_role が要るため管理者検証付きでサーバー側が行う） */
