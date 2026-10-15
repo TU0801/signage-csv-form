@@ -233,26 +233,25 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
 
   return (
     // 段階B（tall のときだけ）：1画面に収め、上段はカードの中身の高さ、作成データ一覧が残りを取って内部スクロールする
-    <div className="space-y-3 tall:grid tall:h-[calc(100dvh-var(--header-h)-1.5rem)] tall:grid-rows-[auto_minmax(0,auto)_minmax(9rem,1fr)] tall:gap-3 tall:space-y-0">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-base font-bold text-gray-900">点検日入力</h1>
-        {/* 管理者の保守会社選択はヘッダーに出す（780f151） */}
-        {isAdmin && (
-          <HeaderSlot>
-            <AdminVendorSelect vendors={vendors} value={vendorCtx.adminVendorId} onChange={handleAdminVendorChange} />
-          </HeaderSlot>
-        )}
-        <Button variant="secondary" size="sm" onClick={handleClear}>
-          クリア
-        </Button>
-      </div>
+    // 見出しの行は1行分を取るので置かない（ユーザー指定 2026-10-15）。h1 は読み上げ用にだけ残し、クリアは入力カードの見出しへ
+    <div className="space-y-3 tall:grid tall:h-[calc(100dvh-var(--header-h)-1.5rem)] tall:grid-rows-[minmax(0,auto)_minmax(9rem,1fr)] tall:gap-3 tall:space-y-0">
+      {/* 管理者の保守会社選択はヘッダーに出す（780f151。ポータルなので置き場所はレイアウトに影響しない） */}
+      {isAdmin && (
+        <HeaderSlot>
+          <AdminVendorSelect vendors={vendors} value={vendorCtx.adminVendorId} onChange={handleAdminVendorChange} />
+        </HeaderSlot>
+      )}
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 tall:min-h-0 tall:grid-rows-[minmax(0,1fr)]">
         <Card className="tall:flex tall:min-h-0 tall:flex-col">
-          <CardHeader>
+          <CardHeader className="flex items-center justify-between gap-3">
+            <h1 className="sr-only">点検日入力</h1>
             <h2 className="text-sm font-semibold text-gray-900">
               {editingId ? '掲示内容入力（編集中）' : '掲示内容入力'}
             </h2>
+            <Button variant="secondary" size="sm" onClick={handleClear}>
+              クリア
+            </Button>
           </CardHeader>
           <CardContent className="p-0 tall:flex tall:min-h-0 tall:flex-1 tall:flex-col">
             <EntryForm
