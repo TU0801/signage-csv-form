@@ -23,7 +23,7 @@ export function AdminVendorSelect({ vendors, value, onChange, children }: AdminV
         aria-label="保守会社"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="max-w-[20rem] rounded border border-amber-400 bg-white px-2 py-1 text-sm text-gray-900"
+        className="max-w-[12rem] 2xl:max-w-[20rem] rounded border border-amber-400 bg-white px-2 py-1 text-sm text-gray-900"
       >
         <option value="">-- 保守会社を選択 --</option>
         {vendors.map((v) => (

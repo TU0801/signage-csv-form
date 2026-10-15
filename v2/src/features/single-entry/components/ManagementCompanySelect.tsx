@@ -13,7 +13,7 @@ export function ManagementCompanySelect({ companies, value, onChange }: Manageme
       aria-label="管理会社"
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="max-w-[16rem] rounded border border-amber-400 bg-white px-2 py-1 text-sm text-gray-900"
+      className="max-w-[11rem] 2xl:max-w-[16rem] rounded border border-amber-400 bg-white px-2 py-1 text-sm text-gray-900"
     >
       <option value="">管理会社: 全て</option>
       {companies.map((c) => (
