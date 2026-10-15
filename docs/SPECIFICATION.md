@@ -335,13 +335,16 @@ Excelからのコピー＆ペーストで複数データを一括入力する画
 #### マスター管理タブ
 
 ##### 物件マスター
+
+物件の正本は業務システム（BARAN業務リスト、biz.properties）。物件の追加・削除と物件コード・物件名・端末は業務システムで編集し、biz のトリガー（biz.sync_property_to_signage）が signage_master_properties へ写す（2026-10-15）。この画面からは signage_master_properties へ書かない。
+
 | 機能 | 説明 |
 |-----|------|
 | 一覧表示 | property_codeでグループ化 |
 | 検索 | コード・名称で検索 |
-| 新規追加 | 物件追加モーダル |
-| 編集 | 複数端末対応の編集 |
-| 削除 | 使用中チェック付き |
+| 新規追加 | 押すと「物件の追加・削除は業務システム（BARAN業務リスト）で行ってください」と案内するだけ（DB は呼ばない） |
+| 編集 | 物件コード・物件名・端末は読み取り専用。保存するのは設備情報（点検。upsert_property_inspection 等）と台ごとの保守の RPC だけ |
+| 削除 | 新規追加と同じ案内を出すだけ（DB は呼ばない） |
 | 台ごとの保守 | 業務システムで台を登録した設備（大分類）は、保守（点検種別・保守会社・点検月・検査月）を物件モーダルの「台ごとの保守」の表で台ごとに編集する（2026-10-14）。その大分類の点検種別は「設備情報」の表と選択肢に出ない。台の追加・削除、保守会社固有コード・設置場所・金額は業務システムで編集する。読み書きは signage スキーマの RPC（unit_inspections_all / unit_inspection_type_options / upsert_unit_inspection / delete_unit_inspection。管理者だけ）で、保存は開いたときとの差分だけを1行ずつ送る。RPC が無い DB では表を出さず、従来どおり動く |
 
 ##### 受注先マスター
@@ -477,6 +480,9 @@ signage は RPC signage.template_images_master() で読み、失敗したら旧�
 | updated_at | TIMESTAMP | DEFAULT NOW() | 更新日時 |
 
 #### signage_master_properties（物件マスター）
+
+正本は業務システムの biz.properties（2026-10-15〜）。行の追加と property_code / property_name / terminals の更新は biz の同期トリガーが行う。アプリからは読むだけ。
+
 | カラム | 型 | 制約 | 説明 |
 |--------|-----|------|------|
 | id | UUID | PK | ID |

@@ -55,6 +55,8 @@ npm run deps:circular                  # 循環依存チェック
 - `error-handler.js` — エラー日本語化・ログDB保存
 - `version.js` — バージョン表示
 
+**物件マスタの正本は業務システム（biz.properties）**（2026-10-15〜）: 物件の追加・削除・コード・名前・端末は biz で編集し、biz のトリガーが `signage_master_properties` へ写す。v1・v2 とも物件の表へは書かず、物件モーダルの保存は点検と台ごとの保守の RPC だけ。
+
 **既知の循環依存**: `supabase/master-data.js` ↔ `supabase/relationships.js`（dynamic importで回避中）
 
 ## バグ頻発箇所と注意点
