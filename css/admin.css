@@ -1038,6 +1038,7 @@
 .master-search-inline {
     flex: 1;
     max-width: 500px;
+    min-width: 280px; /* 業務システムの案内文に押されてプレースホルダが切れないように（2026-10-15） */
 }
 
 .master-add-btn {
