@@ -40,3 +40,71 @@ describe('Modal', () => {
     expect(dialog()).not.toHaveClass('max-w-lg');
   });
 });
+
+describe('Modal の dirty（保存していない変更）', () => {
+  const bar = () => screen.queryByText('保存していない変更があります。破棄して閉じますか？');
+
+  it('Escape・背景・× では閉じずに確認を出し、破棄して閉じるで onClose', () => {
+    const onClose = vi.fn();
+    render(
+      <Modal open dirty onClose={onClose} title="編集">
+        <input aria-label="名前" />
+      </Modal>,
+    );
+    const dialog = screen.getByText('編集').closest('dialog')!;
+    const back = () => fireEvent.click(screen.getByRole('button', { name: '編集に戻る', hidden: true }));
+
+    const cancel = new Event('cancel', { cancelable: true });
+    fireEvent(dialog, cancel);
+    expect(cancel.defaultPrevented).toBe(true);
+    expect(bar()).not.toBeNull();
+    back();
+    expect(bar()).toBeNull();
+
+    fireEvent.mouseDown(dialog);
+    fireEvent.click(dialog);
+    expect(bar()).not.toBeNull();
+    back();
+
+    fireEvent.click(screen.getByRole('button', { name: '閉じる', hidden: true }));
+    expect(bar()).not.toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: '破棄して閉じる', hidden: true }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('dirty でなければ × ですぐ閉じる', () => {
+    const onClose = vi.fn();
+    render(
+      <Modal open onClose={onClose} title="編集">
+        <p>本文</p>
+      </Modal>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: '閉じる', hidden: true }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(bar()).toBeNull();
+  });
+
+  it('開くと data-autofocus、無ければ最初の入力欄にフォーカスする', () => {
+    const { rerender } = render(
+      <Modal open onClose={() => {}} title="編集">
+        <input type="hidden" />
+        <input aria-label="一つ目" />
+      </Modal>,
+    );
+    expect(screen.getByRole('textbox', { name: '一つ目', hidden: true })).toHaveFocus();
+    rerender(
+      <Modal open={false} onClose={() => {}} title="編集">
+        <input aria-label="一つ目" />
+      </Modal>,
+    );
+    rerender(
+      <Modal open onClose={() => {}} title="編集">
+        <input aria-label="一つ目" />
+        <textarea aria-label="二つ目" data-autofocus />
+      </Modal>,
+    );
+    expect(screen.getByRole('textbox', { name: '二つ目', hidden: true })).toHaveFocus();
+  });
+});
