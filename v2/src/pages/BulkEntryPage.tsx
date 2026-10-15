@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { HeaderSlot } from '@/components/layout/HeaderSlot';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
 import { downloadCsv, copyCsvToClipboard } from '@/lib/csv';
 import { createBulkEntries } from '@/lib/api/bulk-entry';
-import { useBulkStore, cancelBulkAutoSave } from '@/stores/bulkStore';
+import { useBulkStore, cancelBulkAutoSave, type BulkRowsPatch } from '@/stores/bulkStore';
 import { useBulkConfirm } from '@/features/bulk-entry/hooks/useBulkConfirm';
 import { useBulkSession } from '@/features/bulk-entry/hooks/useBulkSession';
 import { BulkToolbar } from '@/features/bulk-entry/components/BulkToolbar';
@@ -15,6 +16,7 @@ import { PasteModal } from '@/features/bulk-entry/modals/PasteModal';
 import { RowDetailModal } from '@/features/bulk-entry/modals/RowDetailModal';
 import { SaveTemplateModal } from '@/features/bulk-entry/modals/SaveTemplateModal';
 import { ManageTemplateModal } from '@/features/bulk-entry/modals/ManageTemplateModal';
+import { BulkApplyModal } from '@/features/bulk-entry/modals/BulkApplyModal';
 import { parseExcelPaste } from '@/features/bulk-entry/utils/parseExcelPaste';
 import { bulkCsvFilename, generateBulkCsv } from '@/features/bulk-entry/utils/bulkCsv';
 import { buildBulkEntries } from '@/features/bulk-entry/utils/buildBulkEntries';
@@ -30,6 +32,14 @@ function saveErrorMessage(error: unknown): string {
   return msg;
 }
 
+/** トーストに並べる名前の上限（多いときは「ほかN件」にまとめる） */
+const MAX_LISTED_NAMES = 5;
+
+function listNames(names: string[]): string {
+  const shown = names.slice(0, MAX_LISTED_NAMES).join('、');
+  return names.length > MAX_LISTED_NAMES ? `${shown} ほか${names.length - MAX_LISTED_NAMES}件` : shown;
+}
+
 /**
  * 一括入力画面。
  * v1: bulk.html / js/bulk.js
@@ -37,7 +47,7 @@ function saveErrorMessage(error: unknown): string {
 export function BulkEntryPage() {
   const { addToast } = useToast();
   const { confirm, dialog: confirmDialog } = useBulkConfirm();
-  const { ready, isAdmin, vendors, changeVendor } = useBulkSession(confirm);
+  const { ready, isAdmin, vendors, changeVendor, loadFailed, reload } = useBulkSession(confirm);
 
   const rows = useBulkStore((s) => s.rows);
   const currentVendor = useBulkStore((s) => s.currentVendor);
@@ -47,8 +57,14 @@ export function BulkEntryPage() {
   const removeRows = useBulkStore((s) => s.removeRows);
   const replaceRows = useBulkStore((s) => s.replaceRows);
   const clearRows = useBulkStore((s) => s.clearRows);
+  const applyToRows = useBulkStore((s) => s.applyToRows);
+  const selectedCount = useBulkStore((s) => s.selectedIds.size);
+
+  // 管理者が保守会社を選ばないと保守会社名が空で登録できない（DB で弾かれる）ので、申請の前に止めて案内する
+  const saveBlockedReason = isAdmin && !currentVendor.id ? 'ヘッダーで保守会社を選んでください' : undefined;
 
   const [showPaste, setShowPaste] = useState(false);
+  const [showBulkApply, setShowBulkApply] = useState(false);
   const [detailRowId, setDetailRowId] = useState<number | null>(null);
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
   const [showManageTemplate, setShowManageTemplate] = useState(false);
@@ -91,7 +107,7 @@ export function BulkEntryPage() {
       addToast('データを入力してください', 'error');
       return false;
     }
-    const { rows: parsed, unresolvedCount, errorCount } = parseExcelPaste(
+    const { rows: parsed, unresolvedCount, unresolvedNames, errorCount } = parseExcelPaste(
       raw,
       useBulkStore.getState().masterData.properties,
     );
@@ -99,7 +115,11 @@ export function BulkEntryPage() {
     setShowPaste(false);
     if (parsed.length > 0) addToast(`${parsed.length}件のデータを取り込みました`, 'success');
     if (unresolvedCount > 0) {
-      addToast(`${unresolvedCount}件は物件名が見つかりませんでした。行を確認してください`, 'error');
+      // どの名前が合わなかったかを並べる（行の物件セルにも「未一致: ○○」と出る）
+      addToast(
+        `${unresolvedCount}件は物件名が見つかりませんでした。行を確認してください\n見つからなかった名前: ${listNames(unresolvedNames)}`,
+        'error',
+      );
     }
     if (errorCount > 0) addToast(`${errorCount}件の不正な行をスキップしました`, 'error');
     return true;
@@ -114,12 +134,33 @@ export function BulkEntryPage() {
     addToast(`テンプレート「${template.name}」を適用しました`, 'success');
   };
 
-  // v1: js/bulk-data.js saveAll
+  // 選択行への一括設定（入れた項目だけ上書き）
+  const handleBulkApply = (patch: BulkRowsPatch) => {
+    const ids = [...useBulkStore.getState().selectedIds];
+    applyToRows(ids, patch);
+    setShowBulkApply(false);
+    addToast(`${ids.length}件の行に設定しました`, 'success');
+  };
+
+  // 申請するのは有効な行だけ（v1 と同じ）。エラーの行は v1 では申請後に黙って消えていたので、
+  // 先に件数を確認し、申請後も表に残す。v1: js/bulk-data.js saveAll
   const handleSave = async () => {
     const { rows: current, masterData, currentVendor: vendor, appSettings, userId } = useBulkStore.getState();
-    const validCount = current.filter((r) => r.isValid).length;
+    const validRows = current.filter((r) => r.isValid);
+    const validCount = validRows.length;
+    const errorCount = current.length - validCount;
     if (validCount === 0) {
       addToast('保存できる有効なデータがありません', 'error');
+      return;
+    }
+    if (saveBlockedReason) {
+      addToast(saveBlockedReason, 'error');
+      return;
+    }
+    if (
+      errorCount > 0 &&
+      !(await confirm(`有効な${validCount}件を申請します。\nエラーの${errorCount}件は申請せず、表に残します。`))
+    ) {
       return;
     }
     setSaving(true);
@@ -127,8 +168,17 @@ export function BulkEntryPage() {
       await createBulkEntries(buildBulkEntries(current, masterData, vendor, appSettings), userId ?? '');
       cancelBulkAutoSave();
       clearAutoSave(userId);
-      addToast(`${validCount}件のデータを申請しました`, 'success');
-      clearRows();
+      // 申請した行だけ消す（申請中に足した行・エラーの行は残り、removeRows が残りの行で自動保存を書き直す）
+      const submitted = new Set(validRows.map((r) => r.id));
+      const remaining = useBulkStore.getState().rows.filter((r) => !submitted.has(r.id)).length;
+      addToast(
+        remaining > 0
+          ? `${validCount}件のデータを申請しました\n残りの${remaining}件は表に残しています`
+          : `${validCount}件のデータを申請しました`,
+        'success',
+      );
+      if (remaining > 0) removeRows([...submitted]);
+      else clearRows();
     } catch (error) {
       console.error('Save failed:', error);
       addToast(saveErrorMessage(error), 'error');
@@ -225,6 +275,7 @@ export function BulkEntryPage() {
           onAddRow={addRowWithCopy}
           onDuplicate={handleDuplicate}
           onDeleteSelected={() => void handleDeleteSelected()}
+          onOpenBulkApply={() => setShowBulkApply(true)}
           onOpenPaste={() => setShowPaste(true)}
           onApplyTemplate={(id) => void handleApplyTemplate(id)}
           onOpenSaveTemplate={() => setShowSaveTemplate(true)}
@@ -238,7 +289,23 @@ export function BulkEntryPage() {
           className="max-h-[calc(100dvh-var(--header-h)-12.5rem)] min-h-[12rem] overflow-auto tall:max-h-none tall:min-h-0 tall:flex-1"
           data-testid="bulk-table-container"
         >
-          {rows.length === 0 ? (
+          {rows.length === 0 && !ready ? (
+            // 読み込み中・失敗を「データがありません」と区別する（失敗したらその場で読み直せるようにする）
+            <div className="flex flex-col items-center justify-center gap-2 p-8 text-center">
+              {loadFailed ? (
+                <>
+                  <h3 className="font-semibold text-red-700">マスターデータを読み込めませんでした</h3>
+                  <p className="text-sm text-gray-500">通信状態を確認して、もう一度読み込んでください</p>
+                  <Button onClick={reload}>再読み込み</Button>
+                </>
+              ) : (
+                <>
+                  <Spinner />
+                  <p className="text-sm text-gray-500">マスターデータを読み込み中…</p>
+                </>
+              )}
+            </div>
+          ) : rows.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2 p-8 text-center">
               <h3 className="font-semibold text-gray-700">データがありません</h3>
               <p className="text-sm text-gray-500">「行を追加」または「Excelから取込」で入力を開始してください</p>
@@ -256,9 +323,16 @@ export function BulkEntryPage() {
           onSave={() => void handleSave()}
           onDownloadCsv={handleDownloadCsv}
           onCopyCsv={() => void handleCopyCsv()}
+          saveBlockedReason={saveBlockedReason}
         />
       </Card>
 
+      <BulkApplyModal
+        open={showBulkApply}
+        onClose={() => setShowBulkApply(false)}
+        onApply={handleBulkApply}
+        selectedCount={selectedCount}
+      />
       <PasteModal open={showPaste} onClose={() => setShowPaste(false)} onImport={handleImport} />
       <RowDetailModal open={detailRowId !== null} onClose={() => setDetailRowId(null)} rowId={detailRowId} />
       <SaveTemplateModal

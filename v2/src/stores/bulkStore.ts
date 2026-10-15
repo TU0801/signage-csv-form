@@ -23,6 +23,22 @@ export type BulkRowDetail = Pick<
   'noticeText' | 'displayStartDate' | 'displayStartTime' | 'displayEndDate' | 'displayEndTime' | 'displayTime' | 'position'
 >;
 
+/** 選択行への一括設定で上書きできる項目（入れた項目だけを渡す） */
+export type BulkRowsPatch = Partial<
+  Pick<
+    BulkEntryRow,
+    | 'inspectionType'
+    | 'startDate'
+    | 'endDate'
+    | 'displayStartDate'
+    | 'displayStartTime'
+    | 'displayEndDate'
+    | 'displayEndTime'
+    | 'displayTime'
+    | 'position'
+  >
+>;
+
 
 let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -62,6 +78,8 @@ export interface BulkState {
   changeStartDate: (id: number, startDate: string) => void;
   changeRemarks: (id: number, remarks: string) => void;
   applyRowDetail: (id: number, detail: BulkRowDetail) => void;
+  /** 選んだ行に同じ値を入れる（patch に無い項目は行ごとの値のまま） */
+  applyToRows: (ids: number[], patch: BulkRowsPatch) => void;
   reorderRows: (draggedId: number, targetId: number) => void;
   clearRows: () => void;
   /** 行を全部置き換える（テンプレート適用） */
@@ -84,7 +102,7 @@ export const useBulkStore = create<BulkState>((set, get) => {
   /** v1: js/bulk-table.js validateRow */
   const validate = (row: BulkEntryRow): BulkEntryRow => {
     const { masterData, appSettings } = get();
-    const errors = validateBulkRow(row, masterData.properties, appSettings);
+    const errors = validateBulkRow(row, masterData.properties, appSettings, masterData.notices);
     return { ...row, errors, isValid: errors.length === 0 };
   };
 
@@ -113,6 +131,8 @@ export const useBulkStore = create<BulkState>((set, get) => {
       isValid: false,
       errors: [],
     };
+    // 取込で見つからなかった物件名（物件が決まっている行には残さない）
+    if (!row.propertyCode && data.pastedPropertyName) row.pastedPropertyName = data.pastedPropertyName;
     if (row.propertyCode) {
       row.terminalId = resolveTerminal(masterData.properties, row.propertyCode, row.terminalId, true);
     }
@@ -284,6 +304,8 @@ export const useBulkStore = create<BulkState>((set, get) => {
       mapRow(id, (r) =>
         validate({
           ...r,
+          // 選び直したら取込時の物件名の手がかりは要らない
+          pastedPropertyName: undefined,
           propertyCode,
           terminalId: resolveTerminal(masterData.properties, propertyCode, r.terminalId, false),
         }),
@@ -297,15 +319,31 @@ export const useBulkStore = create<BulkState>((set, get) => {
       get().triggerAutoSave();
     },
 
-    // 入力のたびに保存だけする（v1 は備考の入力で検証し直さない）。v1: js/bulk-table.js .remarks-input input
+    // 入力のたびに検証し直す（v1 は検証せず、文字数超過が他の欄を触るまで OK のまま残っていた）。
+    // v1: js/bulk-table.js .remarks-input input
     changeRemarks: (id, remarks) => {
-      mapRow(id, (r) => ({ ...r, remarks }));
+      mapRow(id, (r) => validate({ ...r, remarks }));
       get().triggerAutoSave();
     },
 
-    // v1: js/bulk-modals.js applyRowDetail（v1 はここで検証し直さない）
+    // 表示期間・表示時間・案内文の検証をすぐ反映するため検証し直す（v1 はここで検証し直さない）。
+    // v1: js/bulk-modals.js applyRowDetail
     applyRowDetail: (id, detail) => {
-      mapRow(id, (r) => ({ ...r, ...detail }));
+      mapRow(id, (r) => validate({ ...r, ...detail }));
+      get().triggerAutoSave();
+    },
+
+    // 点検開始日を入れて終了日が空の行は、セルで入れたときと同じく開始日を入れる
+    applyToRows: (ids, patch) => {
+      const idSet = new Set(ids);
+      set((s) => ({
+        rows: s.rows.map((r) => {
+          if (!idSet.has(r.id)) return r;
+          const next = { ...r, ...patch };
+          if (patch.startDate && patch.endDate === undefined && !r.endDate) next.endDate = patch.startDate;
+          return validate(next);
+        }),
+      }));
       get().triggerAutoSave();
     },
 

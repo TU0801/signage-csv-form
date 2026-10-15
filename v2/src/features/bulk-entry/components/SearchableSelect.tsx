@@ -1,5 +1,5 @@
 import { useRef, useState, type KeyboardEvent } from 'react';
-import { cn } from '@/lib/utils';
+import { cn, normalizeSearch } from '@/lib/utils';
 
 interface Option {
   value: string;
@@ -19,11 +19,14 @@ interface SearchableSelectProps {
   invalid?: boolean;
   /** 選んでいる項目の全文を title に出す（列幅で文字が切れるとき用） */
   showTitle?: boolean;
+  /** 開いたときの検索欄の文字（取込で見つからなかった物件名などをそのまま探し直せるように） */
+  initialSearch?: string;
 }
 
 /**
  * 検索付きのセレクト。フォーカスすると検索欄が開き、入力した文字を含む選択肢だけ残す。
  * 検索欄で Enter なら先頭の候補を選び、Escape なら閉じる。
+ * 絞り込みは全角・半角・大小文字・空白・ひらがな/カタカナの違いを無視する（Excel の物件名の表記ゆれ対策）。
  * v1: js/bulk-table.js setupSearchableSelect
  */
 export function SearchableSelect({
@@ -37,14 +40,15 @@ export function SearchableSelect({
   dataCol,
   invalid,
   showTitle = false,
+  initialSearch,
 }: SearchableSelectProps) {
   const [active, setActive] = useState(false);
   const [search, setSearch] = useState('');
   const wrapperRef = useRef<HTMLDivElement>(null);
   const selectRef = useRef<HTMLSelectElement>(null);
 
-  const text = search.toLowerCase();
-  const visible = text ? options.filter((o) => o.label.toLowerCase().includes(text)) : options;
+  const text = normalizeSearch(search);
+  const visible = text ? options.filter((o) => normalizeSearch(o.label).includes(text)) : options;
 
   const close = () => {
     setActive(false);
@@ -77,7 +81,10 @@ export function SearchableSelect({
     <div
       ref={wrapperRef}
       className="relative"
-      onFocus={() => setActive(true)}
+      onFocus={() => {
+        if (!active && initialSearch) setSearch(initialSearch);
+        setActive(true);
+      }}
       onBlur={(e) => {
         if (!wrapperRef.current?.contains(e.relatedTarget as Node | null)) close();
       }}

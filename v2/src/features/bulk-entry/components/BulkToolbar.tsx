@@ -10,6 +10,8 @@ interface BulkToolbarProps {
   onAddRow: () => void;
   onDuplicate: () => void;
   onDeleteSelected: () => void;
+  /** 選択行に同じ点検種別・日付・表示設定をまとめて入れる */
+  onOpenBulkApply: () => void;
   onOpenPaste: () => void;
   onApplyTemplate: (id: string) => void;
   onOpenSaveTemplate: () => void;
@@ -35,6 +37,7 @@ export function BulkToolbar({
   onAddRow,
   onDuplicate,
   onDeleteSelected,
+  onOpenBulkApply,
   onOpenPaste,
   onApplyTemplate,
   onOpenSaveTemplate,
@@ -66,6 +69,15 @@ export function BulkToolbar({
             className="text-red-600"
           >
             削除
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={onOpenBulkApply}
+            disabled={disabled || selectedCount === 0}
+            title="選択した行に点検種別・点検日・表示期間などをまとめて入れる"
+          >
+            選択行に一括設定
           </Button>
         </div>
       </div>

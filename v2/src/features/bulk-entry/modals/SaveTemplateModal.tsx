@@ -55,6 +55,10 @@ function SaveTemplateForm({ onClose, onSaved }: { onClose: () => void; onSaved: 
         placeholder="例: A社定期清掃"
         autoFocus
       />
+      {/* 保存先は localStorage なので、会社で共有されると誤解されないよう明記する */}
+      <p className="text-xs text-gray-500">
+        テンプレートはこのブラウザにだけ保存されます（別のPCや他の担当者からは見えません。ブラウザのデータを消すと消えます）。
+      </p>
       <div className="flex justify-end gap-3">
         <Button variant="secondary" onClick={onClose}>
           キャンセル

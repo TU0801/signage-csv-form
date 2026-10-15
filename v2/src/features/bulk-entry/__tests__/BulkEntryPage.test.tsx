@@ -133,7 +133,17 @@ describe('BulkEntryPage (v1 js/bulk.js init / adminVendorSelect)', () => {
     act(() => {
       useBulkStore.getState().addRow({ propertyCode: 'z0001A01' });
     });
+    // 行があるときは消える前に確認する。キャンセルなら何も変えない
     fireEvent.change(vendorSelect, { target: { value: 'v2' } });
+    expect(await screen.findByText(/入力中の1行は消えます/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }));
+    await waitFor(() => expect(screen.queryByText(/入力中の1行は消えます/)).not.toBeInTheDocument());
+    expect(useBulkStore.getState().currentVendor).toEqual({ id: null, name: null });
+    expect(useBulkStore.getState().rows).toHaveLength(1);
+    expect(api.getAssignedBuildings).not.toHaveBeenCalled();
+
+    fireEvent.change(vendorSelect, { target: { value: 'v2' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
 
     await waitFor(() => expect(useBulkStore.getState().currentVendor).toEqual({ id: 'v2', name: 'B社' }));
     expect(api.getAssignedBuildings).toHaveBeenCalledWith({ role: 'user', vendor_id: 'v2' });
@@ -159,6 +169,50 @@ describe('BulkEntryPage (v1 js/bulk.js init / adminVendorSelect)', () => {
     fireEvent.keyDown(document, { key: 'Enter', ctrlKey: true });
     // 設定の表示時間（10）で作られる
     expect(useBulkStore.getState().rows[0]!.displayTime).toBe(10);
+  });
+
+  it('shows a reload button when master data fails to load, and loads again from it', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    api.fetchAllMasterData.mockRejectedValueOnce(new Error('network'));
+    renderPage();
+    expect(screen.getByText('マスターデータを読み込み中…')).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: '再読み込み' }));
+    expect(await screen.findByRole('button', { name: '行を追加して始める' })).toBeEnabled();
+    expect(api.fetchAllMasterData).toHaveBeenCalledTimes(2);
+    consoleError.mockRestore();
+  });
+
+  it('admin cannot submit until a vendor is chosen; CSV stays available', async () => {
+    renderPage();
+    await waitFor(() => expect(useBulkStore.getState().sessionLoaded).toBe(true));
+    act(() => {
+      useBulkStore.getState().addRow({ propertyCode: 'z0001A01', inspectionType: '消防設備点検' });
+    });
+    expect(screen.getByRole('button', { name: '↑ 申請する' })).toBeDisabled();
+    expect(screen.getByText('ヘッダーで保守会社を選んでください')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'CSVダウンロード' })).toBeEnabled();
+  });
+
+  it('submitting with error rows asks first, sends only valid rows and keeps the error rows', async () => {
+    api.createBulkEntries.mockResolvedValue([]);
+    renderPage();
+    fireEvent.change(await screen.findByLabelText('保守会社を選択'), { target: { value: 'v2' } });
+    await waitFor(() => expect(useBulkStore.getState().masterData.properties).toHaveLength(3));
+    await waitFor(() => expect(useBulkStore.getState().sessionLoaded).toBe(true));
+    act(() => {
+      useBulkStore.getState().addRow({ propertyCode: 'z0003A01', inspectionType: '消防設備点検' });
+      // 端末の無い物件は端末エラーのまま（申請できるかは未決）
+      useBulkStore.getState().addRow({ propertyCode: 'z0004A01', inspectionType: '消防設備点検' });
+    });
+    expect(screen.getByText('端末未設置')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '↑ 申請する' }));
+    expect(await screen.findByText(/エラーの1件は申請せず、表に残します/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+
+    await waitFor(() => expect(useBulkStore.getState().rows).toHaveLength(1));
+    expect(api.createBulkEntries.mock.calls[0]![0]).toHaveLength(1);
+    expect(useBulkStore.getState().rows[0]!.propertyCode).toBe('z0004A01');
   });
 
   it('leaving the page within the app keeps rows and the admin vendor; logging out drops them', async () => {

@@ -6,20 +6,23 @@ interface BulkFooterProps {
   onSave: () => void;
   onDownloadCsv: () => void;
   onCopyCsv: () => void;
+  /** 申請できない理由（管理者が保守会社を選んでいないなど）。あれば申請だけ押せなくして横に出す（CSV は使える） */
+  saveBlockedReason?: string;
 }
 
 /** 申請・CSV ダウンロード／コピー（有効な行が無いと押せない）。v1: bulk.html .bulk-footer / js/bulk-data.js updateButtons */
-export function BulkFooter({ saving, onSave, onDownloadCsv, onCopyCsv }: BulkFooterProps) {
+export function BulkFooter({ saving, onSave, onDownloadCsv, onCopyCsv, saveBlockedReason }: BulkFooterProps) {
   const validCount = useBulkStore((s) => s.rows.filter((r) => r.isValid).length);
   const disabled = validCount === 0;
 
   return (
     <div className="flex items-center justify-between rounded-b-lg border-t border-gray-200 bg-gray-50 px-3 py-2">
       <div className="flex items-center gap-3">
-        <Button variant="success" size="lg" onClick={onSave} disabled={disabled || saving}>
+        <Button variant="success" size="lg" onClick={onSave} disabled={disabled || saving || !!saveBlockedReason}>
           {saving ? '保存中...' : '↑ 申請する'}
         </Button>
         <span className="text-xs text-gray-500">管理者の承認後に反映されます</span>
+        {saveBlockedReason && <span className="text-xs font-medium text-red-600">{saveBlockedReason}</span>}
       </div>
       <div className="flex items-center gap-2">
         <Button

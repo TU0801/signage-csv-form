@@ -71,6 +71,37 @@ describe('bulkStore (v1 js/bulk-table.js / bulk-modals.js の行操作)', () => 
     expect(s().rows[0]!.errors).toEqual(['端末']);
   });
 
+  it('changing to a property without terminals clears the previous terminal (v1 kept it and the row passed)', () => {
+    s().setMasterData({
+      ...master,
+      properties: [...master.properties, ...flattenProperties([{ property_code: 'NT01', property_name: '端末なし', terminals: [] }], true)],
+    });
+    s().addRow({ propertyCode: 'z0001A01', terminalId: 'T-A1', inspectionType: '消防設備点検' });
+    const id = s().rows[0]!.id;
+    s().changeProperty(id, 'NT01');
+    expect(s().rows[0]).toMatchObject({ terminalId: '', isValid: false, errors: ['端末'] });
+  });
+
+  it('typing remarks re-validates the row at once (v1 waited for another field to change)', () => {
+    s().addRow({ propertyCode: 'z0001A01', inspectionType: '消防設備点検' });
+    const id = s().rows[0]!.id;
+    s().changeRemarks(id, 'あ'.repeat(26));
+    expect(s().rows[0]).toMatchObject({ isValid: false, errors: ['備考文字数(1行25文字以下)'] });
+    s().changeRemarks(id, 'あ'.repeat(25));
+    expect(s().rows[0]!.isValid).toBe(true);
+  });
+
+  it('bulk apply overwrites only the given fields on the given rows and fills an empty end date', () => {
+    s().addRow({ propertyCode: 'z0001A01', remarks: '残す', position: 3 });
+    s().addRow({ propertyCode: '120442-00', endDate: '2026-12-31' });
+    s().addRow({ propertyCode: '120442-00' });
+    const [a, b] = s().rows.map((r) => r.id);
+    s().applyToRows([a!, b!], { inspectionType: '消防設備点検', startDate: '2026-12-01' });
+    expect(s().rows[0]).toMatchObject({ inspectionType: '消防設備点検', startDate: '2026-12-01', endDate: '2026-12-01', remarks: '残す', position: 3, isValid: true });
+    expect(s().rows[1]).toMatchObject({ inspectionType: '消防設備点検', endDate: '2026-12-31', isValid: true });
+    expect(s().rows[2]).toMatchObject({ inspectionType: '', isValid: false });
+  });
+
   it('toolbar duplicate keeps the row vendor; menu duplicate uses the current vendor', () => {
     s().addRow({ propertyCode: 'z0001A01', inspectionType: '消防設備点検', vendorName: '旧社' });
     const id = s().rows[0]!.id;

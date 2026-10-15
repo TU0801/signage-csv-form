@@ -25,6 +25,11 @@ export interface BulkEntryRow {
   position: number;
   isValid: boolean;
   errors: string[];
+  /**
+   * Excel 取込で物件が見つからなかったときの貼り付けた物件名（画面で直すときの手がかり）。
+   * 申請・CSV・自動保存には入れない。物件を選び直したら消す
+   */
+  pastedPropertyName?: string;
 }
 
 /** 行を作るときに渡す値（v1 addRow の data） */

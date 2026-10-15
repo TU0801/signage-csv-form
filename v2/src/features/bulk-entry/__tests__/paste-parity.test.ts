@@ -92,12 +92,19 @@ describe('Excel paste parity with v1 js/bulk-modals.js importFromPaste', () => {
     store.setAppSettings(applySettings(DEFAULT_BULK_SETTINGS, settingsRows));
     const result = parseExcelPaste(PASTE, master.properties);
     result.rows.forEach((r) => useBulkStore.getState().addRow(r));
-    const v2Rows = useBulkStore.getState().rows.map((r) => comparable({ ...r }));
+    // pastedPropertyName は v2 だけが画面用に持つ（v1 には無い）ので比べる前に外す
+    const v2Rows = useBulkStore.getState().rows.map(({ pastedPropertyName: _p, ...r }) => {
+      void _p;
+      return comparable({ ...r });
+    });
 
     expect(v2Rows).toEqual(v1Rows);
     expect(v2Rows).toHaveLength(5);
     expect(v2Rows[2]).toMatchObject({ terminalId: '', isValid: false, errors: ['端末'] });
     expect(v2Rows[3]).toMatchObject({ propertyCode: '', isValid: false });
+    // 見つからなかった物件名は行とトースト用の一覧に残す
+    expect(useBulkStore.getState().rows[3]!.pastedPropertyName).toBe('存在しない物件');
+    expect(result.unresolvedNames).toEqual(['存在しない物件']);
     expect(result.unresolvedCount).toBe(1);
     expect(result.errorCount).toBe(1);
     expect(toasts).toEqual([

@@ -10,6 +10,8 @@ export interface PasteResult {
   rows: BulkRowInput[];
   /** 物件名・物件コードがマスターに無かった行の数（行は物件エラーで残す） */
   unresolvedCount: number;
+  /** マスターに無かった物件名（貼り付けた文字のまま。重複は1つにまとめる） */
+  unresolvedNames: string[];
   /** 物件・端末・点検種別がどれも無く、空白でもない行の数（飛ばす） */
   errorCount: number;
 }
@@ -28,7 +30,8 @@ export function formatDateForInput(dateStr: string): string {
  * Excel から貼り付けたタブ区切りテキストを行にする。
  * 列: 0 物件名/物件コード, 1 端末ID, 2 点検種別, 3 開始日, 4 終了日, 5 備考（6・7列目に案内文・表示位置があれば読む）。
  * - 全体を trim しない（先頭セルが空の行で列がずれないように）。末尾の空行だけ落とす
- * - 物件は名前とコードの両方で照合し、見つからなければ空にして行は残す（黙って取り込まない）
+ * - 物件は名前とコードの両方で照合し、見つからなければ空にして行は残す（黙って取り込まない）。
+ *   貼り付けた物件名は pastedPropertyName に残し、画面で直すときに使う
  * v1: js/bulk-modals.js importFromPaste
  */
 export function parseExcelPaste(raw: string, properties: BulkProperty[]): PasteResult {
@@ -47,6 +50,7 @@ export function parseExcelPaste(raw: string, properties: BulkProperty[]): PasteR
   const rows: BulkRowInput[] = [];
   let errorCount = 0;
   let unresolvedCount = 0;
+  const unresolvedNames: string[] = [];
 
   for (let i = startIndex; i < lines.length; i++) {
     const line = lines[i]!;
@@ -63,10 +67,15 @@ export function parseExcelPaste(raw: string, properties: BulkProperty[]): PasteR
     const property = properties.find(
       (p) => p.propertyName === propValue || String(p.propertyCode) === String(propValue),
     );
-    if (!property && propValue) unresolvedCount++;
+    const unresolved = !property && !!propValue;
+    if (unresolved) {
+      unresolvedCount++;
+      if (!unresolvedNames.includes(propValue)) unresolvedNames.push(propValue);
+    }
 
     rows.push({
       propertyCode: property?.propertyCode || '',
+      ...(unresolved ? { pastedPropertyName: propValue } : {}),
       terminalId,
       inspectionType,
       startDate: formatDateForInput(cols[3]?.trim() || ''),
@@ -77,7 +86,7 @@ export function parseExcelPaste(raw: string, properties: BulkProperty[]): PasteR
     });
   }
 
-  return { rows, unresolvedCount, errorCount };
+  return { rows, unresolvedCount, unresolvedNames, errorCount };
 }
 
 /**

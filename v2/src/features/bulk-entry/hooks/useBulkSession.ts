@@ -20,8 +20,16 @@ export function useBulkSession(confirm: (message: string) => Promise<boolean>) {
   const userId = useAuthStore((s) => s.user?.id ?? null);
   const isAdmin = profile?.role === 'admin';
   const [loadingDone, setLoadingDone] = useState(false);
+  // 読み込みに失敗したら画面に「再読み込み」を出す（押すと reloadKey を変えて読み直す）
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const reload = useCallback(() => {
+    setLoadFailed(false);
+    setReloadKey((k) => k + 1);
+  }, []);
 
   useEffect(() => {
+    void reloadKey;
     if (!profile || !userId) return;
     let cancelled = false;
 
@@ -51,6 +59,7 @@ export function useBulkSession(confirm: (message: string) => Promise<boolean>) {
         if (cancelled) return;
         console.error('Failed to load master data:', error);
         addToast('マスターデータの取得に失敗しました', 'error');
+        setLoadFailed(true);
         return;
       }
       setLoadingDone(true);
@@ -77,7 +86,7 @@ export function useBulkSession(confirm: (message: string) => Promise<boolean>) {
       flushBulkAutoSave();
       setLoadingDone(false);
     };
-  }, [profile, userId, confirm, addToast]);
+  }, [profile, userId, confirm, addToast, reloadKey]);
 
   // 保守会社の一覧はマスターの vendors（保守会社で物件を絞っても vendors は残る）
   const vendors: BulkVendor[] = useBulkStore((s) => s.masterData.vendors);
@@ -100,12 +109,21 @@ export function useBulkSession(confirm: (message: string) => Promise<boolean>) {
 
   /**
    * 管理者の保守会社切り替え。選んだ会社の担当物件（端末の無い物件も1行で残す）に絞り、行は消す。
+   * 行があるときは消える前に確認する（キャンセルなら何もしない＝選択欄は元の会社のまま）。
    * 未選択に戻したら全物件に戻す（行は残す）。
    * v1: js/bulk.js adminVendorSelect change
    */
   const changeVendor = useCallback(
     async (vendorId: string) => {
       const store = useBulkStore.getState();
+      const rowCount = store.rows.length;
+      if (
+        vendorId &&
+        rowCount > 0 &&
+        !(await confirm(`保守会社を切り替えると、入力中の${rowCount}行は消えます。\n切り替えますか？`))
+      ) {
+        return;
+      }
       try {
         if (!vendorId) {
           const fresh = await fetchAllMasterData(profile);
@@ -123,10 +141,10 @@ export function useBulkSession(confirm: (message: string) => Promise<boolean>) {
         addToast('保守会社データの取得に失敗しました', 'error');
       }
     },
-    [profile, vendors, addToast],
+    [profile, vendors, addToast, confirm],
   );
 
-  return { ready, isAdmin, vendors, changeVendor };
+  return { ready, isAdmin, vendors, changeVendor, loadFailed, reload };
 }
 
 // ログアウト・別ユーザーへの切り替えで前のユーザーの行を残さない（書きかけの自動保存は前のユーザーのキーに先に書く）。

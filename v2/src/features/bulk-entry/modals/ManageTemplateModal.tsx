@@ -41,7 +41,11 @@ export function ManageTemplateModal({ open, onClose, templates, onChanged, confi
       }
     >
       <div className="space-y-3">
-        <p className="text-xs text-gray-500">選択中の保守会社のテンプレートと全社共通テンプレートを表示しています。</p>
+        <p className="text-xs text-gray-500">
+          選択中の保守会社のテンプレートと全社共通テンプレートを表示しています。
+          <br />
+          テンプレートはこのブラウザにだけ保存されます（別のPCや他の担当者からは見えません）。
+        </p>
         {templates.length === 0 ? (
           <p className="py-4 text-center text-sm text-gray-500">登録済みのテンプレートはありません</p>
         ) : (

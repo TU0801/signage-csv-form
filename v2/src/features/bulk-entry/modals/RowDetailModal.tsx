@@ -3,6 +3,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { useBulkStore } from '@/stores/bulkStore';
+import { POSITIONS } from '../utils/rowDetail';
 import type { BulkEntryRow, BulkNotice } from '../types';
 
 interface RowDetailModalProps {
@@ -10,15 +11,6 @@ interface RowDetailModalProps {
   onClose: () => void;
   rowId: number | null;
 }
-
-/** 貼紙表示位置。v1: js/bulk-modals.js createRowDetailModal の detailPosition */
-const POSITIONS = [
-  { value: '1', label: '①上左' },
-  { value: '2', label: '②上中' },
-  { value: '3', label: '③上右' },
-  { value: '4', label: '④中央' },
-  { value: '0', label: '⓪全体' },
-];
 
 // 幅を含まない基本の見た目。cn は結合だけなので w-full と w-24 を並べると CSS の並び順で w-full が勝つ（幅は使う側で 1 つだけ付ける）
 const fieldBase = 'block rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none';
