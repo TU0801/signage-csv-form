@@ -3,12 +3,13 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useAuthStore } from '@/stores/authStore';
 import { useBulkStore } from '@/stores/bulkStore';
+import { hasUnsentSingleEntries, useSingleEntryStore } from '@/features/single-entry/stores/singleEntryStore';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { cn } from '@/lib/utils';
 import { HeaderSlotContext } from './HeaderSlot';
 
 /**
- * 一括入力に行があるときのログアウト確認。v1 はログアウトでページを移るときの beforeunload（js/bulk.js、
+ * 一括入力の行・1件入力の作成データがあるときのログアウト確認。v1 はログアウトでページを移るときの beforeunload（js/bulk.js、
  * returnValue='' で文言はブラウザ既定）で確認していたので、Chrome の日本語の既定文言に合わせる。
  */
 export const BULK_LOGOUT_CONFIRM_MESSAGE = 'このサイトを離れますか？\n行った変更が保存されない可能性があります。';
@@ -24,12 +25,15 @@ export function AppHeader({ width = 'standard' }: { width?: LayoutWidth }) {
   const { setTarget } = useContext(HeaderSlotContext);
   const [confirmingLogout, setConfirmingLogout] = useState(false);
 
-  // 一括入力の行は画面を移っても store に残るので、どの画面からのログアウトでも確認する
+  // 一括入力の行・1件入力の申請前の作成データは画面を移っても store に残るので、どの画面からのログアウトでも確認する
   const handleLogout = () => {
-    if (useBulkStore.getState().rows.length > 0) {
+    // 1件入力は今のユーザーの行だけ数える（別のユーザーが残した行で確認を出さない）
+    if (useBulkStore.getState().rows.length > 0 || hasUnsentSingleEntries()) {
       setConfirmingLogout(true);
       return;
     }
+    // 別のユーザーが残した行があっても、ログアウトで捨てる
+    useSingleEntryStore.getState().clear();
     void signOut();
   };
 
@@ -97,7 +101,11 @@ export function AppHeader({ width = 'standard' }: { width?: LayoutWidth }) {
       <ConfirmDialog
         open={confirmingLogout}
         onClose={() => setConfirmingLogout(false)}
-        onConfirm={() => void signOut()}
+        onConfirm={() => {
+          // 1件入力の作成データは確認のうえ捨てる（同じタブで別のユーザーが入っても残さない）
+          useSingleEntryStore.getState().clear();
+          void signOut();
+        }}
         title="確認"
         message={BULK_LOGOUT_CONFIRM_MESSAGE}
         confirmLabel="ログアウト"

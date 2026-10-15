@@ -24,6 +24,7 @@ import { DisplaySettings } from '@/features/single-entry/components/DisplaySetti
 import { AdminVendorSelect } from '@/features/single-entry/components/AdminVendorSelect';
 import { ManagementCompanySelect } from '@/features/single-entry/components/ManagementCompanySelect';
 import { useManagementCompanies } from '@/features/single-entry/hooks/useManagementCompanies';
+import { useSingleEntryStore } from '@/features/single-entry/stores/singleEntryStore';
 import { HeaderSlot } from '@/components/layout/HeaderSlot';
 import { resolveTemplateImageUrl } from '@/features/single-entry/lib/templateImages';
 import {
@@ -37,6 +38,8 @@ import {
 } from '@/features/single-entry/lib/entryLogic';
 import type { LocalEntry } from '@/features/single-entry/types';
 
+
+const EMPTY_ENTRIES: LocalEntry[] = [];
 
 function errorMessage(err: unknown): string {
   if (err && typeof err === 'object' && 'message' in err) return String((err as { message: unknown }).message ?? '');
@@ -109,7 +112,14 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
   const managementIndex = useManagementCompanies(isAdmin);
   const [managementCompanyId, setManagementCompanyId] = useState('');
   const [tab, setTab] = useState<'preview' | 'settings'>('preview');
-  const [localEntries, setLocalEntries] = useState<LocalEntry[]>([]);
+  // 作成データは store（画面を移っても残す）。別のユーザーの行は見せない
+  const userId = user?.id ?? null;
+  const bindUser = useSingleEntryStore((s) => s.bindUser);
+  const storedEntries = useSingleEntryStore((s) => s.entries);
+  const storeUserId = useSingleEntryStore((s) => s.userId);
+  const setLocalEntries = useSingleEntryStore((s) => s.setEntries);
+  const localEntries = storeUserId === userId ? storedEntries : EMPTY_ENTRIES;
+  useEffect(() => bindUser(userId), [bindUser, userId]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [removeId, setRemoveId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -122,7 +132,8 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
     () => buildPropertyOptions(selectableProperties, signageOnly),
     [selectableProperties, signageOnly],
   );
-  const terminals = terminalsOf(vendorCtx.visibleProperties, values.propertyCode);
+  // 端末は物件に付くので全物件から引く（管理者が別の保守会社の行を編集で読み込んでも「端末なし」と出さない）
+  const terminals = terminalsOf(properties, values.propertyCode);
   const inspectionOptions = useMemo(
     () => filterInspectionTypes(inspectionTypes, values.category, vendorCtx.linkedIds),
     [inspectionTypes, values.category, vendorCtx.linkedIds],
@@ -156,9 +167,23 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
     if (values.propertyCode && !next.some((p) => p.property_code === values.propertyCode)) form.resetProperty();
   };
 
-  // 編集・複製で読み込む物件が管理会社の絞り込みの外なら、絞り込みを全てに戻す（物件欄が空に見えるのに値が残るのを防ぐ）
-  const showPropertyInManagementFilter = (propertyCode: string) => {
+  // 編集・複製で読み込む物件が管理会社・サイネージ設置物件のみの絞り込みの外なら、絞り込みを外す
+  // （物件欄に物件名が出ずコードだけ残るのを防ぐ）
+  const showPropertyInFilters = (propertyCode: string) => {
     if (!selectableProperties.some((p) => p.property_code === propertyCode)) setManagementCompanyId('');
+    if (signageOnly && !buildPropertyOptions(vendorCtx.visibleProperties, true).some((o) => o.value === propertyCode)) {
+      setSignageOnly(false);
+    }
+  };
+
+  // 管理者が別の保守会社で作った行を読み込んだら知らせる（このまま追加・更新すると今の保守会社で記録される）
+  const warnIfOtherVendor = (entry: LocalEntry) => {
+    const current = vendorCtx.vendor?.vendor_name ?? '';
+    if (!isAdmin || !entry.vendorName || entry.vendorName === current) return;
+    addToast(
+      `この行は別の保守会社（${entry.vendorName}）で作成しています。\nこのまま追加・更新すると今の保守会社（${current || '未選択'}）で記録されます`,
+      'warning',
+    );
   };
 
   // v1: js/script.js addEntry
@@ -172,6 +197,8 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
       settings,
     });
     if (!result.ok) {
+      // 表示設定タブの項目の誤りは、そのタブを開いて欄を見せる
+      if (result.settingsTab) setTab('settings');
       addToast(result.message, 'error');
       return;
     }
@@ -189,7 +216,8 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
   const handleEdit = (id: string) => {
     const entry = localEntries.find((e) => e._id === id);
     if (!entry) return;
-    showPropertyInManagementFilter(entry.propertyCode);
+    showPropertyInFilters(entry.propertyCode);
+    warnIfOtherVendor(entry);
     form.loadEntry(entry);
     setEditingId(id);
   };
@@ -207,7 +235,8 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
   const handleDuplicate = () => {
     const last = localEntries[localEntries.length - 1];
     if (!last) return;
-    showPropertyInManagementFilter(last.propertyCode);
+    showPropertyInFilters(last.propertyCode);
+    warnIfOtherVendor(last);
     form.duplicate(last);
     addToast('前回のデータを複製しました', 'info');
   };
@@ -218,10 +247,13 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
     setEditingId(null);
   };
 
+  // 削除確認に出す行（どの行を消すのか分かるように）
+  const removing = removeId ? localEntries.find((e) => e._id === removeId) : undefined;
+
   // v1: js/script.js submitEntries（画像をアップロードしてから、まとめて1回で INSERT。status は draft）
   const handleSubmit = async () => {
     if (localEntries.length === 0) {
-      addToast('確定するデータがありません', 'error');
+      addToast('申請するデータがありません', 'error');
       return;
     }
     if (!user) {
@@ -241,13 +273,13 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
       );
       const today = todayUtc();
       await insertEntries(localEntries.map((e, i) => toInsertRow(e, urls[i] ?? null, user.id, settings, today)));
-      addToast(`${localEntries.length}件のデータを確定しました`, 'success');
+      addToast(`${localEntries.length}件を申請しました`, 'success');
       setLocalEntries([]);
       setEditingId(null);
       submitted.refetch();
     } catch (err) {
       console.error('Submit failed:', err);
-      addToast(`確定に失敗しました: ${errorMessage(err)}`, 'error');
+      addToast(`申請に失敗しました: ${errorMessage(err)}`, 'error');
     } finally {
       setSubmitting(false);
     }
@@ -291,6 +323,11 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
               propertyOptions={propertyOptions}
               terminals={terminals}
               inspectionTypes={inspectionOptions}
+              allInspectionTypes={inspectionTypes}
+              linkedIds={vendorCtx.linkedIds}
+              settings={settings}
+              editing={editingId !== null}
+              onCancelEdit={handleClear}
               signageOnly={signageOnly}
               onSignageOnlyChange={handleSignageOnlyChange}
               onAdd={handleAdd}
@@ -338,7 +375,7 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
                 emergencyContact={vendorCtx.vendor?.emergency_contact ?? ''}
               />
             ) : (
-              <DisplaySettings form={form} />
+              <DisplaySettings form={form} displayTimeMax={settings.display_time_max} />
             )}
           </CardContent>
         </Card>
@@ -350,11 +387,12 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
             <div className="flex items-center gap-2">
               <h2 className="text-sm font-semibold text-gray-900">作成データ</h2>
               <Badge variant="primary">{localEntries.length}</Badge>
-              <Badge>申請済: {submitted.entries.length}</Badge>
+              {/* 申請済みは今月登録した分だけを出す（月が替わると前月分は一覧から外れる） */}
+              <Badge>今月の申請: {submitted.entries.length}</Badge>
             </div>
             {localEntries.length > 0 && (
               <Button variant="success" size="sm" onClick={() => void handleSubmit()} disabled={submitting}>
-                {submitting ? '確定中...' : '申請する'}
+                {submitting ? '申請中...' : '申請する'}
               </Button>
             )}
           </div>
@@ -364,6 +402,8 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
             entries={localEntries}
             submitted={submitted.entries}
             properties={properties}
+            editingId={editingId}
+            showVendor={isAdmin}
             onEdit={handleEdit}
             onRemove={setRemoveId}
           />
@@ -375,7 +415,11 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
         onClose={() => setRemoveId(null)}
         onConfirm={handleRemoveConfirmed}
         title="削除確認"
-        message="削除しますか？"
+        message={
+          removing
+            ? `次の作成データを削除しますか？\n${removing.propertyCode} ${removing.propertyName}\n${removing.inspectionType}`
+            : '削除しますか？'
+        }
         confirmLabel="削除"
         variant="danger"
       />

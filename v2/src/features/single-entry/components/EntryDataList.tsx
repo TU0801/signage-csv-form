@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { cn } from '@/lib/utils';
 import type { MasterProperty } from '@/types/app';
 import type { DbEntry } from '@/types/database';
 import type { LocalEntry } from '../types';
@@ -12,6 +13,10 @@ interface EntryDataListProps {
   submitted: DbEntry[];
   /** 建物名を引くための物件（全物件。担当から外れた物件は空欄になる） */
   properties: MasterProperty[];
+  /** 入力欄に読み込んで編集中の行 */
+  editingId: string | null;
+  /** 保守会社の列を出す（管理者は保守会社を切り替えて入力するので、行ごとの会社を見分ける） */
+  showVendor: boolean;
   onEdit: (id: string) => void;
   onRemove: (id: string) => void;
 }
@@ -26,7 +31,15 @@ const tdAction = 'whitespace-nowrap px-2 py-0.5';
 
 /** 作成データの一覧（手元のデータ＋今月の申請済み） */
 // v1: js/script.js renderDataList
-export function EntryDataList({ entries, submitted, properties, onEdit, onRemove }: EntryDataListProps) {
+export function EntryDataList({
+  entries,
+  submitted,
+  properties,
+  editingId,
+  showVendor,
+  onEdit,
+  onRemove,
+}: EntryDataListProps) {
   if (entries.length === 0 && submitted.length === 0) {
     return <div className="py-6 text-center text-sm text-gray-400">データなし</div>;
   }
@@ -41,6 +54,7 @@ export function EntryDataList({ entries, submitted, properties, onEdit, onRemove
           <tr className="border-b border-gray-200">
             <th className={th}>物件コード</th>
             <th className={th}>建物名</th>
+            {showVendor && <th className={th}>保守会社</th>}
             <th className={th}>点検種別</th>
             <th className={th}>開始日</th>
             <th className={th}>終了日</th>
@@ -50,13 +64,31 @@ export function EntryDataList({ entries, submitted, properties, onEdit, onRemove
         </thead>
         <tbody>
           {entries.map((e) => (
-            <tr key={e._id} className="border-b border-gray-100 hover:bg-gray-50">
-              <td className={tdNowrap}>{e.propertyCode}</td>
+            <tr
+              key={e._id}
+              aria-current={e._id === editingId ? 'true' : undefined}
+              className={cn('border-b border-gray-100', e._id === editingId ? 'bg-amber-50' : 'hover:bg-gray-50')}
+            >
+              <td className={tdNowrap}>
+                {e.propertyCode}
+                {e._id === editingId && (
+                  <Badge variant="warning" className="ml-1">
+                    編集中
+                  </Badge>
+                )}
+              </td>
               <td className="cell">
                 <span className={nameBox} title={e.propertyName}>
                   {e.propertyName}
                 </span>
               </td>
+              {showVendor && (
+                <td className="cell">
+                  <span className={nameBox} title={e.vendorName}>
+                    {e.vendorName}
+                  </span>
+                </td>
+              )}
               <td className="cell">
                 <span className={nameBox} title={e.inspectionType}>
                   {e.inspectionType}
@@ -88,6 +120,13 @@ export function EntryDataList({ entries, submitted, properties, onEdit, onRemove
                     {name}
                   </span>
                 </td>
+                {showVendor && (
+                  <td className="cell">
+                    <span className={nameBox} title={e.vendor_name}>
+                      {e.vendor_name}
+                    </span>
+                  </td>
+                )}
                 <td className="cell">
                   <span className={nameBox} title={e.inspection_type}>
                     {e.inspection_type}

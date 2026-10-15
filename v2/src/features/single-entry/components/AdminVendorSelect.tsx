@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react';
+import { Combobox } from '@/components/ui/Combobox';
+import { vendorOptions } from '@/features/users/vendorOptions';
 import type { DbVendor } from '@/types/database';
 
 interface AdminVendorSelectProps {
@@ -19,19 +21,17 @@ export function AdminVendorSelect({ vendors, value, onChange, children }: AdminV
       <span className="rounded bg-amber-400 px-1.5 py-0.5 text-xs font-bold text-gray-900 whitespace-nowrap">
         管理者
       </span>
-      <select
-        aria-label="保守会社"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="max-w-[12rem] 2xl:max-w-[20rem] rounded border border-amber-400 bg-white px-2 py-1 text-sm text-gray-900"
-      >
-        <option value="">-- 保守会社を選択 --</option>
-        {vendors.map((v) => (
-          <option key={v.id} value={v.id}>
-            {v.vendor_name}
-          </option>
-        ))}
-      </select>
+      {/* 40社あり、社名の先頭が「㈱」「株式会社」だとプルダウンの頭出しが効かないので、検索付きにする */}
+      <div className="w-[12rem] 2xl:w-[20rem]">
+        <Combobox
+          aria-label="保守会社"
+          value={value}
+          onChange={onChange}
+          options={vendorOptions(vendors, { withNone: true })}
+          placeholder="保守会社を選択（社名の一部で検索）"
+          className="border-amber-400 py-1"
+        />
+      </div>
       {children}
     </div>
   );

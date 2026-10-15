@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
+  applyCategoryChange,
+  applyInspectionType,
   applyLinkedDefaults,
   applyPropertyChange,
   applyStartDateChange,
@@ -13,6 +15,7 @@ import {
   duplicateValues,
   filterInspectionTypes,
   formatPosterDate,
+  remarksUsage,
   submittedStatusLabel,
   toInsertRow,
   valuesFromEntry,
@@ -41,7 +44,7 @@ describe('物件の選択肢（v1 populatePropertySelect）', () => {
     expect(buildPropertyOptions(PROPERTIES, false)).toEqual([
       { value: '2010', label: '2010 数値コード' },
       { value: '120273-00', label: '120273-00 端末あり' },
-      { value: 'z0015A01', label: 'z0015A01 未設置' },
+      { value: 'z0015A01', label: 'z0015A01 未設置', hint: '端末なし' },
     ]);
     expect(buildPropertyOptions(PROPERTIES, true).map((o) => o.value)).toEqual(['2010', '120273-00']);
   });
@@ -90,9 +93,29 @@ describe('点検工事案内の絞り込み（v1 7ac9214）', () => {
     expect(v).toMatchObject({ category: '', inspectionTypeId: 'ev', noticeText: 'EV停止' });
   });
 
+  it('手で書き換えた案内文は、点検種別が変わらなければ残し、変われば新しい既定文に差し替える', () => {
+    const edited = values({ inspectionTypeId: 'ev', noticeText: '書き換えた文' });
+    // カテゴリを変えても今の種別が残るとき・同じ種別を選び直したときは残す
+    expect(applyCategoryChange(edited, '', TYPES, NO_LINKS).noticeText).toBe('書き換えた文');
+    expect(applyInspectionType(edited, 'ev', TYPES).noticeText).toBe('書き換えた文');
+    // 種別を変えたら、前の種別向けに書いた文は残さない
+    expect(applyInspectionType(edited, 'clean', TYPES)).toMatchObject({ inspectionTypeId: 'clean', noticeText: '清掃します', templateNo: 'cleaning' });
+    expect(applyInspectionType(values({ inspectionTypeId: 'ev', noticeText: 'EV停止' }), 'clean', TYPES).noticeText).toBe('清掃します');
+    // 保守会社を外して点検種別が未選択になったあとは、残っている文を新しい既定文に差し替える
+    expect(applyInspectionType(values({ inspectionTypeId: '', noticeText: 'EV停止' }), 'clean', TYPES).noticeText).toBe('清掃します');
+  });
+
   it('管理者が保守会社の選択を外すとカテゴリ・点検種別を空に戻す（v1 1761930）', () => {
     const v = applyVendorCleared(values({ category: '清掃', inspectionTypeId: 'clean', templateNo: 'cleaning' }));
     expect(v).toMatchObject({ category: '', inspectionTypeId: '', templateNo: '' });
+  });
+});
+
+describe('案内文・備考の文字数と行数の表示', () => {
+  it('行数と1行の最長文字数を数え、設定の上限を超えたら over', () => {
+    expect(remarksUsage('', SETTINGS)).toMatchObject({ lines: 0, longest: 0, over: false });
+    expect(remarksUsage('ab\nabcd', SETTINGS)).toMatchObject({ lines: 2, longest: 4, maxLines: 5, perLine: 25, over: false });
+    expect(remarksUsage('x'.repeat(26), SETTINGS).over).toBe(true);
   });
 });
 
@@ -114,7 +137,7 @@ describe('データを追加（v1 addEntry）', () => {
       ok: false,
       message: '終了日は開始日より後にしてください',
     });
-    expect(buildLocalEntry(values(), ctx())).toEqual({ ok: false, message: '必須項目を入力してください' });
+    expect(buildLocalEntry(values(), ctx())).toEqual({ ok: false, message: '物件コードを選択してください' });
     expect(buildLocalEntry(ok, ctx({ vendor: null }))).toEqual({ ok: false, message: '保守会社を選択してください' });
     expect(buildLocalEntry(values({ ...ok, inspectionTypeId: '' }), ctx())).toEqual({
       ok: false,
@@ -138,6 +161,7 @@ describe('データを追加（v1 addEntry）', () => {
     expect(r).toEqual({
       ok: false,
       message: '表示時間は30秒以下にしてください\n掲示備考は5行以下にしてください\n案内文は200文字以下にしてください',
+      settingsTab: true,
     });
   });
 

@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import { ToastProvider } from '@/components/ui/Toast';
 import { HeaderSlotContext } from '@/components/layout/HeaderSlot';
 import { SingleEntryPage } from '@/pages/SingleEntryPage';
+import { useSingleEntryStore } from '@/features/single-entry/stores/singleEntryStore';
 import { PROPERTIES, SETTINGS, TYPES } from './fixtures';
 import type { DbVendor } from '@/types/database';
 
@@ -58,7 +59,18 @@ vi.mock('@/lib/api/single-entry', async (importOriginal) => {
   };
 });
 
+/** 検索つきの選択欄で、コードで絞って先頭の候補を選ぶ */
+function pick(name: string, query: string) {
+  const input = screen.getByRole('combobox', { name });
+  fireEvent.click(input);
+  fireEvent.change(input, { target: { value: query } });
+  // 管理者の保守会社・管理会社はネイティブ select なので、開いた一覧の中から選ぶ
+  fireEvent.click(within(screen.getByRole('listbox')).getAllByRole('option')[0]!);
+}
+
 beforeEach(() => {
+  // 作成データは store に残るので、テストごとに空にする
+  useSingleEntryStore.setState({ userId: null, entries: [] });
   // jsdom には <dialog> の showModal / close が無い（ConfirmDialog が使う）
   HTMLDialogElement.prototype.showModal ??= function () {};
   HTMLDialogElement.prototype.close ??= function () {};
@@ -78,13 +90,13 @@ describe('1件入力画面（一般ユーザー）', () => {
 
     // 紐付けが1カテゴリ（清掃）だけなので、カテゴリと先頭の紐付け点検種別が選ばれる（v1 applyLinkedDefaults）
     await waitFor(() => expect(screen.getByLabelText('案内カテゴリ')).toHaveValue('清掃'));
-    expect(screen.getByLabelText('点検工事案内 *')).toHaveValue('clean');
+    expect(screen.getByRole('combobox', { name: '点検工事案内 *' })).toHaveValue('排水管清掃');
     // 管理会社フィルターは管理者だけ
     expect(screen.queryByLabelText('管理会社')).toBeNull();
 
-    fireEvent.change(screen.getByLabelText('物件コード', { exact: false, selector: 'select' }), {
-      target: { value: 'z0015A01' },
-    });
+    pick('物件コード *', 'z0015A01');
+    // 端末の無い物件は選ぶ欄の代わりに未設置と出す（入力・申請はできる）
+    expect(screen.getByText('サイネージ未設置（端末なし）')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'データを追加' }));
     const table = await screen.findByRole('table');
     expect(within(table).getByText('z0015A01')).toBeInTheDocument();
@@ -118,24 +130,28 @@ describe('1件入力画面（管理者の管理会社フィルター）', () => 
 
     const filter = await screen.findByLabelText('管理会社');
     expect(filter).toHaveValue('');
-    const propertySelect = screen.getByLabelText('物件コード', { exact: false, selector: 'select' });
-    const codes = () =>
-      within(propertySelect)
+    const propertyInput = screen.getByRole('combobox', { name: '物件コード *' });
+    // 候補は一覧を開いている間だけ出る。開いてコードを読み、閉じる
+    const codes = () => {
+      fireEvent.click(propertyInput);
+      const list = within(screen.getByRole('listbox'))
         .getAllByRole('option')
-        .map((o) => (o as HTMLOptionElement).value)
-        .filter(Boolean);
+        .map((o) => o.textContent?.split(' ')[0]);
+      fireEvent.keyDown(propertyInput, { key: 'Escape' });
+      return list;
+    };
     expect(codes()).toEqual(['2010', '120273-00', 'z0015A01']);
 
     fireEvent.change(filter, { target: { value: 'c-en' } });
     expect(codes()).toEqual(['120273-00']);
 
     // 選択は state で確かめる（選択肢に無い値は DOM 上は空に見えるため、端末ID の選択肢で見る）
-    fireEvent.change(propertySelect, { target: { value: '120273-00' } });
-    const terminalSelect = screen.getByLabelText('端末ID', { exact: false, selector: 'select' });
-    expect(terminalSelect).toHaveValue('h0001A00');
+    pick('物件コード *', '120273-00');
+    const terminalSelect = () => screen.getByLabelText('端末ID', { exact: false, selector: 'select' });
+    expect(terminalSelect()).toHaveValue('h0001A00');
     fireEvent.change(filter, { target: { value: '__none__' } });
     expect(codes()).toEqual(['2010', 'z0015A01']);
-    expect(terminalSelect).not.toHaveValue('h0001A00');
+    expect(terminalSelect()).not.toHaveValue('h0001A00');
   });
 
   it('絞り込みの外の物件の行を編集で読み込むと、管理会社を全てに戻す', async () => {
@@ -149,16 +165,41 @@ describe('1件入力画面（管理者の管理会社フィルター）', () => 
     );
 
     const filter = await screen.findByLabelText('管理会社');
-    fireEvent.change(screen.getByLabelText('物件コード', { exact: false, selector: 'select' }), {
-      target: { value: '120273-00' },
-    });
-    fireEvent.change(screen.getByLabelText('点検工事案内 *'), { target: { value: 'clean' } });
+    pick('物件コード *', '120273-00');
+    pick('点検工事案内 *', '排水管');
     fireEvent.click(screen.getByRole('button', { name: 'データを追加' }));
     const table = await screen.findByRole('table');
 
     fireEvent.change(filter, { target: { value: '__none__' } });
     fireEvent.click(within(table).getByRole('button', { name: '編集' }));
     expect(filter).toHaveValue('');
-    expect(screen.getByLabelText('物件コード', { exact: false, selector: 'select' })).toHaveValue('120273-00');
+    expect(screen.getByRole('combobox', { name: '物件コード *' })).toHaveValue('120273-00 端末あり');
+    // 編集中は主ボタンが「更新」になり、行に印が付く
+    expect(screen.getByRole('button', { name: '更新' })).toBeInTheDocument();
+    expect(within(table).getByText('編集中')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '編集をやめる' }));
+    expect(screen.getByRole('button', { name: 'データを追加' })).toBeInTheDocument();
+  });
+});
+
+describe('1件入力画面（作成データの保持）', () => {
+  it('申請前の作成データは画面を離れて戻っても残る', async () => {
+    const view = () =>
+      render(
+        <ToastProvider>
+          <SingleEntryPage />
+        </ToastProvider>,
+      );
+    const first = view();
+    await waitFor(() => expect(screen.getByRole('combobox', { name: '点検工事案内 *' })).toHaveValue('排水管清掃'));
+    pick('物件コード *', 'z0015A01');
+    fireEvent.click(screen.getByRole('button', { name: 'データを追加' }));
+    await screen.findByRole('table');
+    first.unmount();
+
+    view();
+    const table = await screen.findByRole('table');
+    expect(within(table).getByText('z0015A01')).toBeInTheDocument();
+    expect(useSingleEntryStore.getState().entries).toHaveLength(1);
   });
 });

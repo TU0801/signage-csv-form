@@ -46,6 +46,9 @@ export function hasTerminal(p: Pick<MasterProperty, 'terminals'>): boolean {
   return p.terminals.some((t) => !!t.terminal_id);
 }
 
+/** 端末の無い物件の選択肢に添える印（未設置物件も入力はできる。印は見分けるためだけ） */
+export const NO_TERMINAL_HINT = '端末なし';
+
 /**
  * 物件の選択肢。物件コードの数値昇順（数値にならなければ文字列昇順）。
  * 「サイネージ設置物件のみ」ON のときは端末のある物件だけ（v1 82aa0fb。既定 OFF で未設置物件も出す）。
@@ -54,7 +57,7 @@ export function hasTerminal(p: Pick<MasterProperty, 'terminals'>): boolean {
 export function buildPropertyOptions(
   properties: MasterProperty[],
   signageOnly: boolean,
-): { value: string; label: string }[] {
+): { value: string; label: string; hint?: string }[] {
   const sorted = [...properties].sort((a, b) => {
     const na = parseInt(a.property_code, 10);
     const nb = parseInt(b.property_code, 10);
@@ -62,12 +65,14 @@ export function buildPropertyOptions(
     return String(a.property_code).localeCompare(String(b.property_code));
   });
   const seen = new Set<string>();
-  const options: { value: string; label: string }[] = [];
+  const options: { value: string; label: string; hint?: string }[] = [];
   sorted.forEach((p) => {
-    if (signageOnly && !hasTerminal(p)) return;
+    const withTerminal = hasTerminal(p);
+    if (signageOnly && !withTerminal) return;
     if (seen.has(p.property_code)) return;
     seen.add(p.property_code);
-    options.push({ value: p.property_code, label: `${p.property_code} ${p.property_name}` });
+    const label = `${p.property_code} ${p.property_name}`;
+    options.push(withTerminal ? { value: p.property_code, label } : { value: p.property_code, label, hint: NO_TERMINAL_HINT });
   });
   return options;
 }
@@ -157,7 +162,18 @@ export function chooseInspectionTypeId(
   return '';
 }
 
-/** 点検種別を選んだときの値（案内文・テンプレートNo を差し替える） */
+/** 点検種別の既定の案内文（未選択・見つからなければ ''） */
+export function defaultNoticeText(types: DbInspectionType[], inspectionTypeId: string): string {
+  if (!inspectionTypeId) return '';
+  return types.find((x) => x.id === inspectionTypeId)?.default_text || '';
+}
+
+/**
+ * 点検種別を選んだときの値（テンプレートNo を差し替え、案内文は既定文にする）。
+ * 点検種別が変わらないとき（カテゴリを変えても今の種別が残るときなど）は、手で書き換えた案内文を残す。
+ * v1 は毎回上書きしていたため、カテゴリを触るだけで書いた案内文が消えていた。
+ * 種別が変わるときは既定文に差し替える（前の種別の文が新しい種別のまま申請されないように）。
+ */
 // v1: js/script.js onInspectionTypeChange
 export function applyInspectionType(
   values: SingleEntryValues,
@@ -166,7 +182,16 @@ export function applyInspectionType(
 ): SingleEntryValues {
   const t = inspectionTypeId ? types.find((x) => x.id === inspectionTypeId) : undefined;
   if (!t) return { ...values, inspectionTypeId, templateNo: '' };
-  return { ...values, inspectionTypeId, noticeText: t.default_text || '', templateNo: t.template_no || '' };
+  const edited =
+    inspectionTypeId === values.inspectionTypeId &&
+    values.noticeText !== '' &&
+    values.noticeText !== defaultNoticeText(types, values.inspectionTypeId);
+  return {
+    ...values,
+    inspectionTypeId,
+    noticeText: edited ? values.noticeText : t.default_text || '',
+    templateNo: t.template_no || '',
+  };
 }
 
 /** カテゴリを変えたとき（選び直してから点検種別の反映をやり直す） */
@@ -243,7 +268,8 @@ export interface EntryContext {
 
 export type BuildEntryResult =
   | { ok: true; entry: Omit<LocalEntry, '_id'> }
-  | { ok: false; message: string };
+  /** settingsTab: 表示設定タブの項目（表示時間・表示日）の誤りを含む。画面はそのタブを開いて見せる */
+  | { ok: false; message: string; settingsTab?: true };
 
 /**
  * 入力を検査して手元のデータを作る。メッセージは v1 と同じ文言・同じ順番。
@@ -257,7 +283,8 @@ export function buildLocalEntry(values: SingleEntryValues, ctx: EntryContext): B
   if (startDate && endDate && startDate > endDate) {
     return { ok: false, message: '終了日は開始日より後にしてください' };
   }
-  if (!values.propertyCode) return { ok: false, message: '必須項目を入力してください' };
+  // v1 は「必須項目を入力してください」。ここで止まるのは物件だけなので欄の名前を出す
+  if (!values.propertyCode) return { ok: false, message: '物件コードを選択してください' };
   if (!ctx.vendor) return { ok: false, message: '保守会社を選択してください' };
 
   const inspection = ctx.inspectionTypes.find((t) => t.id === values.inspectionTypeId);
@@ -272,9 +299,11 @@ export function buildLocalEntry(values: SingleEntryValues, ctx: EntryContext): B
 
   const s = ctx.settings;
   const errors: string[] = [];
+  let settingsTab = false;
   const displayTime = parseInt(values.displayTime, 10) || s.display_time_default;
   if (displayTime > s.display_time_max) {
     errors.push(`表示時間は${s.display_time_max}秒以下にしてください`);
+    settingsTab = true;
   }
   if (values.remarks) {
     const lines = values.remarks.split('\n');
@@ -290,8 +319,12 @@ export function buildLocalEntry(values: SingleEntryValues, ctx: EntryContext): B
   }
   if (values.displayStartDate && values.displayEndDate && values.displayStartDate > values.displayEndDate) {
     errors.push('表示終了日は開始日以降にしてください');
+    settingsTab = true;
   }
-  if (errors.length > 0) return { ok: false, message: errors.join('\n') };
+  if (errors.length > 0) {
+    const message = errors.join('\n');
+    return settingsTab ? { ok: false, message, settingsTab: true } : { ok: false, message };
+  }
 
   const property = ctx.properties.find((p) => String(p.property_code) === String(values.propertyCode));
   return {
@@ -320,6 +353,22 @@ export function buildLocalEntry(values: SingleEntryValues, ctx: EntryContext): B
       customImage: isCustom ? ctx.customImage : null,
     },
   };
+}
+
+/** 入力中の文字数・行数（案内文・作業時間及び備考の欄の下に出す。検査そのものは buildLocalEntry） */
+export function noticeUsage(text: string, settings: AppSettings): { chars: number; max: number; over: boolean } {
+  return { chars: text.length, max: settings.notice_text_max_chars, over: text.length > settings.notice_text_max_chars };
+}
+
+export function remarksUsage(
+  text: string,
+  settings: AppSettings,
+): { lines: number; maxLines: number; longest: number; perLine: number; over: boolean } {
+  const lines = text ? text.split('\n') : [];
+  const longest = lines.reduce((m, l) => Math.max(m, l.length), 0);
+  const maxLines = settings.remarks_max_lines;
+  const perLine = settings.remarks_chars_per_line;
+  return { lines: lines.length, maxLines, longest, perLine, over: lines.length > maxLines || longest > perLine };
 }
 
 /**

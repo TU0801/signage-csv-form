@@ -5,11 +5,13 @@ import { POSITION_OPTIONS } from '../lib/entryLogic';
 
 interface DisplaySettingsProps {
   form: EntryFormApi;
+  /** 表示時間の上限（設定 display_time_max。入力欄の上限を追加時の検査と揃える） */
+  displayTimeMax: number;
 }
 
 /** 表示設定タブ（表示開始・終了の日時、表示時間、表示位置）。追加貼紙のときは表示日時を入力できない */
 // v1: index.html #settingsTab / js/script.js onPositionChange, onPosterTypeChange
-export function DisplaySettings({ form }: DisplaySettingsProps) {
+export function DisplaySettings({ form, displayTimeMax }: DisplaySettingsProps) {
   const { values } = form;
   const isCustom = values.posterType === PosterType.CUSTOM;
 
@@ -55,7 +57,7 @@ export function DisplaySettings({ form }: DisplaySettingsProps) {
           label="表示時間（秒）"
           type="number"
           min={1}
-          max={60}
+          max={displayTimeMax}
           value={values.displayTime}
           onChange={(e) => form.setField('displayTime', e.target.value)}
         />
