@@ -1,4 +1,3 @@
-import { addProperty, updateProperty } from '@/lib/api/admin-masters';
 import {
   diffUnitInspections,
   saveInspectionsToBiz,
@@ -8,16 +7,8 @@ import { syncBuildingVendorsFromEquipment } from '@/lib/api/relationships';
 import type { DbProfile, Terminal } from '@/types/database';
 import type { PropertyInspection, PropertyUnit, UnitInspection } from '@/types/app';
 
-/**
- * 端末の入力行を保存する形にする。端末はサイネージ未設置の物件もあるので任意で、端末IDが空の行は保存しない。
- * キーは v1 と同じ terminal_id（{id} などで書くと v1 の画面から端末が見えなくなる）。
- */
-// v1: js/admin-masters.js handleMasterFormSubmit（terminals の収集）
-export function collectTerminals(rows: Terminal[]): Terminal[] {
-  return rows
-    .map((t) => ({ terminal_id: (t.terminal_id ?? '').trim(), supplement: (t.supplement ?? '').trim() }))
-    .filter((t) => t.terminal_id);
-}
+/** 物件の追加・削除ボタンを押したときの案内（2026-10-15。物件の正本は業務システム） */
+export const PROPERTY_BIZ_GUIDE = '物件の追加・削除は業務システム（BARAN業務リスト）で行ってください';
 
 /** 一覧の端末欄（先頭4台の端末ID、5台以上は「...」、末尾に台数） */
 // v1: js/admin-masters.js renderProperties（terminalDisplay）
@@ -76,11 +67,8 @@ export function validateUnitInspections(units: PropertyUnit[]): string | null {
 }
 
 export interface SavePropertyParams {
-  /** 編集なら物件の id、追加なら null */
-  id: string | null;
+  /** 点検情報・台ごとの保守を送る物件のコード（物件そのものは保存しない） */
   propertyCode: string;
-  propertyName: string;
-  terminals: Terminal[];
   /** 設備情報（物件×点検種別。台ごとに管理している点検種別を外した後のもの） */
   inspections: PropertyInspection[];
   /** 台ごとに管理している点検種別の id（開いたときに決めたもの） */
@@ -95,22 +83,17 @@ export interface SavePropertyParams {
 export interface SavePropertyResult {
   /** 紐付け管理に足した保守会社の数 */
   added: number;
-  /** 物件は保存できたが、後続（業務システム・紐付け）で失敗したものの文言 */
+  /** 失敗したもの（業務システム・紐付け）の文言 */
   errors: string[];
 }
 
 /**
- * 物件を保存し、続けて点検情報・台ごとの保守を業務システム（biz）へ、保守会社を紐付け管理へ送る。
- * **物件の保存が失敗したら throw する**（後続は送らない）。後続の失敗は物件の保存を戻さず、
- * 業務システムが断った理由（RPC の文言）を errors に溜めて返す（呼ぶ側が最後にまとめて出す）。
+ * 物件モーダルの保存。点検情報・台ごとの保守を業務システム（biz）へ、保守会社を紐付け管理へ送る。
+ * **物件そのもの（コード・名前・端末）は保存しない**（2026-10-15。正本は業務システムの物件で、biz のトリガーが写す）。
+ * 失敗しても残りは送り、業務システムが断った理由（RPC の文言）を errors に溜めて返す（呼ぶ側が最後にまとめて出す）。
  */
 // v1: js/admin-masters.js handleMasterFormSubmit（type === 'property'）
 export async function savePropertyForm(p: SavePropertyParams): Promise<SavePropertyResult> {
-  // equipment は送らない（2026-09-20 の凍結。点検情報は saveInspectionsToBiz が業務システムへ送る）
-  const record = { property_code: p.propertyCode, property_name: p.propertyName, terminals: p.terminals };
-  if (p.id) await updateProperty(p.id, record);
-  else await addProperty(record);
-
   const errors: string[] = [];
   try {
     await saveInspectionsToBiz(p.propertyCode, p.inspections, p.managedTypeIds);
@@ -145,7 +128,7 @@ export async function savePropertyForm(p: SavePropertyParams): Promise<SavePrope
     added = synced.added;
   } catch (e) {
     console.error('Failed to sync building vendors:', e);
-    errors.push('紐付け管理への反映に失敗しました（物件は保存済みです）');
+    errors.push('紐付け管理への反映に失敗しました');
   }
 
   return { added, errors };

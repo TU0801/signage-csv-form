@@ -1,5 +1,5 @@
 import { supabase, TABLES } from '@/lib/supabase';
-import type { DbProperty, DbInspectionType, DbCategory, Terminal } from '@/types/database';
+import type { DbInspectionType, DbCategory } from '@/types/database';
 
 // ========================================
 // マスター管理（物件・点検種別・カテゴリ）の書き込み。
@@ -8,50 +8,9 @@ import type { DbProperty, DbInspectionType, DbCategory, Terminal } from '@/types
 // 保守会社（block_vendor_direct_write）とテンプレート画像（block_template_images_write）は書き込まない。
 // ========================================
 
-/** 物件の保存で送る列。equipment は block_equipment_write が変更を拒否するので送らない（2026-09-20 凍結） */
-export interface PropertyInput {
-  property_code: string;
-  property_name: string;
-  /** 端末は v1 と同じ terminal_id キーで書く（v1 の画面は terminalId / terminal_id の両方を読む） */
-  terminals: Terminal[];
-}
-
-// v1: js/supabase/admin-masters.js addProperty
-export async function addProperty(p: PropertyInput): Promise<DbProperty> {
-  const { data, error } = await supabase
-    .from(TABLES.properties)
-    .insert({
-      property_code: p.property_code,
-      property_name: p.property_name,
-      terminals: p.terminals,
-    })
-    .select()
-    .single();
-  if (error) throw error;
-  return data as DbProperty;
-}
-
-// v1: js/supabase/admin-masters.js updateProperty
-export async function updateProperty(id: string, p: PropertyInput): Promise<DbProperty> {
-  const { data, error } = await supabase
-    .from(TABLES.properties)
-    .update({
-      property_code: p.property_code,
-      property_name: p.property_name,
-      terminals: p.terminals,
-    })
-    .eq('id', id)
-    .select()
-    .single();
-  if (error) throw error;
-  return data as DbProperty;
-}
-
-// v1: js/supabase/admin-masters.js deleteProperty
-export async function deleteProperty(id: string): Promise<void> {
-  const { error } = await supabase.from(TABLES.properties).delete().eq('id', id);
-  if (error) throw error;
-}
+// **物件（signage_master_properties）は書かない（2026-10-15）。** 物件の正本は業務システム（biz.properties）で、
+// 追加・コード・名前・端末は biz のトリガー（biz.sync_property_to_signage）が写す。
+// 物件モーダルから保存するのは点検情報と台ごとの保守の RPC だけ（lib/api/inspections）。
 
 /**
  * 点検種別の保存で送る列（v1 と同じ5列）。カテゴリは category（カテゴリ名のテキスト）に入れる。
@@ -157,19 +116,9 @@ export async function deleteCategory(id: string): Promise<void> {
 }
 
 /**
- * 物件・点検種別を使っているエントリーの件数（削除の前の確認）。
+ * 点検種別を使っているエントリーの件数（削除の前の確認）。
  * v1 は画面に読み込んだ全エントリーを数えていた。ここは件数だけを DB に問い合わせる（結果は同じ）。
  */
-// v1: js/admin.js deletePropertyByCode（entries.filter(e => e.property_code === code)）
-export async function countEntriesByPropertyCode(propertyCode: string): Promise<number> {
-  const { count, error } = await supabase
-    .from(TABLES.entries)
-    .select('id', { count: 'exact', head: true })
-    .eq('property_code', propertyCode);
-  if (error) throw error;
-  return count ?? 0;
-}
-
 // v1: js/admin-masters.js deleteMasterInspectionAction（entries.filter(e => e.inspection_type === name)）
 export async function countEntriesByInspectionName(inspectionName: string): Promise<number> {
   const { count, error } = await supabase

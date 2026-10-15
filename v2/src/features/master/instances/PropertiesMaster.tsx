@@ -3,15 +3,15 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
-import { countEntriesByPropertyCode, deleteProperty } from '@/lib/api/admin-masters';
 import type { MasterConfig } from '../types/masterConfig';
 import { matchesSearch } from '../hooks/useMasterCRUD';
 import { usePropertyMasterData, type PropertyWithUnits } from '../hooks/usePropertyMasterData';
 import { MasterTable } from '../components/MasterTable';
 import { MasterToolbar } from '../components/MasterToolbar';
-import { MasterDeleteConfirm } from '../components/MasterDeleteConfirm';
 import { PropertyFormModal } from '../components/property/PropertyFormModal';
-import { terminalSummary } from '../lib/propertyForm';
+import { PROPERTY_BIZ_GUIDE, terminalSummary } from '../lib/propertyForm';
+
+const BIZ_PROPERTIES_URL = 'https://system.1984.jp/properties';
 
 type PropertyRecord = PropertyWithUnits & Record<string, unknown>;
 
@@ -27,6 +27,7 @@ const tableConfig: Pick<MasterConfig<PropertyRecord>, 'columns' | 'readOnly'> = 
 // 検索は物件コードと物件名（v1 renderProperties）
 const SEARCH_FIELDS: (keyof PropertyRecord & string)[] = ['property_code', 'property_name'];
 
+// 物件の追加・削除とコード・名前・端末の変更は業務システムで行う（2026-10-15）。追加・削除ボタンは案内だけ出す
 // v1: js/admin-masters.js renderProperties / js/admin.js editPropertyByCode・deletePropertyByCode
 export function PropertiesMaster() {
   const { addToast } = useToast();
@@ -34,45 +35,13 @@ export function PropertiesMaster() {
     usePropertyMasterData();
 
   const [search, setSearch] = useState('');
-  // undefined = 閉じている、null = 追加、物件 = 編集
-  const [formTarget, setFormTarget] = useState<PropertyWithUnits | null | undefined>(undefined);
-  const [deleteTarget, setDeleteTarget] = useState<PropertyWithUnits | null>(null);
+  // null = 閉じている、物件 = 編集
+  const [formTarget, setFormTarget] = useState<PropertyWithUnits | null>(null);
 
   const filtered = (properties as PropertyRecord[]).filter((p) => matchesSearch(p, SEARCH_FIELDS, search));
 
-  // 使用中の物件は消させない
-  // v1: js/admin.js deletePropertyByCode
-  const handleRequestDelete = useCallback(
-    async (item: PropertyWithUnits) => {
-      try {
-        const used = await countEntriesByPropertyCode(item.property_code);
-        if (used > 0) {
-          addToast(`この物件は${used}件のエントリで使用中です`, 'error');
-          return;
-        }
-      } catch (err) {
-        console.error('Failed to check property usage:', err);
-        addToast('削除に失敗しました', 'error');
-        return;
-      }
-      setDeleteTarget(item);
-    },
-    [addToast],
-  );
-
-  const handleDelete = useCallback(async () => {
-    if (!deleteTarget) return;
-    try {
-      await deleteProperty(deleteTarget.id);
-      addToast('物件を削除しました', 'success');
-      void refetch();
-    } catch (err) {
-      console.error('Failed to delete property:', err);
-      addToast('削除に失敗しました', 'error');
-    } finally {
-      setDeleteTarget(null);
-    }
-  }, [deleteTarget, addToast, refetch]);
+  // 追加・削除は DB を呼ばず案内だけ（v1: js/admin.js addPropertyBtn / deletePropertyByCode）
+  const showBizGuide = useCallback(() => addToast(PROPERTY_BIZ_GUIDE, 'info'), [addToast]);
 
   if (loading) {
     return (
@@ -94,39 +63,40 @@ export function PropertiesMaster() {
             onChange={(e) => setSearch(e.target.value)}
           />
         }
-        action={<Button onClick={() => setFormTarget(null)}>+ 新規追加</Button>}
+        note={
+          <>
+            物件の追加・削除と物件コード・物件名・端末の変更は業務システムの物件で行います（
+            <a href={BIZ_PROPERTIES_URL} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
+              物件一覧を開く
+            </a>
+            ）
+          </>
+        }
+        action={<Button onClick={showBizGuide}>+ 新規追加</Button>}
       />
 
       <MasterTable
         config={tableConfig}
         items={filtered}
         onEdit={(item) => setFormTarget(item)}
-        onDelete={(item) => void handleRequestDelete(item)}
+        onDelete={showBizGuide}
         renderCell={(key, _value, item) =>
           key === 'terminals' ? terminalSummary(item.terminals) : undefined
         }
         emptyMessage={search ? '検索結果がありません' : '物件が登録されていません'}
       />
 
-      {formTarget !== undefined && (
+      {formTarget && (
         <PropertyFormModal
-          key={formTarget?.id ?? 'new'}
+          key={formTarget.id}
           property={formTarget}
           vendors={vendors}
           inspectionTypes={inspectionTypes}
           unitTypeOptions={unitTypeOptions}
-          onClose={() => setFormTarget(undefined)}
+          onClose={() => setFormTarget(null)}
           onSaved={() => void refetch()}
         />
       )}
-
-      <MasterDeleteConfirm
-        open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={handleDelete}
-        displayName="物件"
-        itemLabel={deleteTarget ? deleteTarget.property_name : undefined}
-      />
     </div>
   );
 }

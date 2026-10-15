@@ -1,10 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import {
-  addProperty,
-  updateInspectionType,
-  updateInspectionSortOrder,
-  countEntriesByPropertyCode,
-} from '@/lib/api/admin-masters';
+import * as adminMasters from '@/lib/api/admin-masters';
+
+const { updateInspectionType, updateInspectionSortOrder } = adminMasters;
 
 // supabase のクエリビルダーを、呼ばれたメソッドと引数を記録するだけのものにする
 const calls: { method: string; args: unknown[] }[] = [];
@@ -43,21 +40,11 @@ describe('lib/api/admin-masters (v1 js/supabase/admin-masters.js)', () => {
     result = { data: {}, error: null };
   });
 
-  // equipment は block_equipment_write が拒否するので送らない。端末は terminal_id キー
-  it('addProperty sends only property_code / property_name / terminals', async () => {
-    const input = {
-      property_code: 'z0023A01',
-      property_name: 'テスト物件',
-      terminals: [{ terminal_id: 'T1', supplement: '' }],
-      equipment: [{ inspection_type_id: 'x' }],
-    };
-    await addProperty(input);
-    expect(calls[0]).toEqual({ method: 'from', args: ['signage_master_properties'] });
-    expect(calls.find((c) => c.method === 'insert')?.args[0]).toEqual({
-      property_code: 'z0023A01',
-      property_name: 'テスト物件',
-      terminals: [{ terminal_id: 'T1', supplement: '' }],
-    });
+  // 物件の正本は業務システム（2026-10-15）。signage_master_properties へ書く関数を持たない
+  it('has no function that writes signage_master_properties', () => {
+    for (const name of ['addProperty', 'updateProperty', 'deleteProperty']) {
+      expect(adminMasters).not.toHaveProperty(name);
+    }
   });
 
   // v1 は category（カテゴリ名のテキスト）を書く。category_id は実DBで全件 null
@@ -88,13 +75,5 @@ describe('lib/api/admin-masters (v1 js/supabase/admin-masters.js)', () => {
     expect(calls.find((c) => c.method === 'update')?.args[0]).toEqual({ sort_order: 3 });
     expect(calls).toContainEqual({ method: 'select', args: ['id'] });
     expect(calls).toContainEqual({ method: 'single', args: [] });
-  });
-
-  it('countEntriesByPropertyCode counts entries of that property without reading rows', async () => {
-    result = { count: 3, error: null };
-    await expect(countEntriesByPropertyCode('120273-00')).resolves.toBe(3);
-    expect(calls).toContainEqual({ method: 'from', args: ['signage_entries'] });
-    expect(calls).toContainEqual({ method: 'select', args: ['id', { count: 'exact', head: true }] });
-    expect(calls).toContainEqual({ method: 'eq', args: ['property_code', '120273-00'] });
   });
 });

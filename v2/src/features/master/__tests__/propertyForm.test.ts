@@ -1,17 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { PropertyUnit, UnitInspection } from '@/types/app';
 
-const addProperty = vi.fn();
-const updateProperty = vi.fn();
 const saveInspectionsToBiz = vi.fn();
 const saveUnitInspectionsToBiz = vi.fn();
 const syncBuildingVendorsFromEquipment = vi.fn();
 
 vi.mock('@/lib/supabase', () => ({ supabase: {}, TABLES: {}, RPC: {} }));
-vi.mock('@/lib/api/admin-masters', () => ({
-  addProperty: (...a: unknown[]) => addProperty(...a),
-  updateProperty: (...a: unknown[]) => updateProperty(...a),
-}));
 vi.mock('@/lib/api/inspections', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/api/inspections')>()),
   saveInspectionsToBiz: (...a: unknown[]) => saveInspectionsToBiz(...a),
@@ -21,7 +15,7 @@ vi.mock('@/lib/api/relationships', () => ({
   syncBuildingVendorsFromEquipment: (...a: unknown[]) => syncBuildingVendorsFromEquipment(...a),
 }));
 
-const { collectTerminals, terminalSummary, validateUnitInspections, savePropertyForm } = await import(
+const { terminalSummary, validateUnitInspections, savePropertyForm } = await import(
   '../lib/propertyForm'
 );
 
@@ -50,16 +44,6 @@ const unit = (inspections: UnitInspection[]): PropertyUnit => ({
 });
 
 describe('property form helpers (v1 js/admin-masters.js)', () => {
-  // v1 handleMasterFormSubmit: trim して端末IDが空の行は保存しない。キーは terminal_id
-  it('collectTerminals trims and drops rows without a terminal id', () => {
-    expect(
-      collectTerminals([
-        { terminal_id: ' T1 ', supplement: ' 1F ' },
-        { terminal_id: '  ', supplement: '補足だけ' },
-      ]),
-    ).toEqual([{ terminal_id: 'T1', supplement: '1F' }]);
-  });
-
   it('terminalSummary shows up to 4 ids and the count', () => {
     const t = (id: string) => ({ terminal_id: id, supplement: '' });
     expect(terminalSummary([])).toBe('なし (0台)');
@@ -83,10 +67,7 @@ describe('savePropertyForm (v1 handleMasterFormSubmit)', () => {
     { inspection_type_id: 'fire', vendor_id: 'v2', inspection_months: [3], remarks: '', remarks2: '' },
   ];
   const base = {
-    id: 'p1',
     propertyCode: 'z0023A01',
-    propertyName: '物件A',
-    terminals: [{ terminal_id: 'T1', supplement: '' }],
     inspections,
     managedTypeIds: managed,
     originalUnits: [unit([insp()])],
@@ -96,21 +77,14 @@ describe('savePropertyForm (v1 handleMasterFormSubmit)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    updateProperty.mockResolvedValue({});
-    addProperty.mockResolvedValue({});
     saveInspectionsToBiz.mockResolvedValue({ saved: 1 });
     saveUnitInspectionsToBiz.mockResolvedValue({ saved: 1, errors: [] });
     syncBuildingVendorsFromEquipment.mockResolvedValue({ added: 2 });
   });
 
-  it('saves the property (3 columns), then biz inspections with skip ids, the unit diff, and vendor links', async () => {
+  // 物件そのもの（コード・名前・端末）は保存しない（2026-10-15。正本は業務システム）。送るのは RPC だけ
+  it('saves biz inspections with skip ids, the unit diff, and vendor links (not the property row)', async () => {
     await expect(savePropertyForm(base)).resolves.toEqual({ added: 2, errors: [] });
-    expect(updateProperty).toHaveBeenCalledWith('p1', {
-      property_code: 'z0023A01',
-      property_name: '物件A',
-      terminals: [{ terminal_id: 'T1', supplement: '' }],
-    });
-    expect(addProperty).not.toHaveBeenCalled();
     expect(saveInspectionsToBiz).toHaveBeenCalledWith('z0023A01', inspections, managed);
     // 差分だけ（保守会社を変えた1行）
     expect(saveUnitInspectionsToBiz).toHaveBeenCalledWith({
@@ -131,7 +105,7 @@ describe('savePropertyForm (v1 handleMasterFormSubmit)', () => {
     expect(profile).toEqual({ id: 'admin-1' });
   });
 
-  it('keeps going after biz failures and returns their messages (property stays saved)', async () => {
+  it('keeps going after biz failures and returns their messages', async () => {
     saveInspectionsToBiz.mockRejectedValue({ message: 'この点検は台ごとに管理しています' });
     saveUnitInspectionsToBiz.mockResolvedValue({ saved: 0, errors: ['E1', 'E1'] });
     syncBuildingVendorsFromEquipment.mockRejectedValue(new Error('x'));
@@ -140,16 +114,8 @@ describe('savePropertyForm (v1 handleMasterFormSubmit)', () => {
       errors: [
         '点検情報の保存に失敗しました: この点検は台ごとに管理しています',
         '台ごとの保守 2 件の保存に失敗しました: E1',
-        '紐付け管理への反映に失敗しました（物件は保存済みです）',
+        '紐付け管理への反映に失敗しました',
       ],
     });
-  });
-
-  it('does not touch biz when the property save itself fails', async () => {
-    addProperty.mockRejectedValue(new Error('duplicate key'));
-    await expect(savePropertyForm({ ...base, id: null })).rejects.toThrow('duplicate key');
-    expect(saveInspectionsToBiz).not.toHaveBeenCalled();
-    expect(saveUnitInspectionsToBiz).not.toHaveBeenCalled();
-    expect(syncBuildingVendorsFromEquipment).not.toHaveBeenCalled();
   });
 });
