@@ -39,6 +39,14 @@ export function adLinkUrlError(url: string): string | null {
 }
 
 /**
+ * 保存を止めるリンク。javascript: 等はログイン画面で押した人のブラウザでスクリプトが動くので保存させない
+ * （ほかの書式は adLinkUrlError の警告だけで保存できる）。
+ */
+export function adLinkUrlBlocked(url: string): boolean {
+  return /^\s*(javascript|data|vbscript):/i.test(url);
+}
+
+/**
  * 広告画像を v1 と同じ確認・文言でアップロードする（共有の lib/storage.ts は文言が v1 と違うため包む）。
  * 拡張子・サイズを先に v1 の文言で断り、アップロード失敗は v1 の前置きに置き換える。
  */

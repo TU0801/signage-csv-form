@@ -1,6 +1,7 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { useAdSlots, uploadAdImageV1, adLinkUrlError } from '../hooks/useAdSlots';
+import { useAdSlots, uploadAdImageV1, adLinkUrlError, adLinkUrlBlocked } from '../hooks/useAdSlots';
+import { isSafeLinkUrl } from '@/lib/utils';
 
 const mockSelect = vi.fn();
 const mockUpdate = vi.fn();
@@ -172,5 +173,17 @@ describe('adLinkUrlError', () => {
     expect(adLinkUrlError(' https://baran-ev.com/ ')).toBeNull();
     expect(adLinkUrlError('http://example.com')).toBeNull();
     expect(adLinkUrlError('www.example.com')).toBe('https:// または http:// から始まるURLを入力してください');
+  });
+});
+
+describe('広告リンクの安全確認', () => {
+  it('javascript: 等は保存させず、ログイン画面でもリンクにしない', () => {
+    expect(adLinkUrlBlocked(' JavaScript:alert(1)')).toBe(true);
+    expect(adLinkUrlBlocked('data:text/html,x')).toBe(true);
+    expect(adLinkUrlBlocked('example.com')).toBe(false);
+    expect(isSafeLinkUrl('javascript:alert(1)')).toBe(false);
+    expect(isSafeLinkUrl('//evil.example')).toBe(false);
+    expect(isSafeLinkUrl('https://example.com')).toBe(true);
+    expect(isSafeLinkUrl('/login')).toBe(true);
   });
 });

@@ -3,6 +3,7 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { useAdSlots } from '@/features/ad-slots/hooks/useAdSlots';
 import { MAX_AD_SLOTS } from '@/lib/constants';
+import { isSafeLinkUrl } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import type { DbProfile } from '@/types/database';
@@ -151,9 +152,10 @@ function AdSlotCell({ slot }: { slot?: { image_url: string | null; link_url: str
 
   const image = <img src={slot.image_url} alt="" className="h-full w-full object-contain" />;
 
-  if (slot.link_url) {
+  // javascript: などはリンクにしない（画像だけ出す）
+  if (slot.link_url && isSafeLinkUrl(slot.link_url)) {
     return (
-      <a href={slot.link_url} target="_blank" rel="noopener noreferrer" className={`${AD_CELL} block`}>
+      <a href={slot.link_url.trim()} target="_blank" rel="noopener noreferrer" className={`${AD_CELL} block`}>
         {image}
       </a>
     );

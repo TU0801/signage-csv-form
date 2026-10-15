@@ -22,6 +22,16 @@ export function todayUtc(now: Date = new Date()): string {
 }
 
 /**
+ * 画面にリンクとして出してよい URL か。http(s)・mailto・tel・/ で始まる相対 URL だけを許す。
+ * javascript: や data: を href に入れると押した人のブラウザでスクリプトが動くため（保存済みの値も含めて表示側で止める）。
+ */
+export function isSafeLinkUrl(url: string | null | undefined): boolean {
+  const trimmed = (url ?? '').trim();
+  if (!trimmed) return false;
+  return /^(https?:\/\/|mailto:|tel:)/i.test(trimmed) || (trimmed.startsWith('/') && !trimmed.startsWith('//'));
+}
+
+/**
  * 検索用の文字列の正規化。全角・半角（NFKC）、大文字・小文字、空白、ひらがな・カタカナの違いを無視する。
  * 業務システム（BARAN）の lib/ui/search-select.ts normSearch と同じ規則。
  */

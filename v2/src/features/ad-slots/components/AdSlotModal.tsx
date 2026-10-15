@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import type { DbAdSlot } from '@/types/database';
-import { adImageFileError, adLinkUrlError, type AdSlotInput } from '../hooks/useAdSlots';
+import { adImageFileError, adLinkUrlBlocked, adLinkUrlError, type AdSlotInput } from '../hooks/useAdSlots';
 
 interface AdSlotModalProps {
   slot: DbAdSlot | null;
@@ -65,9 +65,11 @@ export function AdSlotModal({ slot, onClose, onSave }: AdSlotModalProps) {
   // リンクの書式は警告だけ（保存は止めない。v1 と同じく入力どおり保存する）。保存済みのリンクを触っていなければ出さない
   const linkWarning = !slot || linkUrl.trim() === (slot.link_url || '').trim() ? null : adLinkUrlError(linkUrl);
 
+  const linkBlocked = adLinkUrlBlocked(linkUrl);
+
   const handleSave = async () => {
     if (!slot) return;
-    if (fileError) return;
+    if (fileError || linkBlocked) return;
     setSaving(true);
     try {
       await onSave(slot, { imageFile, caption, linkUrl, isActive });
@@ -92,7 +94,7 @@ export function AdSlotModal({ slot, onClose, onSave }: AdSlotModalProps) {
           <Button type="button" variant="secondary" onClick={onClose}>
             キャンセル
           </Button>
-          <Button type="button" onClick={handleSave} disabled={saving || !!fileError}>
+          <Button type="button" onClick={handleSave} disabled={saving || !!fileError || linkBlocked}>
             {saving ? '保存中...' : '保存'}
           </Button>
         </>
@@ -158,7 +160,11 @@ export function AdSlotModal({ slot, onClose, onSave }: AdSlotModalProps) {
             onChange={(e) => setLinkUrl(e.target.value)}
             placeholder="https://example.com"
           />
-          {linkWarning && <p className="text-xs text-amber-700">{linkWarning}（このままでも保存できます）</p>}
+          {linkBlocked ? (
+            <p className="text-xs text-red-600">このリンクは安全のため保存できません。https:// から始まるURLを入力してください</p>
+          ) : (
+            linkWarning && <p className="text-xs text-amber-700">{linkWarning}（このままでも保存できます）</p>
+          )}
         </div>
         <label className="flex items-center gap-2 text-sm text-gray-700">
           <input
