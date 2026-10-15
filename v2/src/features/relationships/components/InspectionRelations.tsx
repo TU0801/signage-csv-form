@@ -5,7 +5,10 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
 import type { DbInspectionType } from '@/types/database';
 import type { AddSummary, VendorInspectionWithType } from '../api';
-import { PillSelectModal, type PillOption } from './PillSelectModal';
+import { fetchMasterCategories } from '@/lib/api/masterData';
+import { CheckListSelectModal, type CheckOption } from './CheckListSelectModal';
+
+const UNCATEGORIZED = '未分類';
 
 interface InspectionRelationsProps {
   /** active の紐付けだけ（解除済み inactive は取得しない） */
@@ -23,7 +26,8 @@ export function InspectionRelations({
   onRemove,
 }: InspectionRelationsProps) {
   const { addToast } = useToast();
-  const [options, setOptions] = useState<PillOption[]>([]);
+  const [options, setOptions] = useState<CheckOption[]>([]);
+  const [groups, setGroups] = useState<string[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
@@ -35,7 +39,22 @@ export function InspectionRelations({
         addToast('すべての点検種別が既に紐付けられています', 'info');
         return;
       }
-      setOptions(available.map((i) => ({ value: i.id, label: i.inspection_name })));
+      // 分類ボタンの並びはカテゴリマスターの順。読めなくても追加はできるように、失敗したら候補に出てくる順にする
+      const categoryOrder = await fetchMasterCategories()
+        .then((cs) => cs.map((c) => c.category_name))
+        .catch(() => [] as string[]);
+      const nextOptions = available.map((i) => ({
+        value: i.id,
+        label: i.inspection_name,
+        meta: i.category || UNCATEGORIZED,
+        group: i.category || UNCATEGORIZED,
+      }));
+      const present = new Set(nextOptions.map((o) => o.group));
+      setGroups([
+        ...categoryOrder.filter((c) => present.has(c)),
+        ...[...present].filter((g) => !categoryOrder.includes(g)),
+      ]);
+      setOptions(nextOptions);
       setModalOpen(true);
     } catch {
       addToast('点検種別の取得に失敗しました', 'error');
@@ -85,7 +104,7 @@ export function InspectionRelations({
             <thead>
               <tr className="border-b border-gray-200 text-left">
                 <th className="cell-head font-medium text-gray-700">点検種別</th>
-                <th className="cell-head font-medium text-gray-700">カテゴリID</th>
+                <th className="cell-head font-medium text-gray-700">カテゴリ</th>
                 <th className="cell-head font-medium text-gray-700">ステータス</th>
                 <th className="cell-head font-medium text-gray-700">登録日</th>
                 <th className="cell-head font-medium text-gray-700 sticky right-0 bg-white shadow-[inset_1px_0_0_var(--color-gray-200)]">操作</th>
@@ -116,11 +135,14 @@ export function InspectionRelations({
         </div>
       )}
 
-      <PillSelectModal
+      <CheckListSelectModal
         open={modalOpen}
         title="点検種別を追加"
-        description="追加する点検種別を選択してください（複数選択可）"
+        description="追加する点検種別を選択してください（複数選択可）。名前で検索するか、分類のボタンで絞り込めます（ひらがな・カタカナ、全角・半角は区別しません）。"
+        searchPlaceholder="点検種別・分類で検索"
         options={options}
+        groups={groups}
+        columns={4}
         onClose={() => setModalOpen(false)}
         onConfirm={handleConfirm}
       />

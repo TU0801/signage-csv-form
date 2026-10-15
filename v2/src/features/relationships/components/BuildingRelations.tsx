@@ -5,7 +5,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
 import type { DbBuildingVendor, DbProperty } from '@/types/database';
 import type { AddSummary } from '../api';
-import { BuildingSelectModal, type BuildingOption } from './BuildingSelectModal';
+import { CheckListSelectModal, type CheckOption } from './CheckListSelectModal';
 
 interface BuildingRelationsProps {
   /** active の紐付けだけ */
@@ -25,7 +25,7 @@ export function BuildingRelations({
   onRemove,
 }: BuildingRelationsProps) {
   const { addToast } = useToast();
-  const [options, setOptions] = useState<BuildingOption[]>([]);
+  const [options, setOptions] = useState<CheckOption[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
@@ -40,11 +40,15 @@ export function BuildingRelations({
         return;
       }
       setOptions(
-        available.map((p) => ({
-          code: String(p.property_code),
-          name: p.property_name,
-          terminalCount: Array.isArray(p.terminals) ? p.terminals.length : 0,
-        })),
+        available.map((p) => {
+          const terminalCount = Array.isArray(p.terminals) ? p.terminals.length : 0;
+          return {
+            value: String(p.property_code),
+            label: p.property_name,
+            code: String(p.property_code),
+            meta: terminalCount > 0 ? `端末${terminalCount}台` : '端末なし',
+          };
+        }),
       );
       setModalOpen(true);
     } catch {
@@ -129,8 +133,11 @@ export function BuildingRelations({
         </div>
       )}
 
-      <BuildingSelectModal
+      <CheckListSelectModal
         open={modalOpen}
+        title="物件を追加"
+        description="追加する物件を選択してください（複数選択可）。物件名・物件コードで絞り込めます（ひらがな・カタカナ、全角・半角は区別しません）。"
+        searchPlaceholder="物件コード・物件名で検索"
         options={options}
         onClose={() => setModalOpen(false)}
         onConfirm={handleConfirm}
