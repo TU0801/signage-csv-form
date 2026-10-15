@@ -4,28 +4,9 @@ import { supabase } from './client.js';
 
 // 物件
 //
-// **equipment は書かない（2026-09-20 の凍結）。** 点検情報の正本は業務システムの
-// biz.property_inspections に移っており、こちらは saveInspectionsToBiz() が送る。
-// DB 側のトリガー（signage.block_equipment_write）が equipment の変更を拒否するので、
-// ここで送ると物件の保存そのものが失敗する。
-export async function addProperty(property) {
-  const record = { property_code: property.property_code, property_name: property.property_name, terminals: property.terminals };
-  const { data, error } = await supabase.from('signage_master_properties').insert(record).select().single();
-  if (error) throw error;
-  return data;
-}
-
-export async function updateProperty(id, property) {
-  const record = { property_code: property.property_code, property_name: property.property_name, terminals: property.terminals };
-  const { data, error } = await supabase.from('signage_master_properties').update(record).eq('id', id).select().single();
-  if (error) throw error;
-  return data;
-}
-
-export async function deleteProperty(id) {
-  const { error } = await supabase.from('signage_master_properties').delete().eq('id', id);
-  if (error) throw error;
-}
+// **物件（signage_master_properties）は書かない（2026-10-15）。** 物件の正本は業務システム
+// （biz.properties）で、追加・コード・名前・端末は biz のトリガー（biz.sync_property_to_signage）が
+// 写す。この画面から保存するのは点検情報（saveInspectionsToBiz）と台ごとの保守の RPC だけ。
 
 // 保守会社
 //

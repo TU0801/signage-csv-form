@@ -261,30 +261,20 @@ async function openSameOriginTab(context) {
 }
 
 test.describe('修正依頼0913: 物件マスター', () => {
-  test('英数字の物件コード・端末なしで物件を登録できる', async ({ page }) => {
-    const code = `ZT${Date.now()}A01`;
-    page.on('dialog', dialog => dialog.accept());
+  // 物件の追加は業務システムで行う（2026-10-15）。旧テストは本番に ZT 物件を作っていたので、
+  // 案内が出て物件の表へ書き込まないことだけを確かめる
+  test('物件の新規追加は業務システムへの案内を出し、物件の表へ書き込まない', async ({ page }) => {
     await loginAsAdminAtAdminPage(page);
+    const writes = [];
+    page.on('request', req => {
+      if (req.url().includes('/rest/v1/signage_master_properties') && req.method() !== 'GET') writes.push(req.method());
+    });
 
     await page.click('#addPropertyBtn');
-    await page.fill('#propertyCode', code);
-    await page.fill('#propertyName', `テスト物件_${code}`);
-    await page.click('#masterForm button[type="submit"]');
 
-    try {
-      await expect(page.locator('.master-item', { hasText: code })).toBeVisible({ timeout: 15000 });
-      const saved = await page.evaluate(async (c) => {
-        const { supabase } = await import('/js/supabase/client.js');
-        const { data } = await supabase.from('signage_master_properties').select('property_code, terminals').eq('property_code', c).single();
-        return data;
-      }, code);
-      expect(saved).toEqual({ property_code: code, terminals: [] });
-    } finally {
-      await page.evaluate(async (c) => {
-        const { supabase } = await import('/js/supabase/client.js');
-        await supabase.from('signage_master_properties').delete().eq('property_code', c);
-      }, code);
-    }
+    await expect(page.locator('#toast')).toHaveText('物件の追加・削除は業務システム（BARAN業務リスト）で行ってください');
+    await expect(page.locator('#masterModal')).toBeHidden();
+    expect(writes).toEqual([]);
   });
 
   test('既存の英数字コード物件を編集で開くと物件コードが保持される', async ({ page }) => {
@@ -296,6 +286,7 @@ test.describe('修正依頼0913: 物件マスター', () => {
 
     await page.locator(`.master-item[data-property-code="${code}"] [data-action="edit"]`).click();
     await expect(page.locator('#propertyCode')).toHaveValue(code);
+    await expect(page.locator('#propertyCode')).toHaveAttribute('readonly', '');
   });
 });
 

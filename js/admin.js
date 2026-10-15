@@ -9,8 +9,7 @@ import {
     getAllMasterData,
     getAllEntries,
     getAllProfiles,
-    getPendingEntries,
-    deleteProperty
+    getPendingEntries
 } from './supabase-client.js';
 
 import {
@@ -22,7 +21,7 @@ import {
     openMasterModal,
     closeMasterModal,
     handleMasterFormSubmit,
-    deleteMasterPropertyAction,
+    showPropertyBizGuide,
     deleteMasterInspectionAction,
     deleteMasterCategoryAction,
     initAdSlotsAdmin
@@ -356,7 +355,8 @@ function setupEventListeners() {
     document.getElementById('revertToPendingBtn')?.addEventListener('click', () => updateEntriesStatus('pending'));
 
     // マスター追加ボタン
-    document.getElementById('addPropertyBtn').addEventListener('click', () => openMasterModal('property', masterData));
+    // 物件の追加は業務システムで行う（2026-10-15）。押したら案内だけ出す
+    document.getElementById('addPropertyBtn').addEventListener('click', () => showPropertyBizGuide(showToast));
     document.getElementById('addInspectionBtn').addEventListener('click', () => openMasterModal('inspection', masterData));
     document.getElementById('addCategoryBtn')?.addEventListener('click', () => openMasterModal('category', masterData));
 
@@ -482,40 +482,10 @@ window.editPropertyByCode = function(propertyCode) {
     openMasterModal('property', masterData, propertyData);
 };
 
-// 物件コードで物件を削除（複数端末対応）
-window.deletePropertyByCode = async function(propertyCode) {
-    // property_codeで全てのレコードを取得
-    const propertyRecords = masterData.properties.filter(p => String(p.property_code) === String(propertyCode));
-    if (propertyRecords.length === 0) return;
-
-    // エントリで使用されているかチェック
-    const usedEntries = entries.filter(e => String(e.property_code) === String(propertyCode));
-    if (usedEntries.length > 0) {
-        showToast(`この物件は${usedEntries.length}件のエントリで使用中です`, 'error');
-        return false;
-    }
-
-    const firstRecord = propertyRecords[0];
-    if (!confirm(`物件「${firstRecord.property_name}」（${propertyRecords.length}端末）を削除しますか？`)) return false;
-
-    try {
-        // 全てのレコードを削除
-        for (const record of propertyRecords) {
-            await deleteProperty(record.id);
-        }
-        showToast('物件を削除しました', 'success');
-
-        // マスターデータを再読み込み
-        const newMasterData = await getAllMasterData();
-        Object.assign(masterData, newMasterData);
-        loadMasterData(masterData);
-        updateSidebarCounts();
-        return true;
-    } catch (error) {
-        console.error('Failed to delete property:', error);
-        showToast('削除に失敗しました', 'error');
-        return false;
-    }
+// 物件の削除は業務システムで行う（2026-10-15）。押したら案内だけ出し、DB は呼ばない
+window.deletePropertyByCode = function() {
+    showPropertyBizGuide(showToast);
+    return false;
 };
 
 window.editProperty = function(id) {
@@ -533,8 +503,8 @@ window.editMasterCategory = function(id) {
     if (cat) openMasterModal('category', masterData, cat);
 };
 
-window.deleteMasterProperty = async function(id) {
-    await deleteMasterPropertyAction(id, masterData, entries, showToast, updateStats);
+window.deleteMasterProperty = function() {
+    showPropertyBizGuide(showToast);
 };
 
 window.deleteMasterInspection = async function(id) {

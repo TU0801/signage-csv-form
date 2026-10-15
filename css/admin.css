@@ -1055,6 +1055,17 @@
     margin-left: 0;
 }
 
+/* 物件モーダル: コード・名前・端末は業務システムで編集する旨（2026-10-15） */
+.property-biz-note {
+    margin: 0 0 0.5rem;
+    font-size: 0.8125rem;
+    color: #64748b;
+}
+#propertyFields input[readonly] {
+    background: #f1f5f9;
+    color: #475569;
+}
+
 .master-search-inline input {
     width: 100%;
     padding: 0.75rem 1rem 0.75rem 2.5rem;

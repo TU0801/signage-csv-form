@@ -3,9 +3,6 @@
 import {
     getAllMasterData,
     getMasterCategories,
-    addProperty,
-    updateProperty,
-    deleteProperty,
     addInspectionType,
     updateInspectionType,
     deleteInspectionType,
@@ -140,7 +137,7 @@ export function renderProperties(masterData, filter = '') {
             <div class="master-empty">
                 <div class="master-empty-icon">📋</div>
                 <h4>${filter ? '検索結果がありません' : '物件が登録されていません'}</h4>
-                <p>${filter ? '検索条件を変更してください' : '「新規追加」から物件を追加してください'}</p>
+                <p>${filter ? '検索条件を変更してください' : '物件は業務システム（BARAN業務リスト）で追加します'}</p>
             </div>
         `;
         return;
@@ -403,10 +400,21 @@ export async function loadCategories(masterData) {
 }
 
 // ========================================
+// 物件の追加・削除は業務システムで行う（2026-10-15）
+// ========================================
+
+const PROPERTY_BIZ_GUIDE = '物件の追加・削除は業務システム（BARAN業務リスト）で行ってください';
+
+// 物件の追加・削除ボタンを押したときの案内。DB は呼ばない
+export function showPropertyBizGuide(showToast) {
+    showToast(PROPERTY_BIZ_GUIDE, 'info');
+}
+
+// ========================================
 // マスターモーダル
 // ========================================
 
-// 端末フィールドを追加する関数
+// 端末を読み取り専用で1行表示する（端末の正本は業務システムの物件。2026-10-15）
 function addTerminalField(terminal = {}) {
     const terminalsList = document.getElementById('terminalsList');
     const terminalDiv = document.createElement('div');
@@ -414,13 +422,9 @@ function addTerminalField(terminal = {}) {
     terminalDiv.style.cssText = 'display: flex; gap: 0.5rem; align-items: center;';
 
     terminalDiv.innerHTML = `
-        <input type="text" class="terminal-id" placeholder="端末ID" value="${escapeHtml(terminal.terminal_id || terminal.terminalId || '')}" style="flex: 1;">
-        <input type="text" class="terminal-supplement" placeholder="補足（任意）" value="${escapeHtml(terminal.supplement || '')}" style="flex: 1;">
-        <button type="button" class="btn btn-outline btn-sm btn-danger-outline remove-terminal-btn">削除</button>
+        <input type="text" class="terminal-id" placeholder="端末なし" value="${escapeHtml(terminal.terminal_id || terminal.terminalId || '')}" style="flex: 1;" readonly>
+        <input type="text" class="terminal-supplement" placeholder="補足" value="${escapeHtml(terminal.supplement || '')}" style="flex: 1;" readonly>
     `;
-
-    // 削除ボタンのイベントリスナー
-    terminalDiv.querySelector('.remove-terminal-btn').addEventListener('click', () => terminalDiv.remove());
 
     terminalsList.appendChild(terminalDiv);
 }
@@ -744,15 +748,14 @@ export function openMasterModal(type, masterData, data = null) {
         const section = document.getElementById('propertyFields');
         section.style.display = 'block';
         section.querySelectorAll('input, select, textarea').forEach(el => el.disabled = false);
-        title.textContent = data ? '物件を編集' : '物件を追加';
+        title.textContent = '物件を編集';
+        // 物件コード・物件名・端末は業務システムで編集する（2026-10-15）。ここでは見せるだけ
+        document.getElementById('propertyCode').readOnly = true;
+        document.getElementById('propertyName').readOnly = true;
 
         // 端末リストを初期化
         const terminalsList = document.getElementById('terminalsList');
         terminalsList.innerHTML = '';
-
-        // 端末追加ボタンのイベントリスナーを設定
-        const addTerminalBtn = document.getElementById('addTerminalBtn');
-        addTerminalBtn.onclick = () => addTerminalField();
 
         if (data) {
             document.getElementById('propertyCode').value = data.property_code || '';
@@ -773,7 +776,7 @@ export function openMasterModal(type, masterData, data = null) {
             if (terminals.length > 0) {
                 terminals.forEach(terminal => addTerminalField(terminal));
             } else {
-                // 端末がない場合は1つ追加
+                // 端末がない場合は空の1行（「端末なし」）を出す
                 addTerminalField();
             }
         } else {
@@ -781,7 +784,6 @@ export function openMasterModal(type, masterData, data = null) {
             document.getElementById('propertyName').value = '';
             document.getElementById('supplement').value = '';
             document.getElementById('address').value = '';
-            // 新規追加の場合は1つ端末フィールドを追加
             addTerminalField();
         }
 
@@ -1006,39 +1008,23 @@ export async function handleMasterFormSubmit(e, masterData, showToast, updateSta
 
     try {
         if (type === 'property') {
-            // 端末リストを収集（サイネージ未設置の物件もあるため任意。端末IDが空の行は保存しない）
-            const terminalItems = document.querySelectorAll('#terminalsList .terminal-item');
-            const terminals = Array.from(terminalItems).map(item => ({
-                terminal_id: item.querySelector('.terminal-id').value.trim(),
-                supplement: item.querySelector('.terminal-supplement').value.trim()
-            })).filter(t => t.terminal_id);
-
+            // **物件そのもの（コード・名前・端末）は保存しない（2026-10-15）。** 正本は業務システムの
+            // 物件で、biz のトリガーが signage_master_properties へ写す。ここで送るのは点検情報と台ごとの保守だけ
+            if (!id) {
+                showPropertyBizGuide(showToast);
+                return false;
+            }
             // 物件コードは英数字（z0023A01 等）もあるため文字列のまま扱う（DBも text 型）
             const propertyCode = document.getElementById('propertyCode').value.trim();
             if (!propertyCode) {
-                showToast('物件コードを入力してください', 'error');
-                return;
+                showToast('物件コードがありません', 'error');
+                return false;
             }
             if (!validatePropertyUnitInspections()) return;
 
-            // **equipment は渡さない（2026-09-20 の凍結）。** 点検情報は下の
-            // saveInspectionsToBiz() が業務システムへ送る。ここに残しても
-            // addProperty/updateProperty が捨てるだけで、読む人を迷わせる
-            const data = {
-                property_code: propertyCode,
-                property_name: document.getElementById('propertyName').value,
-                terminals: terminals,
-            };
-            if (id) {
-                await updateProperty(id, data);
-                showToast('物件を更新しました', 'success');
-            } else {
-                await addProperty(data);
-                showToast('物件を追加しました', 'success');
-            }
-            // **点検情報の正本は業務システム（biz）。** 物件の保存と同時にあちらへ送る
+            // **点検情報の正本は業務システム（biz）。** 保存はあちらへ送るだけ
             // （2026-09-19 切り替え）。ここが失敗すると点検案内に反映されないので、
-            // 物件の保存が成功していても明確にエラーを出す。
+            // 明確にエラーを出す。
             // **業務システムが断った理由（RPC の文言）をそのまま出す**（定型文だと、何を直せばよいか分からない）。
             // トーストは1つしか出せないので、ここでは溜めておき、後ろの成功のトーストで消えないよう最後に出す
             const saveErrors = [];
@@ -1061,16 +1047,17 @@ export async function handleMasterFormSubmit(e, masterData, showToast, updateSta
                 saveErrors.push(`台ごとの保守の保存に失敗しました: ${e?.message || e}`);
             }
             // 設備情報で選んだ保守会社を紐付け管理にも反映する（0913 依頼②。台ごとの保守で選んだ保守会社も含める）。
-            // 失敗しても物件の保存自体は成功しているので、警告だけ出して続ける
+            // 失敗しても点検情報の保存は戻さないので、警告だけ出して続ける
             try {
                 const unitInspections = currentPropertyUnits.flatMap(u => u.inspections);
                 const synced = await syncBuildingVendorsFromEquipment(propertyCode, [...currentPropertyEquipment, ...unitInspections]);
                 if (synced.added > 0) showToast(`保守会社 ${synced.added} 件を紐付け管理にも追加しました`, 'success');
             } catch (e) {
                 console.error('Failed to sync building vendors:', e);
-                saveErrors.push('紐付け管理への反映に失敗しました（物件は保存済みです）');
+                saveErrors.push('紐付け管理への反映に失敗しました');
             }
             if (saveErrors.length > 0) showToast(saveErrors.join(' ／ '), 'error');
+            else showToast('点検情報を保存しました', 'success');
         } else if (type === 'inspection') {
             const data = {
                 inspection_name: document.getElementById('inspectionName').value,
@@ -1117,31 +1104,6 @@ export async function handleMasterFormSubmit(e, masterData, showToast, updateSta
 // ========================================
 // マスター削除
 // ========================================
-
-export async function deleteMasterPropertyAction(id, masterData, entries, showToast, updateStats) {
-    const property = masterData.properties.find(p => p.id === id);
-    if (property) {
-        const usedEntries = entries.filter(e => e.property_code === property.property_code);
-        if (usedEntries.length > 0) {
-            showToast(`この物件は${usedEntries.length}件のエントリで使用中です`, 'error');
-            return false;
-        }
-    }
-    if (!confirm('この物件を削除しますか？')) return false;
-    try {
-        await deleteProperty(id);
-        showToast('物件を削除しました', 'success');
-        const newMasterData = await getAllMasterData();
-        Object.assign(masterData, newMasterData);
-        loadMasterData(masterData);
-        updateStats();
-        return true;
-    } catch (error) {
-        console.error('Failed to delete property:', error);
-        showToast('削除に失敗しました', 'error');
-        return false;
-    }
-}
 
 export async function deleteMasterInspectionAction(id, masterData, entries, showToast) {
     const inspection = masterData.inspectionTypes.find(i => i.id === id);

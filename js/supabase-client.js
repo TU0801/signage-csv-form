@@ -48,7 +48,6 @@ export {
 
 // マスターデータ管理
 export {
-  addProperty, updateProperty, deleteProperty,
   addInspectionType, updateInspectionType, deleteInspectionType,
   addCategory, updateCategory, deleteCategory
 } from './supabase/admin-masters.js';

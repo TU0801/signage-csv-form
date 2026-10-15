@@ -415,20 +415,50 @@ test.describe('マスターモーダル バリデーション', () => {
     await loginAsAdminAndGoToAdmin(page);
   });
 
-  test('物件追加モーダルで必須フィールドが表示される', async ({ page }) => {
+  // 物件の追加・削除は業務システムで行う（2026-10-15）。モーダルは既存物件の「編集」からだけ開く
+  test('物件の追加ボタンは業務システムへの案内を出し、モーダルを開かない', async ({ page }) => {
     await clickMasterSubTab(page, 'properties');
     await page.click('#addPropertyBtn');
+
+    await expect(page.locator('#toast')).toHaveText('物件の追加・削除は業務システム（BARAN業務リスト）で行ってください');
+    await expect(page.locator('#masterModal')).toBeHidden();
+  });
+
+  test('物件の削除ボタンは業務システムへの案内を出し、物件は消えない', async ({ page }) => {
+    await clickMasterSubTab(page, 'properties');
+    const first = page.locator('#propertiesList .master-item').first();
+    await expect(first).toBeVisible({ timeout: 15000 });
+    const code = await first.getAttribute('data-property-code');
+    let dialogShown = false;
+    page.on('dialog', d => { dialogShown = true; d.dismiss(); });
+    await first.locator('[data-action="delete"]').click();
+
+    await expect(page.locator('#toast')).toHaveText('物件の追加・削除は業務システム（BARAN業務リスト）で行ってください');
+    expect(dialogShown).toBe(false);
+    await expect(page.locator(`#propertiesList .master-item[data-property-code="${code}"]`)).toHaveCount(1);
+  });
+
+  test('物件編集モーダルでコード・名前・端末は読み取り専用', async ({ page }) => {
+    await clickMasterSubTab(page, 'properties');
+    await page.locator('#propertiesList .master-item [data-action="edit"]').first().click();
     await page.waitForTimeout(300);
 
     await expect(page.locator('#masterModal')).toBeVisible();
     await expect(page.locator('#propertyFields')).toBeVisible();
-    await expect(page.locator('#propertyCode')).toBeVisible();
-    await expect(page.locator('#propertyName')).toBeVisible();
+    await expect(page.locator('#propertyBizNote')).toBeVisible();
+    await expect(page.locator('#propertyCode')).toHaveAttribute('readonly', '');
+    await expect(page.locator('#propertyName')).toHaveAttribute('readonly', '');
+    await expect(page.locator('#propertyCode')).not.toHaveValue('');
+    const terminalInputs = page.locator('#terminalsList input');
+    const n = await terminalInputs.count();
+    for (let i = 0; i < n; i++) await expect(terminalInputs.nth(i)).toHaveAttribute('readonly', '');
+    await expect(page.locator('#addTerminalBtn')).toHaveCount(0);
+    await expect(page.locator('#terminalsList .remove-terminal-btn')).toHaveCount(0);
   });
 
   test('物件モーダルに設備情報セクションが表示される', async ({ page }) => {
     await clickMasterSubTab(page, 'properties');
-    await page.click('#addPropertyBtn');
+    await page.locator('#propertiesList .master-item [data-action="edit"]').first().click();
     await page.waitForTimeout(300);
 
     await expect(page.locator('#propertyFields')).toBeVisible();
@@ -442,8 +472,13 @@ test.describe('マスターモーダル バリデーション', () => {
 
   test('物件モーダルで設備をローカル追加・削除できる', async ({ page }) => {
     await clickMasterSubTab(page, 'properties');
-    await page.click('#addPropertyBtn');
+    await page.locator('#propertiesList .master-item [data-action="edit"]').first().click();
     await page.waitForTimeout(300);
+
+    // 既存の行をローカルで外して空にする（保存はしない。モーダルを閉じれば元のまま）
+    while (await page.locator('#propEquipmentTableBody .prop-equipment-remove').count() > 0) {
+      await page.locator('#propEquipmentTableBody .prop-equipment-remove').first().click();
+    }
 
     // 点検カテゴリの設備種別が無い環境ではスキップ
     const typeOptions = await page.locator('#propEquipmentType option:not([value=""])').count();

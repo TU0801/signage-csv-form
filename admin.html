@@ -270,6 +270,7 @@
                         <div class="master-search-inline">
                             <input type="text" id="propertySearch" placeholder="物件コード・物件名で検索...">
                         </div>
+                        <span class="master-biz-note">物件の追加・削除と物件コード・物件名・端末の変更は業務システムの物件で行います（<a href="https://system.1984.jp/properties" target="_blank" rel="noopener">物件一覧を開く</a>）</span>
                         <button class="btn btn-primary master-add-btn" id="addPropertyBtn">+ 新規追加</button>
                     </div>
                     <div class="master-list" id="propertiesList"></div>
@@ -431,19 +432,19 @@
 
                     <!-- 物件用フィールド -->
                     <div id="propertyFields" style="display:none;">
+                        <p class="property-biz-note" id="propertyBizNote">物件コード・物件名・端末は業務システム（BARAN業務リスト）の物件で編集します（<a href="https://system.1984.jp/properties" target="_blank" rel="noopener">物件一覧を開く</a>）。ここで保存するのは設備情報（点検）と台ごとの保守だけです。</p>
                         <div class="property-grid">
                             <div class="form-group">
-                                <label>物件コード *</label>
-                                <input type="text" id="propertyCode" required>
+                                <label>物件コード</label>
+                                <input type="text" id="propertyCode" readonly>
                             </div>
                             <div class="form-group">
-                                <label>物件名 *</label>
-                                <input type="text" id="propertyName" required>
+                                <label>物件名</label>
+                                <input type="text" id="propertyName" readonly>
                             </div>
                             <div class="form-group full-span">
-                                <label>端末リスト（サイネージ未設置の場合は空欄）</label>
+                                <label>端末リスト（業務システムの物件の端末）</label>
                                 <div id="terminalsList" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.5rem;"></div>
-                                <button type="button" class="btn btn-outline btn-sm" id="addTerminalBtn">+ 端末を追加</button>
                             </div>
                             <div class="form-group">
                                 <label>補足</label>
