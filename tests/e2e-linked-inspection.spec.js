@@ -19,7 +19,7 @@ const baseUrl = process.env.BASE_URL || 'http://localhost:8080';
 
 // 既知ベンダー（テスト安定性のためUUIDで選択する）
 const VENDOR_YAMAMOTO = '95f7ded1-8105-42ee-a866-3e87592d184b'; // 山本クリーンシステム: 多カテゴリ紐づけ
-const VENDOR_BARAN = 'f18bbd80-0f11-4d6c-a807-ac053bf0b4fd';    // 株式会社BARAN: 点検カテゴリのみ1件
+const VENDOR_BARAN = '3a290c29-0041-46db-a50b-1bf7d1be82a3';    // 株式会社BARAN: 点検カテゴリのみ1件（2026-09-28 の biz 統合で ID が変わった）
 
 async function loginAndGoToIndex(page) {
   await page.goto(`${baseUrl}/login.html`);
