@@ -5,13 +5,13 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
 import type { DbBuildingVendor, DbProperty } from '@/types/database';
 import type { AddSummary } from '../api';
-import { PillSelectModal, type PillOption } from './PillSelectModal';
+import { BuildingSelectModal, type BuildingOption } from './BuildingSelectModal';
 
 interface BuildingRelationsProps {
   /** active の紐付けだけ */
   buildingVendors: DbBuildingVendor[];
   properties: Pick<DbProperty, 'property_code' | 'property_name'>[];
-  loadAvailableProperties: () => Promise<Pick<DbProperty, 'property_code' | 'property_name'>[]>;
+  loadAvailableProperties: () => Promise<Pick<DbProperty, 'property_code' | 'property_name' | 'terminals'>[]>;
   onAdd: (propertyCodes: string[]) => Promise<AddSummary>;
   onRemove: (id: string) => Promise<void>;
 }
@@ -25,7 +25,7 @@ export function BuildingRelations({
   onRemove,
 }: BuildingRelationsProps) {
   const { addToast } = useToast();
-  const [options, setOptions] = useState<PillOption[]>([]);
+  const [options, setOptions] = useState<BuildingOption[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
@@ -41,8 +41,9 @@ export function BuildingRelations({
       }
       setOptions(
         available.map((p) => ({
-          value: String(p.property_code),
-          label: `${p.property_name}（${p.property_code}）`,
+          code: String(p.property_code),
+          name: p.property_name,
+          terminalCount: Array.isArray(p.terminals) ? p.terminals.length : 0,
         })),
       );
       setModalOpen(true);
@@ -128,10 +129,8 @@ export function BuildingRelations({
         </div>
       )}
 
-      <PillSelectModal
+      <BuildingSelectModal
         open={modalOpen}
-        title="物件を追加"
-        description="追加する物件を選択してください（複数選択可）"
         options={options}
         onClose={() => setModalOpen(false)}
         onConfirm={handleConfirm}
