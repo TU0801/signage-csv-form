@@ -8,6 +8,28 @@ export function templateLabel(templateNo: string | null | undefined): string {
   return TEMPLATE_IMAGE_LABELS[templateNo] || templateNo;
 }
 
+/** カテゴリの絞り込みで「未設定」を表すキー（カテゴリ名と重ならない値） */
+export const NO_CATEGORY = '__no_category__';
+
+/**
+ * 一覧のカテゴリの絞り込みボタン。並びはカテゴリマスターの順 → マスターに無い名前（出てきた順）→ 未設定。
+ * 件数が 0 のカテゴリは出さない。
+ */
+export function categoryTabs(
+  items: Pick<DbInspectionType, 'category'>[],
+  masterOrder: string[],
+): { key: string; label: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const i of items) {
+    const key = i.category || NO_CATEGORY;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  const named = masterOrder.filter((n) => counts.has(n));
+  const others = [...counts.keys()].filter((k) => k !== NO_CATEGORY && !named.includes(k));
+  const keys = [...named, ...others, ...(counts.has(NO_CATEGORY) ? [NO_CATEGORY] : [])];
+  return keys.map((key) => ({ key, label: key === NO_CATEGORY ? '未設定' : key, count: counts.get(key) ?? 0 }));
+}
+
 /**
  * 保存済みの template_no を選択肢のキーにそろえる。
  * 日時プレフィックス付き（例: "1124 235959cleaning"）は、末尾が一致するキーにする。
@@ -58,6 +80,20 @@ export function moveItem(ids: string[], draggedId: string, targetId: string): st
   if (from < 0 || to < 0 || from === to) return ids;
   const next = ids.filter((id) => id !== draggedId);
   next.splice(to, 0, draggedId);
+  return next;
+}
+
+/**
+ * 2行の位置だけを入れ替えた並び（↑↓ボタン用）。カテゴリの絞り込み中は表示上の隣が全体では離れていることがあり、
+ * moveItem だと間の行がすべてずれて保存が何十件にもなるので、入れ替えにして保存を2行で済ませる
+ */
+export function swapItems(ids: string[], a: string, b: string): string[] {
+  const i = ids.indexOf(a);
+  const j = ids.indexOf(b);
+  if (i < 0 || j < 0 || i === j) return ids;
+  const next = [...ids];
+  next[i] = b;
+  next[j] = a;
   return next;
 }
 

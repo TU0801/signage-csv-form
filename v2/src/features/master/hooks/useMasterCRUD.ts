@@ -27,14 +27,31 @@ export function matchesSearch<T extends Record<string, unknown>>(
   return text.toLowerCase().includes(search.toLowerCase());
 }
 
+// マスター管理のタブを切り替えても検索語を残す（タブごとに部品が作り直されるので、部品の外に持つ）。再読込で消える
+const rememberedSearch = new Map<string, string>();
+
+/** key を渡すと、部品を作り直しても同じ key の検索語を引き継ぐ（タブの行き来用） */
+export function useRememberedSearch(key?: string): [string, (value: string) => void] {
+  const [search, setSearchState] = useState(() => (key ? (rememberedSearch.get(key) ?? '') : ''));
+  const setSearch = useCallback(
+    (value: string) => {
+      if (key) rememberedSearch.set(key, value);
+      setSearchState(value);
+    },
+    [key],
+  );
+  return [search, setSearch];
+}
+
 export function useMasterCRUD<T extends Record<string, unknown>>(
   config: MasterConfig<T>,
+  options: { rememberSearchAs?: string } = {},
 ): UseMasterCRUDReturn<T> {
   const { api } = config;
   const [items, setItems] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useRememberedSearch(options.rememberSearchAs);
 
   const reload = useCallback(async () => {
     try {

@@ -5,7 +5,8 @@ interface MasterTableProps<T extends Record<string, unknown>> {
   config: Pick<MasterConfig<T>, 'columns' | 'readOnly'>;
   items: T[];
   onEdit: (item: T) => void;
-  onDelete: (item: T) => void;
+  /** 省略すると各行の「削除」を出さない（物件のように削除を別システムで行う表） */
+  onDelete?: (item: T) => void;
   renderCell?: (key: string, value: unknown, item: T) => React.ReactNode;
   /** 0件のときの文言（v1: 検索中は「検索結果がありません」） */
   emptyMessage?: string;
@@ -67,9 +68,11 @@ export function MasterTable<T extends Record<string, unknown>>({
                       <Button variant="ghost" size="sm" onClick={() => onEdit(item)}>
                         編集
                       </Button>
-                      <Button variant="danger" size="sm" onClick={() => onDelete(item)}>
-                        削除
-                      </Button>
+                      {onDelete && (
+                        <Button variant="danger" size="sm" onClick={() => onDelete(item)}>
+                          削除
+                        </Button>
+                      )}
                     </div>
                   </td>
                 )}

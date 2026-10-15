@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { PropertiesMaster } from '@/features/master/instances/PropertiesMaster';
@@ -20,12 +19,19 @@ const tabs = [
 type TabKey = (typeof tabs)[number]['key'];
 
 export function MasterPage() {
-  // /admin/settings からは ?tab=settings で来る（旧 v2 の設定ページの URL を残す）
-  const [searchParams] = useSearchParams();
+  // 開いているタブは ?tab= に持つ（再読込や他の画面から戻っても同じタブ）。/admin/settings からは ?tab=settings で来る
+  const [searchParams, setSearchParams] = useSearchParams();
   const requested = searchParams.get('tab');
-  const [activeTab, setActiveTab] = useState<TabKey>(
-    tabs.find((t) => t.key === requested)?.key ?? 'properties',
-  );
+  const activeTab: TabKey = tabs.find((t) => t.key === requested)?.key ?? 'properties';
+  const setActiveTab = (key: TabKey) =>
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set('tab', key);
+        return next;
+      },
+      { replace: true },
+    );
 
   const ActiveComponent = tabs.find((t) => t.key === activeTab)?.component ?? PropertiesMaster;
 

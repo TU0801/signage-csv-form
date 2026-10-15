@@ -50,26 +50,23 @@ vi.mock('../hooks/usePropertyMasterData', () => ({
   }),
 }));
 
-const GUIDE = '物件の追加・削除は業務システム（BARAN業務リスト）で行ってください';
-
-// 物件の正本は業務システム（2026-10-15）。追加・削除は案内だけで DB を呼ばず、コード・名前・端末は読み取り専用
+// 物件の正本は業務システム（2026-10-15）。追加は業務システムへのリンクだけで、行の削除は出さない。コード・名前・端末は読み取り専用
 describe('PropertiesMaster', () => {
   beforeEach(() => {
     addToast.mockClear();
     fromCalls.length = 0;
   });
 
-  it('shows the biz guide for 新規追加 and 削除 without opening a form or touching the DB', () => {
+  it('links 追加 to the business system and has no 削除 button (no DB call)', () => {
     render(<PropertiesMaster />);
-    fireEvent.click(screen.getByRole('button', { name: '+ 新規追加' }));
-    fireEvent.click(screen.getByRole('button', { name: '削除' }));
-    expect(addToast.mock.calls).toEqual([
-      [GUIDE, 'info'],
-      [GUIDE, 'info'],
-    ]);
-    expect(screen.queryByRole('dialog')).toBeNull();
+    const link = screen.getByRole('link', { name: '業務システムで追加' });
+    expect(link.getAttribute('href')).toBe('https://system.1984.jp/properties');
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(screen.queryByRole('button', { name: '削除' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '+ 新規追加' })).toBeNull();
     expect(fromCalls).toEqual([]);
   });
+
 
   it('opens 編集 with read-only code, name and terminals', () => {
     render(<PropertiesMaster />);

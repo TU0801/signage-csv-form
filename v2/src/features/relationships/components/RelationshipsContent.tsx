@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { BuildingIcon, WrenchIcon } from '@/components/ui/icons';
 import { Select } from '@/components/ui/Select';
 import { Spinner } from '@/components/ui/Spinner';
@@ -15,8 +16,24 @@ type SubTab = RelationshipTab;
 export function RelationshipsContent() {
   const { addToast } = useToast();
   const [vendors, setVendors] = useState<DbVendor[]>([]);
-  const [selectedVendorId, setSelectedVendorId] = useState('');
-  const [activeTab, setActiveTab] = useState<SubTab>('buildings');
+  // 保守会社とサブタブは ?vendor=&tab= に持つ（再読込やブラウザの「戻る」で選び直さなくて済むように）
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedVendorId = searchParams.get('vendor') ?? '';
+  const activeTab: SubTab = searchParams.get('tab') === 'inspections' ? 'inspections' : 'buildings';
+  const updateParams = (patch: Record<string, string>) =>
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        for (const [k, v] of Object.entries(patch)) {
+          if (v) next.set(k, v);
+          else next.delete(k);
+        }
+        return next;
+      },
+      { replace: true },
+    );
+  const setSelectedVendorId = (id: string) => updateParams({ vendor: id });
+  const setActiveTab = (tab: SubTab) => updateParams({ tab });
 
   const {
     activeBuildingVendors,
@@ -29,8 +46,10 @@ export function RelationshipsContent() {
     loadAvailableInspectionTypes,
     addBuildingVendors,
     removeBuildingVendor,
+    removeBuildingVendors,
     addVendorInspections,
     removeVendorInspection,
+    removeVendorInspections,
   } = useRelationships(selectedVendorId || null, activeTab);
 
   // 保守会社の一覧はこの画面を開くたびに読む（v1 は管理画面の起動時に1回だけ読む。失敗しても画面は出す。v1 は console.error のみ）
@@ -54,6 +73,9 @@ export function RelationshipsContent() {
   useEffect(() => {
     if (inspectionError) addToast(inspectionError.message, 'error');
   }, [inspectionError, addToast]);
+
+  // 保守会社の一覧を読み終える前（?vendor= で開いた直後）でも確認の文言が空にならないように
+  const vendorName = vendors.find((v) => v.id === selectedVendorId)?.vendor_name ?? 'この保守会社';
 
   const tabs: { key: SubTab; label: string; icon: typeof BuildingIcon }[] = [
     { key: 'buildings', label: '物件', icon: BuildingIcon },
@@ -105,19 +127,26 @@ export function RelationshipsContent() {
               <Spinner />
             </div>
           ) : activeTab === 'buildings' ? (
+            // key: 保守会社を切り替えたら選択・検索語を持ち越さない
             <BuildingRelations
+              key={selectedVendorId}
+              vendorName={vendorName}
               buildingVendors={activeBuildingVendors}
               properties={properties}
               loadAvailableProperties={loadAvailableProperties}
               onAdd={addBuildingVendors}
               onRemove={removeBuildingVendor}
+              onRemoveMany={removeBuildingVendors}
             />
           ) : (
             <InspectionRelations
+              key={selectedVendorId}
+              vendorName={vendorName}
               vendorInspections={vendorInspections}
               loadAvailableInspectionTypes={loadAvailableInspectionTypes}
               onAdd={addVendorInspections}
               onRemove={removeVendorInspection}
+              onRemoveMany={removeVendorInspections}
             />
           )}
         </>

@@ -2,13 +2,11 @@ import {
   diffUnitInspections,
   saveInspectionsToBiz,
   saveUnitInspectionsToBiz,
+  unitManagedTypeIds,
 } from '@/lib/api/inspections';
 import { syncBuildingVendorsFromEquipment } from '@/lib/api/relationships';
 import type { DbProfile, Terminal } from '@/types/database';
-import type { PropertyInspection, PropertyUnit, UnitInspection } from '@/types/app';
-
-/** 物件の追加・削除ボタンを押したときの案内（2026-10-15。物件の正本は業務システム） */
-export const PROPERTY_BIZ_GUIDE = '物件の追加・削除は業務システム（BARAN業務リスト）で行ってください';
+import type { PropertyInspection, PropertyUnit, UnitInspection, UnitInspectionTypeOption } from '@/types/app';
 
 /** 一覧の端末欄（先頭4台の端末ID、5台以上は「...」、末尾に台数） */
 // v1: js/admin-masters.js renderProperties（terminalDisplay）
@@ -34,6 +32,59 @@ export function cloneUnits(units: PropertyUnit[] | undefined): PropertyUnit[] {
       inspection_months: Array.isArray(i.inspection_months) ? [...i.inspection_months] : [],
     })),
   }));
+}
+
+/** 設備情報の比較用の形（並び・空の値の違いだけで「変更あり」にしない） */
+function inspectionKey(rows: PropertyInspection[]): string {
+  return JSON.stringify(
+    rows.map((r) => [
+      r.inspection_type_id,
+      r.vendor_id || null,
+      [...(r.inspection_months ?? [])].map(Number).sort((a, b) => a - b),
+      r.remarks ?? '',
+      r.remarks2 ?? '',
+    ]),
+  );
+}
+
+/** 設備情報が開いたときから変わったか（閉じる前の破棄確認に使う） */
+export function inspectionsChanged(before: PropertyInspection[], after: PropertyInspection[]): boolean {
+  return inspectionKey(before) !== inspectionKey(after);
+}
+
+/** 台ごとの保守が開いたときから変わったか。どちらも cloneUnits で作るので、触っていなければ同じ形になる */
+export function unitsChanged(before: PropertyUnit[], after: PropertyUnit[]): boolean {
+  return JSON.stringify(before) !== JSON.stringify(after);
+}
+
+/**
+ * 一覧の補足列：設備の数・台の数・担当している保守会社（設備情報と台ごとの保守から、出てきた順）。
+ * 設備の数は編集モーダルの「設備情報」の表と揃える（台ごとに管理している種別の集計行は数えない）
+ */
+export function propertyListSummary(
+  p: { inspections?: PropertyInspection[]; units?: PropertyUnit[] },
+  unitTypeOptions: UnitInspectionTypeOption[] = [],
+): {
+  equipmentCount: number;
+  unitCount: number;
+  vendorIds: string[];
+} {
+  const inspections = p.inspections ?? [];
+  const units = p.units ?? [];
+  const managed = unitManagedTypeIds(units, unitTypeOptions);
+  const equipment = inspections.filter((i) => !managed.has(i.inspection_type_id));
+  const ids = [
+    ...inspections.map((i) => i.vendor_id),
+    ...units.flatMap((u) => u.inspections.map((i) => i.vendor_id)),
+  ].filter((id): id is string => !!id);
+  return { equipmentCount: equipment.length, unitCount: units.length, vendorIds: [...new Set(ids)] };
+}
+
+/** 保守会社の欄（先頭2社、3社目からは「他n社」） */
+export function vendorSummary(names: string[]): string {
+  if (names.length === 0) return '-';
+  const head = names.slice(0, 2).join('、');
+  return names.length > 2 ? `${head} 他${names.length - 2}社` : head;
 }
 
 /** 台に新しく足す保守の行（点検種別は未選択） */

@@ -1,5 +1,5 @@
 /**
- * 設定画面の項目。v1 のフォームと同じ5項目・既定値・入力範囲（範囲は入力欄の min/max だけで、保存時には検証しない）。
+ * 設定画面の項目。v1 のフォームと同じ5項目・既定値・入力範囲（v1 は入力欄の min/max だけ。v2 は保存時にも validateSettings で確かめる）。
  * v1: admin.html #master-settings / js/admin-settings.js loadAppSettings
  */
 export const SETTING_FIELDS = [
@@ -52,3 +52,24 @@ export const SETTING_FIELDS = [
 export type SettingKey = (typeof SETTING_FIELDS)[number]['key'];
 /** signage_master_settings.setting_value は text なので画面でも文字列で持つ */
 export type SettingValues = Record<SettingKey, string>;
+
+/**
+ * 保存前の検査。入力欄の min/max はスピンボタンでしか効かず、手で打てば範囲外も空も保存できてしまうため、
+ * 同じ範囲を保存時にも確かめる。既定値が上限を超えると1件入力の初期値が上限エラーになるので、表示時間の既定値 ≤ 上限も見る。
+ * 戻り値は項目ごとのエラー文（問題が無ければ空のオブジェクト）。
+ */
+export function validateSettings(values: SettingValues): Partial<Record<SettingKey, string>> {
+  const errors: Partial<Record<SettingKey, string>> = {};
+  for (const f of SETTING_FIELDS) {
+    const raw = values[f.key]?.trim() ?? '';
+    const n = Number(raw);
+    if (raw === '' || !Number.isInteger(n)) errors[f.key] = '整数で入力してください';
+    else if (n < f.min || n > f.max) errors[f.key] = `${f.min}〜${f.max} の範囲で入力してください`;
+  }
+  if (!errors.display_time_default && !errors.display_time_max) {
+    if (Number(values.display_time_default) > Number(values.display_time_max)) {
+      errors.display_time_default = '表示時間の上限以下にしてください';
+    }
+  }
+  return errors;
+}

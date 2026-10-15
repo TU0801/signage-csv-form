@@ -120,6 +120,22 @@ describe('useRelationships', () => {
     expect(mockFetchVendorInspections).toHaveBeenCalledWith('v1');
   });
 
+  it('物件の紐付けをまとめて解除し、失敗があっても残りは解除して、読み直しは1回だけ', async () => {
+    mockApiRemoveBuildingVendor.mockResolvedValueOnce({}).mockRejectedValueOnce(new Error('rls'));
+    const { result } = renderHook(() => useRelationships('v1'));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    mockFetchBuildingVendors.mockClear();
+
+    let summary;
+    await act(async () => {
+      summary = await result.current.removeBuildingVendors(['bv1', 'bv9']);
+    });
+
+    expect(mockApiRemoveBuildingVendor.mock.calls).toEqual([['bv1'], ['bv9']]);
+    expect(summary).toEqual({ removed: 1, failed: 1 });
+    expect(mockFetchBuildingVendors).toHaveBeenCalledTimes(1);
+  });
+
   it('読み込みに失敗したら v1 と同じ文言のエラーを返す', async () => {
     mockFetchBuildingVendors.mockRejectedValue(new Error('network'));
     const { result } = renderHook(() => useRelationships('v1'));

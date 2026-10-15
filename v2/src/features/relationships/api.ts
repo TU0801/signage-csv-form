@@ -9,7 +9,12 @@ export interface BuildingVendorWithVendor extends DbBuildingVendor {
 }
 
 export interface VendorInspectionWithType extends DbVendorInspection {
-  signage_master_inspection_types: { inspection_name: string; category: string | null } | null;
+  signage_master_inspection_types: {
+    inspection_name: string;
+    category: string | null;
+    /** 紐付け済みの表を点検種別マスターと同じ順に並べるため */
+    sort_order: number | null;
+  } | null;
 }
 
 /** 保守会社の物件紐付け。status は絞らない（表は active、追加モーダルの除外は active + pending で使い分ける） */
@@ -29,7 +34,7 @@ export async function fetchBuildingVendors(vendorId: string): Promise<DbBuilding
 export async function fetchVendorInspections(vendorId: string): Promise<VendorInspectionWithType[]> {
   const { data, error } = await supabase
     .from(TABLES.vendorInspections)
-    .select('*, signage_master_inspection_types(inspection_name, category)')
+    .select('*, signage_master_inspection_types(inspection_name, category, sort_order)')
     .eq('vendor_id', vendorId)
     .eq('status', VendorInspectionStatus.ACTIVE)
     .order('created_at', { ascending: false });

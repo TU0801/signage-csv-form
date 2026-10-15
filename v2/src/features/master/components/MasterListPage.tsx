@@ -24,7 +24,7 @@ export function MasterListPage<T extends Record<string, unknown>>({
 }: MasterListPageProps<T>) {
   const { addToast } = useToast();
   const { filteredItems, loading, error, search, setSearch, addItem, updateItem, deleteItem } =
-    useMasterCRUD(config);
+    useMasterCRUD(config, { rememberSearchAs: config.displayName });
 
   const [formOpen, setFormOpen] = useState(false);
   const [editItem, setEditItem] = useState<T | null>(null);

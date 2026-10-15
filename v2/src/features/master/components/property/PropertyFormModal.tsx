@@ -8,7 +8,13 @@ import { useAuthStore } from '@/stores/authStore';
 import type { DbInspectionType, DbVendor } from '@/types/database';
 import type { PropertyInspection, PropertyUnit, UnitInspectionTypeOption } from '@/types/app';
 import type { PropertyWithUnits } from '../../hooks/usePropertyMasterData';
-import { cloneUnits, savePropertyForm, validateUnitInspections } from '../../lib/propertyForm';
+import {
+  cloneUnits,
+  inspectionsChanged,
+  savePropertyForm,
+  unitsChanged,
+  validateUnitInspections,
+} from '../../lib/propertyForm';
 import { TerminalList } from './TerminalList';
 import { PropertyInspectionEditor } from './PropertyInspectionEditor';
 import { UnitInspectionEditor } from './UnitInspectionEditor';
@@ -49,12 +55,19 @@ export function PropertyFormModal({
   // その物件で台ごとに管理している点検種別。設備情報の表・選択肢・保存の対象から外す
   const [managedTypeIds] = useState<Set<string>>(() => unitManagedTypeIds(property.units, unitTypeOptions));
   // 設備情報。一覧には台の保守の集計が1行で返ってくるが、ここから直すと業務システムが断るので外す
-  const [inspections, setInspections] = useState<PropertyInspection[]>(() =>
-    (property.inspections ?? [])
-      .filter((e) => !managedTypeIds.has(e.inspection_type_id))
-      .map((e) => ({ ...e })),
+  const [originalInspections] = useState<PropertyInspection[]>(() =>
+    (property.inspections ?? []).filter((e) => !managedTypeIds.has(e.inspection_type_id)),
   );
+  const [inspections, setInspections] = useState<PropertyInspection[]>(() =>
+    originalInspections.map((e) => ({ ...e })),
+  );
+  // 設備情報の入力欄に「追加」「更新」を押していない値があるか（保存では送られないので止める）
+  const [draftPending, setDraftPending] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // 閉じる（Esc・背景・×）前に破棄を確かめる。フッターの「キャンセル」は明示的な破棄なので確かめない
+  const dirty =
+    draftPending || inspectionsChanged(originalInspections, inspections) || unitsChanged(originalUnits, units);
 
   const showError = (message: string) => addToast(message, 'error');
 
@@ -64,6 +77,13 @@ export function PropertyFormModal({
     const propertyCode = property.property_code.trim();
     if (!propertyCode) {
       showError('物件コードがありません');
+      return;
+    }
+    // 保存は表の行だけを送る。入力欄に残った値を黙って捨てない
+    if (draftPending) {
+      showError(
+        '設備情報に「追加」（編集中の行は「更新」）を押していない入力があります。押して表に入れるか、「取消」で消してから保存してください',
+      );
       return;
     }
     // 台ごとの保守の確認は送る前（途中で止まると設備情報だけ保存されて台の保守が残る）
@@ -103,6 +123,7 @@ export function PropertyFormModal({
     <Modal
       open
       onClose={onClose}
+      dirty={dirty}
       title="物件を編集"
       className="max-w-6xl"
       // 保存・キャンセルは本文のスクロールの外に置く。フォームの外になるので form 属性で送信先を結ぶ
@@ -155,6 +176,7 @@ export function PropertyFormModal({
             excludedTypeIds={managedTypeIds}
             vendors={vendors}
             onError={showError}
+            onDraftChange={setDraftPending}
           />
         </section>
 

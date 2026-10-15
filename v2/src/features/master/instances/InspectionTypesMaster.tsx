@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { GripVerticalIcon } from '@/components/ui/icons';
 import { Input } from '@/components/ui/Input';
@@ -20,11 +20,11 @@ import {
 } from '@/lib/api/admin-masters';
 import type { DbCategory, DbInspectionType, DbTemplateImage } from '@/types/database';
 import type { MasterConfig } from '../types/masterConfig';
-import { useMasterCRUD } from '../hooks/useMasterCRUD';
+import { matchesSearch, useMasterCRUD } from '../hooks/useMasterCRUD';
 import { MasterToolbar } from '../components/MasterToolbar';
 import { MasterDeleteConfirm } from '../components/MasterDeleteConfirm';
 import { InspectionTypeFormModal } from '../components/InspectionTypeFormModal';
-import { moveItem, sortOrderUpdates, templateLabel } from '../lib/inspectionTypes';
+import { categoryTabs, moveItem, NO_CATEGORY, sortOrderUpdates, swapItems, templateLabel } from '../lib/inspectionTypes';
 
 type InspectionTypeRecord = DbInspectionType & Record<string, unknown>;
 
@@ -74,8 +74,9 @@ function useInspectionTypeOptions() {
 // v1: js/admin-masters.js renderInspections / openMasterModal('inspection') / deleteMasterInspectionAction
 export function InspectionTypesMaster() {
   const { addToast } = useToast();
-  const { items, filteredItems, loading, error, search, setSearch, reload, deleteItem } =
-    useMasterCRUD(config);
+  const { items, loading, error, search, setSearch, reload, deleteItem } = useMasterCRUD(config, {
+    rememberSearchAs: 'inspectionTypes',
+  });
   const { categories, templateImages, optionsLoading } = useInspectionTypeOptions();
 
   const [formItem, setFormItem] = useState<DbInspectionType | null | undefined>(undefined);
@@ -83,6 +84,31 @@ export function InspectionTypesMaster() {
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const [reordering, setReordering] = useState(false);
+  // 並べ替えの保存中は新しい並びを先に表示する（保存は1行ずつなので、終わるまで古い並びのままにしない）
+  const [localOrder, setLocalOrder] = useState<string[] | null>(null);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  // null = すべてのカテゴリ
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  // ↑↓で動かした行のボタン。保存後にフォーカスを戻す（キーボードで続けて動かせるように）
+  const moveButtons = useRef(new Map<string, HTMLButtonElement>());
+  const [refocus, setRefocus] = useState<{ id: string; dir: 'up' | 'down' } | null>(null);
+
+  const orderedItems = useMemo(() => {
+    if (!localOrder) return items;
+    const index = new Map(localOrder.map((id, i) => [id, i]));
+    return [...items].sort((a, b) => (index.get(a.id) ?? 0) - (index.get(b.id) ?? 0));
+  }, [items, localOrder]);
+
+  const tabs = useMemo(
+    () => categoryTabs(items, categories.map((c) => c.category_name)),
+    [items, categories],
+  );
+
+  const visibleItems = orderedItems.filter(
+    (i) =>
+      (categoryFilter === null || (i.category || NO_CATEGORY) === categoryFilter) &&
+      matchesSearch(i, config.searchFields, search),
+  );
 
   // v1: js/admin-masters.js handleMasterFormSubmit（type === 'inspection'）
   const handleSubmit = useCallback(
@@ -138,23 +164,19 @@ export function InspectionTypesMaster() {
     }
   }, [deleteTarget, deleteItem, addToast]);
 
-  // ドラッグ&ドロップで並べ替え（検索中は無効）
-  // v1: js/admin-masters.js handleInspectionDrop / updateInspectionSortOrders
-  const handleDrop = useCallback(
-    async (targetId: string) => {
-      const dragged = draggedId;
-      setDraggedId(null);
-      setOverId(null);
-      if (!dragged || dragged === targetId) return;
-      const ordered = moveItem(
-        items.map((i) => i.id),
-        dragged,
-        targetId,
-      );
+  // 新しい並びを先に表示してから、sort_order が変わる行だけを1行ずつ保存する
+  // v1: js/admin-masters.js updateInspectionSortOrders
+  const saveOrder = useCallback(
+    async (ordered: string[]) => {
+      const updates = sortOrderUpdates(ordered, items);
+      if (updates.length === 0) return;
+      setLocalOrder(ordered);
       setReordering(true);
+      setProgress({ done: 0, total: updates.length });
       try {
-        for (const u of sortOrderUpdates(ordered, items)) {
+        for (const [n, u] of updates.entries()) {
           await updateInspectionSortOrder(u.id, u.sort_order);
+          setProgress({ done: n + 1, total: updates.length });
         }
         addToast('並び順を更新しました', 'success');
       } catch (err) {
@@ -162,11 +184,59 @@ export function InspectionTypesMaster() {
         addToast('並び順の更新に失敗しました', 'error');
       } finally {
         await reload();
+        setLocalOrder(null);
+        setProgress(null);
         setReordering(false);
       }
     },
-    [draggedId, items, addToast, reload],
+    [items, addToast, reload],
   );
+
+  // ドラッグ&ドロップで並べ替え（検索中は無効。カテゴリの絞り込み中は、見えている行どうしで動かせる）
+  // v1: js/admin-masters.js handleInspectionDrop
+  const handleDrop = useCallback(
+    async (targetId: string) => {
+      const dragged = draggedId;
+      setDraggedId(null);
+      setOverId(null);
+      if (!dragged || dragged === targetId) return;
+      await saveOrder(
+        moveItem(
+          orderedItems.map((i) => i.id),
+          dragged,
+          targetId,
+        ),
+      );
+    },
+    [draggedId, orderedItems, saveOrder],
+  );
+
+  // ↑↓：表示中の1つ上・下の行と入れ替える（170 行の表をドラッグしたままスクロールしなくて済むように）
+  const moveBy = (id: string, step: -1 | 1) => {
+    if (reordering) return;
+    const at = visibleItems.findIndex((i) => i.id === id);
+    const neighbor = visibleItems[at + step];
+    if (at < 0 || !neighbor) return;
+    setRefocus({ id, dir: step < 0 ? 'up' : 'down' });
+    void saveOrder(
+      swapItems(
+        orderedItems.map((i) => i.id),
+        id,
+        neighbor.id,
+      ),
+    );
+  };
+
+  // 保存が終わったら押したボタンへフォーカスを戻す。端に着いて押せなくなったら反対向きのボタンへ
+  useEffect(() => {
+    if (!refocus || reordering) return;
+    const other = refocus.dir === 'up' ? 'down' : 'up';
+    const target = [refocus.dir, other]
+      .map((d) => moveButtons.current.get(`${refocus.id}:${d}`))
+      .find((b) => b && !b.disabled);
+    target?.focus();
+    setRefocus(null);
+  }, [refocus, reordering]);
 
   // v1 は getAllMasterData（カテゴリ・テンプレート画像を含む）を読み終えてから一覧を描く
   // v1: js/admin.js loadAllData
@@ -183,13 +253,33 @@ export function InspectionTypesMaster() {
   return (
     <div className="space-y-3">
       <MasterToolbar
-        count={filteredItems.length}
+        count={visibleItems.length}
         search={
           <Input
             placeholder="点検種別名で検索..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+        }
+        filters={
+          <div role="group" aria-label="カテゴリで絞り込み" className="flex flex-wrap gap-1">
+            {[{ key: null, label: 'すべて', count: items.length }, ...tabs].map((t) => (
+              <button
+                key={t.key ?? 'all'}
+                type="button"
+                aria-pressed={categoryFilter === t.key}
+                onClick={() => setCategoryFilter(t.key)}
+                className={cn(
+                  'rounded-full border px-2.5 py-0.5 text-sm whitespace-nowrap',
+                  categoryFilter === t.key
+                    ? 'border-blue-600 bg-blue-600 text-white'
+                    : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50',
+                )}
+              >
+                {t.label} {t.count}
+              </button>
+            ))}
+          </div>
         }
         note={
           <>
@@ -202,7 +292,12 @@ export function InspectionTypesMaster() {
             >
               設定を開く
             </a>
-            ）。{draggable && '行をドラッグすると並び順を変えられます'}
+            ）。
+            {progress
+              ? `並び順を保存しています（${progress.done}/${progress.total}）…`
+              : draggable
+                ? '行をドラッグするか ↑↓ を押すと並び順を変えられます'
+                : '検索中は並び順を変えられません（カテゴリの絞り込み中は変えられます）'}
           </>
         }
         action={<Button onClick={() => setFormItem(null)}>+ 新規追加</Button>}
@@ -214,22 +309,23 @@ export function InspectionTypesMaster() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-200 text-left">
-              {draggable && <th className="cell-head w-8" />}
+              {!search && <th className="cell-head w-20" />}
               <th className="cell-head font-medium text-gray-700">点検種別名</th>
               <th className="cell-head font-medium text-gray-700 w-32">カテゴリ</th>
               <th className="cell-head font-medium text-gray-700">画像</th>
+              <th className="cell-head font-medium text-gray-700">案内文</th>
               <th className="cell-head font-medium text-gray-700 w-32">操作</th>
             </tr>
           </thead>
           <tbody>
-            {filteredItems.length === 0 ? (
+            {visibleItems.length === 0 ? (
               <tr>
-                <td colSpan={draggable ? 5 : 4} className="py-8 text-center text-gray-400">
-                  {search ? '検索結果がありません' : '点検種別が登録されていません'}
+                <td colSpan={search ? 5 : 6} className="py-8 text-center text-gray-400">
+                  {search || categoryFilter !== null ? '検索結果がありません' : '点検種別が登録されていません'}
                 </td>
               </tr>
             ) : (
-              filteredItems.map((item) => (
+              visibleItems.map((item, index) => (
                 <tr
                   key={item.id}
                   draggable={draggable}
@@ -257,12 +353,56 @@ export function InspectionTypesMaster() {
                     overId === item.id && draggedId !== item.id && 'bg-blue-50',
                   )}
                 >
-                  {draggable && (
-                    <td className="cell text-gray-400 cursor-move select-none" title="ドラッグで並べ替え">
-                      <GripVerticalIcon size={16} />
+                  {!search && (
+                    <td className="cell text-gray-400 select-none">
+                      <div className="-my-0.5 flex items-center gap-0.5">
+                        <span className="cursor-move" title="ドラッグで並べ替え">
+                          <GripVerticalIcon size={16} />
+                        </span>
+                        <button
+                          type="button"
+                          aria-label={`${item.inspection_name}を1つ上へ`}
+                          title="1つ上へ"
+                          ref={(el) => {
+                            if (el) moveButtons.current.set(`${item.id}:up`, el);
+                            else moveButtons.current.delete(`${item.id}:up`);
+                          }}
+                          disabled={index === 0}
+                          // 保存中は disabled にしない（押したボタンからフォーカスが外れるため）。押しても moveBy が何もしない
+                          aria-disabled={reordering || undefined}
+                          onClick={() => moveBy(item.id, -1)}
+                          className="rounded px-1 text-gray-500 hover:bg-gray-100 disabled:opacity-30 aria-disabled:opacity-30"
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`${item.inspection_name}を1つ下へ`}
+                          title="1つ下へ"
+                          ref={(el) => {
+                            if (el) moveButtons.current.set(`${item.id}:down`, el);
+                            else moveButtons.current.delete(`${item.id}:down`);
+                          }}
+                          disabled={index === visibleItems.length - 1}
+                          // 保存中は disabled にしない（押したボタンからフォーカスが外れるため）。押しても moveBy が何もしない
+                          aria-disabled={reordering || undefined}
+                          onClick={() => moveBy(item.id, 1)}
+                          className="rounded px-1 text-gray-500 hover:bg-gray-100 disabled:opacity-30 aria-disabled:opacity-30"
+                        >
+                          ↓
+                        </button>
+                      </div>
                     </td>
                   )}
-                  <td className="cell">{item.inspection_name}</td>
+                  <td className="cell">
+                    {item.inspection_name}
+                    {/* 掲示板に出さない種別は、編集を開かなくても分かるようにする */}
+                    {item.show_on_board === false && (
+                      <span className="ml-1.5 whitespace-nowrap rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+                        掲示板に出さない
+                      </span>
+                    )}
+                  </td>
                   <td className="cell whitespace-nowrap">
                     {item.category ? (
                       <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-semibold text-indigo-800">
@@ -273,6 +413,15 @@ export function InspectionTypesMaster() {
                     )}
                   </td>
                   <td className="cell">{templateLabel(item.template_no)}</td>
+                  <td className="cell">
+                    {item.default_text ? (
+                      <div className="max-w-[24rem] truncate text-gray-600" title={item.default_text}>
+                        {item.default_text}
+                      </div>
+                    ) : (
+                      <span className="text-amber-700">未入力</span>
+                    )}
+                  </td>
                   <td className="cell">
                     <div className="-my-0.5 flex gap-1">
                       <Button variant="ghost" size="sm" onClick={() => setFormItem(item)}>

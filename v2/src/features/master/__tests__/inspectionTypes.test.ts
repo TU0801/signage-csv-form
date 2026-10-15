@@ -1,9 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildTemplateOptions,
+  categoryTabs,
+  NO_CATEGORY,
   moveItem,
   resolveTemplateKey,
   sortOrderUpdates,
+  swapItems,
   templateLabel,
 } from '../lib/inspectionTypes';
 
@@ -37,6 +40,17 @@ describe('inspection type helpers (v1 js/admin-masters.js)', () => {
     expect(moveItem(['A', 'B', 'C', 'D'], 'D', 'B')).toEqual(['A', 'D', 'B', 'C']);
   });
 
+  // ↑↓：絞り込み中の離れた隣とも、間の行を動かさずに入れ替える（保存は2行だけ）
+  it('swapItems swaps only the two rows', () => {
+    expect(swapItems(['A', 'B', 'C', 'D'], 'D', 'A')).toEqual(['D', 'B', 'C', 'A']);
+    expect(
+      sortOrderUpdates(swapItems(['A', 'B', 'C', 'D'], 'D', 'A'), ['A', 'B', 'C', 'D'].map((id, i) => ({ id, sort_order: i }))),
+    ).toEqual([
+      { id: 'D', sort_order: 0 },
+      { id: 'A', sort_order: 3 },
+    ]);
+  });
+
   it('sortOrderUpdates renumbers from 0 and returns only rows whose sort_order changes', () => {
     const items = [
       { id: 'A', sort_order: 0 },
@@ -46,6 +60,17 @@ describe('inspection type helpers (v1 js/admin-masters.js)', () => {
     expect(sortOrderUpdates(['A', 'C', 'B'], items)).toEqual([
       { id: 'C', sort_order: 1 },
       { id: 'B', sort_order: 2 },
+    ]);
+  });
+
+  // 一覧のカテゴリの絞り込み：マスターの順 → マスターに無い名前 → 未設定。件数 0 は出さない
+  it('categoryTabs orders by the category master, then unknown names, then 未設定', () => {
+    const items = [{ category: '清掃' }, { category: '点検' }, { category: null }, { category: '旧分類' }, { category: '点検' }];
+    expect(categoryTabs(items, ['工事', '点検', '清掃'])).toEqual([
+      { key: '点検', label: '点検', count: 2 },
+      { key: '清掃', label: '清掃', count: 1 },
+      { key: '旧分類', label: '旧分類', count: 1 },
+      { key: NO_CATEGORY, label: '未設定', count: 1 },
     ]);
   });
 });

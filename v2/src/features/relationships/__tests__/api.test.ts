@@ -58,7 +58,7 @@ describe('relationships api', () => {
           status: 'active',
           created_at: '2026-03-01T00:00:00Z',
           updated_at: '2026-03-01T00:00:00Z',
-          signage_master_inspection_types: { inspection_name: '消防設備点検', category: '点検' },
+          signage_master_inspection_types: { inspection_name: '消防設備点検', category: '点検', sort_order: 3 },
         },
       ],
       error: null,

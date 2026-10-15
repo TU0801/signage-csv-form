@@ -71,6 +71,29 @@ describe('PropertyInspectionEditor edit of a row whose type is not an option', (
   });
 });
 
+// 物件の保存は表の行だけを送るので、「追加」を押していない入力があることを呼ぶ側へ知らせる
+describe('PropertyInspectionEditor pending input', () => {
+  it('reports a draft until it is added or cleared with 取消', () => {
+    const onDraftChange = vi.fn();
+    render(
+      <PropertyInspectionEditor
+        value={[]}
+        onChange={vi.fn()}
+        inspectionTypes={[type('fire', '消防設備点検')]}
+        excludedTypeIds={new Set()}
+        vendors={vendors}
+        onError={vi.fn()}
+        onDraftChange={onDraftChange}
+      />,
+    );
+    expect(onDraftChange).toHaveBeenLastCalledWith(false);
+    fireEvent.change(screen.getByLabelText('備考'), { target: { value: '2基' } });
+    expect(onDraftChange).toHaveBeenLastCalledWith(true);
+    fireEvent.click(screen.getByRole('button', { name: '取消' }));
+    expect(onDraftChange).toHaveBeenLastCalledWith(false);
+  });
+});
+
 describe('UnitInspectionEditor (v1 台ごとの保守)', () => {
   const units: PropertyUnit[] = [
     {

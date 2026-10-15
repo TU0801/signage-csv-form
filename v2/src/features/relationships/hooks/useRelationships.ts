@@ -20,6 +20,17 @@ import {
 
 export type RelationshipTab = 'buildings' | 'inspections';
 
+/** まとめて解除した結果（解除できた件数と、失敗した件数） */
+export interface RemoveSummary {
+  removed: number;
+  failed: number;
+}
+
+function summarizeRemoveResults(results: PromiseSettledResult<unknown>[]): RemoveSummary {
+  const failed = results.filter((r) => r.status === 'rejected').length;
+  return { removed: results.length - failed, failed };
+}
+
 /** 読み込み失敗。失敗のたびに新しいオブジェクトを作るので、同じ文言の失敗が続いても毎回通知できる */
 export interface LoadError {
   message: string;
@@ -144,6 +155,19 @@ export function useRelationships(vendorId: string | null, activeTab: Relationshi
     [loadBuildings],
   );
 
+  /** まとめて解除する。失敗した行があっても残りは解除し、読み直しは最後に1回だけ */
+  const removeBuildingVendors = useCallback(
+    async (ids: string[]): Promise<RemoveSummary> => {
+      try {
+        const results = await Promise.allSettled(ids.map((id) => apiRemoveBuildingVendor(id)));
+        return summarizeRemoveResults(results);
+      } finally {
+        await loadBuildings();
+      }
+    },
+    [loadBuildings],
+  );
+
   // v1: js/admin-relationships.js confirmInspectionSelection
   const addVendorInspections = useCallback(
     async (inspectionIds: string[]): Promise<AddSummary> => {
@@ -169,6 +193,19 @@ export function useRelationships(vendorId: string | null, activeTab: Relationshi
     [loadInspections],
   );
 
+  /** まとめて解除する（物件と同じく、読み直しは最後に1回） */
+  const removeVendorInspections = useCallback(
+    async (ids: string[]): Promise<RemoveSummary> => {
+      try {
+        const results = await Promise.allSettled(ids.map((id) => apiRemoveVendorInspection(id)));
+        return summarizeRemoveResults(results);
+      } finally {
+        await loadInspections();
+      }
+    },
+    [loadInspections],
+  );
+
   return {
     buildingVendors,
     activeBuildingVendors,
@@ -181,7 +218,9 @@ export function useRelationships(vendorId: string | null, activeTab: Relationshi
     loadAvailableInspectionTypes,
     addBuildingVendors,
     removeBuildingVendor,
+    removeBuildingVendors,
     addVendorInspections,
     removeVendorInspection,
+    removeVendorInspections,
   };
 }

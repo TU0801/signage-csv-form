@@ -15,9 +15,14 @@ vi.mock('@/lib/api/relationships', () => ({
   syncBuildingVendorsFromEquipment: (...a: unknown[]) => syncBuildingVendorsFromEquipment(...a),
 }));
 
-const { terminalSummary, validateUnitInspections, savePropertyForm } = await import(
-  '../lib/propertyForm'
-);
+const {
+  terminalSummary,
+  validateUnitInspections,
+  savePropertyForm,
+  inspectionsChanged,
+  propertyListSummary,
+  vendorSummary,
+} = await import('../lib/propertyForm');
 
 const insp = (over: Partial<UnitInspection> = {}): UnitInspection => ({
   inspection_id: 'ui1',
@@ -48,6 +53,35 @@ describe('property form helpers (v1 js/admin-masters.js)', () => {
     const t = (id: string) => ({ terminal_id: id, supplement: '' });
     expect(terminalSummary([])).toBe('なし (0台)');
     expect(terminalSummary(['a', 'b', 'c', 'd', 'e'].map(t))).toBe('a, b, c, d... (5台)');
+  });
+
+  // 閉じる前の破棄確認：点検月の並びや空の値の違いでは「変更あり」にしない
+  it('inspectionsChanged ignores month order and empty-value differences', () => {
+    const row = { inspection_type_id: 'fire', vendor_id: null, inspection_months: [4, 10], remarks: '', remarks2: '' };
+    expect(inspectionsChanged([row], [{ ...row, vendor_id: '' as unknown as null, inspection_months: [10, 4] }])).toBe(false);
+    expect(inspectionsChanged([row], [{ ...row, remarks: '2基' }])).toBe(true);
+    expect(inspectionsChanged([row], [])).toBe(true);
+  });
+
+  // 一覧の補足列：設備の数・台の数・保守会社（設備情報と台の保守から重複なく）
+  it('propertyListSummary and vendorSummary', () => {
+    const row = (vendor_id: string | null) => ({
+      inspection_type_id: 't',
+      vendor_id,
+      inspection_months: [],
+      remarks: '',
+      remarks2: '',
+    });
+    expect(
+      propertyListSummary({ inspections: [row('v1'), row(null), row('v2')], units: [unit([insp({ vendor_id: 'v1' }), insp({ vendor_id: 'v3' })])] }),
+    ).toEqual({ equipmentCount: 3, unitCount: 1, vendorIds: ['v1', 'v2', 'v3'] });
+    // 台ごとに管理している種別（elev）の集計行は、モーダルの設備情報の表に出ないので数えない
+    expect(
+      propertyListSummary({ inspections: [{ ...row('v1'), inspection_type_id: 'elev' }], units: [unit([insp()])] }).equipmentCount,
+    ).toBe(0);
+    expect(vendorSummary([])).toBe('-');
+    expect(vendorSummary(['A社', 'B社'])).toBe('A社、B社');
+    expect(vendorSummary(['A社', 'B社', 'C社', 'D社'])).toBe('A社、B社 他2社');
   });
 
   it('validateUnitInspections rejects unselected and duplicated types', () => {

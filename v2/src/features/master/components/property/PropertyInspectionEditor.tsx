@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { cn } from '@/lib/utils';
@@ -14,6 +14,11 @@ interface PropertyInspectionEditorProps {
   excludedTypeIds: Set<string>;
   vendors: DbVendor[];
   onError: (message: string) => void;
+  /**
+   * 「追加」「更新」をまだ押していない入力があるか（変わるたびに呼ぶ）。
+   * 物件の「保存」は表の行だけを送るので、呼ぶ側はこれで保存を止め、閉じる前の破棄確認にも使う
+   */
+  onDraftChange?: (pending: boolean) => void;
 }
 
 interface RowForm {
@@ -32,6 +37,18 @@ const EMPTY_FORM: RowForm = {
   remarks2: '',
 };
 
+/** 入力欄に表へ入れていない値があるか（編集中の行、または何か1つでも入れた追加欄） */
+function hasPendingRow(form: RowForm, editingIndex: number | null): boolean {
+  return (
+    editingIndex !== null ||
+    !!form.inspection_type_id ||
+    !!form.vendor_id ||
+    form.inspection_months.length > 0 ||
+    !!form.remarks ||
+    !!form.remarks2
+  );
+}
+
 const selectClass = 'block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm';
 // ラベルは Input / Select の部品と同じ見た目にそろえる
 const labelClass = 'block text-xs font-medium text-gray-600';
@@ -48,10 +65,16 @@ export function PropertyInspectionEditor({
   excludedTypeIds,
   vendors,
   onError,
+  onDraftChange,
 }: PropertyInspectionEditorProps) {
   const [form, setForm] = useState<RowForm>(EMPTY_FORM);
   // 編集中の行の位置。null なら「追加」
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const pending = hasPendingRow(form, editingIndex);
+
+  useEffect(() => {
+    onDraftChange?.(pending);
+  }, [pending, onDraftChange]);
 
   // 設備種類は「点検」カテゴリの点検種別だけ
   const typeOptions = inspectionTypes.filter(
@@ -236,7 +259,8 @@ export function PropertyInspectionEditor({
             <Button size="sm" type="button" onClick={submitRow}>
               {editingIndex !== null ? '更新' : '追加'}
             </Button>
-            {editingIndex !== null && (
+            {/* 入れかけの値を表に入れずに消す（追加欄でも出す。残っていると物件の保存が止まるため） */}
+            {pending && (
               <Button variant="secondary" size="sm" type="button" onClick={resetForm}>
                 取消
               </Button>

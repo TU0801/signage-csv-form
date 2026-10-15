@@ -40,6 +40,14 @@ export function InspectionTypeFormModal({
   );
   const [noticeText, setNoticeText] = useState(item?.default_text ?? '');
   const [showOnBoard, setShowOnBoard] = useState(item ? item.show_on_board !== false : true);
+  // 開いたときの値。閉じる（Esc・背景・×）前の破棄確認に使う（テンプレートは選択肢のキーにそろえた後の値と比べる）
+  const [initial] = useState(() => ({ name, category, templateNo, noticeText, showOnBoard }));
+  const dirty =
+    name !== initial.name ||
+    category !== initial.category ||
+    templateNo !== initial.templateNo ||
+    noticeText !== initial.noticeText ||
+    showOnBoard !== initial.showOnBoard;
   const [saving, setSaving] = useState(false);
   const [imageError, setImageError] = useState(false);
 
@@ -69,7 +77,13 @@ export function InspectionTypeFormModal({
   };
 
   return (
-    <Modal open onClose={onClose} title={item ? '点検種別を編集' : '点検種別を追加'} className="max-w-lg">
+    <Modal
+      open
+      onClose={onClose}
+      dirty={dirty}
+      title={item ? '点検種別を編集' : '点検種別を追加'}
+      className="max-w-lg"
+    >
       <form onSubmit={handleSubmit} className="space-y-4">
         <Input
           label="点検種別名 *"

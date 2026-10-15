@@ -1,35 +1,54 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
 import type { DbInspectionType } from '@/types/database';
 import type { AddSummary, VendorInspectionWithType } from '../api';
 import { fetchMasterCategories } from '@/lib/api/masterData';
+import type { RemoveSummary } from '../hooks/useRelationships';
+import { confirmNameList, filterInspectionLinks, sortInspectionLinks } from '../lib/linkedList';
 import { CheckListSelectModal, type CheckOption } from './CheckListSelectModal';
+import { LinkedListToolbar, SelectAllCheckbox, useRowSelection } from './LinkedListParts';
 
 const UNCATEGORIZED = '未分類';
 
 interface InspectionRelationsProps {
+  /** 確認の文言に出す保守会社名 */
+  vendorName: string;
   /** active の紐付けだけ（解除済み inactive は取得しない） */
   vendorInspections: VendorInspectionWithType[];
   loadAvailableInspectionTypes: () => Promise<DbInspectionType[]>;
   onAdd: (inspectionIds: string[]) => Promise<AddSummary>;
   onRemove: (id: string) => Promise<void>;
+  onRemoveMany: (ids: string[]) => Promise<RemoveSummary>;
 }
+
+const nameOf = (vi: VendorInspectionWithType) => vi.signage_master_inspection_types?.inspection_name || '-';
 
 // v1: js/admin-relationships.js renderVendorInspectionRelationships
 export function InspectionRelations({
+  vendorName,
   vendorInspections,
   loadAvailableInspectionTypes,
   onAdd,
   onRemove,
+  onRemoveMany,
 }: InspectionRelationsProps) {
   const { addToast } = useToast();
   const [options, setOptions] = useState<CheckOption[]>([]);
   const [groups, setGroups] = useState<string[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<VendorInspectionWithType | null>(null);
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+  // 解除を送っている間（一括解除を二重に送らない）
+  const [removing, setRemoving] = useState(false);
+  const [query, setQuery] = useState('');
+
+  // 取得は登録日の新しい順なので、点検種別マスターの並び順に並べ直す
+  const sorted = useMemo(() => sortInspectionLinks(vendorInspections), [vendorInspections]);
+  const visible = filterInspectionLinks(sorted, query);
+  const selection = useRowSelection(vendorInspections, visible);
+  const selectedRows = sorted.filter((vi) => selection.isSelected(vi.id));
 
   // v1: js/admin-relationships.js openAddInspectionModal
   const openModal = async () => {
@@ -74,27 +93,56 @@ export function InspectionRelations({
 
   // v1: js/admin-relationships.js handleRemoveVendorInspection
   const handleRemove = async () => {
-    if (!deleteTarget) return;
-    const id = deleteTarget;
+    if (!deleteTarget || removing) return;
+    const id = deleteTarget.id;
     setDeleteTarget(null);
+    setRemoving(true);
     try {
       await onRemove(id);
-      addToast('紐付けを削除しました', 'success');
+      selection.drop([id]);
+      addToast('紐付けを解除しました', 'success');
     } catch {
-      addToast('削除に失敗しました', 'error');
+      addToast('解除に失敗しました', 'error');
+    } finally {
+      setRemoving(false);
+    }
+  };
+
+  const handleRemoveSelected = async () => {
+    const ids = selection.selectedIds;
+    setBulkConfirmOpen(false);
+    if (removing || ids.length === 0) return;
+    setRemoving(true);
+    try {
+      const { removed, failed } = await onRemoveMany(ids);
+      selection.clear();
+      if (removed > 0) addToast(`${removed}件の紐付けを解除しました`, 'success');
+      if (failed > 0) addToast(`${failed}件の解除に失敗しました`, 'error');
+    } catch {
+      addToast('解除に失敗しました', 'error');
+    } finally {
+      setRemoving(false);
     }
   };
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-500">
-          {vendorInspections.length}件の点検種別が紐付けられています
-        </p>
-        <Button size="sm" onClick={openModal}>
-          ＋ 点検種別を追加
-        </Button>
-      </div>
+      <LinkedListToolbar
+        summary={`${vendorInspections.length}件の点検種別が紐付けられています`}
+        shownCount={query ? visible.length : null}
+        query={query}
+        onQueryChange={setQuery}
+        searchLabel="紐付け済みの点検種別を検索"
+        searchPlaceholder="点検種別名・カテゴリで検索"
+        selectedCount={selection.selectedIds.length}
+        onRemoveSelected={() => setBulkConfirmOpen(true)}
+        removing={removing}
+        addButton={
+          <Button size="sm" onClick={openModal}>
+            ＋ 点検種別を追加
+          </Button>
+        }
+      />
 
       {vendorInspections.length === 0 ? (
         <p className="py-8 text-center text-sm text-gray-500">紐付けがありません</p>
@@ -103,33 +151,47 @@ export function InspectionRelations({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-200 text-left">
+                <th className="cell-head w-8">
+                  <SelectAllCheckbox selection={selection} />
+                </th>
                 <th className="cell-head font-medium text-gray-700">点検種別</th>
                 <th className="cell-head font-medium text-gray-700">カテゴリ</th>
-                <th className="cell-head font-medium text-gray-700">ステータス</th>
                 <th className="cell-head font-medium text-gray-700">登録日</th>
                 <th className="cell-head font-medium text-gray-700 sticky right-0 bg-white shadow-[inset_1px_0_0_var(--color-gray-200)]">操作</th>
               </tr>
             </thead>
             <tbody>
-              {vendorInspections.map((vi) => (
-                <tr key={vi.id} className="group border-b border-gray-100 hover:bg-gray-50">
-                  <td className="cell">
-                    {vi.signage_master_inspection_types?.inspection_name || '-'}
-                  </td>
-                  <td className="cell whitespace-nowrap">{vi.signage_master_inspection_types?.category || '-'}</td>
-                  <td className="cell whitespace-nowrap">
-                    <Badge variant="success">有効</Badge>
-                  </td>
-                  <td className="cell whitespace-nowrap">
-                    {vi.created_at ? new Date(vi.created_at).toLocaleDateString('ja-JP') : '-'}
-                  </td>
-                  <td className="cell sticky right-0 bg-white shadow-[inset_1px_0_0_var(--color-gray-200)] group-hover:bg-gray-50">
-                    <Button variant="danger" size="sm" className="-my-0.5" onClick={() => setDeleteTarget(vi.id)}>
-                      削除
-                    </Button>
+              {visible.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-gray-400">
+                    検索結果がありません
                   </td>
                 </tr>
-              ))}
+              ) : (
+                visible.map((vi) => (
+                  <tr key={vi.id} className="group border-b border-gray-100 hover:bg-gray-50">
+                    <td className="cell">
+                      <input
+                        type="checkbox"
+                        className="rounded border-gray-300"
+                        aria-label={`${nameOf(vi)} を選択`}
+                        checked={selection.isSelected(vi.id)}
+                        onChange={() => selection.toggle(vi.id)}
+                      />
+                    </td>
+                    <td className="cell">{nameOf(vi)}</td>
+                    <td className="cell whitespace-nowrap">{vi.signage_master_inspection_types?.category || '-'}</td>
+                    <td className="cell whitespace-nowrap">
+                      {vi.created_at ? new Date(vi.created_at).toLocaleDateString('ja-JP') : '-'}
+                    </td>
+                    <td className="cell sticky right-0 bg-white shadow-[inset_1px_0_0_var(--color-gray-200)] group-hover:bg-gray-50">
+                      <Button variant="danger" size="sm" className="-my-0.5" disabled={removing} onClick={() => setDeleteTarget(vi)}>
+                        解除
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -147,13 +209,24 @@ export function InspectionRelations({
         onConfirm={handleConfirm}
       />
 
+      {/* 押し間違いに気づけるよう、どの点検種別の紐付けかを名前で出す */}
       <ConfirmDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleRemove}
-        title="紐付けの削除"
-        message="この点検種別の紐付けを削除してもよろしいですか？"
-        confirmLabel="削除"
+        title="紐付けの解除"
+        message={deleteTarget ? `「${vendorName}」と「${nameOf(deleteTarget)}」の紐付けを解除しますか？` : ''}
+        confirmLabel="解除"
+        variant="danger"
+      />
+
+      <ConfirmDialog
+        open={bulkConfirmOpen}
+        onClose={() => setBulkConfirmOpen(false)}
+        onConfirm={() => void handleRemoveSelected()}
+        title="紐付けの解除"
+        message={`「${vendorName}」と次の ${selectedRows.length} 件の点検種別の紐付けを解除しますか？\n${confirmNameList(selectedRows.map(nameOf))}`}
+        confirmLabel={`${selectedRows.length}件を解除`}
         variant="danger"
       />
     </div>
