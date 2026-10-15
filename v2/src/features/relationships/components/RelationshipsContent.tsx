@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { BuildingIcon, WrenchIcon } from '@/components/ui/icons';
 import { Select } from '@/components/ui/Select';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
@@ -54,9 +55,9 @@ export function RelationshipsContent() {
     if (inspectionError) addToast(inspectionError.message, 'error');
   }, [inspectionError, addToast]);
 
-  const tabs: { key: SubTab; label: string }[] = [
-    { key: 'buildings', label: '🏢 物件' },
-    { key: 'inspections', label: '🔧 点検種別' },
+  const tabs: { key: SubTab; label: string; icon: typeof BuildingIcon }[] = [
+    { key: 'buildings', label: '物件', icon: BuildingIcon },
+    { key: 'inspections', label: '点検種別', icon: WrenchIcon },
   ];
 
   return (
@@ -90,7 +91,10 @@ export function RelationshipsContent() {
                       : 'pb-2 text-sm font-medium text-gray-500 hover:text-gray-700'
                   }
                 >
-                  {tab.label}
+                  <span className="inline-flex items-center gap-1.5">
+                    <tab.icon size={16} />
+                    {tab.label}
+                  </span>
                 </button>
               ))}
             </nav>

@@ -21,12 +21,14 @@ describe('AdminSidebar (v1 admin.html .sidebar-nav / admin.js updateSidebarCount
       </MemoryRouter>,
     );
     const links = screen.getAllByRole('link');
+    // 全項目にアイコン（線の SVG）が付く
+    expect(links.every((a) => a.querySelector('svg'))).toBe(true);
     expect(links.map((a) => a.textContent?.replace(/\d+$/, ''))).toEqual([
-      '⏳承認待ち',
-      '✅承認済み',
-      '🔗紐付け管理',
-      '📋マスター管理',
-      '👥ユーザー管理',
+      '承認待ち',
+      '承認済み',
+      '紐付け管理',
+      'マスター管理',
+      'ユーザー管理',
       '広告枠管理',
     ]);
     await waitFor(() => expect(within(links[0]!).getByText('3')).toBeInTheDocument());
@@ -37,7 +39,7 @@ describe('AdminSidebar (v1 admin.html .sidebar-nav / admin.js updateSidebarCount
     );
   });
 
-  it('◀ で閉じてアイコンだけにし、状態を localStorage の sidebarCollapsed に残す（v1 admin.js initSidebarToggle）', async () => {
+  it('開閉ボタンで閉じてアイコンだけにし、状態を localStorage の sidebarCollapsed に残す（v1 admin.js initSidebarToggle）', async () => {
     vi.stubGlobal('localStorage', createMemoryStorage());
     const { unmount } = render(
       <MemoryRouter initialEntries={['/admin']}>
@@ -45,9 +47,9 @@ describe('AdminSidebar (v1 admin.html .sidebar-nav / admin.js updateSidebarCount
       </MemoryRouter>,
     );
     const toggle = screen.getByTitle('サイドバーを開閉');
-    expect(toggle).toHaveTextContent('◀');
+    expect(toggle).toHaveAttribute('aria-label', 'サイドバーを閉じる');
     fireEvent.click(toggle);
-    expect(toggle).toHaveTextContent('▶');
+    expect(toggle).toHaveAttribute('aria-label', 'サイドバーを開く');
     expect(localStorage.getItem('sidebarCollapsed')).toBe('true');
     expect(screen.queryByText('承認待ち')).not.toBeInTheDocument();
     await waitFor(() => expect(countApprovedEntries).toHaveBeenCalled());
@@ -59,7 +61,7 @@ describe('AdminSidebar (v1 admin.html .sidebar-nav / admin.js updateSidebarCount
         <AdminSidebar />
       </MemoryRouter>,
     );
-    expect(screen.getByTitle('サイドバーを開閉')).toHaveTextContent('▶');
+    expect(screen.getByTitle('サイドバーを開閉')).toHaveAttribute('aria-label', 'サイドバーを開く');
     fireEvent.click(screen.getByTitle('サイドバーを開閉'));
     expect(localStorage.getItem('sidebarCollapsed')).toBe('false');
     expect(screen.getByText('承認待ち')).toBeInTheDocument();

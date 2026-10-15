@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { CheckIcon, UndoIcon } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/Toast';
 import {
   generateAdminCsv,
@@ -135,7 +136,8 @@ export function EntryActions({
         disabled={!hasSelection}
         onClick={() => setConfirm({ kind: 'status', status: 'exported' })}
       >
-        ✓ 取込済みにする
+        <CheckIcon size={14} className="mr-1" />
+        取込済みにする
       </Button>
       <Button
         size="sm"
@@ -143,7 +145,8 @@ export function EntryActions({
         disabled={!hasSelection}
         onClick={() => setConfirm({ kind: 'status', status: 'ready' })}
       >
-        ↩ 未取込に戻す
+        <UndoIcon size={14} className="mr-1" />
+        未取込に戻す
       </Button>
       <Button
         size="sm"

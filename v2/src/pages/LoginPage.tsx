@@ -1,10 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type InputHTMLAttributes } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { useAdSlots } from '@/features/ad-slots/hooks/useAdSlots';
 import { MAX_AD_SLOTS } from '@/lib/constants';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { Spinner } from '@/components/ui/Spinner';
 import type { DbProfile } from '@/types/database';
 
@@ -67,19 +66,21 @@ export function LoginPage() {
   return (
     // v1: login.html .login-grid（画面いっぱいの 2×2。4 セル同じ大きさ、gap・padding 6px）。lg 未満は縦に積む
     <div className="grid min-h-dvh grid-cols-1 gap-1.5 bg-slate-200 p-1.5 lg:h-dvh lg:grid-cols-2 lg:grid-rows-2">
-      {/* v1: .login-form-cell（グラデーションの上に白いカード）。高さが足りないときはセルの中だけスクロールする */}
-      <div className="flex min-h-0 overflow-y-auto rounded-xl bg-gradient-to-br from-indigo-400 to-purple-700 p-4 lg:p-1.5">
-        <div className="m-auto w-full max-w-sm rounded-2xl bg-white px-4 py-3 shadow-2xl">
+      {/* フォームのセル。カードは高密度化の対象外で、FHD 対応前の v2 の見た目のまま（ユーザー指定 2026-10-15）。
+          入力欄とボタンは共通部品の既定値（高密度）ではなく、当時の大きさで書く。高さが足りないときはセルの中だけスクロールする */}
+      <div className="flex min-h-0 overflow-y-auto rounded-xl bg-gray-50 p-4">
+        <div className="m-auto w-full max-w-md rounded-lg border border-gray-200 bg-white p-8 shadow-sm">
           {/* v1: login.html .login-header（見出し・副題・#appVersion） */}
-          <div className="text-center mb-2">
-            <h1 className="text-xl font-bold text-gray-900">📋 点検日入力フォーム</h1>
-            <p className="mt-0.5 text-sm text-gray-500">アカウントにログインしてください</p>
-            <span className="mt-1 inline-block rounded bg-slate-200 px-2 py-0.5 text-xs text-slate-500">
+          <div className="text-center mb-6">
+            <h1 className="text-2xl font-bold text-gray-900">📋 点検日入力フォーム</h1>
+            <p className="mt-1 text-sm text-gray-500">アカウントにログインしてください</p>
+            <span className="mt-2 inline-block rounded bg-slate-200 px-2 py-0.5 text-xs text-slate-500">
               v{__APP_VERSION__}
             </span>
           </div>
-          <form onSubmit={handleSubmit} className="space-y-2">
-            <Input
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <LoginField
+              id="login-email"
               label="メールアドレス"
               type="email"
               value={email}
@@ -88,7 +89,8 @@ export function LoginPage() {
               autoComplete="email"
               autoFocus
             />
-            <Input
+            <LoginField
+              id="login-password"
               label="パスワード"
               type="password"
               value={password}
@@ -99,12 +101,12 @@ export function LoginPage() {
             {message && (
               <p className="text-sm text-red-600 bg-red-50 rounded-md px-3 py-2">{message}</p>
             )}
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" className="w-full px-4! py-2!" disabled={loading}>
               {loading ? 'ログイン中...' : 'ログイン'}
             </Button>
           </form>
           {/* v1: login.html .login-footer */}
-          <p className="mt-2 text-center text-xs text-slate-500">
+          <p className="mt-6 text-center text-xs text-slate-500">
             パスワードを忘れた場合は管理者にお問い合わせください
           </p>
         </div>
@@ -114,6 +116,22 @@ export function LoginPage() {
       {Array.from({ length: MAX_AD_SLOTS }, (_, i) => i + 1).map((slotIndex) => (
         <AdSlotCell key={slotIndex} slot={slots.find((s) => s.slot_index === slotIndex)} />
       ))}
+    </div>
+  );
+}
+
+/** ログインの入力欄。共通の Input は高密度の既定値なので、FHD 対応前と同じ大きさ（ラベル 14px・入力欄 px-3 py-2）で書く */
+function LoginField({ label, id, ...props }: InputHTMLAttributes<HTMLInputElement> & { label: string; id: string }) {
+  return (
+    <div className="space-y-1">
+      <label htmlFor={id} className="block text-sm font-medium text-gray-700">
+        {label}
+      </label>
+      <input
+        id={id}
+        className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        {...props}
+      />
     </div>
   );
 }

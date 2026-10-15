@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
+import { GripVerticalIcon } from '@/components/ui/icons';
 import { Input } from '@/components/ui/Input';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
@@ -256,7 +257,11 @@ export function InspectionTypesMaster() {
                     overId === item.id && draggedId !== item.id && 'bg-blue-50',
                   )}
                 >
-                  {draggable && <td className="cell text-gray-400 cursor-move select-none">☰</td>}
+                  {draggable && (
+                    <td className="cell text-gray-400 cursor-move select-none" title="ドラッグで並べ替え">
+                      <GripVerticalIcon size={16} />
+                    </td>
+                  )}
                   <td className="cell">{item.inspection_name}</td>
                   <td className="cell whitespace-nowrap">
                     {item.category ? (
