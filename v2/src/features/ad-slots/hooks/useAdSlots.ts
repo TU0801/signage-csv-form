@@ -19,18 +19,33 @@ const AD_IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg'];
 const SHARED_UPLOAD_ERROR_PREFIX = '広告画像のアップロードに失敗しました';
 
 /**
+ * 広告画像の拡張子・サイズの確認（v1 の文言）。問題なければ null。
+ * 保存時だけでなく、ファイルを選んだ時点でも欄の下に出すために分けている。
+ */
+export function adImageFileError(file: Pick<File, 'name' | 'size'>): string | null {
+  const extension = (file.name.split('.').pop() ?? '').toLowerCase();
+  if (!AD_IMAGE_EXTENSIONS.includes(extension)) return 'PNG、JPG形式の画像のみアップロードできます';
+  if (file.size > AD_IMAGE_MAX_BYTES) return 'ファイルサイズは5MB以下にしてください';
+  return null;
+}
+
+/**
+ * リンクURLの書式の確認。空は可（リンクなし）。http(s):// で始まらないとログイン画面で相対URLになり開けない。
+ */
+export function adLinkUrlError(url: string): string | null {
+  const trimmed = url.trim();
+  if (!trimmed || /^https?:\/\/\S+$/i.test(trimmed)) return null;
+  return 'https:// または http:// から始まるURLを入力してください';
+}
+
+/**
  * 広告画像を v1 と同じ確認・文言でアップロードする（共有の lib/storage.ts は文言が v1 と違うため包む）。
  * 拡張子・サイズを先に v1 の文言で断り、アップロード失敗は v1 の前置きに置き換える。
  */
 // v1: js/supabase/ads.js uploadAdImage
 export async function uploadAdImageV1(file: File, slotIndex: number): Promise<string> {
-  const extension = (file.name.split('.').pop() ?? '').toLowerCase();
-  if (!AD_IMAGE_EXTENSIONS.includes(extension)) {
-    throw new Error('PNG、JPG形式の画像のみアップロードできます');
-  }
-  if (file.size > AD_IMAGE_MAX_BYTES) {
-    throw new Error('ファイルサイズは5MB以下にしてください');
-  }
+  const fileError = adImageFileError(file);
+  if (fileError) throw new Error(fileError);
   return uploadAdImage(file, slotIndex).catch((err: unknown) => {
     if (err instanceof Error && err.message.startsWith(SHARED_UPLOAD_ERROR_PREFIX)) {
       const v1Error = new Error(

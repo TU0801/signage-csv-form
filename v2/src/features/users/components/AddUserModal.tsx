@@ -2,9 +2,11 @@ import { useState, type FormEvent } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { Combobox } from '@/components/ui/Combobox';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { MIN_PASSWORD_LENGTH, ROLE_OPTIONS } from '../constants';
+import { vendorOptions } from '../vendorOptions';
 import type { DbProfile, DbVendor } from '@/types/database';
 
 interface AddUserModalProps {
@@ -19,6 +21,8 @@ interface AddUserModalProps {
   }) => Promise<void>;
 }
 
+type FieldErrors = Partial<Record<'email' | 'password' | 'vendor', string>>;
+
 // v1: js/admin-users.js openUserModal / handleUserFormSubmit（admin.html #userModal）
 export function AddUserModal({ open, onClose, vendors, onAdd }: AddUserModalProps) {
   const { addToast } = useToast();
@@ -26,13 +30,18 @@ export function AddUserModal({ open, onClose, vendors, onAdd }: AddUserModalProp
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<DbProfile['role']>('user');
   const [vendorId, setVendorId] = useState('');
+  const [errors, setErrors] = useState<FieldErrors>({});
   const [submitting, setSubmitting] = useState(false);
+
+  // 何か入れていたら、Escape・背景クリック・× では破棄の確認を出す
+  const dirty = !!(email || password || vendorId || role !== 'user');
 
   const resetForm = () => {
     setEmail('');
     setPassword('');
     setRole('user');
     setVendorId('');
+    setErrors({});
   };
 
   const handleClose = () => {
@@ -40,12 +49,25 @@ export function AddUserModal({ open, onClose, vendors, onAdd }: AddUserModalProp
     onClose();
   };
 
+  /** 入力の確認は欄の下に出す（useUsers.addUser と同じ条件。そちらは最後の砦として残す） */
+  const validate = (): FieldErrors => {
+    const next: FieldErrors = {};
+    if (!email.trim()) next.email = 'メールアドレスを入力してください';
+    // noValidate でブラウザの形式チェックが無くなるため、ここで見る（Edge Function は英語のエラーを返す）
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) next.email = 'メールアドレスの形式が正しくありません';
+    if (!password) next.password = 'パスワードを入力してください';
+    else if (password.length < MIN_PASSWORD_LENGTH) {
+      next.password = `パスワードは${MIN_PASSWORD_LENGTH}文字以上で入力してください`;
+    }
+    if (role !== 'admin' && !vendorId) next.vendor = '一般ユーザーは保守会社を選択してください';
+    return next;
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!email.trim() || !password) {
-      addToast('メールアドレスとパスワードは必須です', 'error');
-      return;
-    }
+    const found = validate();
+    setErrors(found);
+    if (Object.keys(found).length > 0) return;
     setSubmitting(true);
     try {
       await onAdd({
@@ -76,8 +98,9 @@ export function AddUserModal({ open, onClose, vendors, onAdd }: AddUserModalProp
   };
 
   return (
-    <Modal open={open} onClose={handleClose} title="ユーザー追加">
-      <form className="space-y-4" onSubmit={handleSubmit}>
+    <Modal open={open} onClose={handleClose} title="ユーザー追加" dirty={dirty}>
+      {/* noValidate: ブラウザの吹き出しではなく欄の下に日本語で出す */}
+      <form className="space-y-4" onSubmit={handleSubmit} noValidate>
         <Input
           label="メールアドレス *"
           id="newUserEmail"
@@ -87,6 +110,7 @@ export function AddUserModal({ open, onClose, vendors, onAdd }: AddUserModalProp
           onChange={(e) => setEmail(e.target.value)}
           placeholder="example@company.com"
           autoComplete="username"
+          error={errors.email}
         />
         <Input
           label="パスワード *"
@@ -98,27 +122,37 @@ export function AddUserModal({ open, onClose, vendors, onAdd }: AddUserModalProp
           onChange={(e) => setPassword(e.target.value)}
           placeholder={`${MIN_PASSWORD_LENGTH}文字以上`}
           autoComplete="new-password"
+          error={errors.password}
         />
-        <div className="space-y-1">
-          <Select
-            label="保守会社 *"
-            id="newUserVendor"
-            options={vendors.map((v) => ({ value: v.id, label: v.vendor_name }))}
-            placeholder="-- 選択してください --"
-            value={vendorId}
-            onChange={(e) => setVendorId(e.target.value)}
-          />
-          <p className="text-xs text-gray-500">
-            一般ユーザーは必須です。管理者は未選択のままで構いません
-          </p>
-        </div>
+        {/* 権限で保守会社が要るかが決まるので、権限を先に選ぶ */}
         <Select
           label="権限 *"
           id="newUserRole"
           options={ROLE_OPTIONS}
           value={role}
-          onChange={(e) => setRole(e.target.value as DbProfile['role'])}
+          onChange={(e) => {
+            setRole(e.target.value as DbProfile['role']);
+            setErrors((prev) => ({ ...prev, vendor: undefined }));
+          }}
         />
+        <div className="space-y-1">
+          <Combobox
+            label="保守会社"
+            required={role !== 'admin'}
+            id="newUserVendor"
+            options={vendorOptions(vendors, { withNone: role === 'admin' })}
+            placeholder="選択してください（社名の一部で検索）"
+            value={vendorId}
+            onChange={(v) => {
+              setVendorId(v);
+              setErrors((prev) => ({ ...prev, vendor: undefined }));
+            }}
+            error={errors.vendor}
+          />
+          <p className="text-xs text-gray-500">
+            一般ユーザーは必須です。管理者は未選択のままで構いません
+          </p>
+        </div>
         <div className="flex justify-end gap-3 pt-2">
           <Button type="button" variant="secondary" onClick={handleClose}>
             キャンセル

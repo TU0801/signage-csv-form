@@ -14,12 +14,13 @@ export function AdSlotCard({ slotIndex, slot, onOpen }: AdSlotCardProps) {
     <button
       type="button"
       onClick={() => onOpen(slotIndex)}
-      className="flex min-h-40 flex-col overflow-hidden rounded-lg bg-white text-left transition-shadow hover:shadow-md"
+      className="flex flex-col overflow-hidden rounded-lg bg-white text-left transition-shadow hover:shadow-md"
       aria-label={`広告枠 ${slotIndex} を編集`}
     >
-      <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-slate-100">
+      {/* ログイン画面のセル（PC で横:縦 ≒ 2:1）に合わせ、切らずに全体を出す（ログイン画面の AdSlotCell と同じ contain） */}
+      <div className="relative flex aspect-[2/1] items-center justify-center overflow-hidden bg-slate-100">
         {slot?.image_url && (
-          <img src={slot.image_url} alt="" className="h-full w-full object-cover" />
+          <img src={slot.image_url} alt="" className="h-full w-full object-contain" />
         )}
         <span className="absolute left-1.5 top-1.5 rounded-full bg-black/50 px-1.5 py-0.5 text-[0.65rem] font-bold text-white">
           {slotIndex}

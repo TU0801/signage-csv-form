@@ -1,6 +1,6 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { useAdSlots, uploadAdImageV1 } from '../hooks/useAdSlots';
+import { useAdSlots, uploadAdImageV1, adLinkUrlError } from '../hooks/useAdSlots';
 
 const mockSelect = vi.fn();
 const mockUpdate = vi.fn();
@@ -163,5 +163,14 @@ describe('uploadAdImageV1', () => {
     await expect(uploadAdImageV1(big, 1)).rejects.toThrow('ファイルサイズは5MB以下にしてください');
 
     expect(mockUploadAdImage).not.toHaveBeenCalled();
+  });
+});
+
+describe('adLinkUrlError', () => {
+  it('accepts empty and http(s) URLs and rejects ones without a scheme (they become relative links)', () => {
+    expect(adLinkUrlError('')).toBeNull();
+    expect(adLinkUrlError(' https://baran-ev.com/ ')).toBeNull();
+    expect(adLinkUrlError('http://example.com')).toBeNull();
+    expect(adLinkUrlError('www.example.com')).toBe('https:// または http:// から始まるURLを入力してください');
   });
 });
