@@ -79,6 +79,8 @@ describe('1件入力画面（一般ユーザー）', () => {
     // 紐付けが1カテゴリ（清掃）だけなので、カテゴリと先頭の紐付け点検種別が選ばれる（v1 applyLinkedDefaults）
     await waitFor(() => expect(screen.getByLabelText('案内カテゴリ')).toHaveValue('清掃'));
     expect(screen.getByLabelText('点検工事案内 *')).toHaveValue('clean');
+    // 管理会社フィルターは管理者だけ
+    expect(screen.queryByLabelText('管理会社')).toBeNull();
 
     fireEvent.change(screen.getByLabelText('物件コード', { exact: false, selector: 'select' }), {
       target: { value: 'z0015A01' },
@@ -134,5 +136,29 @@ describe('1件入力画面（管理者の管理会社フィルター）', () => 
     fireEvent.change(filter, { target: { value: '__none__' } });
     expect(codes()).toEqual(['2010', 'z0015A01']);
     expect(terminalSelect).not.toHaveValue('h0001A00');
+  });
+
+  it('絞り込みの外の物件の行を編集で読み込むと、管理会社を全てに戻す', async () => {
+    isAdmin = true;
+    render(
+      <HeaderSlotContext.Provider value={{ target: document.body, setTarget: () => {} }}>
+        <ToastProvider>
+          <SingleEntryPage />
+        </ToastProvider>
+      </HeaderSlotContext.Provider>,
+    );
+
+    const filter = await screen.findByLabelText('管理会社');
+    fireEvent.change(screen.getByLabelText('物件コード', { exact: false, selector: 'select' }), {
+      target: { value: '120273-00' },
+    });
+    fireEvent.change(screen.getByLabelText('点検工事案内 *'), { target: { value: 'clean' } });
+    fireEvent.click(screen.getByRole('button', { name: 'データを追加' }));
+    const table = await screen.findByRole('table');
+
+    fireEvent.change(filter, { target: { value: '__none__' } });
+    fireEvent.click(within(table).getByRole('button', { name: '編集' }));
+    expect(filter).toHaveValue('');
+    expect(screen.getByLabelText('物件コード', { exact: false, selector: 'select' })).toHaveValue('120273-00');
   });
 });
