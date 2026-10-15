@@ -60,4 +60,27 @@ describe('usePendingEntries (v1 admin-pending.js)', () => {
     expect(api.approveEntries).toHaveBeenCalledWith(['1', '3']);
     expect(api.fetchPendingEntries).toHaveBeenCalledTimes(1);
   });
+
+  it('bulk reject waits for every delete before reloading and reports how many succeeded and failed', async () => {
+    api.fetchPendingEntries.mockResolvedValue([]);
+    // 1件目はすぐ失敗し、2件目はあとから終わる（失敗した時点で読み直さないこと）
+    let finishSecond: () => void = () => {};
+    api.rejectEntry
+      .mockRejectedValueOnce(new Error('denied'))
+      .mockImplementationOnce(() => new Promise<void>((resolve) => (finishSecond = resolve)));
+    const { result } = renderHook(() => usePendingEntries());
+
+    let outcome: Awaited<ReturnType<typeof result.current.rejectBulk>> | undefined;
+    await act(async () => {
+      const p = result.current.rejectBulk(['1', '2']);
+      await Promise.resolve();
+      expect(api.fetchPendingEntries).not.toHaveBeenCalled();
+      finishSecond();
+      outcome = await p;
+    });
+    expect(api.rejectEntry).toHaveBeenCalledWith('1');
+    expect(api.rejectEntry).toHaveBeenCalledWith('2');
+    expect(api.fetchPendingEntries).toHaveBeenCalledTimes(1);
+    expect(outcome).toEqual({ succeeded: 1, failed: 1, firstError: new Error('denied') });
+  });
 });

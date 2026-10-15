@@ -67,6 +67,24 @@ export function usePendingEntries() {
     [fetchPendingEntries],
   );
 
+  // 選択した行をまとめて却下（1件ずつの却下と同じく削除）。却下は取り消せないので、全件の結果が出てから読み直し、
+  // 成功・失敗の件数を返す（途中で1件失敗しても、ほかの削除が済んだかどうかを伝えるため）
+  const rejectBulk = useCallback(
+    async (ids: string[]): Promise<{ succeeded: number; failed: number; firstError: unknown }> => {
+      if (ids.length === 0) return { succeeded: 0, failed: 0, firstError: null };
+      const results = await Promise.allSettled(ids.map((id) => apiRejectEntry(id)));
+      applyDefaultStartDate();
+      await fetchPendingEntries();
+      const failures = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+      return {
+        succeeded: results.length - failures.length,
+        failed: failures.length,
+        firstError: failures[0]?.reason ?? null,
+      };
+    },
+    [fetchPendingEntries],
+  );
+
   return {
     entries,
     loading,
@@ -75,5 +93,6 @@ export function usePendingEntries() {
     approveEntry,
     rejectEntry,
     approveBulk,
+    rejectBulk,
   };
 }

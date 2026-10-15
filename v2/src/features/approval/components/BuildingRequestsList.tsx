@@ -5,6 +5,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
 import { useToast } from '@/components/ui/Toast';
 import { useBuildingRequests } from '../hooks/useBuildingRequests';
+import { useRefetchOnVisible } from '../hooks/useRefetchOnVisible';
 
 // v1: js/admin-relationships.js renderPendingBuildingRequests（admin.html #approval-buildings）
 export function BuildingRequestsList() {
@@ -16,6 +17,9 @@ export function BuildingRequestsList() {
   useEffect(() => {
     fetchPendingRequests();
   }, [fetchPendingRequests]);
+
+  // 別のタブから戻ったら読み直す（却下の確認を開いている間は読み直さない）
+  useRefetchOnVisible(fetchPendingRequests, !loading && rejectTarget === null);
 
   const handleApprove = useCallback(
     async (id: string) => {
@@ -66,9 +70,15 @@ export function BuildingRequestsList() {
   return (
     <Card>
       <CardHeader>
-        <h2 className="text-sm font-semibold text-gray-900">
-          ビル追加リクエスト ({requests.length}件)
-        </h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-gray-900">
+            ビル追加リクエスト ({requests.length}件)
+          </h2>
+          {/* 開いている間に届いたリクエストは自動では出ないので、いつでも読み直せるようにする */}
+          <Button size="sm" variant="ghost" onClick={fetchPendingRequests}>
+            更新
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="p-0">
         {requests.length === 0 ? (

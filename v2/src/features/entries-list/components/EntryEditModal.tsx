@@ -47,6 +47,13 @@ function EntryEditDialog({
   const { addToast } = useToast();
   const [form, setForm] = useState<EntryEditForm>(() => toEditForm(entry, displayDefault));
   const [saving, setSaving] = useState(false);
+  // 承認待ちから開いたときは、保存すると承認にもなる（buildEditUpdates）。ボタンと通知の文言で分かるようにする
+  const approves = mode === 'pending';
+  // 取込済みの行は保存すると未取込に戻り、次の CSV に再び入る
+  const revertsExport = mode === 'list' && entry.status === 'exported';
+  // 開いた時点の値と比べる（表示時間の既定があとから読み込まれても、触っていない画面を「変更あり」にしない）
+  const [initialForm] = useState<EntryEditForm>(() => toEditForm(entry, displayDefault));
+  const dirty = (Object.keys(form) as (keyof EntryEditForm)[]).some((k) => form[k] !== initialForm[k]);
 
   const set = (key: keyof EntryEditForm, value: string) =>
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -59,7 +66,7 @@ function EntryEditDialog({
         entry.id,
         buildEditUpdates(form, mode, entry.status, displayDefault),
       );
-      addToast('編集しました', 'success');
+      addToast(approves ? '保存して承認しました' : '編集しました', 'success');
       onClose();
       await onSaved();
     } catch (error) {
@@ -73,7 +80,7 @@ function EntryEditDialog({
   const propertyDisplay = `${entry.property_code || '-'} ${propertyNames.get(entry.property_code) || ''}`;
 
   return (
-    <Modal open onClose={onClose} title="表示設定を編集" className="max-w-xl">
+    <Modal open onClose={onClose} title="表示設定を編集" className="max-w-xl" dirty={dirty}>
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="rounded-md bg-gray-100 p-4 text-sm">
           <h4 className="mb-3 text-sm font-bold text-gray-500">基本情報（参照のみ）</h4>
@@ -130,12 +137,22 @@ function EntryEditDialog({
             onChange={(e) => set('posterPosition', e.target.value)}
           />
         </div>
+        {approves && (
+          <p className="rounded-md bg-blue-50 px-2 py-1 text-sm text-blue-800">
+            保存すると、この申請は承認されます（承認済みに移ります）。
+          </p>
+        )}
+        {revertsExport && (
+          <p className="rounded-md bg-yellow-50 px-2 py-1 text-sm text-yellow-800">
+            この行は取込済みです。保存すると未取込に戻り、次のCSVに再び含まれます。
+          </p>
+        )}
         <div className="flex justify-end gap-3 pt-2">
           <Button variant="secondary" type="button" onClick={onClose}>
             キャンセル
           </Button>
           <Button variant="primary" type="submit" disabled={saving}>
-            {saving ? '保存中...' : '保存'}
+            {saving ? '保存中...' : approves ? '保存して承認' : '保存'}
           </Button>
         </div>
       </form>

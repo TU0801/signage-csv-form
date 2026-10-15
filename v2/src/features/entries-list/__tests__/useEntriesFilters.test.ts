@@ -37,4 +37,11 @@ describe('entries filters default (v1 admin.js loadAllData / restoreFilters)', (
     applyDefaultStartDate(new Date('2026-12-01T12:00:00+09:00'));
     expect(getSessionFiltersForTest()?.startDate).toBe('2026-10-15');
   });
+
+  it('clearFilters empties every condition including the default start date', () => {
+    const { result } = renderHook(() => useEntriesFilters());
+    act(() => result.current.updateFilter('vendorName', '山田'));
+    act(() => result.current.clearFilters());
+    expect(result.current.filters).toEqual({ propertyCode: '', startDate: '', endDate: '', vendorName: '' });
+  });
 });

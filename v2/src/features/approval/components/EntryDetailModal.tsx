@@ -4,16 +4,23 @@ import { Button } from '@/components/ui/Button';
 import type { DbEntry } from '@/types/database';
 import { normalizeTerminalId } from '@/lib/terminal';
 import {
-  entryApprovalLabel,
+  entryStatusLabel,
   formatJaDate,
   formatJaDateTime,
+  posterPositionLabel,
 } from '@/features/entries-list/lib/entries';
 
 interface EntryDetailModalProps {
   entry: DbEntry | null;
   onClose: () => void;
+  /** 物件コード → 物件名（物件の行に名前も出す） */
+  propertyNames: Map<string, string>;
   emailOf: (userId: string | null | undefined) => string;
   displayDefault: number;
+  /** 承認待ちから開いたときだけ渡す。詳細を確かめたまま承認・却下・編集へ進めるようにする */
+  onApprove?: (entry: DbEntry) => void;
+  onReject?: (entry: DbEntry) => void;
+  onEdit?: (entry: DbEntry) => void;
 }
 
 function DetailRow({ label, children }: { label: string; children: ReactNode }) {
@@ -36,9 +43,18 @@ function Section({ title, children }: { title?: string; children: ReactNode }) {
   );
 }
 
-/** エントリ詳細（データ一覧・承認待ちの両方から開く） */
+/** 申請内容の詳細（承認済み・承認待ちの両方から開く） */
 // v1: js/admin-entries.js showEntryDetail
-export function EntryDetailModal({ entry, onClose, emailOf, displayDefault }: EntryDetailModalProps) {
+export function EntryDetailModal({
+  entry,
+  onClose,
+  propertyNames,
+  emailOf,
+  displayDefault,
+  onApprove,
+  onReject,
+  onEdit,
+}: EntryDetailModalProps) {
   if (!entry) return null;
 
   const isCustom = entry.poster_type === 'custom';
@@ -47,22 +63,41 @@ export function EntryDetailModal({ entry, onClose, emailOf, displayDefault }: En
     <Modal
       open
       onClose={onClose}
-      title="エントリ詳細"
+      title="申請内容の詳細"
       className="max-w-4xl"
       footer={
-        <Button variant="secondary" onClick={onClose}>
-          閉じる
-        </Button>
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            閉じる
+          </Button>
+          {onEdit && (
+            <Button variant="secondary" onClick={() => onEdit(entry)}>
+              編集
+            </Button>
+          )}
+          {onReject && (
+            <Button variant="danger" onClick={() => onReject(entry)}>
+              却下
+            </Button>
+          )}
+          {onApprove && (
+            <Button variant="success" onClick={() => onApprove(entry)}>
+              承認
+            </Button>
+          )}
+        </>
       }
     >
       {/* FHD（2xl）では区分を2段組みにして縦の長さを抑える（上から順に左の列、右の列へ流す） */}
       <div className="gap-x-6 2xl:columns-2">
         <Section>
-          <DetailRow label="物件コード">{entry.property_code}</DetailRow>
+          <DetailRow label="物件">
+            {entry.property_code} {propertyNames.get(entry.property_code) || ''}
+          </DetailRow>
           <DetailRow label="端末ID">{normalizeTerminalId(entry.terminal_id) || '-'}</DetailRow>
           <DetailRow label="保守会社">{entry.vendor_name}</DetailRow>
           <DetailRow label="緊急連絡先">{entry.emergency_contact || '-'}</DetailRow>
-          <DetailRow label="点検工事案内">{entry.inspection_type}</DetailRow>
+          <DetailRow label="点検種別">{entry.inspection_type}</DetailRow>
           <DetailRow label="テンプレートNo">{entry.template_no || '-'}</DetailRow>
         </Section>
 
@@ -79,7 +114,7 @@ export function EntryDetailModal({ entry, onClose, emailOf, displayDefault }: En
             {formatJaDate(entry.display_end_date)} {entry.display_end_time || ''}
           </DetailRow>
           <DetailRow label="表示時間">{entry.display_duration || displayDefault}秒</DetailRow>
-          <DetailRow label="表示位置">{entry.poster_position || '-'}</DetailRow>
+          <DetailRow label="表示位置">{posterPositionLabel(entry.poster_position)}</DetailRow>
           <DetailRow label="貼紙区分">{isCustom ? '追加' : 'テンプレート'}</DetailRow>
           {isCustom && entry.poster_image && (
             <DetailRow label="貼紙画像">
@@ -100,7 +135,7 @@ export function EntryDetailModal({ entry, onClose, emailOf, displayDefault }: En
         <Section title="登録情報">
           <DetailRow label="登録者">{emailOf(entry.user_id)}</DetailRow>
           <DetailRow label="登録日時">{formatJaDateTime(entry.created_at)}</DetailRow>
-          <DetailRow label="ステータス">{entryApprovalLabel(entry.status)}</DetailRow>
+          <DetailRow label="ステータス">{entryStatusLabel(entry.status)}</DetailRow>
         </Section>
       </div>
     </Modal>

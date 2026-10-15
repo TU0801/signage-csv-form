@@ -55,7 +55,10 @@ export function useEntriesFilters() {
     [],
   );
 
-  return { filters, updateFilter };
+  // 「条件をクリア」: 既定の開始日（今日）も外して全期間を出す。承認・却下のあとは applyDefaultStartDate が開始日を戻す（v1 と同じ）
+  const clearFilters = useCallback(() => setFilters(emptyFilters), []);
+
+  return { filters, updateFilter, clearFilters };
 }
 
 /** Exported for testing */

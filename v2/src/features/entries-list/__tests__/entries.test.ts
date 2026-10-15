@@ -2,8 +2,12 @@ import { describe, it, expect } from 'vitest';
 import {
   buildEditUpdates,
   bulkStatusLabel,
+  describeEntryFilters,
+  displayPeriodWarning,
   entryApprovalLabel,
+  entryStatusLabel,
   filterExportEntries,
+  posterPositionLabel,
   sortEntries,
   toEditForm,
   toggleEntrySort,
@@ -67,6 +71,18 @@ describe('status labels', () => {
     expect(entryApprovalLabel('draft')).toBe('承認待ち');
   });
 
+  it('detail status separates 未取込 and 取込済み (CSV exports both)', () => {
+    expect(entryStatusLabel('ready')).toBe('承認済み（未取込）');
+    expect(entryStatusLabel('exported')).toBe('承認済み（取込済み）');
+    expect(entryStatusLabel('draft')).toBe('承認待ち');
+  });
+
+  it('poster position shows the label, raw value when unknown', () => {
+    expect(posterPositionLabel('0')).toBe('⑤全体');
+    expect(posterPositionLabel('9')).toBe('9');
+    expect(posterPositionLabel(null)).toBe('-');
+  });
+
   it('bulk change label (v1 updateEntriesStatus)', () => {
     expect(bulkStatusLabel('exported')).toBe('取込済み');
     expect(bulkStatusLabel('ready')).toBe('未取込');
@@ -96,5 +112,28 @@ describe('edit modal (v1 admin-entry-edit.js)', () => {
     expect(buildEditUpdates(form, 'list', 'exported', 6).status).toBe('ready');
     expect(buildEditUpdates(form, 'list', 'ready', 6)).not.toHaveProperty('status');
     expect(buildEditUpdates({ ...form, displayDuration: '' }, 'list', 'ready', 6).display_duration).toBe(6);
+  });
+});
+
+describe('display period warning (承認待ちの表示期間の色)', () => {
+  it('flags end before start, then end already past', () => {
+    const ok = makeEntry({ display_start_date: '2026-10-25', display_end_date: '2026-11-02' });
+    expect(displayPeriodWarning(ok, '2026-10-15')).toBeNull();
+    expect(
+      displayPeriodWarning(makeEntry({ display_start_date: '2026-09-18', display_end_date: '2026-09-16' }), '2026-09-01'),
+    ).toBe('表示終了日が表示開始日より前です');
+    expect(displayPeriodWarning(ok, '2026-11-03')).toBe('表示終了日を過ぎています');
+  });
+});
+
+describe('describeEntryFilters (承認済みの絞り込みの説明)', () => {
+  it('describes only the active conditions', () => {
+    expect(describeEntryFilters(noFilters, new Map())).toEqual([]);
+    expect(
+      describeEntryFilters(
+        { ...noFilters, propertyCode: '2010', startDate: '2026-10-15', vendorName: '山田' },
+        new Map([['2010', 'さくら']]),
+      ),
+    ).toEqual(['物件 2010 さくら', '点検開始日 2026/10/15 以降', '保守会社 山田']);
   });
 });

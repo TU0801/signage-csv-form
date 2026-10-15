@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
+import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
@@ -20,6 +21,7 @@ import { useEntriesFilters } from '../hooks/useEntriesFilters';
 import { useEntryLookups } from '../hooks/useEntryLookups';
 import {
   bulkStatusLabel,
+  describeEntryFilters,
   formatJaDate,
   formatJaDateTime,
   loadEntrySort,
@@ -41,6 +43,8 @@ const SORTABLE_COLUMNS: { column: EntrySortColumn; label: string; width?: string
   { column: 'remarks', label: '作業時間 及び 備考', width: NAME_COL.remarks },
   { column: 'vendor_name', label: '保守会社', width: NAME_COL.vendor },
   { column: 'created_at', label: '登録日時' },
+  // CSV は未取込・取込済みの両方を出すので、長谷工へ取り込んだかを行ごとに見えるようにする
+  { column: 'status', label: '取込' },
 ];
 
 const th = 'cell-head font-medium text-gray-500';
@@ -50,10 +54,10 @@ const nowrap = `${td} whitespace-nowrap`;
 const thActions = `${th} sticky right-0 bg-gray-50 shadow-[inset_1px_0_0_var(--color-gray-200)]`;
 const tdActions = `${td} sticky right-0 bg-white shadow-[inset_1px_0_0_var(--color-gray-200)] group-hover:bg-gray-50`;
 
-/** データ一覧（承認済みのみ） */
+/** 承認済み（サイドバーの「承認済み」。v1 の呼び名はデータ一覧） */
 // v1: js/admin-entries.js loadEntries / renderEntries
 export function EntriesTable() {
-  const { filters, updateFilter } = useEntriesFilters();
+  const { filters, updateFilter, clearFilters } = useEntriesFilters();
   const { entries, loading, error, refetch } = useEntriesTable(filters);
   const lookups = useEntryLookups();
   const { addToast } = useToast();
@@ -63,6 +67,11 @@ export function EntriesTable() {
   const [detailEntry, setDetailEntry] = useState<DbEntry | null>(null);
   const [editEntry, setEditEntry] = useState<DbEntry | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+
+  const activeConditions = useMemo(
+    () => describeEntryFilters(filters, lookups.propertyNames),
+    [filters, lookups.propertyNames],
+  );
 
   const sorted = useMemo(
     () => sortEntries(entries, sort, lookups.propertyNames),
@@ -151,6 +160,8 @@ export function EntriesTable() {
       <EntriesFilters
         filters={filters}
         onUpdateFilter={updateFilter}
+        onClear={clearFilters}
+        activeConditions={activeConditions}
         properties={lookups.properties}
         vendors={lookups.vendors}
       />
@@ -159,7 +170,7 @@ export function EntriesTable() {
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-sm font-semibold text-gray-900">
-              データ一覧 ({entries.length}件)
+              承認済み ({entries.length}件)
             </h2>
             <Button variant="ghost" size="sm" onClick={reload} disabled={loading}>
               {loading ? '読み込み中...' : '更新'}
@@ -190,7 +201,18 @@ export function EntriesTable() {
               <Spinner size="lg" />
             </div>
           ) : entries.length === 0 ? (
-            <p className="px-3 py-6 text-center text-sm text-gray-500">データがありません</p>
+            <div className="px-3 py-6 text-center text-sm text-gray-500">
+              <p>データがありません</p>
+              {/* 開いたときは点検開始日が今日以降に絞られるので、0件の理由と解除の手段を出す */}
+              {activeConditions.length > 0 && (
+                <p className="mt-1">
+                  {activeConditions.join(' / ')} で絞り込まれています。
+                  <Button size="sm" variant="secondary" onClick={clearFilters} className="ml-2">
+                    絞り込みを解除
+                  </Button>
+                </p>
+              )}
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left">
@@ -264,6 +286,11 @@ export function EntriesTable() {
                         </div>
                       </td>
                       <td className={nowrap}>{formatJaDateTime(entry.created_at)}</td>
+                      <td className={nowrap}>
+                        <Badge variant={entry.status === 'exported' ? 'success' : 'warning'}>
+                          {bulkStatusLabel(entry.status === 'exported' ? 'exported' : 'ready')}
+                        </Badge>
+                      </td>
                       <td className={td}>
                         <div className={NAME_CELL} title={lookups.emailOf(entry.user_id)}>
                           {lookups.emailOf(entry.user_id)}
@@ -299,6 +326,7 @@ export function EntriesTable() {
       <EntryDetailModal
         entry={detailEntry}
         onClose={() => setDetailEntry(null)}
+        propertyNames={lookups.propertyNames}
         emailOf={lookups.emailOf}
         displayDefault={lookups.displayDefault}
       />

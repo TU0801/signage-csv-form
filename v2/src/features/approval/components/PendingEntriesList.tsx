@@ -8,12 +8,21 @@ import { entryErrorReason } from '@/lib/api/admin-entries';
 import { EntryEditModal } from '@/features/entries-list/components/EntryEditModal';
 import { useEntryLookups } from '@/features/entries-list/hooks/useEntryLookups';
 import { NAME_COL } from '@/features/entries-list/lib/tableColumns';
+import { formatJaDate } from '@/features/entries-list/lib/entries';
 import type { DbEntry } from '@/types/database';
 import { PendingEntryRow } from './PendingEntryRow';
 import { EntryDetailModal } from './EntryDetailModal';
 import { usePendingEntries } from '../hooks/usePendingEntries';
+import { useRefetchOnVisible } from '../hooks/useRefetchOnVisible';
 
-type PendingConfirm = { kind: 'approve'; id: string } | { kind: 'reject'; id: string } | { kind: 'bulk' };
+type PendingConfirm =
+  | { kind: 'approve'; id: string }
+  | { kind: 'reject'; id: string }
+  | { kind: 'bulk' }
+  | { kind: 'bulkReject' };
+
+/** 確認ダイアログに一度に並べる対象の上限（多いときは「ほかN件」） */
+const MAX_LISTED = 10;
 
 const th = 'cell-head font-medium text-gray-500';
 // 操作の列は右端に固定する（PendingEntryRow の操作セルと対）
@@ -22,8 +31,16 @@ const thActions = `${th} sticky right-0 bg-gray-50 shadow-[inset_1px_0_0_var(--c
 /** データ承認待ち（申請済み = draft）。編集して保存すると承認になる */
 // v1: js/admin-pending.js / admin.html #approval-data
 export function PendingEntriesList() {
-  const { entries, loading, error, fetchPendingEntries, approveEntry, rejectEntry, approveBulk } =
-    usePendingEntries();
+  const {
+    entries,
+    loading,
+    error,
+    fetchPendingEntries,
+    approveEntry,
+    rejectEntry,
+    approveBulk,
+    rejectBulk,
+  } = usePendingEntries();
   const lookups = useEntryLookups();
   const { addToast } = useToast();
 
@@ -35,6 +52,12 @@ export function PendingEntriesList() {
   useEffect(() => {
     fetchPendingEntries();
   }, [fetchPendingEntries]);
+
+  // 別のタブから戻ったら読み直す（詳細・編集・確認を開いている間は読み直さない）
+  useRefetchOnVisible(
+    fetchPendingEntries,
+    !loading && !detailEntry && !editEntry && confirm === null,
+  );
 
   // 読み直した一覧に無い行は選択から外す
   const selected = useMemo(
@@ -99,14 +122,62 @@ export function PendingEntriesList() {
     }
   }, [approveBulk, selected, addToast]);
 
+  // 選択を却下（1件ずつの却下と同じく削除）
+  const handleBulkReject = useCallback(async () => {
+    const ids = selected;
+    if (ids.length === 0) return;
+    try {
+      const { succeeded, failed, firstError } = await rejectBulk(ids);
+      if (failed === 0) {
+        setSelectedIds(new Set());
+        addToast(`${succeeded}件を却下しました`, 'success');
+        return;
+      }
+      // 却下済みの行は読み直しで一覧から消え、選択からも外れる。残った行（失敗分）は選んだままにする
+      console.error('Failed to reject entries:', firstError);
+      addToast(
+        succeeded > 0
+          ? `${succeeded}件を却下しました。${failed}件は却下できませんでした: ${entryErrorReason(firstError)}`
+          : `却下に失敗しました: ${entryErrorReason(firstError)}`,
+        'error',
+      );
+    } catch (err) {
+      // 読み直しの失敗など
+      console.error('Failed to reject entries:', err);
+      addToast(`却下に失敗しました: ${entryErrorReason(err)}`, 'error');
+    }
+  }, [rejectBulk, selected, addToast]);
+
+  // 確認ダイアログに出す対象の1行（物件・点検種別・点検日）。却下は削除なので、何を消すかを確かめられるようにする
+  const describeEntry = (entry: DbEntry) => {
+    const name = lookups.propertyNames.get(entry.property_code) || '';
+    return (
+      `${entry.property_code} ${name} / ${entry.inspection_type || '-'} / ` +
+      `点検日 ${formatJaDate(entry.inspection_start)}〜${formatJaDate(entry.inspection_end)}`
+    );
+  };
+  const listTargets = (ids: string[]) => {
+    const targets = entries.filter((e) => ids.includes(e.id));
+    const lines = targets.slice(0, MAX_LISTED).map((e) => `・${describeEntry(e)}`);
+    if (targets.length > MAX_LISTED) lines.push(`ほか${targets.length - MAX_LISTED}件`);
+    return lines.join('\n');
+  };
+
   const confirmProps =
     confirm?.kind === 'reject'
       ? {
           title: '却下',
-          message: 'この申請を却下しますか？（申請データは削除されます）',
+          message: `この申請を却下しますか？（申請データは削除されます）\n${listTargets([confirm.id])}`,
           confirmLabel: '却下する',
           variant: 'danger' as const,
         }
+      : confirm?.kind === 'bulkReject'
+        ? {
+            title: '選択を却下',
+            message: `選択した${selected.length}件を却下しますか？（申請データは削除されます）\n${listTargets(selected)}`,
+            confirmLabel: '却下する',
+            variant: 'danger' as const,
+          }
       : confirm?.kind === 'bulk'
         ? {
             title: '一括承認',
@@ -125,18 +196,35 @@ export function PendingEntriesList() {
     <>
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-semibold text-gray-900">
               データ承認待ち ({entries.length}件)
             </h2>
-            <Button
-              size="sm"
-              variant="success"
-              disabled={selected.length === 0}
-              onClick={() => setConfirm({ kind: 'bulk' })}
-            >
-              一括承認
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              {selected.length > 0 && (
+                <span className="text-sm font-medium text-blue-800">{selected.length}件選択中</span>
+              )}
+              <Button
+                size="sm"
+                variant="danger"
+                disabled={selected.length === 0}
+                onClick={() => setConfirm({ kind: 'bulkReject' })}
+              >
+                選択を却下
+              </Button>
+              <Button
+                size="sm"
+                variant="success"
+                disabled={selected.length === 0}
+                onClick={() => setConfirm({ kind: 'bulk' })}
+              >
+                一括承認
+              </Button>
+              {/* 開いている間に届いた申請は自動では出ないので、いつでも読み直せるようにする */}
+              <Button size="sm" variant="ghost" onClick={fetchPendingEntries} disabled={loading}>
+                {loading ? '読み込み中...' : '更新'}
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -174,6 +262,7 @@ export function PendingEntriesList() {
                     <th className={`${th} ${NAME_COL.inspectionType}`}>点検種別</th>
                     <th className={th}>点検開始日</th>
                     <th className={th}>点検終了日</th>
+                    <th className={th}>表示期間</th>
                     <th className={`${th} ${NAME_COL.remarks}`}>備考</th>
                     <th className={`${th} ${NAME_COL.vendor}`}>保守会社</th>
                     <th className={th}>登録日時</th>
@@ -203,11 +292,25 @@ export function PendingEntriesList() {
         </CardContent>
       </Card>
 
+      {/* 承認待ちから開いた詳細は、そのまま承認・却下・編集へ進める（確認ダイアログは一覧の行と同じ） */}
       <EntryDetailModal
         entry={detailEntry}
         onClose={() => setDetailEntry(null)}
+        propertyNames={lookups.propertyNames}
         emailOf={lookups.emailOf}
         displayDefault={lookups.displayDefault}
+        onApprove={(e) => {
+          setDetailEntry(null);
+          setConfirm({ kind: 'approve', id: e.id });
+        }}
+        onReject={(e) => {
+          setDetailEntry(null);
+          setConfirm({ kind: 'reject', id: e.id });
+        }}
+        onEdit={(e) => {
+          setDetailEntry(null);
+          setEditEntry(e);
+        }}
       />
 
       <EntryEditModal
@@ -226,6 +329,7 @@ export function PendingEntriesList() {
           if (!confirm) return;
           if (confirm.kind === 'approve') void handleApprove(confirm.id);
           else if (confirm.kind === 'reject') void handleReject(confirm.id);
+          else if (confirm.kind === 'bulkReject') void handleBulkReject();
           else void handleBulkApprove();
         }}
         {...confirmProps}

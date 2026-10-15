@@ -113,61 +113,78 @@ export function EntryActions({
   const confirmMessage =
     confirm?.kind === 'delete'
       ? `選択した${selectedIds.length}件のデータを完全に削除してもよろしいですか？ この操作は取り消せません。`
-      : confirm?.kind === 'status'
-        ? `選択した${selectedIds.length}件を「${bulkStatusLabel(confirm.status)}」に変更しますか？`
-        : '';
+      : confirm?.kind === 'status' && confirm.status === 'pending'
+        ? // 未申請（pending）は管理画面のどの一覧にも出ないので、戻した後に見えなくなることを先に伝える
+          `選択した${selectedIds.length}件を「未申請」に戻しますか？\n` +
+          '申請者の入力画面の一覧に「未申請」として残り、管理画面の承認待ち・承認済みのどちらにも出なくなります。'
+        : confirm?.kind === 'status'
+          ? `選択した${selectedIds.length}件を「${bulkStatusLabel(confirm.status)}」に変更しますか？`
+          : '';
 
+  // 選択した行が対象の操作と、一覧に出ている全件が対象の操作を分けて並べる（CSV は選択に関係なく全件を出す）
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      {hasSelection && (
-        <span className="text-sm font-medium text-blue-800">{selectedEntries.length}件選択中</span>
-      )}
-      <Button
-        size="sm"
-        variant="danger"
-        disabled={!hasSelection}
-        onClick={() => setConfirm({ kind: 'delete' })}
-      >
-        一括削除
-      </Button>
-      <Button
-        size="sm"
-        variant="secondary"
-        disabled={!hasSelection}
-        onClick={() => setConfirm({ kind: 'status', status: 'exported' })}
-      >
-        <CheckIcon size={14} className="mr-1" />
-        取込済みにする
-      </Button>
-      <Button
-        size="sm"
-        variant="secondary"
-        disabled={!hasSelection}
-        onClick={() => setConfirm({ kind: 'status', status: 'ready' })}
-      >
-        <UndoIcon size={14} className="mr-1" />
-        未取込に戻す
-      </Button>
-      <Button
-        size="sm"
-        variant="secondary"
-        disabled={!hasSelection}
-        onClick={() => setConfirm({ kind: 'status', status: 'pending' })}
-      >
-        未申請に戻す
-      </Button>
-      <Button size="sm" variant="success" onClick={handleExportReport}>
-        点検レポート
-      </Button>
-      <Button size="sm" variant="success" onClick={handleExportCsv}>
-        CSV
-      </Button>
-      <Button size="sm" variant="secondary" onClick={handleCopyCsv}>
-        コピー
-      </Button>
-      <Button size="sm" variant="secondary" onClick={handleDownloadImages} disabled={downloading}>
-        {downloading ? 'DL中...' : '追加画像DL'}
-      </Button>
+    <div className="flex flex-wrap items-start gap-x-6 gap-y-2">
+      <div role="group" aria-label="選択した行への操作" className="space-y-1">
+        <p className={hasSelection ? 'text-xs font-medium text-blue-800' : 'text-xs text-gray-500'}>
+          選択した行に対して（{selectedEntries.length}件）
+          {!hasSelection && ': 行のチェックで選びます'}
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant="danger"
+            disabled={!hasSelection}
+            onClick={() => setConfirm({ kind: 'delete' })}
+          >
+            一括削除
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={!hasSelection}
+            onClick={() => setConfirm({ kind: 'status', status: 'exported' })}
+          >
+            <CheckIcon size={14} className="mr-1" />
+            取込済みにする
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={!hasSelection}
+            onClick={() => setConfirm({ kind: 'status', status: 'ready' })}
+          >
+            <UndoIcon size={14} className="mr-1" />
+            未取込に戻す
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={!hasSelection}
+            onClick={() => setConfirm({ kind: 'status', status: 'pending' })}
+          >
+            未申請に戻す
+          </Button>
+          <Button size="sm" variant="success" onClick={handleExportReport}>
+            点検レポート
+          </Button>
+        </div>
+      </div>
+      <div role="group" aria-label="表示中の全件への操作" className="space-y-1">
+        <p className="text-xs text-gray-500">
+          表示中の全件に対して（{entries.length}件・選択は関係なし）
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" variant="success" onClick={handleExportCsv}>
+            CSV
+          </Button>
+          <Button size="sm" variant="secondary" onClick={handleCopyCsv}>
+            コピー
+          </Button>
+          <Button size="sm" variant="secondary" onClick={handleDownloadImages} disabled={downloading}>
+            {downloading ? 'DL中...' : '追加画像DL'}
+          </Button>
+        </div>
+      </div>
 
       <ConfirmDialog
         open={confirm !== null}

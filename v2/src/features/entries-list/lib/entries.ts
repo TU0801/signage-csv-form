@@ -19,7 +19,8 @@ export type EntrySortColumn =
   | 'inspection_end'
   | 'remarks'
   | 'vendor_name'
-  | 'created_at';
+  | 'created_at'
+  | 'status';
 
 export interface EntrySort {
   column: EntrySortColumn;
@@ -109,6 +110,13 @@ export function entryApprovalLabel(status: DbEntry['status']): string {
   return '承認待ち';
 }
 
+/** 詳細モーダルのステータス表示。承認済みは長谷工への取込の済み・未を分けて出す（CSV は両方を出力するため） */
+export function entryStatusLabel(status: DbEntry['status']): string {
+  if (status === 'ready') return '承認済み（未取込）';
+  if (status === 'exported') return '承認済み（取込済み）';
+  return entryApprovalLabel(status);
+}
+
 /** 一括ステータス変更の表示名 */
 // v1: js/admin-entries.js updateEntriesStatus の statusLabel
 export function bulkStatusLabel(status: AdminEntryStatus): string {
@@ -134,6 +142,12 @@ export const POSTER_POSITION_OPTIONS = [
   { value: '4', label: '④中央' },
   { value: '0', label: '⑤全体' },
 ];
+
+/** 表示位置の表示名（①上左 など）。候補に無い値はそのまま出す */
+export function posterPositionLabel(value: string | null | undefined): string {
+  if (!value) return '-';
+  return POSTER_POSITION_OPTIONS.find((o) => o.value === value)?.label ?? value;
+}
 
 export interface EntryEditForm {
   displayStartDate: string;
@@ -187,6 +201,52 @@ export function buildEditUpdates(
     updates.status = 'ready';
   }
   return updates;
+}
+
+// ---------------------------------------------------------------------------
+// 表示期間の確認（承認前に気づけるように一覧で色を付ける）
+// ---------------------------------------------------------------------------
+
+/** 端末のローカル日付（YYYY-MM-DD）。管理画面は日本で使うので JST の今日になる */
+export function localDateString(now: Date = new Date()): string {
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${m}-${d}`;
+}
+
+/** 表示期間のおかしな点。無ければ null（保存の可否は変えない。表示だけ） */
+export function displayPeriodWarning(entry: DbEntry, today: string = localDateString()): string | null {
+  const start = entry.display_start_date ?? '';
+  const end = entry.display_end_date ?? '';
+  if (start && end && end < start) return '表示終了日が表示開始日より前です';
+  if (end && end < today) return '表示終了日を過ぎています';
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// 絞り込みの説明（0件のときに何で絞っているかを出す）
+// ---------------------------------------------------------------------------
+
+/** 今かかっている絞り込みを「点検開始日 2026/10/15 から」のような短い文の配列にする */
+export function describeEntryFilters(
+  filters: AdminEntryFilters,
+  propertyNames: Map<string, string>,
+): string[] {
+  const out: string[] = [];
+  if (filters.propertyCode) {
+    const name = propertyNames.get(filters.propertyCode);
+    out.push(`物件 ${filters.propertyCode}${name ? ` ${name}` : ''}`);
+  }
+  const ymd = (v: string) => v.replace(/-/g, '/');
+  if (filters.startDate && filters.endDate) {
+    out.push(`点検開始日 ${ymd(filters.startDate)}〜${ymd(filters.endDate)}`);
+  } else if (filters.startDate) {
+    out.push(`点検開始日 ${ymd(filters.startDate)} 以降`);
+  } else if (filters.endDate) {
+    out.push(`点検開始日 ${ymd(filters.endDate)} まで`);
+  }
+  if (filters.vendorName) out.push(`保守会社 ${filters.vendorName}`);
+  return out;
 }
 
 // ---------------------------------------------------------------------------

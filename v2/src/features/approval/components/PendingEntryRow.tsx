@@ -1,6 +1,10 @@
 import { Button } from '@/components/ui/Button';
 import type { DbEntry } from '@/types/database';
-import { formatJaDate, formatJaDateTime } from '@/features/entries-list/lib/entries';
+import {
+  displayPeriodWarning,
+  formatJaDate,
+  formatJaDateTime,
+} from '@/features/entries-list/lib/entries';
 import { NAME_CELL } from '@/features/entries-list/lib/tableColumns';
 
 interface PendingEntryRowProps {
@@ -20,6 +24,11 @@ const nowrap = `${td} whitespace-nowrap`;
 // 画面が狭いときは表を横にスクロールし、操作の列だけ右端に残す（行のホバー色は group で合わせる）
 const actions = `${td} sticky right-0 bg-white shadow-[inset_1px_0_0_var(--color-gray-200)] group-hover:bg-gray-50`;
 
+// 表示期間セルの2行目に出す短い理由
+function periodWarningShort(warning: string): string {
+  return warning.startsWith('表示終了日が表示開始日より前') ? '終了日が開始日より前' : '期限切れ';
+}
+
 // v1: js/admin-pending.js renderPendingEntries（1行分）
 export function PendingEntryRow({
   entry,
@@ -32,6 +41,7 @@ export function PendingEntryRow({
   onViewDetail,
   onEdit,
 }: PendingEntryRowProps) {
+  const periodWarning = displayPeriodWarning(entry);
   return (
     <tr className="group border-b border-gray-100 hover:bg-gray-50">
       <td className={td}>
@@ -56,6 +66,15 @@ export function PendingEntryRow({
       </td>
       <td className={nowrap}>{formatJaDate(entry.inspection_start)}</td>
       <td className={nowrap}>{formatJaDate(entry.inspection_end)}</td>
+      {/* 表示期間（掲出日）。終了が開始より前・すでに過ぎているものは承認前に気づけるよう赤くする */}
+      <td
+        className={periodWarning ? `${nowrap} font-medium text-red-600` : nowrap}
+        title={periodWarning ?? undefined}
+      >
+        {formatJaDate(entry.display_start_date)}〜{formatJaDate(entry.display_end_date)}
+        {/* 理由は2行目に短く出す（1行に並べると列が広がり、ほかの列が横スクロールに押し出される）。全文は title */}
+        {periodWarning && <div className="text-xs">{periodWarningShort(periodWarning)}</div>}
+      </td>
       <td className={td}>
         {entry.remarks ? (
           <div className={NAME_CELL} title={entry.remarks}>
