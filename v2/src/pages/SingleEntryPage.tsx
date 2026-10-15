@@ -156,6 +156,11 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
     if (values.propertyCode && !next.some((p) => p.property_code === values.propertyCode)) form.resetProperty();
   };
 
+  // 編集・複製で読み込む物件が管理会社の絞り込みの外なら、絞り込みを全てに戻す（物件欄が空に見えるのに値が残るのを防ぐ）
+  const showPropertyInManagementFilter = (propertyCode: string) => {
+    if (!selectableProperties.some((p) => p.property_code === propertyCode)) setManagementCompanyId('');
+  };
+
   // v1: js/script.js addEntry
   const handleAdd = () => {
     const result = buildLocalEntry(values, {
@@ -184,6 +189,7 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
   const handleEdit = (id: string) => {
     const entry = localEntries.find((e) => e._id === id);
     if (!entry) return;
+    showPropertyInManagementFilter(entry.propertyCode);
     form.loadEntry(entry);
     setEditingId(id);
   };
@@ -201,6 +207,7 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
   const handleDuplicate = () => {
     const last = localEntries[localEntries.length - 1];
     if (!last) return;
+    showPropertyInManagementFilter(last.propertyCode);
     form.duplicate(last);
     addToast('前回のデータを複製しました', 'info');
   };

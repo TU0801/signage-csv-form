@@ -124,12 +124,15 @@ describe('1件入力画面（管理者の管理会社フィルター）', () => 
         .filter(Boolean);
     expect(codes()).toEqual(['2010', '120273-00', 'z0015A01']);
 
-    fireEvent.change(propertySelect, { target: { value: 'z0015A01' } });
     fireEvent.change(filter, { target: { value: 'c-en' } });
     expect(codes()).toEqual(['120273-00']);
-    expect(propertySelect).toHaveValue('');
 
+    // 選択は state で確かめる（選択肢に無い値は DOM 上は空に見えるため、端末ID の選択肢で見る）
+    fireEvent.change(propertySelect, { target: { value: '120273-00' } });
+    const terminalSelect = screen.getByLabelText('端末ID', { exact: false, selector: 'select' });
+    expect(terminalSelect).toHaveValue('h0001A00');
     fireEvent.change(filter, { target: { value: '__none__' } });
     expect(codes()).toEqual(['2010', 'z0015A01']);
+    expect(terminalSelect).not.toHaveValue('h0001A00');
   });
 });
