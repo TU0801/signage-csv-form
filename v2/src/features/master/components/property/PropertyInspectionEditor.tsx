@@ -32,7 +32,9 @@ const EMPTY_FORM: RowForm = {
   remarks2: '',
 };
 
-const selectClass = 'block w-full rounded-md border border-gray-300 px-3 py-2 text-sm';
+const selectClass = 'block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm';
+// ラベルは Input / Select の部品と同じ見た目にそろえる
+const labelClass = 'block text-xs font-medium text-gray-600';
 
 /**
  * 設備情報（物件×点検種別）。一覧はローカルで編集し、物件の「保存」でまとめて業務システムへ送る。
@@ -113,17 +115,17 @@ export function PropertyInspectionEditor({
   const vendorName = (id: string | null) => vendors.find((v) => v.id === id)?.vendor_name || '-';
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-200 text-left whitespace-nowrap">
-              <th className="py-2 px-2 font-medium text-gray-700">設備種類</th>
-              <th className="py-2 px-2 font-medium text-gray-700">保守会社</th>
-              <th className="py-2 px-2 font-medium text-gray-700">点検月</th>
-              <th className="py-2 px-2 font-medium text-gray-700">備考</th>
-              <th className="py-2 px-2 font-medium text-gray-700">備考2</th>
-              <th className="py-2 px-2 font-medium text-gray-700 w-28">操作</th>
+              <th className="cell-head font-medium text-gray-700">設備種類</th>
+              <th className="cell-head font-medium text-gray-700">保守会社</th>
+              <th className="cell-head font-medium text-gray-700">点検月</th>
+              <th className="cell-head font-medium text-gray-700">備考</th>
+              <th className="cell-head font-medium text-gray-700">備考2</th>
+              <th className="cell-head font-medium text-gray-700 w-28">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -139,17 +141,17 @@ export function PropertyInspectionEditor({
                   key={row.inspection_type_id || index}
                   className={cn('border-b border-gray-100', index === editingIndex && 'bg-amber-50')}
                 >
-                  <td className="py-2 px-2">{typeName(row.inspection_type_id)}</td>
-                  <td className="py-2 px-2">{vendorName(row.vendor_id)}</td>
-                  <td className="py-2 px-2">
+                  <td className="cell">{typeName(row.inspection_type_id)}</td>
+                  <td className="cell">{vendorName(row.vendor_id)}</td>
+                  <td className="cell">
                     {row.inspection_months.length
                       ? row.inspection_months.map((m) => `${m}月`).join(', ')
                       : '-'}
                   </td>
-                  <td className="py-2 px-2">{row.remarks}</td>
-                  <td className="py-2 px-2">{row.remarks2}</td>
-                  <td className="py-2 px-2">
-                    <div className="flex gap-1">
+                  <td className="cell">{row.remarks}</td>
+                  <td className="cell">{row.remarks2}</td>
+                  <td className="cell">
+                    <div className="-my-0.5 flex gap-1">
                       <Button variant="secondary" size="sm" type="button" onClick={() => startEdit(index)}>
                         編集
                       </Button>
@@ -165,13 +167,14 @@ export function PropertyInspectionEditor({
         </table>
       </div>
 
-      <div className="rounded-md border border-gray-200 bg-gray-50 p-3 space-y-3">
+      <div className="rounded-md border border-gray-200 bg-gray-50 p-3 space-y-2">
         <h4 className="text-sm font-semibold text-gray-700">
           {editingIndex !== null ? '設備を更新' : '設備を追加'}
         </h4>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1">
-            <label htmlFor="prop-equipment-type" className="block text-sm font-medium text-gray-700">
+        {/* FHD（2xl）では設備種類・保守会社・点検月を1行に並べる（それより狭いときは点検月が次の行） */}
+        <div className="grid gap-x-3 gap-y-2 sm:grid-cols-2 2xl:grid-cols-4">
+          <div className="space-y-0.5">
+            <label htmlFor="prop-equipment-type" className={labelClass}>
               設備種類
             </label>
             <select
@@ -188,8 +191,8 @@ export function PropertyInspectionEditor({
               ))}
             </select>
           </div>
-          <div className="space-y-1">
-            <label htmlFor="prop-equipment-vendor" className="block text-sm font-medium text-gray-700">
+          <div className="space-y-0.5">
+            <label htmlFor="prop-equipment-vendor" className={labelClass}>
               保守会社
             </label>
             <select
@@ -206,16 +209,16 @@ export function PropertyInspectionEditor({
               ))}
             </select>
           </div>
+          <div className="space-y-0.5 sm:col-span-2">
+            <span className={labelClass}>点検月</span>
+            <MonthCheckboxes
+              value={form.inspection_months}
+              onChange={(months) => setForm({ ...form, inspection_months: months })}
+              suffix="月"
+            />
+          </div>
         </div>
-        <div className="space-y-1">
-          <span className="block text-sm font-medium text-gray-700">点検月</span>
-          <MonthCheckboxes
-            value={form.inspection_months}
-            onChange={(months) => setForm({ ...form, inspection_months: months })}
-            suffix="月"
-          />
-        </div>
-        <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+        <div className="grid gap-x-3 gap-y-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
           <Input
             label="備考"
             id="prop-equipment-remarks"

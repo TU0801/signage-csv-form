@@ -34,9 +34,9 @@ export function AdSlotsContent() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <div>
-        <h1 className="text-xl font-bold text-gray-900">広告枠管理</h1>
+        <h1 className="text-base font-bold text-gray-900">広告枠管理</h1>
         <p className="text-sm text-gray-500">ログイン画面の広告枠（3枠）を管理します</p>
       </div>
 

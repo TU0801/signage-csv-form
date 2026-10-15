@@ -180,7 +180,7 @@ export function InspectionTypesMaster() {
   const draggable = !search && !reordering;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <MasterToolbar
         count={filteredItems.length}
         search={
@@ -213,11 +213,11 @@ export function InspectionTypesMaster() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-200 text-left">
-              {draggable && <th className="w-8" />}
-              <th className="py-2 px-3 font-medium text-gray-700">点検種別名</th>
-              <th className="py-2 px-3 font-medium text-gray-700 w-32">カテゴリ</th>
-              <th className="py-2 px-3 font-medium text-gray-700">画像</th>
-              <th className="py-2 px-3 font-medium text-gray-700 w-32">操作</th>
+              {draggable && <th className="cell-head w-8" />}
+              <th className="cell-head font-medium text-gray-700">点検種別名</th>
+              <th className="cell-head font-medium text-gray-700 w-32">カテゴリ</th>
+              <th className="cell-head font-medium text-gray-700">画像</th>
+              <th className="cell-head font-medium text-gray-700 w-32">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -256,9 +256,9 @@ export function InspectionTypesMaster() {
                     overId === item.id && draggedId !== item.id && 'bg-blue-50',
                   )}
                 >
-                  {draggable && <td className="px-2 text-gray-400 cursor-move select-none">☰</td>}
-                  <td className="py-2 px-3">{item.inspection_name}</td>
-                  <td className="py-2 px-3">
+                  {draggable && <td className="cell text-gray-400 cursor-move select-none">☰</td>}
+                  <td className="cell">{item.inspection_name}</td>
+                  <td className="cell whitespace-nowrap">
                     {item.category ? (
                       <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-semibold text-indigo-800">
                         {item.category}
@@ -267,9 +267,9 @@ export function InspectionTypesMaster() {
                       '-'
                     )}
                   </td>
-                  <td className="py-2 px-3">{templateLabel(item.template_no)}</td>
-                  <td className="py-2 px-3">
-                    <div className="flex gap-1">
+                  <td className="cell">{templateLabel(item.template_no)}</td>
+                  <td className="cell">
+                    <div className="-my-0.5 flex gap-1">
                       <Button variant="ghost" size="sm" onClick={() => setFormItem(item)}>
                         編集
                       </Button>

@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/Button';
 import { useBulkStore } from '@/stores/bulkStore';
 import { templateLabel, type BulkTemplate } from '../utils/bulkTemplates';
+import { BulkStatsBar } from './BulkStatsBar';
 
 interface BulkToolbarProps {
   /** 読み込みが済むまで操作させない（v1: js/bulk.js init は読み込み後にイベントを登録） */
@@ -18,14 +19,14 @@ interface BulkToolbarProps {
 function Stat({ value, label, className }: { value: number; label: string; className?: string }) {
   return (
     <div className="flex items-baseline gap-1">
-      <span className={`text-lg font-bold ${className ?? 'text-gray-900'}`}>{value}</span>
+      <span className={`text-base font-bold ${className ?? 'text-gray-900'}`}>{value}</span>
       <span className="text-xs text-gray-500">{label}</span>
     </div>
   );
 }
 
 /**
- * 行操作・データ入出力・件数。
+ * 行操作・データ入出力・表示の絞り込み・件数（1 行にまとめる）。
  * v1: bulk.html .bulk-toolbar / js/bulk-data.js updateStats / js/bulk-table.js updateSelectedCount
  */
 export function BulkToolbar({
@@ -46,8 +47,8 @@ export function BulkToolbar({
   const valid = rows.filter((r) => r.isValid).length;
 
   return (
-    <div className="flex flex-wrap items-end gap-6 border-b border-gray-200 bg-gray-50 px-4 py-3">
-      <div className="space-y-1">
+    <div className="flex flex-wrap items-end gap-x-4 gap-y-2 border-b border-gray-200 bg-gray-50 px-3 py-2">
+      <div className="space-y-0.5">
         <div className="text-[11px] font-semibold text-gray-500">行操作</div>
         <div className="flex items-center gap-1.5">
           <Button size="sm" onClick={onAddRow} disabled={disabled} title="新しい行を追加 (Ctrl+Enter)">
@@ -69,7 +70,7 @@ export function BulkToolbar({
         </div>
       </div>
 
-      <div className="space-y-1">
+      <div className="space-y-0.5">
         <div className="text-[11px] font-semibold text-gray-500">データ入出力</div>
         <div className="flex items-center gap-1.5">
           <Button size="sm" variant="secondary" onClick={onOpenPaste} disabled={disabled} title="Excelからデータを貼り付け">
@@ -83,11 +84,11 @@ export function BulkToolbar({
             onChange={(e) => {
               if (e.target.value) onApplyTemplate(e.target.value);
             }}
-            className="rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+            className="h-7 w-56 max-w-[16rem] truncate rounded-md border border-gray-300 px-2 py-0 text-sm"
           >
             <option value="">テンプレート</option>
             {templates.map((t) => (
-              <option key={t.id} value={t.id}>
+              <option key={t.id} value={t.id} title={templateLabel(t)}>
                 {templateLabel(t)}
               </option>
             ))}
@@ -113,12 +114,15 @@ export function BulkToolbar({
         </div>
       </div>
 
-      <div className="ml-auto flex items-center gap-3 rounded-lg bg-white px-4 py-2 shadow-sm">
-        <Stat value={total} label="件" />
-        <div className="h-5 w-px bg-gray-200" />
-        <Stat value={valid} label="有効" className="text-green-600" />
-        <Stat value={total - valid} label="エラー" className="text-red-600" />
-        <Stat value={selectedCount} label="選択中" className="text-blue-600" />
+      <div className="ml-auto flex items-center gap-3">
+        <BulkStatsBar />
+        <div className="flex items-center gap-3 rounded-lg bg-white px-3 py-1 shadow-sm">
+          <Stat value={total} label="件" />
+          <div className="h-5 w-px bg-gray-200" />
+          <Stat value={valid} label="有効" className="text-green-600" />
+          <Stat value={total - valid} label="エラー" className="text-red-600" />
+          <Stat value={selectedCount} label="選択中" className="text-blue-600" />
+        </div>
       </div>
     </div>
   );

@@ -79,13 +79,13 @@ export function InspectionTypeFormModal({
           onChange={(e) => setName(e.target.value)}
         />
 
-        <div className="space-y-1">
-          <label htmlFor="inspection-category" className="block text-sm font-medium text-gray-700">
+        <div className="space-y-0.5">
+          <label htmlFor="inspection-category" className="block text-xs font-medium text-gray-600">
             カテゴリ
           </label>
           <select
             id="inspection-category"
-            className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            className="block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
             value={category}
             onChange={(e) => setCategory(e.target.value)}
           >
@@ -98,13 +98,13 @@ export function InspectionTypeFormModal({
           </select>
         </div>
 
-        <div className="space-y-1">
-          <label htmlFor="inspection-template" className="block text-sm font-medium text-gray-700">
+        <div className="space-y-0.5">
+          <label htmlFor="inspection-template" className="block text-xs font-medium text-gray-600">
             テンプレート画像
           </label>
           <select
             id="inspection-template"
-            className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+            className="block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
             value={templateNo}
             onChange={(e) => {
               setTemplateNo(e.target.value);

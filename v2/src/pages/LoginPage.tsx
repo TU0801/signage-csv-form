@@ -65,90 +65,81 @@ export function LoginPage() {
   const message = error || notice || '';
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-4xl">
-        {/* 2×2: 左上ログインフォーム＋広告枠1〜3（v1: login.html） */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 h-full flex flex-col justify-center">
-              {/* v1: login.html .login-header（見出し・副題・#appVersion） */}
-              <div className="text-center mb-6">
-                <h1 className="text-2xl font-bold text-gray-900">📋 点検日入力フォーム</h1>
-                <p className="mt-1 text-sm text-gray-500">アカウントにログインしてください</p>
-                <span className="mt-2 inline-block rounded bg-slate-200 px-2 py-0.5 text-xs text-slate-500">
-                  v{__APP_VERSION__}
-                </span>
-              </div>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <Input
-                  label="メールアドレス"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  autoComplete="email"
-                  autoFocus
-                />
-                <Input
-                  label="パスワード"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  autoComplete="current-password"
-                />
-                {message && (
-                  <p className="text-sm text-red-600 bg-red-50 rounded-md px-3 py-2">{message}</p>
-                )}
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? 'ログイン中...' : 'ログイン'}
-                </Button>
-              </form>
-              {/* v1: login.html .login-footer */}
-              <p className="mt-6 text-center text-xs text-slate-500">
-                パスワードを忘れた場合は管理者にお問い合わせください
-              </p>
-            </div>
+    // v1: login.html .login-grid（画面いっぱいの 2×2。4 セル同じ大きさ、gap・padding 6px）。lg 未満は縦に積む
+    <div className="grid min-h-dvh grid-cols-1 gap-1.5 bg-slate-200 p-1.5 lg:h-dvh lg:grid-cols-2 lg:grid-rows-2">
+      {/* v1: .login-form-cell（グラデーションの上に白いカード）。高さが足りないときはセルの中だけスクロールする */}
+      <div className="flex min-h-0 overflow-y-auto rounded-xl bg-gradient-to-br from-indigo-400 to-purple-700 p-4 lg:p-1.5">
+        <div className="m-auto w-full max-w-sm rounded-2xl bg-white px-4 py-3 shadow-2xl">
+          {/* v1: login.html .login-header（見出し・副題・#appVersion） */}
+          <div className="text-center mb-2">
+            <h1 className="text-xl font-bold text-gray-900">📋 点検日入力フォーム</h1>
+            <p className="mt-0.5 text-sm text-gray-500">アカウントにログインしてください</p>
+            <span className="mt-1 inline-block rounded bg-slate-200 px-2 py-0.5 text-xs text-slate-500">
+              v{__APP_VERSION__}
+            </span>
           </div>
-
-          {/* 広告枠は配列の位置ではなく slot_index で置く（v1: login.html loadAdSlots の data-slot） */}
-          {Array.from({ length: MAX_AD_SLOTS }, (_, i) => i + 1).map((slotIndex) => (
-            <AdSlotCell key={slotIndex} slot={slots.find((s) => s.slot_index === slotIndex)} />
-          ))}
+          <form onSubmit={handleSubmit} className="space-y-2">
+            <Input
+              label="メールアドレス"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+              autoFocus
+            />
+            <Input
+              label="パスワード"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+            />
+            {message && (
+              <p className="text-sm text-red-600 bg-red-50 rounded-md px-3 py-2">{message}</p>
+            )}
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? 'ログイン中...' : 'ログイン'}
+            </Button>
+          </form>
+          {/* v1: login.html .login-footer */}
+          <p className="mt-2 text-center text-xs text-slate-500">
+            パスワードを忘れた場合は管理者にお問い合わせください
+          </p>
         </div>
       </div>
+
+      {/* 広告枠は配列の位置ではなく slot_index で置く（v1: login.html loadAdSlots の data-slot） */}
+      {Array.from({ length: MAX_AD_SLOTS }, (_, i) => i + 1).map((slotIndex) => (
+        <AdSlotCell key={slotIndex} slot={slots.find((s) => s.slot_index === slotIndex)} />
+      ))}
     </div>
   );
 }
 
-// v1: login.html loadAdSlots（画像だけを出し、キャプションは出さない。alt も空）
+// v1: login.html loadAdSlots（画像だけを出し、キャプションは出さない。alt も空）。v1 .ad-slot（背景 #f8fafc、角丸 12px）
+// 画像は切らずに全体を出す（v1 の cover では本番の画像の文字や下端が欠けるため contain。余白はセルの背景）
+const AD_CELL = 'min-h-0 overflow-hidden rounded-xl bg-slate-50 aspect-video lg:aspect-auto';
+
 function AdSlotCell({ slot }: { slot?: { image_url: string | null; link_url: string | null } }) {
   if (!slot || !slot.image_url) {
     return (
-      <div className="bg-gray-100 rounded-lg border border-gray-200 flex items-center justify-center min-h-[120px]">
-        <span className="text-xs text-gray-400">広告スペース</span>
+      <div className={`${AD_CELL} flex items-center justify-center`}>
+        <span className="text-sm text-slate-400">広告スペース</span>
       </div>
     );
   }
 
-  const content = (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden h-full flex items-center justify-center p-1">
-      <img src={slot.image_url} alt="" className="max-w-full max-h-[100px] object-contain" />
-    </div>
-  );
+  const image = <img src={slot.image_url} alt="" className="h-full w-full object-contain" />;
 
   if (slot.link_url) {
     return (
-      <a
-        href={slot.link_url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="block hover:shadow-md transition-shadow"
-      >
-        {content}
+      <a href={slot.link_url} target="_blank" rel="noopener noreferrer" className={`${AD_CELL} block`}>
+        {image}
       </a>
     );
   }
 
-  return content;
+  return <div className={AD_CELL}>{image}</div>;
 }

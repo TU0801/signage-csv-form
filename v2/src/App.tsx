@@ -55,7 +55,8 @@ export default function App() {
             path="admin"
             element={
               <AdminRoute>
-                <UserLayout />
+                {/* 管理画面は上限なし。サイドバーを画面の左端に付ける */}
+                <UserLayout width="full" />
               </AdminRoute>
             }
           >

@@ -1,1 +1,21 @@
 @import 'tailwindcss';
+
+/* FHD 最適化の共通の寸法と指定（設計 R2・R3・R5） */
+:root {
+  /* ヘッダーの高さ（枠線込み）。高さを画面に合わせる calc はすべてこれを参照する */
+  --header-h: 3rem;
+}
+
+/* 画面の高さに枠を合わせるのは、PC 幅で高さに余裕があるときだけ（1366×768 の最大化 ≒ 高さ 650 では効かない） */
+@custom-variant tall (@media (min-width: 1024px) and (min-height: 760px));
+
+/* 表のセル（th/td）の余白をそろえる */
+@utility cell {
+  padding: 0.25rem 0.5rem;
+}
+
+@utility cell-head {
+  padding: 0.375rem 0.5rem;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}

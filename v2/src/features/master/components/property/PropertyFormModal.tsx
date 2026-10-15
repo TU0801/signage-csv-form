@@ -115,9 +115,26 @@ export function PropertyFormModal({
   };
 
   return (
-    <Modal open onClose={onClose} title={property ? '物件を編集' : '物件を追加'} className="max-w-4xl">
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="grid gap-4 sm:grid-cols-2">
+    <Modal
+      open
+      onClose={onClose}
+      title={property ? '物件を編集' : '物件を追加'}
+      className="max-w-6xl"
+      // 保存・キャンセルは本文のスクロールの外に置く。フォームの外になるので form 属性で送信先を結ぶ
+      footer={
+        <>
+          <Button variant="secondary" type="button" onClick={onClose}>
+            キャンセル
+          </Button>
+          <Button type="submit" form="property-form" disabled={saving}>
+            {saving ? '保存中...' : '保存'}
+          </Button>
+        </>
+      }
+    >
+      <form id="property-form" onSubmit={handleSubmit} className="space-y-3">
+        {/* FHD（2xl）では物件コード・物件名・端末リストを1行に並べる */}
+        <div className="grid gap-x-3 gap-y-2 sm:grid-cols-2 2xl:grid-cols-3">
           <Input
             label="物件コード *"
             id="property-code"
@@ -132,13 +149,13 @@ export function PropertyFormModal({
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
-          <div className="sm:col-span-2">
+          <div className="sm:col-span-2 2xl:col-span-1">
             <TerminalEditor value={terminals} onChange={setTerminals} />
           </div>
         </div>
 
-        <section className="space-y-3 border-t border-gray-200 pt-4">
-          <h3 className="text-base font-semibold text-gray-900">設備情報</h3>
+        <section className="space-y-2 border-t border-gray-200 pt-3">
+          <h3 className="text-sm font-semibold text-gray-900">設備情報</h3>
           <PropertyInspectionEditor
             value={inspections}
             onChange={setInspections}
@@ -151,8 +168,8 @@ export function PropertyFormModal({
 
         {/* 台がある物件のときだけ出す */}
         {units.length > 0 && (
-          <section className="space-y-3 border-t border-gray-200 pt-4">
-            <h3 className="text-base font-semibold text-gray-900">台ごとの保守</h3>
+          <section className="space-y-2 border-t border-gray-200 pt-3">
+            <h3 className="text-sm font-semibold text-gray-900">台ごとの保守</h3>
             <p className="text-sm text-gray-500">
               台を登録した設備の保守は、台ごとに編集します（上の設備情報の表には出ません）。台の追加・削除、保守会社固有コード・設置場所・金額の変更は業務システムで行います（
               <a
@@ -174,15 +191,6 @@ export function PropertyFormModal({
             />
           </section>
         )}
-
-        <div className="flex justify-end gap-3 pt-2">
-          <Button variant="secondary" type="button" onClick={onClose}>
-            キャンセル
-          </Button>
-          <Button type="submit" disabled={saving}>
-            {saving ? '保存中...' : '保存'}
-          </Button>
-        </div>
       </form>
     </Modal>
   );

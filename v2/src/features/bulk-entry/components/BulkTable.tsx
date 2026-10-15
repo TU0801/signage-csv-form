@@ -19,7 +19,16 @@ const COL = { property: 0, terminal: 1, inspection: 2, startDate: 3, endDate: 4,
 const LAST_COL = COL.remarks;
 
 const cellInput =
-  'block w-full rounded border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none';
+  'block h-7 w-full rounded border border-gray-300 px-2 py-0 text-sm focus:border-blue-500 focus:outline-none';
+
+/** 見出しセル（余白と文字の大きさは cell-head。p* は付けない） */
+const th = 'cell-head text-left font-medium text-gray-600';
+
+/** 右端に固定する列の左の境目（横スクロールで下を流れる列と区別する） */
+const stickyEdge = 'shadow-[inset_1px_0_0_#e5e7eb]';
+
+/** 備考の title。全文に入力の目安を添える（目安の文言は従来の title のまま残す） */
+const REMARKS_HINT = '1行25文字×5行まで';
 
 function focusCell(tr: Element | null | undefined, col: number) {
   const el = tr?.querySelector<HTMLElement>(`[data-col="${col}"]`);
@@ -164,7 +173,7 @@ export function BulkTable({ onOpenRowDetail, confirm }: BulkTableProps) {
       <table className="w-full border-collapse text-sm">
         <thead className="sticky top-0 z-10 bg-gray-50">
           <tr className="border-b">
-            <th className="w-10 px-2 py-2">
+            <th className="cell-head w-10 min-w-[2.5rem]">
               <input
                 type="checkbox"
                 title="すべて選択"
@@ -173,19 +182,21 @@ export function BulkTable({ onOpenRowDetail, confirm }: BulkTableProps) {
                 className="h-4 w-4 rounded border-gray-300"
               />
             </th>
-            <th className="w-10 px-2 py-2 text-left text-xs font-medium text-gray-600">No</th>
-            <th className="min-w-[14rem] px-2 py-2 text-left text-xs font-medium text-gray-600">
+            <th className={cn(th, 'w-10 min-w-[2.5rem]')}>No</th>
+            <th className={cn(th, 'min-w-[22rem]')}>
               物件<span className="text-red-500">*</span>
             </th>
-            <th className="min-w-[8rem] px-2 py-2 text-left text-xs font-medium text-gray-600">端末</th>
-            <th className="min-w-[12rem] px-2 py-2 text-left text-xs font-medium text-gray-600">
+            <th className={cn(th, 'w-36 min-w-[9rem]')}>端末</th>
+            <th className={cn(th, 'min-w-[16rem]')}>
               点検種別<span className="text-red-500">*</span>
             </th>
-            <th className="px-2 py-2 text-left text-xs font-medium text-gray-600">点検開始日</th>
-            <th className="px-2 py-2 text-left text-xs font-medium text-gray-600">点検終了日</th>
-            <th className="min-w-[10rem] px-2 py-2 text-left text-xs font-medium text-gray-600">備考</th>
-            <th className="w-12 px-2 py-2 text-center text-xs font-medium text-gray-600">詳細</th>
-            <th className="w-16 px-2 py-2 text-center text-xs font-medium text-gray-600">状態</th>
+            <th className={cn(th, 'w-40 min-w-[10rem]')}>点検開始日</th>
+            <th className={cn(th, 'w-40 min-w-[10rem]')}>点検終了日</th>
+            <th className={cn(th, 'min-w-[20rem]')}>備考</th>
+            {/* 幅は w-* だけだと表が入れ物より広いときに縮むので min-w も付ける。
+                詳細・状態は横スクロールしても右端に残す（状態 w-20 = 5rem の左に詳細） */}
+            <th className={cn(th, 'sticky right-[5rem] w-14 min-w-[3.5rem] bg-gray-50 text-center', stickyEdge)}>詳細</th>
+            <th className={cn(th, 'sticky right-0 w-20 min-w-[5rem] bg-gray-50 text-center')}>状態</th>
           </tr>
         </thead>
         <tbody>
@@ -193,6 +204,9 @@ export function BulkTable({ onOpenRowDetail, confirm }: BulkTableProps) {
             if (!isVisible(row)) return null;
             const terminalIds = terminalIdsFor(masterData.properties, row.propertyCode);
             const hasDetail = !!(row.noticeText || row.displayStartDate);
+            const selected = selectedIds.has(row.id);
+            // 右端に固定する列は下の列が透けないよう背景を塗る（選択中の行の色に合わせる）
+            const stickyBg = selected ? 'bg-blue-50' : 'bg-white';
             return (
               <tr
                 key={row.id}
@@ -208,25 +222,26 @@ export function BulkTable({ onOpenRowDetail, confirm }: BulkTableProps) {
                 }}
                 className={cn(
                   'border-b align-top',
-                  selectedIds.has(row.id) && 'bg-blue-50',
+                  selected && 'bg-blue-50',
                   draggedRowId === row.id && 'opacity-50',
                   dragOverRowId === row.id && draggedRowId !== row.id && 'border-t-2 border-t-blue-500',
                 )}
               >
-                <td className="px-2 py-1.5 text-center">
+                <td className="cell text-center align-middle">
                   <input
                     type="checkbox"
-                    checked={selectedIds.has(row.id)}
+                    checked={selected}
                     onChange={() => toggleSelection(row.id)}
                     className="h-4 w-4 rounded border-gray-300"
                   />
                 </td>
-                <td className="px-2 py-1.5 text-xs text-gray-400">{index + 1}</td>
-                <td className="px-2 py-1">
+                <td className="cell align-middle text-xs text-gray-400">{index + 1}</td>
+                <td className="cell">
                   <SearchableSelect
                     value={row.propertyCode}
                     options={propertyOptions}
                     placeholder="-- 物件を選択 --"
+                    showTitle
                     searchPlaceholder="物件名で検索..."
                     onChange={(v) => changeProperty(row.id, v)}
                     onPicked={() => focusNextOf(row.id, COL.property)}
@@ -234,7 +249,7 @@ export function BulkTable({ onOpenRowDetail, confirm }: BulkTableProps) {
                     onKeyDown={(e) => handleCellKeyDown(e, index, COL.property)}
                   />
                 </td>
-                <td className="px-2 py-1">
+                <td className="cell">
                   <select
                     data-col={COL.terminal}
                     value={row.terminalId}
@@ -250,11 +265,12 @@ export function BulkTable({ onOpenRowDetail, confirm }: BulkTableProps) {
                     ))}
                   </select>
                 </td>
-                <td className="px-2 py-1">
+                <td className="cell">
                   <SearchableSelect
                     value={row.inspectionType}
                     options={inspectionOptions}
                     placeholder="-- 点検種別を選択 --"
+                    showTitle
                     searchPlaceholder="点検種別で検索..."
                     onChange={(v) => updateRow(row.id, { inspectionType: v })}
                     onPicked={() => focusNextOf(row.id, COL.inspection)}
@@ -262,7 +278,7 @@ export function BulkTable({ onOpenRowDetail, confirm }: BulkTableProps) {
                     onKeyDown={(e) => handleCellKeyDown(e, index, COL.inspection)}
                   />
                 </td>
-                <td className="px-2 py-1">
+                <td className="cell">
                   <input
                     type="date"
                     data-col={COL.startDate}
@@ -273,7 +289,7 @@ export function BulkTable({ onOpenRowDetail, confirm }: BulkTableProps) {
                     className={cellInput}
                   />
                 </td>
-                <td className="px-2 py-1">
+                <td className="cell">
                   <input
                     type="date"
                     data-col={COL.endDate}
@@ -284,33 +300,33 @@ export function BulkTable({ onOpenRowDetail, confirm }: BulkTableProps) {
                     className={cellInput}
                   />
                 </td>
-                <td className="px-2 py-1">
+                <td className="cell">
                   <input
                     type="text"
                     data-col={COL.remarks}
                     value={row.remarks}
                     placeholder="任意入力"
                     maxLength={125}
-                    title="1行25文字×5行まで"
+                    title={row.remarks ? `${row.remarks}\n${REMARKS_HINT}` : REMARKS_HINT}
                     onChange={(e) => changeRemarks(row.id, e.target.value)}
                     onKeyDown={(e) => handleCellKeyDown(e, index, COL.remarks)}
                     className={cellInput}
                   />
                 </td>
-                <td className="px-2 py-1.5 text-center">
+                <td className={cn('cell sticky right-[5rem] text-center align-middle', stickyEdge, stickyBg)}>
                   <button
                     type="button"
                     title="詳細設定"
                     onClick={() => onOpenRowDetail(row.id)}
                     className={cn(
-                      'rounded border px-2 py-0.5 text-xs',
+                      'inline-flex h-7 items-center rounded border px-2 text-xs',
                       hasDetail ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-gray-300 text-gray-600',
                     )}
                   >
                     {hasDetail ? '✓' : '⋯'}
                   </button>
                 </td>
-                <td className="px-2 py-1.5 text-center">
+                <td className={cn('cell sticky right-0 text-center align-middle', stickyBg)}>
                   <span title={row.isValid ? '' : `エラー: ${row.errors.join(', ')}`}>
                     <Badge variant={row.isValid ? 'success' : 'danger'}>{row.isValid ? 'OK' : 'エラー'}</Badge>
                   </span>

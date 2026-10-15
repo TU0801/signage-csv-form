@@ -17,6 +17,8 @@ interface SearchableSelectProps {
   onKeyDown?: (e: KeyboardEvent<HTMLElement>) => void;
   dataCol: number;
   invalid?: boolean;
+  /** 選んでいる項目の全文を title に出す（列幅で文字が切れるとき用） */
+  showTitle?: boolean;
 }
 
 /**
@@ -34,6 +36,7 @@ export function SearchableSelect({
   onKeyDown,
   dataCol,
   invalid,
+  showTitle = false,
 }: SearchableSelectProps) {
   const [active, setActive] = useState(false);
   const [search, setSearch] = useState('');
@@ -95,12 +98,14 @@ export function SearchableSelect({
         data-col={dataCol}
         value={value}
         size={active ? Math.min(visible.length + 1, 8) : undefined}
+        title={showTitle ? options.find((o) => o.value === value)?.label || undefined : undefined}
         onChange={(e) => pick(e.target.value)}
         onKeyDown={onKeyDown}
         className={cn(
-          'block w-full rounded border px-2 py-1 text-sm focus:border-blue-500 focus:outline-none',
+          'block w-full rounded border px-2 text-sm focus:border-blue-500 focus:outline-none',
           invalid ? 'border-red-400' : 'border-gray-300',
-          active && 'absolute z-20 bg-white shadow-lg',
+          // 閉じているときは表のほかの入力欄と同じ高さ（h-7）。開いたときは size の行数ぶんの高さにする
+          active ? 'absolute z-20 bg-white py-1 shadow-lg' : 'h-7 py-0',
         )}
       >
         <option value="">{placeholder}</option>

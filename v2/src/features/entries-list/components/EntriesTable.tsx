@@ -29,20 +29,26 @@ import {
   type EntrySort,
   type EntrySortColumn,
 } from '../lib/entries';
+import { NAME_COL, NAME_CELL } from '../lib/tableColumns';
 
-const SORTABLE_COLUMNS: { column: EntrySortColumn; label: string }[] = [
+// width: 名前の列の幅（tableColumns.ts）。無い列は中身の長さで決まる（折り返さない）
+const SORTABLE_COLUMNS: { column: EntrySortColumn; label: string; width?: string }[] = [
   { column: 'property_code', label: '物件コード' },
-  { column: 'property_name', label: '物件名' },
-  { column: 'inspection_type', label: '点検種別' },
+  { column: 'property_name', label: '物件名', width: NAME_COL.property },
+  { column: 'inspection_type', label: '点検種別', width: NAME_COL.inspectionType },
   { column: 'inspection_start', label: '点検開始日' },
   { column: 'inspection_end', label: '点検終了日' },
-  { column: 'remarks', label: '作業時間 及び 備考' },
-  { column: 'vendor_name', label: '保守会社' },
+  { column: 'remarks', label: '作業時間 及び 備考', width: NAME_COL.remarks },
+  { column: 'vendor_name', label: '保守会社', width: NAME_COL.vendor },
   { column: 'created_at', label: '登録日時' },
 ];
 
-const th = 'px-3 py-3 text-xs font-medium text-gray-500 whitespace-nowrap';
-const td = 'px-3 py-2 text-sm text-gray-900';
+const th = 'cell-head font-medium text-gray-500';
+const td = 'cell text-sm text-gray-900';
+const nowrap = `${td} whitespace-nowrap`;
+// 画面が狭いときは表を横にスクロールし、操作の列だけ右端に残す（行のホバー色は group で合わせる）
+const thActions = `${th} sticky right-0 bg-gray-50 shadow-[inset_1px_0_0_var(--color-gray-200)]`;
+const tdActions = `${td} sticky right-0 bg-white shadow-[inset_1px_0_0_var(--color-gray-200)] group-hover:bg-gray-50`;
 
 /** データ一覧（承認済みのみ） */
 // v1: js/admin-entries.js loadEntries / renderEntries
@@ -141,7 +147,7 @@ export function EntriesTable() {
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <EntriesFilters
         filters={filters}
         onUpdateFilter={updateFilter}
@@ -152,14 +158,14 @@ export function EntriesTable() {
       <Card>
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-gray-900">
+            <h2 className="text-sm font-semibold text-gray-900">
               データ一覧 ({entries.length}件)
             </h2>
             <Button variant="ghost" size="sm" onClick={reload} disabled={loading}>
               {loading ? '読み込み中...' : '更新'}
             </Button>
           </div>
-          <div className="mt-3">
+          <div className="mt-2">
             <EntryActions
               entries={entries}
               selectedEntries={selectedEntries}
@@ -173,7 +179,7 @@ export function EntriesTable() {
         </CardHeader>
         <CardContent className="p-0">
           {error ? (
-            <div className="px-6 py-6">
+            <div className="p-3">
               <p className="text-red-600">{error}</p>
               <Button variant="secondary" size="sm" onClick={reload} className="mt-2">
                 再読み込み
@@ -184,7 +190,7 @@ export function EntriesTable() {
               <Spinner size="lg" />
             </div>
           ) : entries.length === 0 ? (
-            <p className="px-6 py-8 text-center text-sm text-gray-500">データがありません</p>
+            <p className="px-3 py-6 text-center text-sm text-gray-500">データがありません</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left">
@@ -199,10 +205,10 @@ export function EntriesTable() {
                         className="h-4 w-4 rounded border-gray-300 text-blue-600"
                       />
                     </th>
-                    {SORTABLE_COLUMNS.map(({ column, label }) => (
+                    {SORTABLE_COLUMNS.map(({ column, label, width }) => (
                       <th
                         key={column}
-                        className={`${th} cursor-pointer select-none`}
+                        className={`${th} cursor-pointer select-none ${width ?? ''}`}
                         onClick={() => handleSort(column)}
                       >
                         {label}
@@ -211,13 +217,13 @@ export function EntriesTable() {
                         </span>
                       </th>
                     ))}
-                    <th className={th}>登録者</th>
-                    <th className={th}>操作</th>
+                    <th className={`${th} ${NAME_COL.registrant}`}>登録者</th>
+                    <th className={thActions}>操作</th>
                   </tr>
                 </thead>
                 <tbody>
                   {sorted.map((entry) => (
-                    <tr key={entry.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <tr key={entry.id} className="group border-b border-gray-100 hover:bg-gray-50">
                       <td className={td}>
                         <input
                           type="checkbox"
@@ -227,25 +233,44 @@ export function EntriesTable() {
                           className="h-4 w-4 rounded border-gray-300 text-blue-600"
                         />
                       </td>
-                      <td className={td}>{entry.property_code}</td>
-                      <td className={td}>{lookups.propertyNames.get(entry.property_code) || '-'}</td>
-                      <td className={td}>{entry.inspection_type}</td>
-                      <td className={td}>{formatJaDate(entry.inspection_start)}</td>
-                      <td className={td}>{formatJaDate(entry.inspection_end)}</td>
+                      <td className={nowrap}>{entry.property_code}</td>
+                      <td className={td}>
+                        <div
+                          className={NAME_CELL}
+                          title={lookups.propertyNames.get(entry.property_code) || undefined}
+                        >
+                          {lookups.propertyNames.get(entry.property_code) || '-'}
+                        </div>
+                      </td>
+                      <td className={td}>
+                        <div className={NAME_CELL} title={entry.inspection_type || undefined}>
+                          {entry.inspection_type}
+                        </div>
+                      </td>
+                      <td className={nowrap}>{formatJaDate(entry.inspection_start)}</td>
+                      <td className={nowrap}>{formatJaDate(entry.inspection_end)}</td>
                       <td className={td}>
                         {entry.remarks ? (
-                          <div className="max-w-[150px] truncate" title={entry.remarks}>
+                          <div className={NAME_CELL} title={entry.remarks}>
                             {entry.remarks}
                           </div>
                         ) : (
                           '-'
                         )}
                       </td>
-                      <td className={td}>{entry.vendor_name || '-'}</td>
-                      <td className={`${td} whitespace-nowrap`}>{formatJaDateTime(entry.created_at)}</td>
-                      <td className={td}>{lookups.emailOf(entry.user_id)}</td>
                       <td className={td}>
-                        <div className="flex items-center gap-1">
+                        <div className={NAME_CELL} title={entry.vendor_name || undefined}>
+                          {entry.vendor_name || '-'}
+                        </div>
+                      </td>
+                      <td className={nowrap}>{formatJaDateTime(entry.created_at)}</td>
+                      <td className={td}>
+                        <div className={NAME_CELL} title={lookups.emailOf(entry.user_id)}>
+                          {lookups.emailOf(entry.user_id)}
+                        </div>
+                      </td>
+                      <td className={tdActions}>
+                        <div className="-my-0.5 flex items-center gap-1">
                           <Button size="sm" variant="ghost" onClick={() => setDetailEntry(entry)}>
                             詳細
                           </Button>

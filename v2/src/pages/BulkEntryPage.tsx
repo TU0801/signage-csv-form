@@ -9,7 +9,6 @@ import { useBulkStore, cancelBulkAutoSave } from '@/stores/bulkStore';
 import { useBulkConfirm } from '@/features/bulk-entry/hooks/useBulkConfirm';
 import { useBulkSession } from '@/features/bulk-entry/hooks/useBulkSession';
 import { BulkToolbar } from '@/features/bulk-entry/components/BulkToolbar';
-import { BulkStatsBar } from '@/features/bulk-entry/components/BulkStatsBar';
 import { BulkTable } from '@/features/bulk-entry/components/BulkTable';
 import { BulkFooter } from '@/features/bulk-entry/components/BulkFooter';
 import { PasteModal } from '@/features/bulk-entry/modals/PasteModal';
@@ -191,8 +190,10 @@ export function BulkEntryPage() {
   }, [ready, addRowWithCopy, handleDuplicate, handleDeleteSelected]);
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-xl font-bold text-gray-900">一括入力</h1>
+    // tall（幅 1024 以上・高さ 760 以上）のときだけ画面の高さに合わせ、表の部分だけをスクロールさせる。
+    // main の上下の余白（py-3 = 1.5rem）を引く。h1 はヘッダーのナビ「一括入力」と重複するので sr-only
+    <div className="flex flex-col gap-2 tall:h-[calc(100dvh-var(--header-h)-1.5rem)]">
+      <h1 className="sr-only">一括入力</h1>
       {/* 管理者の保守会社選択はヘッダーに出す（v1.31.1。v1: bulk.html header #adminVendorSelectGroup） */}
       {isAdmin && (
         <HeaderSlot>
@@ -204,7 +205,7 @@ export function BulkEntryPage() {
               aria-label="保守会社を選択"
               value={currentVendor.id ?? ''}
               onChange={(e) => void changeVendor(e.target.value)}
-              className="max-w-[220px] rounded border border-amber-400 bg-white px-1.5 py-1 text-sm text-slate-800"
+              className="max-w-[20rem] rounded border border-amber-400 bg-white px-1.5 py-1 text-sm text-slate-800"
             >
               <option value="">-- 保守会社を選択 --</option>
               {vendors.map((v) => (
@@ -217,7 +218,7 @@ export function BulkEntryPage() {
         </HeaderSlot>
       )}
 
-      <Card className="flex flex-col overflow-hidden">
+      <Card className="flex flex-col overflow-hidden tall:min-h-0 tall:flex-1">
         <BulkToolbar
           disabled={!ready}
           templates={templates}
@@ -229,12 +230,16 @@ export function BulkEntryPage() {
           onOpenSaveTemplate={() => setShowSaveTemplate(true)}
           onOpenManageTemplate={() => setShowManageTemplate(true)}
         />
-        <BulkStatsBar />
 
-        {/* 行が増えても申請ボタンが画面外に出ないよう、表の部分だけスクロールさせる（v1.30.1） */}
-        <div className="max-h-[calc(100vh-22rem)] min-h-[12rem] overflow-auto" data-testid="bulk-table-container">
+        {/* 行が増えても申請ボタンが画面外に出ないよう、表の部分だけスクロールさせる（v1.30.1）。
+            12.5rem は main の上下の余白・ツールバー（狭い幅で 2 行に折り返したとき）・申請の行のぶん。
+            tall のときは Card の残りの高さをすべて使う（max-h と min-h は外す） */}
+        <div
+          className="max-h-[calc(100dvh-var(--header-h)-12.5rem)] min-h-[12rem] overflow-auto tall:max-h-none tall:min-h-0 tall:flex-1"
+          data-testid="bulk-table-container"
+        >
           {rows.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-2 p-12 text-center">
+            <div className="flex flex-col items-center justify-center gap-2 p-8 text-center">
               <h3 className="font-semibold text-gray-700">データがありません</h3>
               <p className="text-sm text-gray-500">「行を追加」または「Excelから取込」で入力を開始してください</p>
               <Button onClick={addRowWithCopy} disabled={!ready}>

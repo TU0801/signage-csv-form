@@ -29,8 +29,8 @@ export function EntriesFilters({
   }));
 
   return (
-    <div className="flex flex-wrap items-end gap-4">
-      <div className="w-64">
+    <div className="flex flex-wrap items-end gap-3">
+      <div className="w-80">
         <Select
           label="物件"
           options={propertyOptions}

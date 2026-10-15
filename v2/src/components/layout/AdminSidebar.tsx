@@ -79,7 +79,9 @@ export function AdminSidebar() {
   return (
     <aside
       className={cn(
-        'relative shrink-0 bg-gray-50 border-r border-gray-200 min-h-[calc(100vh-3.5rem)] transition-[width]',
+        // ヘッダーの下に固定し、画面の残りの高さに合わせる。スクロールは nav に持たせる
+        // （aside に overflow を付けると右にはみ出した開閉ボタンが切れる。sticky も absolute の基準になるので relative は不要）
+        'sticky top-[var(--header-h)] flex h-[calc(100dvh-var(--header-h))] shrink-0 flex-col self-start bg-gray-50 border-r border-gray-200 transition-[width]',
         collapsed ? 'w-[60px]' : 'w-48',
       )}
     >
@@ -92,7 +94,7 @@ export function AdminSidebar() {
       >
         {collapsed ? '▶' : '◀'}
       </button>
-      <nav className={cn('space-y-1', collapsed ? 'px-2 py-3' : 'p-3')}>
+      <nav className={cn('min-h-0 flex-1 space-y-1 overflow-y-auto', collapsed ? 'px-2 py-3' : 'p-3')}>
         {adminNav.map((item) => {
           const count = item.badge ? counts[item.badge] : 0;
           return (

@@ -15,8 +15,8 @@ const TABS: { key: ApprovalTab; label: string }[] = [
 export function ApprovalPage() {
   const [tab, setTab] = useState<ApprovalTab>('data');
   return (
-    <div className="space-y-6">
-      <h1 className="text-xl font-bold text-gray-900">承認待ち</h1>
+    <div className="space-y-3">
+      <h1 className="text-base font-bold text-gray-900">承認待ち</h1>
       <div className="flex gap-2 border-b border-gray-200">
         {TABS.map((t) => (
           <button
@@ -24,7 +24,7 @@ export function ApprovalPage() {
             type="button"
             onClick={() => setTab(t.key)}
             className={cn(
-              '-mb-px border-b-2 px-4 py-2 text-sm font-medium',
+              '-mb-px border-b-2 px-4 py-1.5 text-sm font-medium',
               tab === t.key
                 ? 'border-blue-600 text-blue-700'
                 : 'border-transparent text-gray-500 hover:text-gray-700',

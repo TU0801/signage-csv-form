@@ -57,9 +57,9 @@ export function UsersContent() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-gray-900">ユーザー管理</h1>
+        <h1 className="text-base font-bold text-gray-900">ユーザー管理</h1>
         <Button onClick={() => setShowAddModal(true)} size="sm">
           ユーザー追加
         </Button>
@@ -67,76 +67,85 @@ export function UsersContent() {
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-gray-200 text-left">
-            <th className="py-2 px-3 font-medium text-gray-700">メールアドレス</th>
-            <th className="py-2 px-3 font-medium text-gray-700">保守会社</th>
-            <th className="py-2 px-3 font-medium text-gray-700">権限</th>
-            <th className="py-2 px-3 font-medium text-gray-700">ステータス</th>
-            <th className="py-2 px-3 font-medium text-gray-700">登録日</th>
-            <th className="py-2 px-3 font-medium text-gray-700">操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          {users.length === 0 ? (
-            <tr>
-              <td colSpan={6} className="py-8 text-center text-gray-400">
-                ユーザーが登録されていません
-              </td>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-200 text-left">
+              <th className="cell-head font-medium text-gray-700">メールアドレス</th>
+              <th className="cell-head font-medium text-gray-700">保守会社</th>
+              <th className="cell-head font-medium text-gray-700">権限</th>
+              <th className="cell-head font-medium text-gray-700">ステータス</th>
+              <th className="cell-head font-medium text-gray-700">登録日</th>
+              <th className="cell-head font-medium text-gray-700 sticky right-0 bg-white shadow-[inset_1px_0_0_var(--color-gray-200)]">操作</th>
             </tr>
-          ) : (
-            users.map((user) => {
-              const isSelf = currentUserId === user.id;
-              const status = user.status || 'active';
-              return (
-                <tr key={user.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-2 px-3">
-                    {user.email}
-                    {isSelf && ' (自分)'}
-                  </td>
-                  <td className="py-2 px-3">{vendorLabel(user.vendor_id, vendors)}</td>
-                  <td className="py-2 px-3">
-                    <Badge variant={user.role === 'admin' ? 'danger' : 'default'}>
-                      {user.role === 'admin' ? '管理者' : 'ユーザー'}
-                    </Badge>
-                  </td>
-                  <td className="py-2 px-3">
-                    <Badge variant={status === 'active' ? 'success' : 'default'}>
-                      {status === 'active' ? '有効' : '無効'}
-                    </Badge>
-                  </td>
-                  <td className="py-2 px-3">
-                    {user.created_at ? new Date(user.created_at).toLocaleDateString('ja-JP') : '-'}
-                  </td>
-                  <td className="py-2 px-3 flex gap-2">
-                    {/* 削除は無い（v1 にも無く、profiles に DELETE ポリシーも無い。使わせないときは無効化する） */}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={isSelf}
-                      title={isSelf ? '自分は編集できません' : undefined}
-                      onClick={() => setEditTarget(user)}
-                    >
-                      編集
-                    </Button>
-                    {!isSelf && status === 'active' && (
-                      <Button variant="danger" size="sm" onClick={() => setDeactivateTarget(user)}>
-                        無効化
-                      </Button>
-                    )}
-                    {!isSelf && status === 'inactive' && (
-                      <Button variant="success" size="sm" onClick={() => handleActivate(user)}>
-                        有効化
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-              );
-            })
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {users.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="py-8 text-center text-gray-400">
+                  ユーザーが登録されていません
+                </td>
+              </tr>
+            ) : (
+              users.map((user) => {
+                const isSelf = currentUserId === user.id;
+                const status = user.status || 'active';
+                return (
+                  <tr key={user.id} className="group border-b border-gray-100 hover:bg-gray-50">
+                    <td className="cell whitespace-nowrap">
+                      {user.email}
+                      {isSelf && ' (自分)'}
+                    </td>
+                    <td className="cell">
+                      <div className="max-w-[16rem] truncate" title={vendorLabel(user.vendor_id, vendors)}>
+                        {vendorLabel(user.vendor_id, vendors)}
+                      </div>
+                    </td>
+                    <td className="cell whitespace-nowrap">
+                      <Badge variant={user.role === 'admin' ? 'danger' : 'default'}>
+                        {user.role === 'admin' ? '管理者' : 'ユーザー'}
+                      </Badge>
+                    </td>
+                    <td className="cell whitespace-nowrap">
+                      <Badge variant={status === 'active' ? 'success' : 'default'}>
+                        {status === 'active' ? '有効' : '無効'}
+                      </Badge>
+                    </td>
+                    <td className="cell whitespace-nowrap">
+                      {user.created_at ? new Date(user.created_at).toLocaleDateString('ja-JP') : '-'}
+                    </td>
+                    <td className="cell sticky right-0 bg-white shadow-[inset_1px_0_0_var(--color-gray-200)] group-hover:bg-gray-50">
+                      {/* 削除は無い（v1 にも無く、profiles に DELETE ポリシーも無い。使わせないときは無効化する） */}
+                      {/* flex は td ではなく中の div に付ける（td に付けると表のセルとして並ばなくなる） */}
+                      <div className="-my-0.5 flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={isSelf}
+                          title={isSelf ? '自分は編集できません' : undefined}
+                          onClick={() => setEditTarget(user)}
+                        >
+                          編集
+                        </Button>
+                        {!isSelf && status === 'active' && (
+                          <Button variant="danger" size="sm" onClick={() => setDeactivateTarget(user)}>
+                            無効化
+                          </Button>
+                        )}
+                        {!isSelf && status === 'inactive' && (
+                          <Button variant="success" size="sm" onClick={() => handleActivate(user)}>
+                            有効化
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
 
       <AddUserModal
         open={showAddModal}

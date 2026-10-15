@@ -13,7 +13,11 @@ import { HeaderSlotContext } from './HeaderSlot';
  */
 export const BULK_LOGOUT_CONFIRM_MESSAGE = 'このサイトを離れますか？\n行った変更が保存されない可能性があります。';
 
-export function AppHeader() {
+/** standard: 一般画面（v1 と同じ上限 1800px で中央寄せ） / full: 管理画面（上限なし。余白はサイドバーと本文側で持つ） */
+export type LayoutWidth = 'standard' | 'full';
+
+/** width は本文（UserLayout の main）と同じ値にして、ロゴと本文の左端をそろえる */
+export function AppHeader({ width = 'standard' }: { width?: LayoutWidth }) {
   const { profile, isAdmin } = useAuth();
   const signOut = useAuthStore((s) => s.signOut);
   const location = useLocation();
@@ -35,9 +39,10 @@ export function AppHeader() {
   ];
 
   return (
-    <header className="bg-white border-b border-gray-200">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-14">
+    // 高さは枠線込みで --header-h（border-box）。サイドバーや画面の高さに合わせる枠はこの変数で引き算する
+    <header className="sticky top-0 z-30 h-[var(--header-h)] bg-white border-b border-gray-200">
+      <div className={cn('h-full px-3 lg:px-4', width === 'full' ? 'max-w-none' : 'max-w-[1800px] mx-auto')}>
+        <div className="flex items-center justify-between h-full">
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2">
               <Link to="/" className="text-lg font-bold text-gray-900">

@@ -14,7 +14,7 @@ interface UnitInspectionEditorProps {
   onError: (message: string) => void;
 }
 
-const selectClass = 'block w-full rounded-md border border-gray-300 px-2 py-1 text-sm';
+const selectClass = 'block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm';
 
 /**
  * 台ごとの保守（業務システムで台を登録した大分類。2026-10-14）。
@@ -44,12 +44,12 @@ export function UnitInspectionEditor({
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-gray-200 text-left whitespace-nowrap">
-            <th className="py-2 px-2 font-medium text-gray-700">台（保守会社固有コード／設置場所）</th>
-            <th className="py-2 px-2 font-medium text-gray-700">点検種別</th>
-            <th className="py-2 px-2 font-medium text-gray-700">保守会社</th>
-            <th className="py-2 px-2 font-medium text-gray-700">点検月</th>
-            <th className="py-2 px-2 font-medium text-gray-700">検査月</th>
-            <th className="py-2 px-2 font-medium text-gray-700 w-12">操作</th>
+            <th className="cell-head font-medium text-gray-700">台（保守会社固有コード／設置場所）</th>
+            <th className="cell-head font-medium text-gray-700">点検種別</th>
+            <th className="cell-head font-medium text-gray-700">保守会社</th>
+            <th className="cell-head font-medium text-gray-700">点検月</th>
+            <th className="cell-head font-medium text-gray-700">検査月</th>
+            <th className="cell-head font-medium text-gray-700 w-12">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -58,12 +58,21 @@ export function UnitInspectionEditor({
             const remarks = [unit.unit_remarks, unit.unit_remarks2].filter(Boolean).join(' ／ ');
             // 台のセルは、その台の保守の行数ぶん縦に結合する（保守が無い台も1行）
             const unitCell = (
-              <td rowSpan={Math.max(1, unit.inspections.length)} className="py-2 px-2 align-top border-r border-gray-100">
-                <div className="font-medium">
+              <td rowSpan={Math.max(1, unit.inspections.length)} className="cell align-top border-r border-gray-100">
+                {/* 長いコード・設置場所・備考は省略し、全文は title で見せる */}
+                <div className="max-w-[16rem] truncate font-medium" title={unit.unit_code || undefined}>
                   {unit.unit_code || <span className="text-gray-400">（コードなし）</span>}
                 </div>
-                {unit.unit_location && <div className="text-xs text-gray-500">{unit.unit_location}</div>}
-                {remarks && <div className="text-xs text-gray-500">{remarks}</div>}
+                {unit.unit_location && (
+                  <div className="max-w-[16rem] truncate text-xs text-gray-500" title={unit.unit_location}>
+                    {unit.unit_location}
+                  </div>
+                )}
+                {remarks && (
+                  <div className="max-w-[16rem] truncate text-xs text-gray-500" title={remarks}>
+                    {remarks}
+                  </div>
+                )}
                 <Button
                   variant="secondary"
                   size="sm"
@@ -82,7 +91,7 @@ export function UnitInspectionEditor({
               <Fragment key={unit.unit_id}>
                 {showCategory && (
                   <tr className="bg-gray-100">
-                    <td colSpan={6} className="py-1 px-2 text-xs font-semibold text-gray-700">
+                    <td colSpan={6} className="cell text-xs font-semibold text-gray-700">
                       {unit.category_label || unit.category_code}
                     </td>
                   </tr>
@@ -90,7 +99,7 @@ export function UnitInspectionEditor({
                 {unit.inspections.length === 0 ? (
                   <tr className="border-b border-gray-100">
                     {unitCell}
-                    <td colSpan={5} className="py-2 px-2 text-gray-400">
+                    <td colSpan={5} className="cell text-gray-400">
                       保守は登録されていません
                     </td>
                   </tr>
@@ -105,7 +114,7 @@ export function UnitInspectionEditor({
                         className="border-b border-gray-100 align-top"
                       >
                         {rowIndex === 0 && unitCell}
-                        <td className="py-2 px-2 min-w-[10rem]">
+                        <td className="cell min-w-[10rem]">
                           {insp.inspection_id ? (
                             <>
                               {insp.inspection_type_label || '-'}
@@ -137,7 +146,7 @@ export function UnitInspectionEditor({
                             </select>
                           )}
                         </td>
-                        <td className="py-2 px-2 min-w-[10rem]">
+                        <td className="cell min-w-[10rem]">
                           <select
                             aria-label="保守会社"
                             className={selectClass}
@@ -155,14 +164,14 @@ export function UnitInspectionEditor({
                             ))}
                           </select>
                         </td>
-                        <td className="py-2 px-2 min-w-[12rem]">
+                        <td className="cell min-w-[12rem]">
                           <MonthCheckboxes
                             label="点検月"
                             value={insp.inspection_months}
                             onChange={(months) => updateRow(unitIndex, rowIndex, { inspection_months: months })}
                           />
                         </td>
-                        <td className="py-2 px-2">
+                        <td className="cell">
                           <input
                             type="month"
                             aria-label="検査月"
@@ -171,7 +180,7 @@ export function UnitInspectionEditor({
                             onChange={(e) => updateRow(unitIndex, rowIndex, { inspected_on: e.target.value || null })}
                           />
                         </td>
-                        <td className="py-2 px-2">
+                        <td className="cell">
                           <Button
                             variant="danger"
                             size="sm"

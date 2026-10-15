@@ -66,13 +66,13 @@ export function BuildingRequestsList() {
   return (
     <Card>
       <CardHeader>
-        <h2 className="text-lg font-semibold text-gray-900">
+        <h2 className="text-sm font-semibold text-gray-900">
           ビル追加リクエスト ({requests.length}件)
         </h2>
       </CardHeader>
       <CardContent className="p-0">
         {requests.length === 0 ? (
-          <p className="px-6 py-8 text-center text-sm text-gray-500">
+          <p className="px-3 py-6 text-center text-sm text-gray-500">
             承認待ちのビル追加リクエストはありません
           </p>
         ) : (
@@ -80,26 +80,36 @@ export function BuildingRequestsList() {
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50">
-                  <th className="px-4 py-3 text-xs font-medium uppercase text-gray-500">物件コード</th>
-                  <th className="px-4 py-3 text-xs font-medium uppercase text-gray-500">物件名</th>
-                  <th className="px-4 py-3 text-xs font-medium uppercase text-gray-500">保守会社</th>
-                  <th className="px-4 py-3 text-xs font-medium uppercase text-gray-500">申請者</th>
-                  <th className="px-4 py-3 text-xs font-medium uppercase text-gray-500">申請日時</th>
-                  <th className="px-4 py-3 text-xs font-medium uppercase text-gray-500">操作</th>
+                  <th className="cell-head font-medium uppercase text-gray-500">物件コード</th>
+                  <th className="cell-head font-medium uppercase text-gray-500">物件名</th>
+                  <th className="cell-head font-medium uppercase text-gray-500">保守会社</th>
+                  <th className="cell-head font-medium uppercase text-gray-500">申請者</th>
+                  <th className="cell-head font-medium uppercase text-gray-500">申請日時</th>
+                  <th className="cell-head sticky right-0 bg-gray-50 font-medium text-gray-500 shadow-[inset_1px_0_0_var(--color-gray-200)]">
+                    操作
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {requests.map((req) => (
-                  <tr key={req.id} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm text-gray-500">{req.property_code}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{req.propertyName}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{req.vendorName}</td>
-                    <td className="px-4 py-3 text-sm text-gray-500">{req.requesterEmail}</td>
-                    <td className="px-4 py-3 text-sm text-gray-500">
+                  <tr key={req.id} className="group border-b border-gray-100 hover:bg-gray-50">
+                    <td className="cell whitespace-nowrap text-sm text-gray-500">{req.property_code}</td>
+                    <td className="cell text-sm text-gray-900">
+                      <div className="max-w-[16rem] truncate" title={req.propertyName || undefined}>
+                        {req.propertyName}
+                      </div>
+                    </td>
+                    <td className="cell text-sm text-gray-900">
+                      <div className="max-w-[16rem] truncate" title={req.vendorName || undefined}>
+                        {req.vendorName}
+                      </div>
+                    </td>
+                    <td className="cell whitespace-nowrap text-sm text-gray-500">{req.requesterEmail}</td>
+                    <td className="cell whitespace-nowrap text-sm text-gray-500">
                       {req.created_at ? new Date(req.created_at).toLocaleString('ja-JP') : '-'}
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
+                    <td className="cell sticky right-0 bg-white shadow-[inset_1px_0_0_var(--color-gray-200)] group-hover:bg-gray-50">
+                      <div className="-my-0.5 flex items-center gap-1">
                         <Button
                           size="sm"
                           variant="success"

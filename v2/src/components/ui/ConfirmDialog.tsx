@@ -23,22 +23,28 @@ export function ConfirmDialog({
   variant = 'primary',
 }: ConfirmDialogProps) {
   return (
-    <Modal open={open} onClose={onClose} title={title}>
-      <p className="text-sm text-gray-600 mb-6 whitespace-pre-line">{message}</p>
-      <div className="flex justify-end gap-3">
-        <Button variant="secondary" onClick={onClose}>
-          {cancelLabel}
-        </Button>
-        <Button
-          variant={variant === 'danger' ? 'danger' : 'primary'}
-          onClick={() => {
-            onConfirm();
-            onClose();
-          }}
-        >
-          {confirmLabel}
-        </Button>
-      </div>
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={title}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            {cancelLabel}
+          </Button>
+          <Button
+            variant={variant === 'danger' ? 'danger' : 'primary'}
+            onClick={() => {
+              onConfirm();
+              onClose();
+            }}
+          >
+            {confirmLabel}
+          </Button>
+        </>
+      }
+    >
+      <p className="text-sm text-gray-600 whitespace-pre-line">{message}</p>
     </Modal>
   );
 }

@@ -30,7 +30,20 @@ export function PasteModal({ open, onClose, onImport }: PasteModalProps) {
   };
 
   return (
-    <Modal open={open} onClose={handleClose} title="Excelからデータを取り込む" className="max-w-2xl">
+    <Modal
+      open={open}
+      onClose={handleClose}
+      title="Excelからデータを取り込む"
+      className="max-w-5xl"
+      footer={
+        <>
+          <Button variant="secondary" onClick={handleClose}>
+            キャンセル
+          </Button>
+          <Button onClick={handleImport}>取り込む</Button>
+        </>
+      }
+    >
       <div className="space-y-3">
         <div className="flex items-start justify-between gap-3">
           <p className="text-sm text-gray-600">
@@ -52,7 +65,8 @@ export function PasteModal({ open, onClose, onImport }: PasteModalProps) {
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="ここにExcelからコピーしたデータを貼り付け..."
-          className="h-40 w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          wrap="off"
+          className="h-[45vh] min-h-40 w-full overflow-auto whitespace-pre rounded-md border border-gray-300 px-2 py-1.5 font-mono text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           autoFocus
         />
 
@@ -90,13 +104,6 @@ export function PasteModal({ open, onClose, onImport }: PasteModalProps) {
             <p className="mt-2 text-gray-500">※ 端末ID（B列）は省略可能です。省略時は物件から自動設定されます。</p>
           </div>
         </details>
-
-        <div className="flex justify-end gap-3">
-          <Button variant="secondary" onClick={handleClose}>
-            キャンセル
-          </Button>
-          <Button onClick={handleImport}>取り込む</Button>
-        </div>
       </div>
     </Modal>
   );

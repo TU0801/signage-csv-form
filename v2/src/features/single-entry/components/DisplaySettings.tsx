@@ -14,8 +14,8 @@ export function DisplaySettings({ form }: DisplaySettingsProps) {
   const isCustom = values.posterType === PosterType.CUSTOM;
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-x-3 gap-y-2">
         <Input
           id="se-display-start-date"
           label="表示開始日"
@@ -49,7 +49,7 @@ export function DisplaySettings({ form }: DisplaySettingsProps) {
           onChange={(e) => form.setField('displayEndTime', e.target.value)}
         />
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-x-3 gap-y-2">
         <Input
           id="se-display-time"
           label="表示時間（秒）"
@@ -59,8 +59,8 @@ export function DisplaySettings({ form }: DisplaySettingsProps) {
           value={values.displayTime}
           onChange={(e) => form.setField('displayTime', e.target.value)}
         />
-        <fieldset className="space-y-1">
-          <legend className="text-sm font-medium text-gray-700">表示位置</legend>
+        <fieldset className="space-y-0.5">
+          <legend className="text-xs font-medium text-gray-600">表示位置</legend>
           <div className="flex flex-wrap gap-2 pt-1 text-sm">
             {POSITION_OPTIONS.map((p) => (
               <label key={p.value} className="inline-flex items-center gap-1">

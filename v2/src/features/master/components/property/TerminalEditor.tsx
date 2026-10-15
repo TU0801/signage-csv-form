@@ -17,8 +17,8 @@ export function TerminalEditor({ value, onChange }: TerminalEditorProps) {
     onChange(value.map((t, i) => (i === index ? { ...t, [field]: val } : t)));
 
   return (
-    <div className="space-y-2">
-      <span className="block text-sm font-medium text-gray-700">
+    <div className="space-y-1">
+      <span className="block text-xs font-medium text-gray-600">
         端末リスト（サイネージ未設置の場合は空欄）
       </span>
       {value.map((terminal, index) => (

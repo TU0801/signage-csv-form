@@ -104,7 +104,7 @@ export function MasterListPage<T extends Record<string, unknown>>({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <MasterToolbar
         count={filteredItems.length}
         search={

@@ -27,14 +27,14 @@ export function MasterTable<T extends Record<string, unknown>>({
             {config.columns.map((col) => (
               <th
                 key={col.key}
-                className="py-2 px-3 font-medium text-gray-700"
+                className="cell-head font-medium text-gray-700"
                 style={col.width ? { width: col.width } : undefined}
               >
                 {col.label}
               </th>
             ))}
             {!config.readOnly && (
-              <th className="py-2 px-3 font-medium text-gray-700 w-32">操作</th>
+              <th className="cell-head font-medium text-gray-700 w-32 sticky right-0 bg-white shadow-[inset_1px_0_0_var(--color-gray-200)]">操作</th>
             )}
           </tr>
         </thead>
@@ -52,18 +52,18 @@ export function MasterTable<T extends Record<string, unknown>>({
             items.map((item) => (
               <tr
                 key={item['id'] as string}
-                className="border-b border-gray-100 hover:bg-gray-50"
+                className="group border-b border-gray-100 hover:bg-gray-50"
               >
                 {config.columns.map((col) => (
-                  <td key={col.key} className="py-2 px-3">
+                  <td key={col.key} className="cell">
                     {renderCell
                       ? (renderCell(col.key, item[col.key], item) ?? formatCellValue(item[col.key]))
                       : formatCellValue(item[col.key])}
                   </td>
                 ))}
                 {!config.readOnly && (
-                  <td className="py-2 px-3">
-                    <div className="flex gap-1">
+                  <td className="cell sticky right-0 bg-white shadow-[inset_1px_0_0_var(--color-gray-200)] group-hover:bg-gray-50">
+                    <div className="-my-0.5 flex gap-1">
                       <Button variant="ghost" size="sm" onClick={() => onEdit(item)}>
                         編集
                       </Button>

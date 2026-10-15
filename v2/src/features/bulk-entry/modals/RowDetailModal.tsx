@@ -20,7 +20,9 @@ const POSITIONS = [
   { value: '0', label: '⓪全体' },
 ];
 
-const field = 'block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none';
+// 幅を含まない基本の見た目。cn は結合だけなので w-full と w-24 を並べると CSS の並び順で w-full が勝つ（幅は使う側で 1 つだけ付ける）
+const fieldBase = 'block rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none';
+const field = `${fieldBase} w-full`;
 
 /**
  * 行の詳細設定（案内文・表示期間・表示時間・貼紙表示位置）。
@@ -34,7 +36,7 @@ export function RowDetailModal({ open, onClose, rowId }: RowDetailModalProps) {
   const row = index >= 0 ? rows[index] : undefined;
 
   return (
-    <Modal open={open} onClose={onClose} title={`詳細設定 ${row ? `(行 ${index + 1})` : ''}`} className="max-w-xl">
+    <Modal open={open} onClose={onClose} title={`詳細設定 ${row ? `(行 ${index + 1})` : ''}`} className="max-w-2xl">
       {open && row && <RowDetailForm key={row.id} row={row} notices={notices} onClose={onClose} />}
     </Modal>
   );
@@ -73,7 +75,7 @@ function RowDetailForm({ row, notices, onClose }: { row: BulkEntryRow; notices: 
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       <section className="space-y-1">
         <h4 className="text-sm font-semibold text-gray-800">掲示板用案内文</h4>
         <textarea
@@ -94,15 +96,35 @@ function RowDetailForm({ row, notices, onClose }: { row: BulkEntryRow; notices: 
           <label className="space-y-1 text-sm text-gray-700">
             <span>表示開始</span>
             <div className="flex gap-1">
-              <input type="date" value={displayStartDate} onChange={(e) => setDisplayStartDate(e.target.value)} className={field} />
-              <input type="time" value={displayStartTime} onChange={(e) => setDisplayStartTime(e.target.value)} className={field} />
+              <input
+                type="date"
+                value={displayStartDate}
+                onChange={(e) => setDisplayStartDate(e.target.value)}
+                className={`${fieldBase} min-w-0 flex-1`}
+              />
+              <input
+                type="time"
+                value={displayStartTime}
+                onChange={(e) => setDisplayStartTime(e.target.value)}
+                className={`${fieldBase} w-32 shrink-0`}
+              />
             </div>
           </label>
           <label className="space-y-1 text-sm text-gray-700">
             <span>表示終了</span>
             <div className="flex gap-1">
-              <input type="date" value={displayEndDate} onChange={(e) => setDisplayEndDate(e.target.value)} className={field} />
-              <input type="time" value={displayEndTime} onChange={(e) => setDisplayEndTime(e.target.value)} className={field} />
+              <input
+                type="date"
+                value={displayEndDate}
+                onChange={(e) => setDisplayEndDate(e.target.value)}
+                className={`${fieldBase} min-w-0 flex-1`}
+              />
+              <input
+                type="time"
+                value={displayEndTime}
+                onChange={(e) => setDisplayEndTime(e.target.value)}
+                className={`${fieldBase} w-32 shrink-0`}
+              />
             </div>
           </label>
         </div>
@@ -114,7 +136,7 @@ function RowDetailForm({ row, notices, onClose }: { row: BulkEntryRow; notices: 
             max={60}
             value={displayTime}
             onChange={(e) => setDisplayTime(e.target.value)}
-            className={`${field} w-24`}
+            className={`${fieldBase} w-24`}
           />
         </label>
       </section>

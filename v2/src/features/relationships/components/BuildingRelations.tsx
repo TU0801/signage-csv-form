@@ -76,7 +76,7 @@ export function BuildingRelations({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-sm text-gray-500">{buildingVendors.length}件の物件が紐付けられています</p>
         <Button size="sm" onClick={openModal}>
@@ -87,36 +87,45 @@ export function BuildingRelations({
       {buildingVendors.length === 0 ? (
         <p className="py-8 text-center text-sm text-gray-500">紐付けがありません</p>
       ) : (
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-200 text-left">
-              <th className="py-2 px-3 font-medium text-gray-700">物件コード</th>
-              <th className="py-2 px-3 font-medium text-gray-700">物件名</th>
-              <th className="py-2 px-3 font-medium text-gray-700">ステータス</th>
-              <th className="py-2 px-3 font-medium text-gray-700">登録日</th>
-              <th className="py-2 px-3 font-medium text-gray-700">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {buildingVendors.map((bv) => (
-              <tr key={bv.id} className="border-b border-gray-100 hover:bg-gray-50">
-                <td className="py-2 px-3">{bv.property_code}</td>
-                <td className="py-2 px-3">{propertyMap.get(String(bv.property_code)) || '-'}</td>
-                <td className="py-2 px-3">
-                  <Badge variant="success">有効</Badge>
-                </td>
-                <td className="py-2 px-3">
-                  {bv.created_at ? new Date(bv.created_at).toLocaleDateString('ja-JP') : '-'}
-                </td>
-                <td className="py-2 px-3">
-                  <Button variant="danger" size="sm" onClick={() => setDeleteTarget(bv.id)}>
-                    削除
-                  </Button>
-                </td>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-200 text-left">
+                <th className="cell-head font-medium text-gray-700">物件コード</th>
+                <th className="cell-head font-medium text-gray-700">物件名</th>
+                <th className="cell-head font-medium text-gray-700">ステータス</th>
+                <th className="cell-head font-medium text-gray-700">登録日</th>
+                <th className="cell-head font-medium text-gray-700 sticky right-0 bg-white shadow-[inset_1px_0_0_var(--color-gray-200)]">操作</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {buildingVendors.map((bv) => (
+                <tr key={bv.id} className="group border-b border-gray-100 hover:bg-gray-50">
+                  <td className="cell whitespace-nowrap">{bv.property_code}</td>
+                  <td className="cell">
+                    <div
+                      className="max-w-[16rem] truncate"
+                      title={propertyMap.get(String(bv.property_code)) || undefined}
+                    >
+                      {propertyMap.get(String(bv.property_code)) || '-'}
+                    </div>
+                  </td>
+                  <td className="cell whitespace-nowrap">
+                    <Badge variant="success">有効</Badge>
+                  </td>
+                  <td className="cell whitespace-nowrap">
+                    {bv.created_at ? new Date(bv.created_at).toLocaleDateString('ja-JP') : '-'}
+                  </td>
+                  <td className="cell sticky right-0 bg-white shadow-[inset_1px_0_0_var(--color-gray-200)] group-hover:bg-gray-50">
+                    <Button variant="danger" size="sm" className="-my-0.5" onClick={() => setDeleteTarget(bv.id)}>
+                      削除
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       <PillSelectModal

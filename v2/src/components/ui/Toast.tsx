@@ -14,6 +14,9 @@ export function useToast() {
   return ctx;
 }
 
+/** 同時に表示する数の上限。積み重なって画面右下の操作（申請するなど）を覆わないようにする */
+const MAX_VISIBLE_TOASTS = 3;
+
 const typeStyles = {
   info: 'bg-blue-50 text-blue-800 border-blue-200',
   success: 'bg-green-50 text-green-800 border-green-200',
@@ -26,7 +29,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const addToast = useCallback((message: string, type: ToastType['type'] = 'info') => {
     const id = crypto.randomUUID();
-    setToasts((prev) => [...prev, { id, message, type }]);
+    setToasts((prev) => [...prev, { id, message, type }].slice(-MAX_VISIBLE_TOASTS));
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 4000);
@@ -44,7 +47,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <div
             key={toast.id}
             className={cn(
-              'flex items-center gap-2 rounded-md border px-4 py-3 shadow-sm text-sm',
+              'flex items-center gap-2 rounded-md border px-3 py-2 shadow-sm text-sm',
               typeStyles[toast.type],
             )}
           >

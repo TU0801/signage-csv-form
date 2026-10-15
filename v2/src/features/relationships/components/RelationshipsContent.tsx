@@ -60,8 +60,8 @@ export function RelationshipsContent() {
   ];
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-xl font-bold text-gray-900">紐付け管理</h1>
+    <div className="space-y-3">
+      <h1 className="text-base font-bold text-gray-900">紐付け管理</h1>
 
       <div className="max-w-sm">
         <Select

@@ -232,9 +232,10 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
   const isCustom = values.posterType === PosterType.CUSTOM;
 
   return (
-    <div className="space-y-6">
+    // 段階B（tall のときだけ）：1画面に収め、上段はカードの中身の高さ、作成データ一覧が残りを取って内部スクロールする
+    <div className="space-y-3 tall:grid tall:h-[calc(100dvh-var(--header-h)-1.5rem)] tall:grid-rows-[auto_minmax(0,auto)_minmax(9rem,1fr)] tall:gap-3 tall:space-y-0">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-bold text-gray-900">点検日入力</h1>
+        <h1 className="text-base font-bold text-gray-900">点検日入力</h1>
         {/* 管理者の保守会社選択はヘッダーに出す（780f151） */}
         {isAdmin && (
           <HeaderSlot>
@@ -246,14 +247,14 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card>
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 tall:min-h-0 tall:grid-rows-[minmax(0,1fr)]">
+        <Card className="tall:flex tall:min-h-0 tall:flex-col">
           <CardHeader>
-            <h2 className="text-base font-semibold text-gray-900">
+            <h2 className="text-sm font-semibold text-gray-900">
               {editingId ? '掲示内容入力（編集中）' : '掲示内容入力'}
             </h2>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0 tall:flex tall:min-h-0 tall:flex-1 tall:flex-col">
             <EntryForm
               form={form}
               propertyOptions={propertyOptions}
@@ -269,8 +270,8 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
           </CardContent>
         </Card>
 
-        <Card>
-          <div className="flex border-b border-gray-200" role="tablist">
+        <Card className="tall:flex tall:min-h-0 tall:flex-col">
+          <div className="flex shrink-0 border-b border-gray-200" role="tablist">
             {(
               [
                 ['preview', '貼紙プレビュー'],
@@ -284,7 +285,7 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
                 aria-selected={tab === key}
                 onClick={() => setTab(key)}
                 className={cn(
-                  'flex-1 px-4 py-3 text-sm font-medium',
+                  'flex-1 px-3 py-2 text-sm font-medium',
                   tab === key ? 'border-b-2 border-blue-600 text-blue-700' : 'text-gray-600 hover:bg-gray-50',
                 )}
               >
@@ -292,7 +293,7 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
               </button>
             ))}
           </div>
-          <CardContent>
+          <CardContent className="tall:min-h-0 tall:flex-1 tall:overflow-y-auto">
             {tab === 'preview' ? (
               <PosterPreview
                 templateImageUrl={templateUrlOf(values.templateNo)}
@@ -312,11 +313,11 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
+      <Card className="tall:flex tall:min-h-0 tall:flex-col">
+        <CardHeader className="shrink-0">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-semibold text-gray-900">作成データ</h2>
+              <h2 className="text-sm font-semibold text-gray-900">作成データ</h2>
               <Badge variant="primary">{localEntries.length}</Badge>
               <Badge>申請済: {submitted.entries.length}</Badge>
             </div>
@@ -327,7 +328,7 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
             )}
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0 tall:min-h-0 tall:flex-1">
           <EntryDataList
             entries={localEntries}
             submitted={submitted.entries}

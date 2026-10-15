@@ -7,6 +7,7 @@ import { useToast } from '@/components/ui/Toast';
 import { entryErrorReason } from '@/lib/api/admin-entries';
 import { EntryEditModal } from '@/features/entries-list/components/EntryEditModal';
 import { useEntryLookups } from '@/features/entries-list/hooks/useEntryLookups';
+import { NAME_COL } from '@/features/entries-list/lib/tableColumns';
 import type { DbEntry } from '@/types/database';
 import { PendingEntryRow } from './PendingEntryRow';
 import { EntryDetailModal } from './EntryDetailModal';
@@ -14,7 +15,9 @@ import { usePendingEntries } from '../hooks/usePendingEntries';
 
 type PendingConfirm = { kind: 'approve'; id: string } | { kind: 'reject'; id: string } | { kind: 'bulk' };
 
-const th = 'px-3 py-3 text-xs font-medium text-gray-500 whitespace-nowrap';
+const th = 'cell-head font-medium text-gray-500';
+// 操作の列は右端に固定する（PendingEntryRow の操作セルと対）
+const thActions = `${th} sticky right-0 bg-gray-50 shadow-[inset_1px_0_0_var(--color-gray-200)]`;
 
 /** データ承認待ち（申請済み = draft）。編集して保存すると承認になる */
 // v1: js/admin-pending.js / admin.html #approval-data
@@ -123,7 +126,7 @@ export function PendingEntriesList() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900">
+            <h2 className="text-sm font-semibold text-gray-900">
               データ承認待ち ({entries.length}件)
             </h2>
             <Button
@@ -138,7 +141,7 @@ export function PendingEntriesList() {
         </CardHeader>
         <CardContent className="p-0">
           {error ? (
-            <div className="px-6 py-6">
+            <div className="p-3">
               <p className="text-red-600">{error}</p>
               <Button variant="secondary" size="sm" onClick={fetchPendingEntries} className="mt-2">
                 再読み込み
@@ -149,7 +152,7 @@ export function PendingEntriesList() {
               <Spinner size="lg" />
             </div>
           ) : entries.length === 0 ? (
-            <p className="px-6 py-8 text-center text-sm text-gray-500">
+            <p className="px-3 py-6 text-center text-sm text-gray-500">
               承認待ちのデータはありません
             </p>
           ) : (
@@ -167,15 +170,15 @@ export function PendingEntriesList() {
                       />
                     </th>
                     <th className={th}>物件コード</th>
-                    <th className={th}>物件名</th>
-                    <th className={th}>点検種別</th>
+                    <th className={`${th} ${NAME_COL.property}`}>物件名</th>
+                    <th className={`${th} ${NAME_COL.inspectionType}`}>点検種別</th>
                     <th className={th}>点検開始日</th>
                     <th className={th}>点検終了日</th>
-                    <th className={th}>備考</th>
-                    <th className={th}>保守会社</th>
+                    <th className={`${th} ${NAME_COL.remarks}`}>備考</th>
+                    <th className={`${th} ${NAME_COL.vendor}`}>保守会社</th>
                     <th className={th}>登録日時</th>
-                    <th className={th}>登録者</th>
-                    <th className={th}>操作</th>
+                    <th className={`${th} ${NAME_COL.registrant}`}>登録者</th>
+                    <th className={thActions}>操作</th>
                   </tr>
                 </thead>
                 <tbody>
