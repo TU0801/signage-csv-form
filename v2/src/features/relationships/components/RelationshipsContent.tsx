@@ -9,6 +9,7 @@ import type { DbVendor } from '@/types/database';
 import { useRelationships, type RelationshipTab } from '../hooks/useRelationships';
 import { BuildingRelations } from './BuildingRelations';
 import { InspectionRelations } from './InspectionRelations';
+import { vendorOptions } from '@/lib/vendorOptions';
 
 type SubTab = RelationshipTab;
 
@@ -16,6 +17,7 @@ type SubTab = RelationshipTab;
 export function RelationshipsContent() {
   const { addToast } = useToast();
   const [vendors, setVendors] = useState<DbVendor[]>([]);
+  const [vendorsStatus, setVendorsStatus] = useState<'loading' | 'loaded' | 'failed'>('loading');
   // 保守会社とサブタブは ?vendor=&tab= に持つ（再読込やブラウザの「戻る」で選び直さなくて済むように）
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedVendorId = searchParams.get('vendor') ?? '';
@@ -57,9 +59,14 @@ export function RelationshipsContent() {
     let cancelled = false;
     fetchMasterVendors()
       .then((list) => {
-        if (!cancelled) setVendors(list);
+        if (cancelled) return;
+        setVendors(list);
+        setVendorsStatus('loaded');
       })
-      .catch((err) => console.error('Failed to load vendors:', err));
+      .catch((err) => {
+        console.error('Failed to load vendors:', err);
+        if (!cancelled) setVendorsStatus('failed');
+      });
     return () => {
       cancelled = true;
     };
@@ -74,8 +81,21 @@ export function RelationshipsContent() {
     if (inspectionError) addToast(inspectionError.message, 'error');
   }, [inspectionError, addToast]);
 
-  // 保守会社の一覧を読み終える前（?vendor= で開いた直後）でも確認の文言が空にならないように
-  const vendorName = vendors.find((v) => v.id === selectedVendorId)?.vendor_name ?? 'この保守会社';
+  // ?vendor= の保守会社が一覧に無い（削除済みなど）なら外す。選択欄は未選択に見えるのに操作できてしまうため
+  const selectedVendor = vendors.find((v) => v.id === selectedVendorId);
+  useEffect(() => {
+    if (vendorsStatus === 'loaded' && selectedVendorId && !selectedVendor) {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete('vendor');
+          return next;
+        },
+        { replace: true },
+      );
+    }
+  }, [vendorsStatus, selectedVendorId, selectedVendor, setSearchParams]);
+  const vendorName = selectedVendor?.vendor_name ?? 'この保守会社';
 
   const tabs: { key: SubTab; label: string; icon: typeof BuildingIcon }[] = [
     { key: 'buildings', label: '物件', icon: BuildingIcon },
@@ -89,7 +109,7 @@ export function RelationshipsContent() {
       <div className="max-w-sm">
         <Select
           label="保守会社"
-          options={vendors.map((v) => ({ value: v.id, label: v.vendor_name }))}
+          options={vendorOptions(vendors)}
           placeholder="-- 選択してください --"
           value={selectedVendorId}
           onChange={(e) => setSelectedVendorId(e.target.value)}
@@ -98,6 +118,15 @@ export function RelationshipsContent() {
 
       {!selectedVendorId ? (
         <p className="py-8 text-center text-sm text-gray-500">保守会社を選択してください</p>
+      ) : !selectedVendor ? (
+        // 一覧を読み終えて保守会社が分かるまでは紐付けの追加・解除を出さない
+        vendorsStatus === 'failed' ? (
+          <p className="py-8 text-center text-sm text-red-600">保守会社の一覧を読み込めませんでした。再読み込みしてください</p>
+        ) : (
+          <div className="flex justify-center py-8">
+            <Spinner />
+          </div>
+        )
       ) : (
         <>
           <div className="border-b border-gray-200">

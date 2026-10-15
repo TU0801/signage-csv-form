@@ -20,8 +20,10 @@ import { BulkApplyModal } from '@/features/bulk-entry/modals/BulkApplyModal';
 import { parseExcelPaste } from '@/features/bulk-entry/utils/parseExcelPaste';
 import { bulkCsvFilename, generateBulkCsv } from '@/features/bulk-entry/utils/bulkCsv';
 import { buildBulkEntries } from '@/features/bulk-entry/utils/buildBulkEntries';
+import { matchesBulkFilter } from '@/features/bulk-entry/utils/rowFilter';
 import { clearAutoSave } from '@/features/bulk-entry/utils/bulkAutoSave';
 import { getStoredTemplates, getVisibleTemplates, templateRows } from '@/features/bulk-entry/utils/bulkTemplates';
+import { compareVendorNames } from '@/lib/vendorOptions';
 
 /** v1 の申請失敗メッセージ（message と details をそのまま付ける）。v1: js/bulk-data.js saveAll catch */
 function saveErrorMessage(error: unknown): string {
@@ -59,6 +61,10 @@ export function BulkEntryPage() {
   const clearRows = useBulkStore((s) => s.clearRows);
   const applyToRows = useBulkStore((s) => s.applyToRows);
   const selectedCount = useBulkStore((s) => s.selectedIds.size);
+  // 一括設定は今の絞り込みで見えている選択行だけに入れる（隠れた行を黙って上書きしない）
+  const visibleSelectedCount = useBulkStore(
+    (s) => s.rows.filter((r) => s.selectedIds.has(r.id) && matchesBulkFilter(r, s.filter)).length,
+  );
 
   // 管理者が保守会社を選ばないと保守会社名が空で登録できない（DB で弾かれる）ので、申請の前に止めて案内する
   const saveBlockedReason = isAdmin && !currentVendor.id ? 'ヘッダーで保守会社を選んでください' : undefined;
@@ -136,7 +142,8 @@ export function BulkEntryPage() {
 
   // 選択行への一括設定（入れた項目だけ上書き）
   const handleBulkApply = (patch: BulkRowsPatch) => {
-    const ids = [...useBulkStore.getState().selectedIds];
+    const { rows: all, selectedIds, filter } = useBulkStore.getState();
+    const ids = all.filter((r) => selectedIds.has(r.id) && matchesBulkFilter(r, filter)).map((r) => r.id);
     applyToRows(ids, patch);
     setShowBulkApply(false);
     addToast(`${ids.length}件の行に設定しました`, 'success');
@@ -258,7 +265,7 @@ export function BulkEntryPage() {
               className="max-w-[20rem] rounded border border-amber-400 bg-white px-1.5 py-1 text-sm text-slate-800"
             >
               <option value="">-- 保守会社を選択 --</option>
-              {vendors.map((v) => (
+              {[...vendors].sort((a, b) => compareVendorNames(a.vendorName, b.vendorName)).map((v) => (
                 <option key={v.id} value={v.id}>
                   {v.vendorName}
                 </option>
@@ -331,7 +338,8 @@ export function BulkEntryPage() {
         open={showBulkApply}
         onClose={() => setShowBulkApply(false)}
         onApply={handleBulkApply}
-        selectedCount={selectedCount}
+        selectedCount={visibleSelectedCount}
+        hiddenSelectedCount={selectedCount - visibleSelectedCount}
       />
       <PasteModal open={showPaste} onClose={() => setShowPaste(false)} onImport={handleImport} />
       <RowDetailModal open={detailRowId !== null} onClose={() => setDetailRowId(null)} rowId={detailRowId} />

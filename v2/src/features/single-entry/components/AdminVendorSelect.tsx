@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Combobox } from '@/components/ui/Combobox';
-import { vendorOptions } from '@/features/users/vendorOptions';
+import { vendorOptions } from '@/lib/vendorOptions';
 import type { DbVendor } from '@/types/database';
 
 interface AdminVendorSelectProps {
@@ -27,7 +27,10 @@ export function AdminVendorSelect({ vendors, value, onChange, children }: AdminV
           aria-label="保守会社"
           value={value}
           onChange={onChange}
-          options={vendorOptions(vendors, { withNone: true })}
+          options={
+            // 未選択のときは placeholder を見せる。選んだ後だけ先頭に空へ戻す候補を出す
+            value ? [{ value: '', label: '保守会社を選択' }, ...vendorOptions(vendors)] : vendorOptions(vendors)
+          }
           placeholder="保守会社を選択（社名の一部で検索）"
           className="border-amber-400 py-1"
         />

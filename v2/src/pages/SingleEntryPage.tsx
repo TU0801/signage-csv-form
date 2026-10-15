@@ -122,7 +122,8 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
   useEffect(() => bindUser(userId), [bindUser, userId]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [removeId, setRemoveId] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const submitting = useSingleEntryStore((s) => s.submitting);
+  const setSubmitting = useSingleEntryStore((s) => s.setSubmitting);
 
   const selectableProperties = useMemo(
     () => filterByManagementCompany(vendorCtx.visibleProperties, managementIndex, managementCompanyId),
@@ -252,6 +253,7 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
 
   // v1: js/script.js submitEntries（画像をアップロードしてから、まとめて1回で INSERT。status は draft）
   const handleSubmit = async () => {
+    if (useSingleEntryStore.getState().submitting) return;
     if (localEntries.length === 0) {
       addToast('申請するデータがありません', 'error');
       return;
@@ -260,10 +262,13 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
       addToast('ログインが必要です', 'error');
       return;
     }
+    // 申請中に足した行を消さないよう、申請した行の _id だけを覚えておく
+    const sending = localEntries;
+    const sentIds = new Set(sending.map((e) => e._id));
     setSubmitting(true);
     try {
       const urls = await Promise.all(
-        localEntries.map((e) => {
+        sending.map((e) => {
           if (e.posterType !== PosterType.CUSTOM || !e.customImage) return Promise.resolve(null);
           return uploadPosterImage(e.customImage.file, user.id).catch((uploadError: unknown) => {
             console.error('Image upload failed:', uploadError);
@@ -272,10 +277,10 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
         }),
       );
       const today = todayUtc();
-      await insertEntries(localEntries.map((e, i) => toInsertRow(e, urls[i] ?? null, user.id, settings, today)));
-      addToast(`${localEntries.length}件を申請しました`, 'success');
-      setLocalEntries([]);
-      setEditingId(null);
+      await insertEntries(sending.map((e, i) => toInsertRow(e, urls[i] ?? null, user.id, settings, today)));
+      addToast(`${sending.length}件を申請しました`, 'success');
+      setLocalEntries((prev) => prev.filter((e) => !sentIds.has(e._id)));
+      setEditingId((id) => (id && sentIds.has(id) ? null : id));
       submitted.refetch();
     } catch (err) {
       console.error('Submit failed:', err);

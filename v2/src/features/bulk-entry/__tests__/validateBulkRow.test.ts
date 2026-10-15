@@ -49,13 +49,8 @@ describe('validateBulkRow (v1 js/bulk-table.js validateRow)', () => {
     expect(errorsOf({ remarks: '123456' })).toEqual(['備考文字数(1行5文字以下)']);
   });
 
-  it('an inspection type missing from the master is an error (only once the master is loaded)', () => {
-    const notices = [{ inspectionType: '消防設備点検', templateNo: '7', noticeText: '' }];
-    expect(validateBulkRow({ ...base }, properties, settings, notices)).toEqual([]);
-    expect(validateBulkRow({ ...base, inspectionType: '消防設備 点検' }, properties, settings, notices)).toEqual([
-      '点検種別(未登録)',
-    ]);
-    expect(validateBulkRow({ ...base, inspectionType: '消防設備 点検' }, properties, settings, [])).toEqual([]);
+  it('an inspection type missing from the master is not an error (saved and exported as in v1)', () => {
+    expect(validateBulkRow({ ...base, inspectionType: '消防設備 点検' }, properties, settings)).toEqual([]);
   });
 
   it('notice text is limited by notice_text_max_chars', () => {

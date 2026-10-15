@@ -6,7 +6,7 @@ import { Combobox } from '@/components/ui/Combobox';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { MIN_PASSWORD_LENGTH, ROLE_OPTIONS } from '../constants';
-import { vendorOptions } from '../vendorOptions';
+import { vendorOptions } from '@/lib/vendorOptions';
 import type { DbProfile, DbVendor } from '@/types/database';
 
 interface EditUserModalProps {

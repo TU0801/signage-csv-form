@@ -35,7 +35,7 @@ export function MasterTable<T extends Record<string, unknown>>({
               </th>
             ))}
             {!config.readOnly && (
-              <th className="cell-head font-medium text-gray-700 w-32 sticky right-0 bg-white shadow-[inset_1px_0_0_var(--color-gray-200)]">操作</th>
+              <th className="cell-head font-medium text-gray-700 w-px whitespace-nowrap sticky right-0 bg-white shadow-[inset_1px_0_0_var(--color-gray-200)]">操作</th>
             )}
           </tr>
         </thead>

@@ -9,6 +9,7 @@ import { MasterTable } from '../components/MasterTable';
 import { MasterToolbar } from '../components/MasterToolbar';
 import { PropertyFormModal } from '../components/property/PropertyFormModal';
 import { propertyListSummary, terminalSummary, vendorSummary } from '../lib/propertyForm';
+import { vendorOptions } from '@/lib/vendorOptions';
 
 const BIZ_PROPERTIES_URL = 'https://system.1984.jp/properties';
 
@@ -86,7 +87,7 @@ export function PropertiesMaster() {
                 value={vendorFilter}
                 options={[
                   { value: '', label: 'すべての保守会社' },
-                  ...vendors.map((v) => ({ value: v.id, label: v.vendor_name })),
+                  ...vendorOptions(vendors),
                 ]}
                 onChange={setVendorFilter}
                 placeholder="すべての保守会社"

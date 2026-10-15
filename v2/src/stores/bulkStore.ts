@@ -102,7 +102,7 @@ export const useBulkStore = create<BulkState>((set, get) => {
   /** v1: js/bulk-table.js validateRow */
   const validate = (row: BulkEntryRow): BulkEntryRow => {
     const { masterData, appSettings } = get();
-    const errors = validateBulkRow(row, masterData.properties, appSettings, masterData.notices);
+    const errors = validateBulkRow(row, masterData.properties, appSettings);
     return { ...row, errors, isValid: errors.length === 0 };
   };
 

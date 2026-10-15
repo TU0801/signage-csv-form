@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import type { DbInspectionType, DbVendor } from '@/types/database';
 import type { PropertyInspection } from '@/types/app';
 import { MonthCheckboxes } from './MonthCheckboxes';
+import { sortVendors } from '@/lib/vendorOptions';
 
 interface PropertyInspectionEditorProps {
   value: PropertyInspection[];
@@ -225,7 +226,7 @@ export function PropertyInspectionEditor({
               onChange={(e) => setForm({ ...form, vendor_id: e.target.value })}
             >
               <option value="">なし</option>
-              {vendors.map((v) => (
+              {sortVendors(vendors).map((v) => (
                 <option key={v.id} value={v.id}>
                   {v.vendor_name}
                 </option>

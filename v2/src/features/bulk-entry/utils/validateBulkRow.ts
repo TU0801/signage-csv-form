@@ -1,10 +1,9 @@
-import type { BulkEntryRow, BulkNotice, BulkProperty, BulkSettings } from '../types';
+import type { BulkEntryRow, BulkProperty, BulkSettings } from '../types';
 
 /**
  * 行のエラー一覧（空なら有効）。保守会社は画面上部で決まるのでチェックしない。
  * 物件はマスターに実在するコードであることを求める（貼り付けで生値が入っても弾く）。
- * 点検種別もマスターに無ければ「点検種別(未登録)」にする（貼り付けの表記ゆれのまま申請すると、
- * テンプレートNo・案内文が空で登録されるため）。notices が空（読み込み前）のときは照合しない。
+ * マスターに無い点検種別はエラーにしない（v1 と同じく申請・CSV に含める）。画面では警告だけ出す（BulkTable）。
  * v1: js/bulk-table.js validateRow
  */
 export function validateBulkRow(
@@ -23,7 +22,6 @@ export function validateBulkRow(
   >,
   properties: BulkProperty[],
   settings: BulkSettings,
-  notices: BulkNotice[] = [],
 ): string[] {
   const errors: string[] = [];
 
@@ -31,9 +29,6 @@ export function validateBulkRow(
     !!row.propertyCode && properties.some((p) => String(p.propertyCode) === String(row.propertyCode));
   if (!propExists) errors.push('物件');
   if (!row.inspectionType) errors.push('点検種別');
-  else if (notices.length > 0 && !notices.some((n) => n.inspectionType === row.inspectionType)) {
-    errors.push('点検種別(未登録)');
-  }
   if (propExists && !row.terminalId) errors.push('端末');
 
   if (row.startDate && row.endDate && row.startDate > row.endDate) {

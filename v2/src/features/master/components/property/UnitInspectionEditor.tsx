@@ -4,6 +4,7 @@ import type { DbVendor } from '@/types/database';
 import type { PropertyUnit, UnitInspection, UnitInspectionTypeOption } from '@/types/app';
 import { newUnitInspection } from '../../lib/propertyForm';
 import { MonthCheckboxes } from './MonthCheckboxes';
+import { sortVendors } from '@/lib/vendorOptions';
 
 interface UnitInspectionEditorProps {
   units: PropertyUnit[];
@@ -157,7 +158,7 @@ export function UnitInspectionEditor({
                             {!vendorKnown && insp.vendor_id && (
                               <option value={insp.vendor_id}>{insp.vendor_name || '（一覧に無い保守会社）'}</option>
                             )}
-                            {vendors.map((v) => (
+                            {sortVendors(vendors).map((v) => (
                               <option key={v.id} value={v.id}>
                                 {v.vendor_name}
                               </option>

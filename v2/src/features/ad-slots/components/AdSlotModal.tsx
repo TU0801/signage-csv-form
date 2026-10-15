@@ -23,7 +23,6 @@ export function AdSlotModal({ slot, onClose, onSave }: AdSlotModalProps) {
   const [linkUrl, setLinkUrl] = useState('');
   const [isActive, setIsActive] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [linkError, setLinkError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -32,7 +31,6 @@ export function AdSlotModal({ slot, onClose, onSave }: AdSlotModalProps) {
       setLinkUrl(slot.link_url || '');
       setIsActive(slot.is_active || false);
       setImageFile(null);
-      setLinkError(null);
     }
   }, [slot]);
 
@@ -64,12 +62,12 @@ export function AdSlotModal({ slot, onClose, onSave }: AdSlotModalProps) {
       linkUrl !== (slot.link_url || '') ||
       isActive !== (slot.is_active || false));
 
+  // リンクの書式は警告だけ（保存は止めない。v1 と同じく入力どおり保存する）。保存済みのリンクを触っていなければ出さない
+  const linkWarning = !slot || linkUrl.trim() === (slot.link_url || '').trim() ? null : adLinkUrlError(linkUrl);
+
   const handleSave = async () => {
     if (!slot) return;
-    // 保存済みのリンクを触っていなければ確認しない（以前の形式のまま画像だけ差し替えられるように）
-    const urlError = linkUrl.trim() === (slot.link_url || '').trim() ? null : adLinkUrlError(linkUrl);
-    setLinkError(urlError);
-    if (urlError || fileError) return;
+    if (fileError) return;
     setSaving(true);
     try {
       await onSave(slot, { imageFile, caption, linkUrl, isActive });
@@ -89,6 +87,16 @@ export function AdSlotModal({ slot, onClose, onSave }: AdSlotModalProps) {
       onClose={onClose}
       title={slot ? `広告枠 ${slot.slot_index} 編集` : '広告枠 編集'}
       dirty={dirty}
+      footer={
+        <>
+          <Button type="button" variant="secondary" onClick={onClose}>
+            キャンセル
+          </Button>
+          <Button type="button" onClick={handleSave} disabled={saving || !!fileError}>
+            {saving ? '保存中...' : '保存'}
+          </Button>
+        </>
+      }
     >
       <div className="space-y-4">
         <div className="space-y-2">
@@ -141,18 +149,17 @@ export function AdSlotModal({ slot, onClose, onSave }: AdSlotModalProps) {
           {/* v1 と同じくログイン画面は画像とリンクだけを使う */}
           <p className="text-xs text-gray-500">管理画面での見分け用です（ログイン画面には表示されません）</p>
         </div>
-        <Input
-          label="リンクURL"
-          id="adSlotLinkUrl"
-          type="url"
-          value={linkUrl}
-          onChange={(e) => {
-            setLinkUrl(e.target.value);
-            setLinkError(null);
-          }}
-          placeholder="https://example.com"
-          error={linkError ?? undefined}
-        />
+        <div className="space-y-1">
+          <Input
+            label="リンクURL"
+            id="adSlotLinkUrl"
+            type="url"
+            value={linkUrl}
+            onChange={(e) => setLinkUrl(e.target.value)}
+            placeholder="https://example.com"
+          />
+          {linkWarning && <p className="text-xs text-amber-700">{linkWarning}（このままでも保存できます）</p>}
+        </div>
         <label className="flex items-center gap-2 text-sm text-gray-700">
           <input
             type="checkbox"
@@ -162,14 +169,6 @@ export function AdSlotModal({ slot, onClose, onSave }: AdSlotModalProps) {
           />
           表示する
         </label>
-        <div className="flex justify-end gap-3 pt-2">
-          <Button type="button" variant="secondary" onClick={onClose}>
-            キャンセル
-          </Button>
-          <Button type="button" onClick={handleSave} disabled={saving || !!fileError}>
-            {saving ? '保存中...' : '保存'}
-          </Button>
-        </div>
       </div>
     </Modal>
   );

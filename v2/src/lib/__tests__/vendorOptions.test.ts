@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { vendorOptions } from '../vendorOptions';
+import { sortVendors, vendorOptions } from '../vendorOptions';
 import type { DbVendor } from '@/types/database';
 
 const vendor = (id: string, vendor_name: string) => ({ id, vendor_name }) as DbVendor;
@@ -19,5 +19,6 @@ describe('vendorOptions', () => {
       '㈱ビル管理',
     ]);
     expect(vendorOptions(vendors, { withNone: true })[0]).toEqual({ value: '', label: '選択なし' });
+    expect(sortVendors(vendors).map((v) => v.id)).toEqual(vendorOptions(vendors).map((o) => o.value));
   });
 });

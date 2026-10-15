@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import type { DbVendor } from '@/types/database';
 import type { EntriesFilters as EntriesFiltersType } from '../hooks/useEntriesFilters';
+import { sortVendors } from '@/lib/vendorOptions';
 
 interface EntriesFiltersProps {
   filters: EntriesFiltersType;
@@ -38,7 +39,7 @@ export function EntriesFilters({
     })),
   ];
 
-  const vendorOptions = vendors.map((v) => ({
+  const vendorOptions = sortVendors(vendors).map((v) => ({
     value: v.vendor_name,
     label: v.vendor_name,
   }));

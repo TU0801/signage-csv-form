@@ -16,7 +16,7 @@ export function useToast() {
   return ctx;
 }
 
-/** 同時に表示する数の上限。積み重なって画面右上の操作を覆わないようにする */
+/** 同時に表示する数の上限。積み重なって右上（ヘッダーの下）の表や操作を覆いすぎないようにする */
 const MAX_VISIBLE_TOASTS = 3;
 
 /** 成功・お知らせが自動で消えるまで。エラー・警告は読み落とさないよう × で閉じるまで残す */
@@ -57,11 +57,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const container = (
     // fixed は viewport 基準（dialog に transform は無い）。モーダルの中では右上の×や右下の保存ボタンを覆わないよう上の中央に、
-    // モーダルが無いときは従来どおり右下に出す
+    // モーダルが無いときはヘッダーの下の右上に出す（エラーは閉じるまで残るので、右下だと一括入力の下端の CSV ボタンを覆う）
     <div
       className={cn(
         'fixed z-[1000] max-w-md space-y-2',
-        host ? 'left-1/2 top-2 -translate-x-1/2' : 'bottom-4 right-4',
+        host ? 'left-1/2 top-2 -translate-x-1/2' : 'right-4 top-[calc(var(--header-h)+0.5rem)]',
       )}
     >
       {toasts.map((toast) => (

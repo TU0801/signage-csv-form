@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { useBulkDragDrop } from '../hooks/useBulkDragDrop';
 import { defaultDisplayTime, terminalIdsFor, uniqueProperties } from '../utils/bulkMaster';
 import { hasRowDetail, rowDetailSummary } from '../utils/rowDetail';
+import { matchesBulkFilter } from '../utils/rowFilter';
 import { ContextMenu } from './ContextMenu';
 import { SearchableSelect } from './SearchableSelect';
 import type { BulkEntryRow } from '../types';
@@ -24,6 +25,12 @@ const LAST_COL = COL.remarks;
 
 const cellInputBase = 'block h-7 w-full rounded border px-2 py-0 text-sm focus:border-blue-500 focus:outline-none';
 const cellInput = (invalid = false) => cn(cellInputBase, invalid ? 'border-red-400' : 'border-gray-300');
+/** 端末の選択欄（列が狭いので文字を小さく・余白を詰めて8桁のIDが読めるようにする） */
+const terminalSelect = (invalid = false) =>
+  cn(
+    'block h-7 w-full rounded border px-1 py-0 text-xs focus:border-blue-500 focus:outline-none',
+    invalid ? 'border-red-400' : 'border-gray-300',
+  );
 
 /** 端末を選ばずに読み取りで出すときの見た目（入力欄と同じ高さ） */
 const cellText = 'block h-7 truncate px-1 text-xs leading-7';
@@ -116,8 +123,7 @@ export function BulkTable({ onOpenRowDetail, confirm }: BulkTableProps) {
 
   const allSelected = rows.length > 0 && rows.every((r) => selectedIds.has(r.id));
 
-  const isVisible = (row: BulkEntryRow) =>
-    filter === 'all' || (filter === 'valid' ? row.isValid : !row.isValid);
+  const isVisible = (row: BulkEntryRow) => matchesBulkFilter(row, filter);
 
   // v1: js/bulk-table.js handleCellKeyDown
   const handleCellKeyDown = useCallback(
@@ -302,10 +308,11 @@ export function BulkTable({ onOpenRowDetail, confirm }: BulkTableProps) {
                     <select
                       data-col={COL.terminal}
                       aria-label="端末"
+                      title={row.terminalId || '端末を選択'}
                       value={row.terminalId}
                       onChange={(e) => updateRow(row.id, { terminalId: e.target.value })}
                       onKeyDown={(e) => handleCellKeyDown(e, index, COL.terminal)}
-                      className={cellInput(hasError(row, '端末'))}
+                      className={terminalSelect(hasError(row, '端末'))}
                     >
                       <option value="">-- 端末 --</option>
                       {terminalIds.map((id) => (
@@ -314,7 +321,7 @@ export function BulkTable({ onOpenRowDetail, confirm }: BulkTableProps) {
                         </option>
                       ))}
                     </select>
-                  ) : row.terminalId && !(propExists && terminalIds.length === 0) ? (
+                  ) : row.terminalId ? (
                     <span className={cn(cellText, 'text-gray-700')} title={row.terminalId}>
                       {row.terminalId}
                     </span>
@@ -340,10 +347,11 @@ export function BulkTable({ onOpenRowDetail, confirm }: BulkTableProps) {
                     onPicked={() => focusNextOf(row.id, COL.inspection)}
                     dataCol={COL.inspection}
                     onKeyDown={(e) => handleCellKeyDown(e, index, COL.inspection)}
-                    invalid={hasError(row, '点検種別')}
+                    invalid={hasError(row, '点検種別') || unregisteredInspection}
                     initialSearch={unregisteredInspection ? row.inspectionType : undefined}
                   />
-                  {/* マスターに無い点検種別（取込の表記ゆれなど）は選択欄に出せないので、入っている文字を下に出す */}
+                  {/* マスターに無い点検種別（取込の表記ゆれなど）は選択欄に出せないので、入っている文字を下に出す。
+                      警告だけで申請・CSV は止めない（v1 と同じ） */}
                   {unregisteredInspection && (
                     <p className="mt-0.5 truncate text-[11px] text-red-600" title={row.inspectionType}>
                       未登録: {row.inspectionType}
@@ -425,6 +433,15 @@ export function BulkTable({ onOpenRowDetail, confirm }: BulkTableProps) {
                   {/* 理由はマウスを乗せなくても読めるよう、バッジの下に短く出す */}
                   {!row.isValid && (
                     <p className="mt-0.5 text-left text-[11px] leading-tight text-red-600">{row.errors.join('・')}</p>
+                  )}
+                  {/* 未登録の点検種別は警告（申請・CSV には含まれる。テンプレートNo・案内文は空になる） */}
+                  {unregisteredInspection && (
+                    <p
+                      className="mt-0.5 text-left text-[11px] leading-tight text-amber-700"
+                      title="マスターに無い点検種別です。このまま申請するとテンプレートNo・案内文が空になります"
+                    >
+                      点検種別(未登録)
+                    </p>
                   )}
                 </td>
               </tr>

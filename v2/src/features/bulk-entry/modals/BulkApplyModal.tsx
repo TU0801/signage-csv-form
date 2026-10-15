@@ -10,7 +10,10 @@ interface BulkApplyModalProps {
   onClose: () => void;
   /** 入れる項目だけを渡す（空の項目は行ごとの値のまま） */
   onApply: (patch: BulkRowsPatch) => void;
+  /** 入れる行数（絞り込みで見えている選択行） */
   selectedCount: number;
+  /** 絞り込みで隠れている選択行の数（入れない） */
+  hiddenSelectedCount?: number;
 }
 
 const fieldBase = 'block rounded-md border border-gray-300 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none';
@@ -25,7 +28,7 @@ export function BulkApplyModal(props: BulkApplyModalProps) {
   return props.open ? <BulkApplyForm {...props} /> : null;
 }
 
-function BulkApplyForm({ onClose, onApply, selectedCount }: BulkApplyModalProps) {
+function BulkApplyForm({ onClose, onApply, selectedCount, hiddenSelectedCount = 0 }: BulkApplyModalProps) {
   const notices = useBulkStore((s) => s.masterData.notices);
   const [inspectionType, setInspectionType] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -66,7 +69,7 @@ function BulkApplyForm({ onClose, onApply, selectedCount }: BulkApplyModalProps)
           <Button variant="secondary" onClick={onClose}>
             キャンセル
           </Button>
-          <Button onClick={() => onApply(patch)} disabled={!changed}>
+          <Button onClick={() => onApply(patch)} disabled={!changed || selectedCount === 0}>
             {selectedCount}行に入れる
           </Button>
         </>
@@ -76,6 +79,11 @@ function BulkApplyForm({ onClose, onApply, selectedCount }: BulkApplyModalProps)
         <p className="text-xs text-gray-500">
           入力した項目だけを選択中の行に上書きします。空のままの項目は行ごとの値を変えません。
         </p>
+        {hiddenSelectedCount > 0 && (
+          <p className="text-xs font-medium text-amber-700">
+            絞り込みで隠れている選択行 {hiddenSelectedCount} 行には入れません。
+          </p>
+        )}
 
         <Combobox
           label="点検種別"

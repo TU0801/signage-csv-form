@@ -10,6 +10,9 @@ import type { LocalEntry } from '../types';
 interface SingleEntryState {
   userId: string | null;
   entries: LocalEntry[];
+  /** 申請中か。画面を移って戻っても二重に申請させないため store に置く */
+  submitting: boolean;
+  setSubmitting: (submitting: boolean) => void;
   /** 画面を開いたときに呼ぶ。別のユーザーなら行を捨てる */
   bindUser: (userId: string | null) => void;
   setEntries: (next: LocalEntry[] | ((prev: LocalEntry[]) => LocalEntry[])) => void;
@@ -19,6 +22,8 @@ interface SingleEntryState {
 export const useSingleEntryStore = create<SingleEntryState>((set, get) => ({
   userId: null,
   entries: [],
+  submitting: false,
+  setSubmitting: (submitting) => set({ submitting }),
   bindUser: (userId) => {
     if (get().userId !== userId) set({ userId, entries: [] });
   },
