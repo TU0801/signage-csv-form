@@ -23,8 +23,8 @@ interface UseVendorContextArgs {
 }
 
 /**
- * どの保守会社として入力するか。一般ユーザーは自社（profile.vendor_id）、管理者は画面で選んだ保守会社。
- * 保守会社が決まったら、その紐付け点検種別（と管理者なら担当物件）を読む。
+ * 紐付けを読む保守会社は、一般ユーザーは自社（profile.vendor_id）、管理者は画面で選んだ保守会社。
+ * 保守会社が決まったら、その紐付け点検種別（と管理者なら担当物件）を読む。記録する保守会社（vendor）は下の v1 準拠の決め方。
  * 選択を速く切り替えても最後の選択の結果だけを反映する（v1 adminVendorChangeSeq の last-wins）。
  */
 // v1: js/script.js onAdminVendorChange / init（window.currentVendorId の紐付け反映）
@@ -79,10 +79,14 @@ export function useVendorContext({
     return properties.filter((p) => codes.has(p.property_code));
   }, [isAdmin, adminVendorId, properties, current]);
 
-  const vendor = useMemo(
-    () => (vendorId ? (vendors.find((v) => String(v.id) === String(vendorId)) ?? null) : null),
-    [vendors, vendorId],
-  );
+  // 記録・プレビューに使う保守会社は v1 と同じ決め方にする（ユーザー決定 2026-10-15）:
+  // 管理者がヘッダーで選んだときはその会社、それ以外（一般ユーザー・未選択の管理者）は社名順の先頭の会社。
+  // v1 は隠し項目 #vendor が '0' 固定で masterData.vendors[0] を使う（index.html:363, script.js:304-309, 952）。
+  // 一般ユーザーでも自社ではなく先頭の会社名・緊急連絡先が入る点は承知のうえでの決定。紐付けの読み込みは自社（vendorId）のまま
+  const vendor = useMemo(() => {
+    if (isAdmin && adminVendorId) return vendors.find((v) => String(v.id) === String(adminVendorId)) ?? null;
+    return vendors[0] ?? null;
+  }, [vendors, isAdmin, adminVendorId]);
 
   const selectAdminVendor = useCallback((id: string) => setAdminVendorId(id), []);
 

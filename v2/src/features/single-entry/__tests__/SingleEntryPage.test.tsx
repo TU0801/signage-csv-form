@@ -58,7 +58,8 @@ beforeEach(() => {
 });
 
 describe('1件入力画面（一般ユーザー）', () => {
-  it('自社の紐付けを反映し、自社の保守会社として未設置物件の案内を申請できる', async () => {
+  // 記録する保守会社は v1 と同じく社名順の先頭（v1 index.html:363 の #vendor = 0。ユーザー決定 2026-10-15）。紐付けは自社で読む
+  it('自社の紐付けを反映し、v1 と同じく社名順の先頭の保守会社で未設置物件の案内を申請できる', async () => {
     render(
       <ToastProvider>
         <SingleEntryPage />
@@ -84,7 +85,7 @@ describe('1件入力画面（一般ユーザー）', () => {
       user_id: 'u1',
       property_code: 'z0015A01',
       terminal_id: '',
-      vendor_name: '三菱電機ﾋﾞﾙｿﾘｭｰｼｮﾝｽﾞ㈱',
+      vendor_name: '㈱IHIﾊﾟｰｷﾝｸﾞｽｸｴｱ',
       inspection_type: '排水管清掃',
       display_duration: 10,
       status: 'draft',

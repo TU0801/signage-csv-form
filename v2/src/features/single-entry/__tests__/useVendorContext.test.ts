@@ -61,6 +61,19 @@ describe('管理者の保守会社選択（v1 onAdminVendorChange / adminVendorC
     act(() => result.current.selectAdminVendor(''));
     expect(result.current.visibleProperties).toHaveLength(3);
     expect(result.current.linkedIds.size).toBe(0);
-    expect(result.current.vendor).toBeNull();
+    // 未選択の管理者は v1 と同じく社名順の先頭の会社（v1 script.js:952 で #vendor = '0'）
+    expect(result.current.vendor?.vendor_name).toBe('A社');
+  });
+});
+
+describe('一般ユーザーの保守会社（v1 index.html:363 の #vendor = 0）', () => {
+  it('記録する保守会社は社名順の先頭、紐付けは自社で読む', async () => {
+    fetchLinked.mockResolvedValue(new Set(['b-only']));
+    const { result } = renderHook(() =>
+      useVendorContext({ isAdmin: false, profileVendorId: 'B', properties: PROPERTIES, vendors: VENDORS, onLinkedLoaded: vi.fn() }),
+    );
+    expect(result.current.vendor?.vendor_name).toBe('A社');
+    await waitFor(() => expect([...result.current.linkedIds]).toEqual(['b-only']));
+    expect(fetchLinked).toHaveBeenCalledWith('B');
   });
 });
