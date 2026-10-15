@@ -30,20 +30,13 @@ export function adImageFileError(file: Pick<File, 'name' | 'size'>): string | nu
 }
 
 /**
- * リンクURLの書式の確認。空は可（リンクなし）。http(s):// で始まらないとログイン画面で相対URLになり開けない。
+ * リンクURLの確認。空は可（リンクなし）。それ以外は http(s):// で始まるものだけ保存できる
+ * （相対URLは開けず、javascript: 等は押した人のブラウザでスクリプトが動くため。2026-10-16 ユーザー決定で保存を止める）。
  */
 export function adLinkUrlError(url: string): string | null {
   const trimmed = url.trim();
   if (!trimmed || /^https?:\/\/\S+$/i.test(trimmed)) return null;
   return 'https:// または http:// から始まるURLを入力してください';
-}
-
-/**
- * 保存を止めるリンク。javascript: 等はログイン画面で押した人のブラウザでスクリプトが動くので保存させない
- * （ほかの書式は adLinkUrlError の警告だけで保存できる）。
- */
-export function adLinkUrlBlocked(url: string): boolean {
-  return /^\s*(javascript|data|vbscript):/i.test(url);
 }
 
 /**

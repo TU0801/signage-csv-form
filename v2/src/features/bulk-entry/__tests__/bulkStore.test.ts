@@ -71,7 +71,7 @@ describe('bulkStore (v1 js/bulk-table.js / bulk-modals.js の行操作)', () => 
     expect(s().rows[0]!.errors).toEqual(['端末']);
   });
 
-  it('changing to a property without terminals keeps the previous terminal (v1 behaviour)', () => {
+  it('changing to a property without terminals clears the previous terminal (v1 kept it and the row passed)', () => {
     s().setMasterData({
       ...master,
       properties: [...master.properties, ...flattenProperties([{ property_code: 'NT01', property_name: '端末なし', terminals: [] }], true)],
@@ -79,7 +79,7 @@ describe('bulkStore (v1 js/bulk-table.js / bulk-modals.js の行操作)', () => 
     s().addRow({ propertyCode: 'z0001A01', terminalId: 'T-A1', inspectionType: '消防設備点検' });
     const id = s().rows[0]!.id;
     s().changeProperty(id, 'NT01');
-    expect(s().rows[0]).toMatchObject({ terminalId: 'T-A1', isValid: true, errors: [] });
+    expect(s().rows[0]).toMatchObject({ terminalId: '', isValid: false, errors: ['端末'] });
   });
 
   it('typing remarks re-validates the row at once (v1 waited for another field to change)', () => {

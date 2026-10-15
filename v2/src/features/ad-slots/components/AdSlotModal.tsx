@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import type { DbAdSlot } from '@/types/database';
-import { adImageFileError, adLinkUrlBlocked, adLinkUrlError, type AdSlotInput } from '../hooks/useAdSlots';
+import { adImageFileError, adLinkUrlError, type AdSlotInput } from '../hooks/useAdSlots';
 
 interface AdSlotModalProps {
   slot: DbAdSlot | null;
@@ -62,10 +62,9 @@ export function AdSlotModal({ slot, onClose, onSave }: AdSlotModalProps) {
       linkUrl !== (slot.link_url || '') ||
       isActive !== (slot.is_active || false));
 
-  // リンクの書式は警告だけ（保存は止めない。v1 と同じく入力どおり保存する）。保存済みのリンクを触っていなければ出さない
-  const linkWarning = !slot || linkUrl.trim() === (slot.link_url || '').trim() ? null : adLinkUrlError(linkUrl);
-
-  const linkBlocked = adLinkUrlBlocked(linkUrl);
+  // http(s):// で始まらないリンクは保存できない（保存済みの値がそうでも、直すまで保存を止める）
+  const linkError = adLinkUrlError(linkUrl);
+  const linkBlocked = !!linkError;
 
   const handleSave = async () => {
     if (!slot) return;
@@ -160,11 +159,7 @@ export function AdSlotModal({ slot, onClose, onSave }: AdSlotModalProps) {
             onChange={(e) => setLinkUrl(e.target.value)}
             placeholder="https://example.com"
           />
-          {linkBlocked ? (
-            <p className="text-xs text-red-600">このリンクは安全のため保存できません。https:// から始まるURLを入力してください</p>
-          ) : (
-            linkWarning && <p className="text-xs text-amber-700">{linkWarning}（このままでも保存できます）</p>
-          )}
+          {linkError && <p className="text-xs text-red-600">{linkError}</p>}
         </div>
         <label className="flex items-center gap-2 text-sm text-gray-700">
           <input

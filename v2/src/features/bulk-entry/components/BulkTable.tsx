@@ -434,15 +434,6 @@ export function BulkTable({ onOpenRowDetail, confirm }: BulkTableProps) {
                   {!row.isValid && (
                     <p className="mt-0.5 text-left text-[11px] leading-tight text-red-600">{row.errors.join('・')}</p>
                   )}
-                  {/* 未登録の点検種別は警告（申請・CSV には含まれる。テンプレートNo・案内文は空になる） */}
-                  {unregisteredInspection && (
-                    <p
-                      className="mt-0.5 text-left text-[11px] leading-tight text-amber-700"
-                      title="マスターに無い点検種別です。このまま申請するとテンプレートNo・案内文が空になります"
-                    >
-                      点検種別(未登録)
-                    </p>
-                  )}
                 </td>
               </tr>
             );

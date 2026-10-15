@@ -1,6 +1,6 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { useAdSlots, uploadAdImageV1, adLinkUrlError, adLinkUrlBlocked } from '../hooks/useAdSlots';
+import { useAdSlots, uploadAdImageV1, adLinkUrlError } from '../hooks/useAdSlots';
 import { isSafeLinkUrl } from '@/lib/utils';
 
 const mockSelect = vi.fn();
@@ -178,9 +178,8 @@ describe('adLinkUrlError', () => {
 
 describe('広告リンクの安全確認', () => {
   it('javascript: 等は保存させず、ログイン画面でもリンクにしない', () => {
-    expect(adLinkUrlBlocked(' JavaScript:alert(1)')).toBe(true);
-    expect(adLinkUrlBlocked('data:text/html,x')).toBe(true);
-    expect(adLinkUrlBlocked('example.com')).toBe(false);
+    expect(adLinkUrlError(' JavaScript:alert(1)')).not.toBeNull();
+    expect(adLinkUrlError('data:text/html,x')).not.toBeNull();
     expect(isSafeLinkUrl('javascript:alert(1)')).toBe(false);
     expect(isSafeLinkUrl('//evil.example')).toBe(false);
     expect(isSafeLinkUrl('https://example.com')).toBe(true);

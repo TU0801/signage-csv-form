@@ -108,7 +108,7 @@ export function terminalIdsFor(properties: BulkProperty[], propertyCode: string)
 /**
  * 物件に合わせて端末を決める。
  * - preserve（貼り付け・復元・行追加）: 指定端末が物件にあれば採用、無ければ空（端末エラーで気づける）、未指定なら最初の端末
- * - 画面で物件を変えたとき: 最初の端末。端末の無い物件なら今の端末のまま（v1 と同じ）
+ * - 画面で物件を変えたとき: 最初の端末。端末の無い物件なら空（前の物件の端末を残すと別物件の端末で申請される。v1 はここが残るバグ）
  * マスターに無い物件コードなら今の値のまま。
  * v1: js/bulk-table.js updateTerminals
  */
@@ -126,5 +126,5 @@ export function resolveTerminal(
     if (currentTerminalId) return '';
     return ids[0] ?? currentTerminalId;
   }
-  return ids[0] ?? currentTerminalId;
+  return ids[0] ?? '';
 }
