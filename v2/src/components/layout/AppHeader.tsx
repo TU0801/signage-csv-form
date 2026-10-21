@@ -19,7 +19,7 @@ export type LayoutWidth = 'standard' | 'full';
 
 /** width は本文（UserLayout の main）と同じ値にして、ロゴと本文の左端をそろえる */
 export function AppHeader({ width = 'standard' }: { width?: LayoutWidth }) {
-  const { profile, isAdmin } = useAuth();
+  const { profile, isAdmin, isManagement } = useAuth();
   const signOut = useAuthStore((s) => s.signOut);
   const location = useLocation();
   const { setTarget } = useContext(HeaderSlotContext);
@@ -37,10 +37,14 @@ export function AppHeader({ width = 'standard' }: { width?: LayoutWidth }) {
     void signOut();
   };
 
-  const navItems = [
-    { to: '/', label: '1件入力' },
-    { to: '/bulk', label: '一括入力' },
+  // 管理会社は申請を作らないので点検ポータルだけ。保守会社・管理者は入力画面に加えて点検ポータル
+  const portalItems = [
+    { to: '/portal', label: '点検一覧' },
+    { to: '/portal/documents', label: '点検報告書' },
   ];
+  const navItems = isManagement
+    ? portalItems
+    : [{ to: '/', label: '1件入力' }, { to: '/bulk', label: '一括入力' }, ...portalItems];
 
   return (
     // 高さは枠線込みで --header-h（border-box）。サイドバーや画面の高さに合わせる枠はこの変数で引き算する
@@ -49,7 +53,7 @@ export function AppHeader({ width = 'standard' }: { width?: LayoutWidth }) {
         <div className="flex items-center justify-between h-full">
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2">
-              <Link to="/" className="text-lg font-bold text-gray-900">
+              <Link to={isManagement ? '/portal' : '/'} className="text-lg font-bold text-gray-900">
                 サイネージCMS
               </Link>
               {/* v1: index.html / bulk.html / admin.html の #appVersion（js/version.js APP_VERSION） */}

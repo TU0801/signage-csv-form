@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { ToastProvider } from '@/components/ui/Toast';
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute';
+import { EntryRoute } from '@/components/layout/EntryRoute';
 import { AdminRoute } from '@/components/layout/AdminRoute';
 import { UserLayout } from '@/components/layout/UserLayout';
 import { AdminLayout } from '@/components/layout/AdminLayout';
@@ -11,6 +12,8 @@ import { installErrorLogging } from '@/lib/api/errorLog';
 import { LoginPage } from '@/pages/LoginPage';
 import { SingleEntryPage } from '@/pages/SingleEntryPage';
 import { BulkEntryPage } from '@/pages/BulkEntryPage';
+import { PortalPage } from '@/pages/PortalPage';
+import { PortalDocumentsPage } from '@/pages/PortalDocumentsPage';
 import { ApprovalPage } from '@/pages/admin/ApprovalPage';
 import { EntriesPage } from '@/pages/admin/EntriesPage';
 import { MasterPage } from '@/pages/admin/MasterPage';
@@ -46,8 +49,35 @@ export default function App() {
               </ProtectedRoute>
             }
           >
-            <Route index element={<SingleEntryPage />} />
-            <Route path="bulk" element={<BulkEntryPage />} />
+            <Route
+              index
+              element={
+                <EntryRoute>
+                  <SingleEntryPage />
+                </EntryRoute>
+              }
+            />
+            <Route
+              path="bulk"
+              element={
+                <EntryRoute>
+                  <BulkEntryPage />
+                </EntryRoute>
+              }
+            />
+          </Route>
+
+          {/* 点検ポータル（管理会社・保守会社・管理者）。一覧が横に広いので全幅 */}
+          <Route
+            path="portal"
+            element={
+              <ProtectedRoute>
+                <UserLayout width="full" />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<PortalPage />} />
+            <Route path="documents" element={<PortalDocumentsPage />} />
           </Route>
 
           {/* Admin pages */}

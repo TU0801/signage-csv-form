@@ -3,8 +3,11 @@ export interface DbProfile {
   id: string;
   email: string;
   company_name: string | null;
-  role: 'admin' | 'user';
+  /** admin: 管理者（BARAN） / user: 保守会社（vendor_id） / management: 管理会社（management_company_id → biz.companies） */
+  role: 'admin' | 'user' | 'management';
   vendor_id: string | null;
+  /** 管理会社アカウントの会社（role='management' のときだけ。点検ポータル 2026-10-21） */
+  management_company_id?: string | null;
   /** 無効化は 'inactive'（RLS の is_active_member / is_active_admin は 'active' だけを通す） */
   status: 'active' | 'inactive';
   created_at: string | null;
@@ -36,6 +39,16 @@ export interface DbEntry {
   status: 'pending' | 'draft' | 'ready' | 'exported' | null;
   poster_image: string | null;
   inspection_co: number;
+  /** 点検ポータルから申請したときの点検行（biz.property_inspections.id）。旧来の申請は null */
+  property_inspection_id?: string | null;
+  /** 申請した保守会社（点検ポータルから申請したときだけ。旧来の申請は vendor_name の文字列だけ） */
+  vendor_id?: string | null;
+  /** 何月分の点検の申請か（月初の日付）。点検ポータルから申請したときだけ */
+  target_month?: string | null;
+  /** 承認・差戻しのコメント（差戻しでは理由） */
+  review_comment?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
   created_at: string | null;
   updated_at: string | null;
 }

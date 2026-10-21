@@ -8,9 +8,11 @@ import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import type { DbProfile } from '@/types/database';
 
-/** v1: login.html redirectByProfile（管理者は管理画面、それ以外は入力画面） */
-function homePathFor(profile: Pick<DbProfile, 'role'>): string {
-  return profile.role === 'admin' ? '/admin' : '/';
+/** v1: login.html redirectByProfile（管理者は管理画面、それ以外は入力画面）。管理会社は点検ポータル */
+export function homePathFor(profile: Pick<DbProfile, 'role'>): string {
+  if (profile.role === 'admin') return '/admin';
+  if (profile.role === 'management') return '/portal';
+  return '/';
 }
 
 export function LoginPage() {

@@ -28,6 +28,8 @@ export const TABLES = {
   vendorInspections: 'signage_vendor_inspections',
   adSlots: 'signage_ad_slots',
   errorLogs: 'signage_error_logs',
+  /** 点検報告書（点検ポータル）。書き込みは RPC だけ */
+  inspectionReports: 'signage_inspection_reports',
 } as const;
 
 /** signage スキーマの RPC（biz への窓口） */
@@ -42,6 +44,20 @@ export const RPC = {
   upsertUnitInspection: 'upsert_unit_inspection',
   deleteUnitInspection: 'delete_unit_inspection',
   propertyManagementCompanies: 'property_management_companies',
+  /** 点検ポータル（2026-10-21）。範囲（管理者・保守会社・管理会社）は DB 側で絞る */
+  portalInspections: 'portal_inspections',
+  portalEntries: 'portal_entries',
+  portalReviewEntry: 'portal_review_entry',
+  portalRegisterReport: 'portal_register_report',
+  portalUpdateReport: 'portal_update_report',
+  portalReviewReport: 'portal_review_report',
+  managementCompaniesMaster: 'management_companies_master',
+} as const;
+
+/** Storage のバケット */
+export const BUCKETS = {
+  /** 点検報告書（非公開・PDF・50MB）。置き場所は {property_inspection_id}/{uuid}.pdf、読むときは署名付き URL */
+  inspectionReports: 'inspection-reports',
 } as const;
 
 /** Edge Function（ユーザー作成・パスワード変更。service_role が要るため管理者検証付きでサーバー側が行う） */
