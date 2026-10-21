@@ -10,6 +10,10 @@
 ALTER TABLE signage.signage_profiles DROP CONSTRAINT IF EXISTS signage_profiles_role_check;
 ALTER TABLE signage.signage_profiles ADD CONSTRAINT signage_profiles_role_check CHECK (role = ANY (ARRAY['admin'::text, 'user'::text, 'management'::text]));
 ALTER TABLE signage.signage_profiles ADD COLUMN IF NOT EXISTS management_company_id uuid REFERENCES biz.companies(id);
+ALTER TABLE signage.signage_profiles DROP CONSTRAINT IF EXISTS signage_profiles_management_company_check;
+ALTER TABLE signage.signage_profiles ADD CONSTRAINT signage_profiles_management_company_check CHECK (
+  CASE WHEN role = 'management' THEN management_company_id IS NOT NULL AND vendor_id IS NULL
+       ELSE management_company_id IS NULL END);
 
 -- 既存の「有効なメンバー」判定（マスタ・申請・Storage のポリシー18件と RPC 5本が使う）は、管理会社を含めない。
 -- 管理会社は範囲を絞った portal_* の RPC だけで読む（他社の物件・点検・マスタを読ませない）。admin・user の結果は従来と同じ
@@ -67,7 +71,7 @@ CREATE OR REPLACE FUNCTION signage.management_companies_master()
  RETURNS TABLE(id uuid, name text)
  LANGUAGE sql
  STABLE SECURITY DEFINER
- SET search_path TO 'biz', 'signage', 'public'
+ SET search_path TO 'biz', 'signage', 'pg_temp'
 AS $function$
   select c.id, c.name from biz.companies c
   where c.is_management_company and signage.is_active_admin()
@@ -116,7 +120,8 @@ AS $function$
   select signage.is_active_admin() or exists (
     select 1 from signage.signage_master_properties s
     join biz.properties b on b.signage_property_id = s.id
-    where s.property_code = p_property_code
+    -- 旧来の申請は 120410、マスタは 120410-00 のように書式が揺れる（画面側 normalizePropertyCode と同じ規則）
+    where regexp_replace(s.property_code, '-00$', '') = regexp_replace(btrim(p_property_code), '-00$', '')
       and signage.current_management_company_id() is not null
       and b.management_company_id = signage.current_management_company_id());
 $function$;
@@ -153,6 +158,13 @@ BEGIN
     RETURN NEW;
   END IF;
 
+  -- 業務システムで点検行を消したときの FK（ON DELETE SET NULL）による更新は通す。
+  -- property_inspection_id が NULL になるだけで、ほかの列は変わらない
+  IF TG_OP = 'UPDATE' AND OLD.property_inspection_id IS NOT NULL AND NEW.property_inspection_id IS NULL
+     AND (to_jsonb(NEW) - 'property_inspection_id' - 'updated_at') = (to_jsonb(OLD) - 'property_inspection_id' - 'updated_at') THEN
+    RETURN NEW;
+  END IF;
+
   -- 変更できるのは未申請（pending）の行だけ。申請済み（draft）を変えられると、管理者が内容を確認した後に
   -- 差し替えた本文が承認されてしまう（承認は id 指定で status を ready にするだけのため）
   IF TG_OP = 'UPDATE' AND OLD.status IS DISTINCT FROM 'pending' THEN
@@ -184,6 +196,13 @@ BEGIN
   IF auth.uid() IS NULL OR signage.is_active_admin() OR current_setting('signage.portal_review', true) = 'on' THEN
     RETURN NEW;
   END IF;
+  -- 業務システムで点検行を消したときの FK（ON DELETE SET NULL）による更新は通す。
+  -- property_inspection_id が NULL になるだけで、ほかの列は変わらない
+  IF TG_OP = 'UPDATE' AND OLD.property_inspection_id IS NOT NULL AND NEW.property_inspection_id IS NULL
+     AND (to_jsonb(NEW) - 'property_inspection_id' - 'updated_at') = (to_jsonb(OLD) - 'property_inspection_id' - 'updated_at') THEN
+    RETURN NEW;
+  END IF;
+
   IF signage.current_role_kind() = 'management' THEN
     RAISE EXCEPTION '管理会社のアカウントでは申請を作成・変更できません' USING ERRCODE = '42501';
   END IF;
@@ -200,7 +219,8 @@ BEGIN
        WHERE pi.id = NEW.property_inspection_id AND s.property_code = NEW.property_code) THEN
     RAISE EXCEPTION '点検と物件が一致しません' USING ERRCODE = '22023';
   END IF;
-  IF NEW.vendor_id IS NOT NULL AND NEW.vendor_id IS DISTINCT FROM signage.current_vendor_id() THEN
+  IF NEW.vendor_id IS NOT NULL AND (TG_OP = 'INSERT' OR NEW.vendor_id IS DISTINCT FROM OLD.vendor_id)
+     AND NEW.vendor_id IS DISTINCT FROM signage.current_vendor_id() THEN
     RAISE EXCEPTION '保守会社は自社のみ指定できます' USING ERRCODE = '42501';
   END IF;
   IF TG_OP = 'INSERT' THEN
@@ -248,7 +268,7 @@ CREATE OR REPLACE FUNCTION signage.portal_inspections()
    inspection_months integer[], schedule_from date, remarks text)
  LANGUAGE sql
  STABLE SECURITY DEFINER
- SET search_path TO 'biz', 'signage', 'public'
+ SET search_path TO 'biz', 'signage', 'pg_temp'
 AS $function$
   select pi.id, s.property_code, s.property_name,
          coalesce(jsonb_array_length(case when jsonb_typeof(s.terminals) = 'array' then s.terminals end), 0),
@@ -278,12 +298,15 @@ $function$;
 
 -- 範囲内の申請。点検に紐付いたもの（property_inspection_id あり）は点検の範囲で、
 -- 紐付きの無い旧来の申請は（管理者・自分の申請・管理会社の物件）で絞る
+DROP FUNCTION IF EXISTS signage.portal_entries();
 CREATE OR REPLACE FUNCTION signage.portal_entries()
  RETURNS TABLE(
    id uuid, user_id uuid, property_code text, inspection_type text, vendor_name text, vendor_id uuid,
    property_inspection_id uuid, target_month date, inspection_start date, inspection_end date,
    status text, review_comment text, reviewed_at timestamptz, created_at timestamptz, updated_at timestamptz,
-   is_mine boolean)
+   is_mine boolean,
+   terminal_id text, template_no text, announcement text, remarks text, poster_type text, poster_image text,
+   display_start_date date, display_start_time text, display_end_date date, display_end_time text)
  LANGUAGE sql
  STABLE SECURITY DEFINER
  SET search_path TO 'signage', 'pg_temp'
@@ -291,7 +314,9 @@ AS $function$
   select e.id, e.user_id, e.property_code, e.inspection_type, e.vendor_name, e.vendor_id,
          e.property_inspection_id, e.target_month, e.inspection_start, e.inspection_end,
          e.status, e.review_comment, e.reviewed_at, e.created_at, e.updated_at,
-         e.user_id = auth.uid()
+         e.user_id = auth.uid(),
+         e.terminal_id, e.template_no, e.announcement, e.remarks, e.poster_type, e.poster_image,
+         e.display_start_date, e.display_start_time, e.display_end_date, e.display_end_time
   from signage.signage_entries e
   where signage.current_role_kind() is not null
     and (
@@ -358,7 +383,8 @@ $function$;
 -- ============================================================
 CREATE TABLE IF NOT EXISTS signage.signage_inspection_reports (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  property_inspection_id uuid NOT NULL REFERENCES biz.property_inspections(id) ON DELETE RESTRICT,
+  -- 業務システムで点検行を消しても報告書は残す（物件・点検種別は写しの列で持つ）
+  property_inspection_id uuid REFERENCES biz.property_inspections(id) ON DELETE SET NULL,
   -- 表示・ZIP・ファイル名に使う値は登録時点のものを写して持つ（マスタの名前が変わっても過去の報告書名を変えない）
   property_code text NOT NULL,
   property_name text NOT NULL,
@@ -390,13 +416,33 @@ CREATE TABLE IF NOT EXISTS signage.signage_inspection_reports (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+-- 先に作った版（NOT NULL・ON DELETE RESTRICT）からの付け替え。新規作成なら何も変わらない
+ALTER TABLE signage.signage_inspection_reports ALTER COLUMN property_inspection_id DROP NOT NULL;
+ALTER TABLE signage.signage_inspection_reports DROP CONSTRAINT IF EXISTS signage_inspection_reports_property_inspection_id_fkey;
+ALTER TABLE signage.signage_inspection_reports ADD CONSTRAINT signage_inspection_reports_property_inspection_id_fkey
+  FOREIGN KEY (property_inspection_id) REFERENCES biz.property_inspections(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS signage_inspection_reports_inspection_idx ON signage.signage_inspection_reports (property_inspection_id, target_month);
 CREATE INDEX IF NOT EXISTS signage_inspection_reports_performed_idx ON signage.signage_inspection_reports (performed_on);
 ALTER TABLE signage.signage_inspection_reports ENABLE ROW LEVEL SECURITY;
 
+-- 報告書を読めるのは、管理者・提出した保守会社（同じ点検の台を受け持つ別の保守会社や、担当を外れた後の新しい保守会社には見せない）・
+-- 物件の管理会社
+CREATE OR REPLACE FUNCTION signage.report_visible(p_vendor_id uuid, p_property_code text)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'signage', 'pg_temp'
+AS $function$
+  select case signage.current_role_kind()
+    when 'admin' then true
+    when 'user' then p_vendor_id is not null and p_vendor_id = signage.current_vendor_id()
+    when 'management' then signage.property_reviewable(p_property_code)
+    else false end;
+$function$;
+
 DROP POLICY IF EXISTS "Scoped members can read inspection reports" ON signage.signage_inspection_reports;
 CREATE POLICY "Scoped members can read inspection reports" ON signage.signage_inspection_reports
-  FOR SELECT TO authenticated USING (signage.inspection_in_scope(property_inspection_id));
+  FOR SELECT TO authenticated USING (signage.report_visible(vendor_id, property_code));
 -- 書き込みは RPC（portal_register_report / portal_update_report / portal_review_report）だけ
 
 DROP TRIGGER IF EXISTS audit_trigger ON signage.signage_inspection_reports;
@@ -463,7 +509,8 @@ BEGIN
   IF p_storage_path IS NULL OR split_part(p_storage_path, '/', 1) <> p_inspection_id::text OR p_storage_path LIKE '%..%' THEN
     RAISE EXCEPTION 'ファイルの置き場所が不正です' USING ERRCODE = '22023';
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM storage.objects o WHERE o.bucket_id = 'inspection-reports' AND o.name = p_storage_path) THEN
+  IF NOT EXISTS (SELECT 1 FROM storage.objects o WHERE o.bucket_id = 'inspection-reports' AND o.name = p_storage_path
+                 AND (o.owner_id IS NULL OR o.owner_id = auth.uid()::text)) THEN
     RAISE EXCEPTION 'ファイルのアップロードが完了していません' USING ERRCODE = '22023';
   END IF;
   IF p_entry_id IS NOT NULL AND NOT EXISTS (
@@ -532,8 +579,8 @@ BEGIN
     RAISE EXCEPTION '報告書が見つかりません' USING ERRCODE = 'P0002';
   END IF;
   -- 管理者以外は自社が提出した報告書だけ（同じ点検に台ごとの別の保守会社が居ても、他社の版は触らせない）
-  IF NOT signage.inspection_writable(r.property_inspection_id)
-     OR (NOT signage.is_active_admin() AND r.vendor_id IS DISTINCT FROM signage.current_vendor_id()) THEN
+  IF NOT signage.is_active_admin()
+     AND NOT (signage.current_role_kind() = 'user' AND r.vendor_id IS NOT NULL AND r.vendor_id = signage.current_vendor_id()) THEN
     RAISE EXCEPTION 'この報告書を変更する権限がありません' USING ERRCODE = '42501';
   END IF;
   IF NOT signage.is_active_admin() AND r.status = 'accepted' AND p_action <> 'restore' THEN
@@ -628,9 +675,21 @@ EXCEPTION WHEN invalid_text_representation THEN
 END;
 $function$;
 
+-- オブジェクトを読めるのは、それを保存先に持つ報告書を読める人（登録前・登録に失敗したファイルは管理者だけ）
+CREATE OR REPLACE FUNCTION signage.report_object_visible(p_name text)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'signage', 'pg_temp'
+AS $function$
+  select signage.is_active_admin() or exists (
+    select 1 from signage.signage_inspection_reports r
+    where r.storage_path = p_name and signage.report_visible(r.vendor_id, r.property_code));
+$function$;
+
 DROP POLICY IF EXISTS "inspection_reports_select" ON storage.objects;
 CREATE POLICY "inspection_reports_select" ON storage.objects FOR SELECT TO authenticated
-  USING (bucket_id = 'inspection-reports' AND signage.inspection_in_scope(signage.report_object_inspection_id(name)));
+  USING (bucket_id = 'inspection-reports' AND signage.report_object_visible(name));
 DROP POLICY IF EXISTS "inspection_reports_insert" ON storage.objects;
 CREATE POLICY "inspection_reports_insert" ON storage.objects FOR INSERT TO authenticated
   WITH CHECK (bucket_id = 'inspection-reports' AND signage.inspection_writable(signage.report_object_inspection_id(name)));
@@ -651,6 +710,24 @@ REVOKE ALL ON FUNCTION signage.portal_register_report(uuid, date, date, text, te
 REVOKE ALL ON FUNCTION signage.portal_update_report(uuid, text, date, date, text, text) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION signage.portal_review_report(uuid, text, text) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION signage.management_companies_master() FROM PUBLIC, anon;
+-- 補助関数（RLS・ポリシー・RPC の中で使う）。anon からは呼ばせない。unique_report_file_name は RPC の中だけで使う
+REVOKE ALL ON FUNCTION signage.current_role_kind() FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION signage.current_management_company_id() FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION signage.inspection_in_scope(uuid) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION signage.property_reviewable(text) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION signage.inspection_writable(uuid) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION signage.report_visible(uuid, text) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION signage.report_object_visible(text) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION signage.report_object_inspection_id(text) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION signage.unique_report_file_name(text, integer, text, uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION signage.current_role_kind() TO authenticated;
+GRANT EXECUTE ON FUNCTION signage.current_management_company_id() TO authenticated;
+GRANT EXECUTE ON FUNCTION signage.inspection_in_scope(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION signage.property_reviewable(text) TO authenticated;
+GRANT EXECUTE ON FUNCTION signage.inspection_writable(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION signage.report_visible(uuid, text) TO authenticated;
+GRANT EXECUTE ON FUNCTION signage.report_object_visible(text) TO authenticated;
+GRANT EXECUTE ON FUNCTION signage.report_object_inspection_id(text) TO authenticated;
 GRANT EXECUTE ON FUNCTION signage.portal_inspections() TO authenticated;
 GRANT EXECUTE ON FUNCTION signage.portal_entries() TO authenticated;
 GRANT EXECUTE ON FUNCTION signage.portal_review_entry(uuid, text, text) TO authenticated;
@@ -666,6 +743,7 @@ GRANT SELECT ON signage.signage_inspection_reports TO authenticated;
 -- DROP POLICY inspection_reports_select / _insert / _admin_update / _admin_delete ON storage.objects;
 -- （バケット inspection-reports は中身を確認してから削除）
 -- DROP FUNCTION signage.portal_review_report, portal_update_report, portal_register_report, unique_report_file_name,
+--   report_object_visible, report_visible,
 --   inspection_writable, report_object_inspection_id, portal_review_entry, portal_entries, portal_inspections,
 --   management_companies_master, property_reviewable, inspection_in_scope, current_role_kind, current_management_company_id;
 -- DROP TABLE signage.signage_inspection_reports;
@@ -673,4 +751,5 @@ GRANT SELECT ON signage.signage_inspection_reports TO authenticated;
 -- guard_entry_approval_flow と guard_profile_privileged_columns は本ファイル冒頭コメントの差分（portal_review の分岐・management_company_id）を除いた版へ戻す
 -- ALTER TABLE signage.signage_entries DROP COLUMN property_inspection_id, vendor_id, target_month, review_comment, reviewed_by, reviewed_at;
 -- is_active_member は role 条件（IN ('admin','user')）を外した版へ戻す
+-- ALTER TABLE signage.signage_profiles DROP CONSTRAINT signage_profiles_management_company_check;
 -- ALTER TABLE signage.signage_profiles DROP COLUMN management_company_id; role CHECK を ('admin','user') へ
