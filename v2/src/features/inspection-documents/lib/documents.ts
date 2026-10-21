@@ -203,7 +203,9 @@ const CSV_HEADERS = [
 ];
 
 function csvCell(value: string | number | null | undefined): string {
-  const s = value == null ? '' : String(value);
+  const raw = value == null ? '' : String(value);
+  // Excel で開いたときに数式として動かないよう、= + - @ タブ CR で始まる文字列は先頭に ' を付ける（数値はそのまま）
+  const s = typeof value === 'string' && /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 

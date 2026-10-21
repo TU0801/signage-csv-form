@@ -90,4 +90,9 @@ describe('reportsToCsv', () => {
     expect(row).toContain('"a,b"');
     expect(row).toContain('2026/10/05 10:00');
   });
+
+  it('= などで始まる値は数式として動かないよう先頭に \' を付ける', () => {
+    const row = reportsToCsv([makeReport({ note: '=HYPERLINK("x")' })]).split('\r\n')[1];
+    expect(row).toContain(`"'=HYPERLINK(""x"")"`);
+  });
 });

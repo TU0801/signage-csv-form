@@ -192,6 +192,14 @@ BEGIN
      AND NOT signage.inspection_in_scope(NEW.property_inspection_id) THEN
     RAISE EXCEPTION '担当外の点検には申請できません' USING ERRCODE = '42501';
   END IF;
+  -- 点検に紐付けた申請は、その点検の物件のものでなければならない（承認の範囲は物件コードで決まるため、すり替えを止める）
+  IF NEW.property_inspection_id IS NOT NULL AND NOT EXISTS (
+       SELECT 1 FROM biz.property_inspections pi
+       JOIN biz.properties b ON b.id = pi.property_id
+       JOIN signage.signage_master_properties s ON s.id = b.signage_property_id
+       WHERE pi.id = NEW.property_inspection_id AND s.property_code = NEW.property_code) THEN
+    RAISE EXCEPTION '点検と物件が一致しません' USING ERRCODE = '22023';
+  END IF;
   IF NEW.vendor_id IS NOT NULL AND NEW.vendor_id IS DISTINCT FROM signage.current_vendor_id() THEN
     RAISE EXCEPTION '保守会社は自社のみ指定できます' USING ERRCODE = '42501';
   END IF;
