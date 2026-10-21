@@ -1,8 +1,8 @@
 -- 点検ポータル（管理会社・保守会社の点検一覧／申請の承認・差戻し／点検報告書）
 -- 2026-10-21 作成。本番へは未適用（適用はユーザー承認後）。
 -- 適用方法: Management API で1文ずつ流す（BEGIN/COMMIT を付けない。付けると何も残らない）。
--- すべて追加。既存の関数で変えるのは guard_entry_approval_flow（RPC 経由の承認を通す）と
--- guard_profile_privileged_columns（management_company_id を保護対象へ）の2つだけ。戻し手順は末尾。
+-- すべて追加。既存の関数で変えるのは guard_entry_approval_flow（RPC 経由の承認を通す）、
+-- guard_profile_privileged_columns（management_company_id を保護対象へ）、is_active_member（management を含めない）の3つだけ。戻し手順は末尾。
 
 -- ============================================================
 -- 1. アカウント: 管理会社ロール
@@ -10,6 +10,15 @@
 ALTER TABLE signage.signage_profiles DROP CONSTRAINT IF EXISTS signage_profiles_role_check;
 ALTER TABLE signage.signage_profiles ADD CONSTRAINT signage_profiles_role_check CHECK (role = ANY (ARRAY['admin'::text, 'user'::text, 'management'::text]));
 ALTER TABLE signage.signage_profiles ADD COLUMN IF NOT EXISTS management_company_id uuid REFERENCES biz.companies(id);
+
+-- 既存の「有効なメンバー」判定（マスタ・申請・Storage のポリシー18件と RPC 5本が使う）は、管理会社を含めない。
+-- 管理会社は範囲を絞った portal_* の RPC だけで読む（他社の物件・点検・マスタを読ませない）。admin・user の結果は従来と同じ
+CREATE OR REPLACE FUNCTION signage.is_active_member()
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'signage', 'pg_temp'
+AS $function$ SELECT EXISTS (SELECT 1 FROM signage.signage_profiles WHERE id = auth.uid() AND status = 'active' AND role IN ('admin', 'user')) $function$;
 
 CREATE OR REPLACE FUNCTION signage.current_management_company_id()
  RETURNS uuid
@@ -270,7 +279,7 @@ AS $function$
          e.status, e.review_comment, e.reviewed_at, e.created_at, e.updated_at,
          e.user_id = auth.uid()
   from signage.signage_entries e
-  where signage.is_active_member()
+  where signage.current_role_kind() is not null
     and (
       signage.is_active_admin()
       or (e.property_inspection_id is not null and signage.inspection_in_scope(e.property_inspection_id))
@@ -455,10 +464,12 @@ BEGIN
     LEFT JOIN biz.inspection_types t ON t.id = pi.inspection_type_id
    WHERE pi.id = p_inspection_id;
 
+  -- 置き換えるのは同じ保守会社の版だけ（台ごとに別の保守会社が居る点検で、他社の提出を消さない）
   UPDATE signage.signage_inspection_reports
      SET status = 'superseded'
    WHERE property_inspection_id = p_inspection_id
      AND target_month IS NOT DISTINCT FROM date_trunc('month', coalesce(p_target_month, p_performed_on))::date
+     AND vendor_id IS NOT DISTINCT FROM coalesce(signage.current_vendor_id(), info.maintainer_id)
      AND status IN ('submitted', 'returned', 'accepted');
 
   INSERT INTO signage.signage_inspection_reports (
@@ -494,7 +505,9 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION '報告書が見つかりません' USING ERRCODE = 'P0002';
   END IF;
-  IF NOT signage.inspection_writable(r.property_inspection_id) THEN
+  -- 管理者以外は自社が提出した報告書だけ（同じ点検に台ごとの別の保守会社が居ても、他社の版は触らせない）
+  IF NOT signage.inspection_writable(r.property_inspection_id)
+     OR (NOT signage.is_active_admin() AND r.vendor_id IS DISTINCT FROM signage.current_vendor_id()) THEN
     RAISE EXCEPTION 'この報告書を変更する権限がありません' USING ERRCODE = '42501';
   END IF;
   IF NOT signage.is_active_admin() AND r.status = 'accepted' AND p_action <> 'restore' THEN
@@ -633,4 +646,5 @@ GRANT SELECT ON signage.signage_inspection_reports TO authenticated;
 -- DROP TRIGGER guard_entry_portal_columns / guard_entry_management_delete ON signage.signage_entries; DROP FUNCTION 同名;
 -- guard_entry_approval_flow と guard_profile_privileged_columns は本ファイル冒頭コメントの差分（portal_review の分岐・management_company_id）を除いた版へ戻す
 -- ALTER TABLE signage.signage_entries DROP COLUMN property_inspection_id, vendor_id, target_month, review_comment, reviewed_by, reviewed_at;
+-- is_active_member は role 条件（IN ('admin','user')）を外した版へ戻す
 -- ALTER TABLE signage.signage_profiles DROP COLUMN management_company_id; role CHECK を ('admin','user') へ
