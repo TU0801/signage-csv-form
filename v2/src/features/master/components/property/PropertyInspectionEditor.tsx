@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { cn } from '@/lib/utils';
@@ -73,7 +73,8 @@ export function PropertyInspectionEditor({
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const pending = hasPendingRow(form, editingIndex);
 
-  useEffect(() => {
+  // 描画の前（layout effect）に親へ伝える。useEffect だと親の dirty が1描画遅れ、選んだ直後の Esc で確認なしに閉じていた
+  useLayoutEffect(() => {
     onDraftChange?.(pending);
   }, [pending, onDraftChange]);
 
