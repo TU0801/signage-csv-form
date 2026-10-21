@@ -161,7 +161,9 @@ BEGIN
   -- 業務システムで点検行を消したときの FK（ON DELETE SET NULL）による更新は通す。
   -- property_inspection_id が NULL になるだけで、ほかの列は変わらない
   IF TG_OP = 'UPDATE' AND OLD.property_inspection_id IS NOT NULL AND NEW.property_inspection_id IS NULL
-     AND (to_jsonb(NEW) - 'property_inspection_id' - 'updated_at') = (to_jsonb(OLD) - 'property_inspection_id' - 'updated_at') THEN
+     AND (to_jsonb(NEW) - 'property_inspection_id' - 'updated_at') = (to_jsonb(OLD) - 'property_inspection_id' - 'updated_at')
+     -- 参照先が本当に消えているときだけ（利用者が自分で紐付けを外す更新は通常の検査にかける）
+     AND NOT EXISTS (SELECT 1 FROM biz.property_inspections WHERE id = OLD.property_inspection_id) THEN
     RETURN NEW;
   END IF;
 
@@ -199,7 +201,9 @@ BEGIN
   -- 業務システムで点検行を消したときの FK（ON DELETE SET NULL）による更新は通す。
   -- property_inspection_id が NULL になるだけで、ほかの列は変わらない
   IF TG_OP = 'UPDATE' AND OLD.property_inspection_id IS NOT NULL AND NEW.property_inspection_id IS NULL
-     AND (to_jsonb(NEW) - 'property_inspection_id' - 'updated_at') = (to_jsonb(OLD) - 'property_inspection_id' - 'updated_at') THEN
+     AND (to_jsonb(NEW) - 'property_inspection_id' - 'updated_at') = (to_jsonb(OLD) - 'property_inspection_id' - 'updated_at')
+     -- 参照先が本当に消えているときだけ（利用者が自分で紐付けを外す更新は通常の検査にかける）
+     AND NOT EXISTS (SELECT 1 FROM biz.property_inspections WHERE id = OLD.property_inspection_id) THEN
     RETURN NEW;
   END IF;
 
@@ -315,9 +319,19 @@ AS $function$
          e.property_inspection_id, e.target_month, e.inspection_start, e.inspection_end,
          e.status, e.review_comment, e.reviewed_at, e.created_at, e.updated_at,
          e.user_id = auth.uid(),
-         e.terminal_id, e.template_no, e.announcement, e.remarks, e.poster_type, e.poster_image,
-         e.display_start_date, e.display_start_time, e.display_end_date, e.display_end_time
+         -- 掲示の内容は、申請者・同じ保守会社・承認する管理会社・管理者だけに返す
+         -- （同じ点検の台を受け持つ別の保守会社には、申請があることと状態だけを見せる）
+         case when c.can_see then e.terminal_id end, case when c.can_see then e.template_no end,
+         case when c.can_see then e.announcement end, case when c.can_see then e.remarks end,
+         case when c.can_see then e.poster_type end, case when c.can_see then e.poster_image end,
+         case when c.can_see then e.display_start_date end, case when c.can_see then e.display_start_time end,
+         case when c.can_see then e.display_end_date end, case when c.can_see then e.display_end_time end
   from signage.signage_entries e
+  cross join lateral (select
+    signage.is_active_admin()
+    or e.user_id = auth.uid()
+    or (e.vendor_id is not null and e.vendor_id = signage.current_vendor_id())
+    or (signage.current_role_kind() = 'management' and signage.property_reviewable(e.property_code)) as can_see) c
   where signage.current_role_kind() is not null
     and (
       signage.is_active_admin()
