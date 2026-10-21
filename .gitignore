@@ -13,3 +13,9 @@ error/
 deps.svg
 admin-auth
 /*.png
+# 顧客資料（リポジトリは PUBLIC。コミットしない）
+/building_maintenance_flow.pdf
+/修正依頼/
+/建物リスト*.xlsx
+/docs/V2_VERIFICATION_REPORT.md
+/docs/v2-verification/
