@@ -7,7 +7,9 @@ import { useToast } from '@/components/ui/Toast';
 import { useUsers } from '../hooks/useUsers';
 import { AddUserModal } from './AddUserModal';
 import { EditUserModal } from './EditUserModal';
+import { roleLabel } from '../constants';
 import type { DbProfile, DbVendor } from '@/types/database';
+import type { ManagementCompanyRow } from '@/types/portal';
 
 /** 保守会社名。見つからなければ ID を出す（v1: js/admin-users.js loadUsers） */
 function vendorLabel(vendorId: string | null, vendors: DbVendor[]): string {
@@ -16,11 +18,34 @@ function vendorLabel(vendorId: string | null, vendors: DbVendor[]): string {
   return vendor ? vendor.vendor_name : `Unknown (ID:${vendorId})`;
 }
 
+/** 会社の列。管理会社アカウントは管理会社名（management_companies_master の結果から引く）、それ以外は保守会社名 */
+function companyLabel(user: DbProfile, vendors: DbVendor[], managementCompanies: ManagementCompanyRow[]): string {
+  if (user.role !== 'management') return vendorLabel(user.vendor_id, vendors);
+  if (!user.management_company_id) return '-';
+  const company = managementCompanies.find((c) => c.id === user.management_company_id);
+  return company ? company.name : `Unknown (ID:${user.management_company_id})`;
+}
+
+const ROLE_BADGE: Record<DbProfile['role'], 'danger' | 'primary' | 'default'> = {
+  admin: 'danger',
+  management: 'primary',
+  user: 'default',
+};
+
 // v1: js/admin-users.js loadUsers（admin.html #tab-users）
 export function UsersContent() {
   const { addToast } = useToast();
-  const { users, vendors, currentUserId, loading, error, addUser, editUser, updateUserStatus } =
-    useUsers();
+  const {
+    users,
+    vendors,
+    managementCompanies,
+    currentUserId,
+    loading,
+    error,
+    addUser,
+    editUser,
+    updateUserStatus,
+  } = useUsers();
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [editTarget, setEditTarget] = useState<DbProfile | null>(null);
@@ -72,7 +97,7 @@ export function UsersContent() {
           <thead>
             <tr className="border-b border-gray-200 text-left">
               <th className="cell-head font-medium text-gray-700">メールアドレス</th>
-              <th className="cell-head font-medium text-gray-700">保守会社</th>
+              <th className="cell-head font-medium text-gray-700">保守会社／管理会社</th>
               <th className="cell-head font-medium text-gray-700">権限</th>
               <th className="cell-head font-medium text-gray-700">ステータス</th>
               <th className="cell-head font-medium text-gray-700">登録日</th>
@@ -90,6 +115,7 @@ export function UsersContent() {
               users.map((user) => {
                 const isSelf = currentUserId === user.id;
                 const status = user.status || 'active';
+                const company = companyLabel(user, vendors, managementCompanies);
                 return (
                   <tr key={user.id} className="group border-b border-gray-100 hover:bg-gray-50">
                     <td className="cell whitespace-nowrap">
@@ -97,14 +123,12 @@ export function UsersContent() {
                       {isSelf && ' (自分)'}
                     </td>
                     <td className="cell">
-                      <div className="max-w-[16rem] truncate" title={vendorLabel(user.vendor_id, vendors)}>
-                        {vendorLabel(user.vendor_id, vendors)}
+                      <div className="max-w-[16rem] truncate" title={company}>
+                        {company}
                       </div>
                     </td>
                     <td className="cell whitespace-nowrap">
-                      <Badge variant={user.role === 'admin' ? 'danger' : 'default'}>
-                        {user.role === 'admin' ? '管理者' : 'ユーザー'}
-                      </Badge>
+                      <Badge variant={ROLE_BADGE[user.role] ?? 'default'}>{roleLabel(user.role)}</Badge>
                     </td>
                     <td className="cell whitespace-nowrap">
                       <Badge variant={status === 'active' ? 'success' : 'default'}>
@@ -151,6 +175,7 @@ export function UsersContent() {
         open={showAddModal}
         onClose={() => setShowAddModal(false)}
         vendors={vendors}
+        managementCompanies={managementCompanies}
         onAdd={addUser}
       />
 
@@ -159,6 +184,7 @@ export function UsersContent() {
         onClose={() => setEditTarget(null)}
         user={editTarget}
         vendors={vendors}
+        managementCompanies={managementCompanies}
         onUpdate={editUser}
       />
 

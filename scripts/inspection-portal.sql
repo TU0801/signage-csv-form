@@ -228,10 +228,12 @@ CREATE TRIGGER guard_entry_management_delete BEFORE DELETE ON signage.signage_en
 -- ============================================================
 -- 4. ポータルの読み取り RPC
 -- ============================================================
--- 範囲内の点検行。月・物件・管理会社・保守会社の名前をまとめて返す（一覧と超過判定の元データ）
+-- 範囲内の点検行。月・物件・管理会社・保守会社の名前をまとめて返す（一覧と超過判定の元データ）。
+-- 端末 ID も返す（保守会社の物件マスタは担当物件表 signage_building_vendors の物件だけなので、そこに無い点検物件の端末を選べるように）
+DROP FUNCTION IF EXISTS signage.portal_inspections();
 CREATE OR REPLACE FUNCTION signage.portal_inspections()
  RETURNS TABLE(
-   inspection_id uuid, property_code text, property_name text, terminal_count integer,
+   inspection_id uuid, property_code text, property_name text, terminal_count integer, terminal_ids text[],
    management_company_id uuid, management_company_name text,
    inspection_type_id uuid, inspection_type_label text, template_no text,
    vendor_id uuid, vendor_name text, unit_vendor_ids uuid[],
@@ -242,6 +244,10 @@ CREATE OR REPLACE FUNCTION signage.portal_inspections()
 AS $function$
   select pi.id, s.property_code, s.property_name,
          coalesce(jsonb_array_length(case when jsonb_typeof(s.terminals) = 'array' then s.terminals end), 0),
+         coalesce((select array_agg(coalesce(t->>'terminal_id', t->>'terminalId') order by ord)
+                   from jsonb_array_elements(case when jsonb_typeof(s.terminals) = 'array' then s.terminals else '[]'::jsonb end)
+                        with ordinality as x(t, ord)
+                   where coalesce(t->>'terminal_id', t->>'terminalId') is not null), '{}'),
          b.management_company_id, mc.name,
          pi.inspection_type_id, t.label, t.template_no,
          pi.maintainer_id, m.name,
@@ -438,6 +444,7 @@ AS $function$
 DECLARE
   r signage.signage_inspection_reports;
   info record;
+  v_vendor uuid;
 BEGIN
   IF NOT signage.inspection_writable(p_inspection_id) THEN
     RAISE EXCEPTION 'この点検の報告書を登録する権限がありません' USING ERRCODE = '42501';
@@ -464,12 +471,23 @@ BEGIN
     LEFT JOIN biz.inspection_types t ON t.id = pi.inspection_type_id
    WHERE pi.id = p_inspection_id;
 
+  -- 提出する保守会社: 保守会社のアカウントは自社。管理者の代理提出は、同じ点検・対象月の最新の版の保守会社（再提出）、
+  -- 無ければ点検行の保守会社
+  v_vendor := coalesce(
+    signage.current_vendor_id(),
+    (SELECT r0.vendor_id FROM signage.signage_inspection_reports r0
+      WHERE r0.property_inspection_id = p_inspection_id
+        AND r0.target_month IS NOT DISTINCT FROM date_trunc('month', coalesce(p_target_month, p_performed_on))::date
+        AND r0.status IN ('submitted', 'returned', 'accepted')
+      ORDER BY r0.created_at DESC LIMIT 1),
+    info.maintainer_id);
+
   -- 置き換えるのは同じ保守会社の版だけ（台ごとに別の保守会社が居る点検で、他社の提出を消さない）
   UPDATE signage.signage_inspection_reports
      SET status = 'superseded'
    WHERE property_inspection_id = p_inspection_id
      AND target_month IS NOT DISTINCT FROM date_trunc('month', coalesce(p_target_month, p_performed_on))::date
-     AND vendor_id IS NOT DISTINCT FROM coalesce(signage.current_vendor_id(), info.maintainer_id)
+     AND vendor_id IS NOT DISTINCT FROM v_vendor
      AND status IN ('submitted', 'returned', 'accepted');
 
   INSERT INTO signage.signage_inspection_reports (
@@ -478,8 +496,8 @@ BEGIN
     content_hash, storage_path, note, uploaded_by)
   VALUES (
     p_inspection_id, info.property_code, info.property_name, info.inspection_type_id, coalesce(info.label, ''),
-    coalesce(signage.current_vendor_id(), info.maintainer_id),
-    (SELECT v.vendor_name FROM signage.signage_master_vendors v WHERE v.id = coalesce(signage.current_vendor_id(), info.maintainer_id)),
+    v_vendor,
+    (SELECT v.vendor_name FROM signage.signage_master_vendors v WHERE v.id = v_vendor),
     date_trunc('month', coalesce(p_target_month, p_performed_on))::date, p_performed_on, p_entry_id,
     signage.unique_report_file_name(info.property_code, extract(year from p_performed_on)::int, p_file_name),
     p_original_name, p_size_bytes, p_content_hash, p_storage_path, nullif(btrim(coalesce(p_note, '')), ''), auth.uid())

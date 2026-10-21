@@ -2,45 +2,49 @@ import { useState, type FormEvent } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { Combobox } from '@/components/ui/Combobox';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
-import { MIN_PASSWORD_LENGTH, ROLE_OPTIONS } from '../constants';
-import { vendorOptions } from '@/lib/vendorOptions';
+import { MIN_PASSWORD_LENGTH, ROLE_OPTIONS, companyRequiredError } from '../constants';
+import { CompanyField } from './CompanyField';
 import type { DbProfile, DbVendor } from '@/types/database';
+import type { ManagementCompanyRow } from '@/types/portal';
 
 interface AddUserModalProps {
   open: boolean;
   onClose: () => void;
   vendors: DbVendor[];
+  managementCompanies: ManagementCompanyRow[];
   onAdd: (params: {
     email: string;
     password: string;
     role: DbProfile['role'];
     vendor_id: string | null;
+    management_company_id: string | null;
   }) => Promise<void>;
 }
 
-type FieldErrors = Partial<Record<'email' | 'password' | 'vendor', string>>;
+type FieldErrors = Partial<Record<'email' | 'password' | 'company', string>>;
 
 // v1: js/admin-users.js openUserModal / handleUserFormSubmit（admin.html #userModal）
-export function AddUserModal({ open, onClose, vendors, onAdd }: AddUserModalProps) {
+export function AddUserModal({ open, onClose, vendors, managementCompanies, onAdd }: AddUserModalProps) {
   const { addToast } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<DbProfile['role']>('user');
   const [vendorId, setVendorId] = useState('');
+  const [managementCompanyId, setManagementCompanyId] = useState('');
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submitting, setSubmitting] = useState(false);
 
   // 何か入れていたら、Escape・背景クリック・× では破棄の確認を出す
-  const dirty = !!(email || password || vendorId || role !== 'user');
+  const dirty = !!(email || password || vendorId || managementCompanyId || role !== 'user');
 
   const resetForm = () => {
     setEmail('');
     setPassword('');
     setRole('user');
     setVendorId('');
+    setManagementCompanyId('');
     setErrors({});
   };
 
@@ -59,7 +63,8 @@ export function AddUserModal({ open, onClose, vendors, onAdd }: AddUserModalProp
     else if (password.length < MIN_PASSWORD_LENGTH) {
       next.password = `パスワードは${MIN_PASSWORD_LENGTH}文字以上で入力してください`;
     }
-    if (role !== 'admin' && !vendorId) next.vendor = '一般ユーザーは保守会社を選択してください';
+    const companyError = companyRequiredError(role, vendorId || null, managementCompanyId || null);
+    if (companyError) next.company = companyError;
     return next;
   };
 
@@ -75,6 +80,7 @@ export function AddUserModal({ open, onClose, vendors, onAdd }: AddUserModalProp
         password,
         role,
         vendor_id: vendorId || null,
+        management_company_id: managementCompanyId || null,
       });
       addToast('ユーザーを追加しました', 'success');
       handleClose();
@@ -86,6 +92,7 @@ export function AddUserModal({ open, onClose, vendors, onAdd }: AddUserModalProp
         message.includes('既に登録') ||
         message.includes('プロファイル') ||
         message === '保守会社を選択してください' ||
+        message === '管理会社を選択してください' ||
         message === `パスワードは${MIN_PASSWORD_LENGTH}文字以上で入力してください`
       ) {
         addToast(message, 'error');
@@ -124,7 +131,7 @@ export function AddUserModal({ open, onClose, vendors, onAdd }: AddUserModalProp
           autoComplete="new-password"
           error={errors.password}
         />
-        {/* 権限で保守会社が要るかが決まるので、権限を先に選ぶ */}
+        {/* 権限で保守会社・管理会社のどちらが要るかが決まるので、権限を先に選ぶ */}
         <Select
           label="権限 *"
           id="newUserRole"
@@ -132,27 +139,26 @@ export function AddUserModal({ open, onClose, vendors, onAdd }: AddUserModalProp
           value={role}
           onChange={(e) => {
             setRole(e.target.value as DbProfile['role']);
-            setErrors((prev) => ({ ...prev, vendor: undefined }));
+            setErrors((prev) => ({ ...prev, company: undefined }));
           }}
         />
-        <div className="space-y-1">
-          <Combobox
-            label="保守会社"
-            required={role !== 'admin'}
-            id="newUserVendor"
-            options={vendorOptions(vendors, { withNone: role === 'admin' })}
-            placeholder="選択してください（社名の一部で検索）"
-            value={vendorId}
-            onChange={(v) => {
-              setVendorId(v);
-              setErrors((prev) => ({ ...prev, vendor: undefined }));
-            }}
-            error={errors.vendor}
-          />
-          <p className="text-xs text-gray-500">
-            一般ユーザーは必須です。管理者は未選択のままで構いません
-          </p>
-        </div>
+        <CompanyField
+          idPrefix="newUser"
+          role={role}
+          vendors={vendors}
+          managementCompanies={managementCompanies}
+          vendorId={vendorId}
+          managementCompanyId={managementCompanyId}
+          onVendorChange={(v) => {
+            setVendorId(v);
+            setErrors((prev) => ({ ...prev, company: undefined }));
+          }}
+          onManagementCompanyChange={(v) => {
+            setManagementCompanyId(v);
+            setErrors((prev) => ({ ...prev, company: undefined }));
+          }}
+          error={errors.company}
+        />
         <div className="flex justify-end gap-3 pt-2">
           <Button type="button" variant="secondary" onClick={handleClose}>
             キャンセル

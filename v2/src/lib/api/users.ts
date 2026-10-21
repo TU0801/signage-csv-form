@@ -25,13 +25,15 @@ async function invokeAdminUsers<T>(body: Record<string, unknown>): Promise<T> {
   return data as T;
 }
 
-/** 認証ユーザーとプロファイル（status='active'）を作る */
+/** 認証ユーザーとプロファイル（status='active'）を作る。会社の列は role に合わせて Edge Function がそろえる */
 // v1: js/supabase/users.js createUser
 export async function createUser(params: {
   email: string;
   password: string;
   role: DbProfile['role'];
   vendorId?: string | null;
+  /** role='management' のときだけ必須（biz.companies の管理会社） */
+  managementCompanyId?: string | null;
 }): Promise<DbProfile> {
   const { user } = await invokeAdminUsers<{ user: DbProfile }>({
     action: 'create_user',
@@ -39,6 +41,7 @@ export async function createUser(params: {
     password: params.password,
     role: params.role,
     vendorId: params.vendorId ?? null,
+    managementCompanyId: params.managementCompanyId ?? null,
   });
   return user;
 }

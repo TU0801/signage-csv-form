@@ -2,32 +2,46 @@ import { useState, useEffect, type FormEvent } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { Combobox } from '@/components/ui/Combobox';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
-import { MIN_PASSWORD_LENGTH, ROLE_OPTIONS } from '../constants';
-import { vendorOptions } from '@/lib/vendorOptions';
+import { MIN_PASSWORD_LENGTH, ROLE_OPTIONS, companyRequiredError } from '../constants';
+import { CompanyField } from './CompanyField';
 import type { DbProfile, DbVendor } from '@/types/database';
+import type { ManagementCompanyRow } from '@/types/portal';
 
 interface EditUserModalProps {
   open: boolean;
   onClose: () => void;
   user: DbProfile | null;
   vendors: DbVendor[];
+  managementCompanies: ManagementCompanyRow[];
   /** 戻り値はパスワードを変えたかどうか */
   onUpdate: (
     id: string,
-    params: { role: DbProfile['role']; vendor_id: string | null; password?: string },
+    params: {
+      role: DbProfile['role'];
+      vendor_id: string | null;
+      management_company_id: string | null;
+      password?: string;
+    },
   ) => Promise<boolean>;
 }
 
-type FieldErrors = Partial<Record<'password' | 'vendor', string>>;
+type FieldErrors = Partial<Record<'password' | 'company', string>>;
 
 // v1: js/admin-users.js openEditUserModal / handleEditUserSubmit（無効化・有効化は一覧の行ボタンで行う）
-export function EditUserModal({ open, onClose, user, vendors, onUpdate }: EditUserModalProps) {
+export function EditUserModal({
+  open,
+  onClose,
+  user,
+  vendors,
+  managementCompanies,
+  onUpdate,
+}: EditUserModalProps) {
   const { addToast } = useToast();
   const [role, setRole] = useState<DbProfile['role']>('user');
   const [vendorId, setVendorId] = useState('');
+  const [managementCompanyId, setManagementCompanyId] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submitting, setSubmitting] = useState(false);
@@ -36,6 +50,7 @@ export function EditUserModal({ open, onClose, user, vendors, onUpdate }: EditUs
     if (user) {
       setRole(user.role);
       setVendorId(user.vendor_id ?? '');
+      setManagementCompanyId(user.management_company_id ?? '');
       setPassword('');
       setErrors({});
     }
@@ -43,7 +58,14 @@ export function EditUserModal({ open, onClose, user, vendors, onUpdate }: EditUs
 
   // 開いたときの値から変えていたら、Escape・背景クリック・× では破棄の確認を出す
   const dirty =
-    !!user && (role !== user.role || vendorId !== (user.vendor_id ?? '') || password !== '');
+    !!user &&
+    (role !== user.role ||
+      vendorId !== (user.vendor_id ?? '') ||
+      managementCompanyId !== (user.management_company_id ?? '') ||
+      password !== '');
+
+  // 管理会社へ付け替えると申請の画面に入れなくなるので、保存前に知らせる（既存の実ユーザーを画面で移す運用）
+  const switchingToManagement = !!user && user.role !== 'management' && role === 'management';
 
   /** 入力の確認は欄の下に出す（useUsers.editUser と同じ条件。そちらは最後の砦として残す） */
   const validate = (): FieldErrors => {
@@ -51,7 +73,8 @@ export function EditUserModal({ open, onClose, user, vendors, onUpdate }: EditUs
     if (password && password.length < MIN_PASSWORD_LENGTH) {
       next.password = `パスワードは${MIN_PASSWORD_LENGTH}文字以上で入力してください`;
     }
-    if (role !== 'admin' && !vendorId) next.vendor = '一般ユーザーは保守会社を選択してください';
+    const companyError = companyRequiredError(role, vendorId || null, managementCompanyId || null);
+    if (companyError) next.company = companyError;
     return next;
   };
 
@@ -66,6 +89,7 @@ export function EditUserModal({ open, onClose, user, vendors, onUpdate }: EditUs
       const passwordChanged = await onUpdate(user.id, {
         role,
         vendor_id: vendorId || null,
+        management_company_id: managementCompanyId || null,
         password,
       });
       addToast(
@@ -78,6 +102,7 @@ export function EditUserModal({ open, onClose, user, vendors, onUpdate }: EditUs
       // 入力の確認はそのまま、保存の失敗は前置きを付ける（v1 と同じ）
       if (
         message === '保守会社を選択してください' ||
+        message === '管理会社を選択してください' ||
         message.startsWith(`パスワードは${MIN_PASSWORD_LENGTH}文字`)
       ) {
         addToast(message, 'error');
@@ -109,7 +134,7 @@ export function EditUserModal({ open, onClose, user, vendors, onUpdate }: EditUs
           autoComplete="new-password"
           error={errors.password}
         />
-        {/* 権限で保守会社が要るかが決まるので、権限を先に選ぶ */}
+        {/* 権限で保守会社・管理会社のどちらが要るかが決まるので、権限を先に選ぶ */}
         <Select
           label="権限 *"
           id="editUserRole"
@@ -117,27 +142,32 @@ export function EditUserModal({ open, onClose, user, vendors, onUpdate }: EditUs
           value={role}
           onChange={(e) => {
             setRole(e.target.value as DbProfile['role']);
-            setErrors((prev) => ({ ...prev, vendor: undefined }));
+            setErrors((prev) => ({ ...prev, company: undefined }));
           }}
         />
-        <div className="space-y-1">
-          <Combobox
-            label="保守会社"
-            required={role !== 'admin'}
-            id="editUserVendor"
-            options={vendorOptions(vendors, { withNone: role === 'admin' })}
-            placeholder="選択してください（社名の一部で検索）"
-            value={vendorId}
-            onChange={(v) => {
-              setVendorId(v);
-              setErrors((prev) => ({ ...prev, vendor: undefined }));
-            }}
-            error={errors.vendor}
-          />
-          <p className="text-xs text-gray-500">
-            一般ユーザーは必須です。管理者は未選択のままで構いません
+        <CompanyField
+          idPrefix="editUser"
+          role={role}
+          vendors={vendors}
+          managementCompanies={managementCompanies}
+          vendorId={vendorId}
+          managementCompanyId={managementCompanyId}
+          onVendorChange={(v) => {
+            setVendorId(v);
+            setErrors((prev) => ({ ...prev, company: undefined }));
+          }}
+          onManagementCompanyChange={(v) => {
+            setManagementCompanyId(v);
+            setErrors((prev) => ({ ...prev, company: undefined }));
+          }}
+          error={errors.company}
+        />
+        {switchingToManagement && (
+          <p role="note" className="rounded border border-yellow-200 bg-yellow-50 px-2 py-1.5 text-xs text-yellow-800">
+            管理会社へ付け替えると、保守会社の設定は外れ、申請の作成（1件入力・一括入力）ができなくなります。
+            ログイン後は自社物件の点検一覧（承認・報告書の確認）だけになります。
           </p>
-        </div>
+        )}
         <div className="flex justify-end gap-3 pt-2">
           <Button type="button" variant="secondary" onClick={onClose}>
             キャンセル

@@ -14,6 +14,7 @@ const inspection = (over: Partial<PortalInspectionRow> = {}): PortalInspectionRo
   property_code: '120409-00',
   property_name: 'テストマンション',
   terminal_count: 1,
+  terminal_ids: ['T001'],
   management_company_id: 'm1',
   management_company_name: 'テスト管理',
   inspection_type_id: 't1',

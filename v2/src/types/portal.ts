@@ -10,6 +10,8 @@ export interface PortalInspectionRow {
   property_name: string;
   /** 物件の端末数。0 の物件も申請できる（terminal_id は ''） */
   terminal_count: number;
+  /** 物件の端末 ID（並び順どおり）。保守会社の物件マスタに無い点検物件でも端末を選べるように RPC が返す */
+  terminal_ids: string[];
   management_company_id: string | null;
   management_company_name: string | null;
   inspection_type_id: string;

@@ -2,15 +2,18 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase, TABLES } from '@/lib/supabase';
 import { createUser, setUserPassword } from '@/lib/api/users';
 import { fetchMasterVendors } from '@/lib/api/masterData';
+import { fetchManagementCompanies } from '@/lib/api/portal';
 import { useAuthStore } from '@/stores/authStore';
 import type { DbProfile, DbVendor } from '@/types/database';
+import type { ManagementCompanyRow } from '@/types/portal';
 import { applyDefaultStartDate } from '@/features/entries-list/hooks/useEntriesFilters';
-import { MIN_PASSWORD_LENGTH } from '../constants';
+import { MIN_PASSWORD_LENGTH, companyColumns, companyRequiredError } from '../constants';
 
 export function useUsers() {
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
   const [users, setUsers] = useState<DbProfile[]>([]);
   const [vendors, setVendors] = useState<DbVendor[]>([]);
+  const [managementCompanies, setManagementCompanies] = useState<ManagementCompanyRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,10 +44,20 @@ export function useUsers() {
     }
   }, []);
 
+  // 管理会社アカウントの作成・付け替えと一覧の社名に使う（RPC management_companies_master。管理者だけ行が返る）
+  const fetchManagementCompanyList = useCallback(async () => {
+    try {
+      setManagementCompanies(await fetchManagementCompanies());
+    } catch (err) {
+      console.error('Failed to load management companies:', err);
+    }
+  }, []);
+
   useEffect(() => {
     fetchUsers();
     fetchVendors();
-  }, [fetchUsers, fetchVendors]);
+    fetchManagementCompanyList();
+  }, [fetchUsers, fetchVendors, fetchManagementCompanyList]);
 
   // 自分自身は編集・無効化できない（v1 は自分の行の「編集」を無効化し「無効化」を出さない）
   // v1: js/admin-users.js loadUsers の isSelf
@@ -63,11 +76,11 @@ export function useUsers() {
       password: string;
       role: DbProfile['role'];
       vendor_id: string | null;
+      management_company_id?: string | null;
     }) => {
-      // 保守会社は一般ユーザーのみ必須（管理者は保守会社なしで運用している）
-      if (params.role !== 'admin' && !params.vendor_id) {
-        throw new Error('保守会社を選択してください');
-      }
+      const columns = companyColumns(params.role, params.vendor_id, params.management_company_id ?? null);
+      const companyError = companyRequiredError(params.role, columns.vendor_id, columns.management_company_id);
+      if (companyError) throw new Error(companyError);
       if (params.password.length < MIN_PASSWORD_LENGTH) {
         throw new Error(`パスワードは${MIN_PASSWORD_LENGTH}文字以上で入力してください`);
       }
@@ -75,7 +88,8 @@ export function useUsers() {
         email: params.email,
         password: params.password,
         role: params.role,
-        vendorId: params.vendor_id || null,
+        vendorId: columns.vendor_id,
+        managementCompanyId: columns.management_company_id,
       });
       await fetchUsers();
     },
@@ -83,7 +97,8 @@ export function useUsers() {
   );
 
   /**
-   * 権限・保守会社の変更と、入力があればパスワード変更。
+   * 権限・保守会社・管理会社の変更と、入力があればパスワード変更。
+   * 保守会社→管理会社の付け替えもここで行う（会社の列は companyColumns で role に合わせてそろえる）。
    * パスワード変更（共用アカウント等で拒否され得る）を先に行い、失敗したら権限・保守会社も保存しない。
    * 戻り値はパスワードを変えたかどうか。
    */
@@ -91,12 +106,17 @@ export function useUsers() {
   const editUser = useCallback(
     async (
       id: string,
-      params: { role: DbProfile['role']; vendor_id: string | null; password?: string },
+      params: {
+        role: DbProfile['role'];
+        vendor_id: string | null;
+        management_company_id?: string | null;
+        password?: string;
+      },
     ): Promise<boolean> => {
       assertNotSelf(id, '自分は編集できません');
-      if (params.role !== 'admin' && !params.vendor_id) {
-        throw new Error('保守会社を選択してください');
-      }
+      const columns = companyColumns(params.role, params.vendor_id, params.management_company_id ?? null);
+      const companyError = companyRequiredError(params.role, columns.vendor_id, columns.management_company_id);
+      if (companyError) throw new Error(companyError);
       const newPassword = params.password ?? '';
       if (newPassword && newPassword.length < MIN_PASSWORD_LENGTH) {
         throw new Error(`パスワードは${MIN_PASSWORD_LENGTH}文字以上で入力してください`);
@@ -109,14 +129,14 @@ export function useUsers() {
       // v1: js/supabase/users.js updateUserProfile
       const { error: err } = await supabase
         .from(TABLES.profiles)
-        .update({ role: params.role, vendor_id: params.vendor_id })
+        .update({ role: params.role, ...columns })
         .eq('id', id)
         .select()
         .single();
       if (err) {
         if (!newPassword) throw err;
         // パスワードは変わっているので、それが伝わるように分けて知らせる
-        throw new Error(`パスワードは変更済みですが、権限・保守会社の保存に失敗しました（${err.message}）`);
+        throw new Error(`パスワードは変更済みですが、権限・会社の保存に失敗しました（${err.message}）`);
       }
       // v1: js/admin-users.js handleEditUserSubmit（reloadAll = loadAllData。データ一覧の開始日が空なら今日に戻る）
       applyDefaultStartDate();
@@ -149,6 +169,7 @@ export function useUsers() {
   return {
     users,
     vendors,
+    managementCompanies,
     currentUserId,
     loading,
     error,

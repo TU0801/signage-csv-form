@@ -68,13 +68,25 @@ Deno.serve(async (req) => {
 
   if (body.action === 'create_user') {
     const email = typeof body.email === 'string' ? body.email.trim() : '';
-    const role = body.role === 'admin' ? 'admin' : body.role === 'user' ? 'user' : null;
-    const vendorId = typeof body.vendorId === 'string' && body.vendorId ? body.vendorId : null;
+    const role = body.role === 'admin' || body.role === 'user' || body.role === 'management' ? body.role : null;
+    // 管理会社アカウントは保守会社を持たない（申請の作成を開かせない）。管理会社の会社は management のときだけ受け取る
+    const vendorId = role !== 'management' && typeof body.vendorId === 'string' && body.vendorId ? body.vendorId : null;
+    const managementCompanyId = role === 'management' && typeof body.managementCompanyId === 'string' && body.managementCompanyId
+      ? body.managementCompanyId
+      : null;
     if (!email || !role) return json({ error: 'メールアドレスと権限を指定してください' }, 400);
     if (passwordError) return passwordError;
+    if (role === 'management' && !managementCompanyId) return json({ error: '管理会社を選択してください' }, 400);
     if (vendorId) {
       const { data: vendor } = await admin.from('signage_master_vendors').select('id').eq('id', vendorId).maybeSingle();
       if (!vendor) return json({ error: '保守会社が見つかりません' }, 400);
+    }
+    if (managementCompanyId) {
+      // 管理会社は業務システム（biz.companies）の会社。管理会社の印が無い会社を選ばせない（外部キーだけでは区別できない）
+      const { data: company, error: companyError } = await admin.schema('biz')
+        .from('companies').select('id').eq('id', managementCompanyId).eq('is_management_company', true).maybeSingle();
+      if (companyError) return json({ error: `管理会社の確認に失敗しました: ${companyError.message}` }, 500);
+      if (!company) return json({ error: '管理会社が見つかりません' }, 400);
     }
 
     const { data: created, error: createError } = await admin.auth.admin.createUser({
@@ -91,9 +103,12 @@ Deno.serve(async (req) => {
       );
     }
 
+    // management_company_id は管理会社のときだけ送る（列を足す DDL の前に配備しても、従来の作成が通るように）
+    const profileRow: Record<string, unknown> = { id: created.user.id, email: created.user.email, role, vendor_id: vendorId, status: 'active' };
+    if (role === 'management') profileRow.management_company_id = managementCompanyId;
     const { data: profile, error: profileError } = await admin
       .from('signage_profiles')
-      .upsert({ id: created.user.id, email: created.user.email, role, vendor_id: vendorId, status: 'active' }, { onConflict: 'id' })
+      .upsert(profileRow, { onConflict: 'id' })
       .select()
       .single();
     if (profileError) {
@@ -104,7 +119,12 @@ Deno.serve(async (req) => {
         : '';
       return json({ error: `プロファイル作成に失敗しました: ${profileError.message}${rollbackNote}` }, 500);
     }
-    await writeAudit(admin, caller.id, 'CREATE_USER', created.user.id, { email: created.user.email, role, vendor_id: vendorId });
+    await writeAudit(admin, caller.id, 'CREATE_USER', created.user.id, {
+      email: created.user.email,
+      role,
+      vendor_id: vendorId,
+      management_company_id: managementCompanyId,
+    });
     return json({ user: profile });
   }
 

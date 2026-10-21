@@ -12,6 +12,7 @@ const mockUpdate = vi.fn();
 const mockCreateUser = vi.fn();
 const mockSetUserPassword = vi.fn();
 const mockFetchVendors = vi.fn();
+const mockFetchManagementCompanies = vi.fn();
 const mockEq = vi.fn();
 const mockOrder = vi.fn();
 const mockSingle = vi.fn();
@@ -36,6 +37,10 @@ vi.mock('@/lib/api/users', () => ({
 
 vi.mock('@/lib/api/masterData', () => ({
   fetchMasterVendors: () => mockFetchVendors(),
+}));
+
+vi.mock('@/lib/api/portal', () => ({
+  fetchManagementCompanies: () => mockFetchManagementCompanies(),
 }));
 
 // ログイン中の管理者は id 'me'
@@ -71,6 +76,7 @@ describe('useUsers', () => {
     mockSelect.mockReturnValue({ order: mockOrder });
     mockOrder.mockResolvedValue({ data: [], error: null });
     mockFetchVendors.mockResolvedValue([{ id: 'v1', vendor_name: '保守A' }]);
+    mockFetchManagementCompanies.mockResolvedValue([{ id: 'm1', name: '管理A' }]);
     // Edge Function の戻り値（create_user は { user: profile } を lib/api が user にして返す / set_password は { ok: true }）
     mockCreateUser.mockResolvedValue(profile('u2'));
     mockSetUserPassword.mockImplementation(async () => {
@@ -93,6 +99,7 @@ describe('useUsers', () => {
     expect(mockOrder).toHaveBeenCalledWith('created_at', { ascending: false });
     expect(result.current.users).toEqual(rows);
     expect(result.current.vendors).toEqual([{ id: 'v1', vendor_name: '保守A' }]);
+    expect(result.current.managementCompanies).toEqual([{ id: 'm1', name: '管理A' }]);
     expect(result.current.currentUserId).toBe('me');
   });
 
@@ -119,7 +126,30 @@ describe('useUsers', () => {
       password: 'secret123',
       role: 'user',
       vendorId: 'v1',
+      managementCompanyId: null,
     });
+  });
+
+  it('addUser requires a management company for a management account and drops the vendor', async () => {
+    const { result } = await renderReady();
+
+    await expect(
+      result.current.addUser({ email: 'm@test.com', password: 'secret123', role: 'management', vendor_id: 'v1' }),
+    ).rejects.toThrow('管理会社を選択してください');
+    expect(mockCreateUser).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await result.current.addUser({
+        email: 'm@test.com',
+        password: 'secret123',
+        role: 'management',
+        vendor_id: 'v1',
+        management_company_id: 'm1',
+      });
+    });
+    expect(mockCreateUser).toHaveBeenCalledWith(
+      expect.objectContaining({ role: 'management', vendorId: null, managementCompanyId: 'm1' }),
+    );
   });
 
   it('addUser requires a vendor for a general user but not for an admin', async () => {
@@ -151,7 +181,7 @@ describe('useUsers', () => {
 
     expect(changed).toBe(true);
     expect(mockSetUserPassword).toHaveBeenCalledWith('u1', 'newpass1');
-    expect(calls).toEqual(['password', 'update:{"role":"admin","vendor_id":null}']);
+    expect(calls).toEqual(['password', 'update:{"role":"admin","vendor_id":null,"management_company_id":null}']);
   });
 
   it('editUser does not save role/vendor when the password change is refused', async () => {
@@ -172,7 +202,21 @@ describe('useUsers', () => {
 
     await expect(
       result.current.editUser('u1', { role: 'user', vendor_id: 'v1', password: 'newpass1' }),
-    ).rejects.toThrow('パスワードは変更済みですが、権限・保守会社の保存に失敗しました（0 rows）');
+    ).rejects.toThrow('パスワードは変更済みですが、権限・会社の保存に失敗しました（0 rows）');
+  });
+
+  it('editUser moves a vendor account to a management company (vendor cleared, company required)', async () => {
+    const { result } = await renderReady();
+
+    await expect(
+      result.current.editUser('u1', { role: 'management', vendor_id: 'v1', management_company_id: null }),
+    ).rejects.toThrow('管理会社を選択してください');
+    expect(mockUpdate).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await result.current.editUser('u1', { role: 'management', vendor_id: 'v1', management_company_id: 'm1' });
+    });
+    expect(mockUpdate).toHaveBeenCalledWith({ role: 'management', vendor_id: null, management_company_id: 'm1' });
   });
 
   it('editUser without a password skips the Edge Function and rejects a short one', async () => {

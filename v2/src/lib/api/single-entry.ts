@@ -98,7 +98,10 @@ export async function fetchMyEntriesThisMonth(userId: string, now: Date = new Da
   return (data ?? []) as DbEntry[];
 }
 
-/** 申請で INSERT する1行（frame_no は v1 も送らない。DB の既定値 '1' が入る） */
+/**
+ * 申請で INSERT する1行（frame_no は v1 も送らない。DB の既定値 '1' が入る）。
+ * property_inspection_id・vendor_id・target_month は点検ポータルから申請したときだけ入れる（1件入力・一括入力は送らない）
+ */
 export type EntryInsertRow = Pick<
   DbEntry,
   | 'user_id'
@@ -121,6 +124,9 @@ export type EntryInsertRow = Pick<
   | 'poster_image'
   | 'poster_position'
   | 'status'
+  | 'property_inspection_id'
+  | 'vendor_id'
+  | 'target_month'
 >;
 
 /** まとめて1回の INSERT で申請する（全件成功か全件失敗。v1 と同じ） */

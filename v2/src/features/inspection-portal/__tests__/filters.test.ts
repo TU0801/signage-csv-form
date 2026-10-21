@@ -1,0 +1,60 @@
+import { describe, expect, it } from 'vitest';
+import { buildSchedule, countSchedule } from '../lib/schedule';
+import { COUNT_TO_STATUS, filterSchedule, INITIAL_FILTERS } from '../lib/filters';
+import { makeEntry, makeInspection, makeReport } from './fixtures';
+
+const TODAY = '2026-10-21';
+
+describe('点検一覧の絞り込み', () => {
+  it('既定（超過＋今月＋今後3か月）は過去の申請済みと4か月先以降を出さない', () => {
+    const items = buildSchedule(
+      [makeInspection({ inspection_months: [5, 8, 11, 2], schedule_from: '2026-04-01' })],
+      [makeEntry({ target_month: '2026-05-01', status: 'ready' })],
+      [],
+      { today: TODAY, monthsAhead: 12 },
+    );
+    const shown = filterSchedule(items, INITIAL_FILTERS, TODAY).map((i) => i.targetMonth);
+    // 5月は承認済み（出さない）、8月は超過（出す）、11月は今後3か月以内、2月は4か月先（出さない）
+    expect(shown).toEqual(['2026-08-01', '2026-11-01']);
+    expect(filterSchedule(items, { ...INITIAL_FILTERS, timing: 'all' }, TODAY)).toHaveLength(items.length);
+  });
+
+  it('件数バッジの条件で絞ると、その件数と同じ行が出る', () => {
+    const inspections = [
+      makeInspection(),
+      makeInspection({ inspection_id: 'i2', property_code: '900002-00', property_name: 'テスト第二マンション' }),
+    ];
+    const items = buildSchedule(
+      inspections,
+      [makeEntry({ id: 'e1', status: 'draft' }), makeEntry({ id: 'e2', property_inspection_id: 'i2', status: 'pending', review_comment: '日付違い' })],
+      [makeReport({ status: 'returned' })],
+      { today: TODAY, monthsAhead: 12 },
+    );
+    const counts = countSchedule(items);
+    for (const key of Object.keys(counts) as (keyof typeof counts)[]) {
+      const rows = filterSchedule(items, { ...INITIAL_FILTERS, timing: 'all', status: COUNT_TO_STATUS[key] }, TODAY);
+      expect(rows, key).toHaveLength(counts[key]);
+    }
+    expect(counts.awaitingApproval).toBe(1);
+    expect(counts.sentBack).toBe(1);
+    expect(counts.reportsReturned).toBe(1);
+  });
+
+  it('物件名・コードの検索、保守会社（台の会社を含む）、管理会社（未設定）で絞る', () => {
+    const items = buildSchedule(
+      [
+        makeInspection(),
+        makeInspection({ inspection_id: 'i2', property_code: '900002-00', property_name: 'テスト第二', vendor_id: 'v2', unit_vendor_ids: ['v3'], management_company_id: null }),
+      ],
+      [],
+      [],
+      { today: TODAY, monthsAhead: 12 },
+    );
+    const ids = (f: Partial<typeof INITIAL_FILTERS>) =>
+      [...new Set(filterSchedule(items, { ...INITIAL_FILTERS, timing: 'all', ...f }, TODAY).map((i) => i.inspection.inspection_id))];
+    expect(ids({ search: '９００００２' })).toEqual(['i2']);
+    expect(ids({ search: '第一' })).toEqual(['i1']);
+    expect(ids({ vendorId: 'v3' })).toEqual(['i2']);
+    expect(ids({ managementCompanyId: '__none__' })).toEqual(['i2']);
+  });
+});
