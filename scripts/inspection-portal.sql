@@ -315,12 +315,15 @@ CREATE OR REPLACE FUNCTION signage.portal_entries()
  STABLE SECURITY DEFINER
  SET search_path TO 'signage', 'pg_temp'
 AS $function$
-  select e.id, e.user_id, e.property_code, e.inspection_type, e.vendor_name, e.vendor_id,
-         e.property_inspection_id, e.target_month, e.inspection_start, e.inspection_end,
-         e.status, e.review_comment, e.reviewed_at, e.created_at, e.updated_at,
+  -- 申請者・同じ保守会社・承認する管理会社・管理者以外（同じ点検の台を受け持つ別の保守会社）には、
+  -- 申請があること・対象月・状態だけを返し、申請者・保守会社・日付・理由・掲示の内容は null にする
+  select e.id, case when c.can_see then e.user_id end, e.property_code, e.inspection_type,
+         case when c.can_see then e.vendor_name end, case when c.can_see then e.vendor_id end,
+         e.property_inspection_id, e.target_month,
+         case when c.can_see then e.inspection_start end, case when c.can_see then e.inspection_end end,
+         e.status, case when c.can_see then e.review_comment end, case when c.can_see then e.reviewed_at end,
+         e.created_at, e.updated_at,
          e.user_id = auth.uid(),
-         -- 掲示の内容は、申請者・同じ保守会社・承認する管理会社・管理者だけに返す
-         -- （同じ点検の台を受け持つ別の保守会社には、申請があることと状態だけを見せる）
          case when c.can_see then e.terminal_id end, case when c.can_see then e.template_no end,
          case when c.can_see then e.announcement end, case when c.can_see then e.remarks end,
          case when c.can_see then e.poster_type end, case when c.can_see then e.poster_image end,
@@ -618,6 +621,10 @@ BEGIN
     WHERE id = p_report_id RETURNING * INTO r;
   ELSIF p_action = 'restore' THEN
     IF r.status <> 'deleted' THEN RETURN r; END IF;
+    -- 受領済みの版の削除は管理者しかできないので、その復元も管理者だけ（保守会社が受領済みを作り出せないように）
+    IF NOT signage.is_active_admin() AND r.status_before_delete = 'accepted' THEN
+      RAISE EXCEPTION '受領済みだった報告書の復元は管理者にお問い合わせください' USING ERRCODE = '42501';
+    END IF;
     UPDATE signage.signage_inspection_reports SET status = coalesce(status_before_delete, 'submitted'), status_before_delete = NULL,
       file_name = signage.unique_report_file_name(property_code, extract(year from performed_on)::int, file_name, id)
     WHERE id = p_report_id RETURNING * INTO r;

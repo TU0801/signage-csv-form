@@ -31,10 +31,11 @@ export interface PortalInspectionRow {
 /** RPC portal_entries の1行（範囲内の申請） */
 export interface PortalEntryRow {
   id: string;
-  user_id: string;
+  /** 申請者。同じ点検の台を受け持つ別の保守会社には null で返る（vendor_name・日付・理由・掲示の内容も同じ） */
+  user_id: string | null;
   property_code: string;
   inspection_type: string;
-  vendor_name: string;
+  vendor_name: string | null;
   vendor_id: string | null;
   property_inspection_id: string | null;
   target_month: string | null;
