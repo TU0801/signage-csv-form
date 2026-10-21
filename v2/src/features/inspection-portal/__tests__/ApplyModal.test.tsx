@@ -132,7 +132,8 @@ describe('ApplyModal（点検ポータルの申請）', () => {
       id: 'e9',
       terminal_id: 'T-2',
       inspection_start: '2026-11-03',
-      inspection_end: null,
+      // 終了日を省いた申請も DB には開始日と同じ日が入る（buildApplyRow）。日付を後ろへずらして直せること
+      inspection_end: '2026-11-03',
       announcement: '直す前の案内文',
       remarks: '',
       display_start_date: '2026-11-03',
@@ -158,7 +159,7 @@ describe('ApplyModal（点検ポータルの申請）', () => {
     await waitFor(() => expect(entryApi.resubmitEntry).toHaveBeenCalledTimes(1));
     const [id, patch] = entryApi.resubmitEntry.mock.calls[0] as unknown as [string, Record<string, unknown>];
     expect(id).toBe('e9');
-    expect(patch).toMatchObject({ status: 'draft', inspection_start: '2026-11-12', terminal_id: 'T-2', vendor_id: 'v1' });
+    expect(patch).toMatchObject({ status: 'draft', inspection_start: '2026-11-12', inspection_end: '2026-11-12', terminal_id: 'T-2', vendor_id: 'v1' });
     expect(patch).not.toHaveProperty('user_id');
     expect(api.insertEntries).not.toHaveBeenCalled();
   });

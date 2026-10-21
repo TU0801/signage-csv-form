@@ -76,7 +76,9 @@ export function valuesFromDbEntry(entry: DbEntry, fallbackMonth: string): ApplyV
     targetMonth: entry.target_month ?? fallbackMonth,
     terminalId: entry.terminal_id ?? '',
     startDate: entry.inspection_start ?? '',
-    endDate: entry.inspection_end ?? '',
+    // 終了日を省いた申請は開始日と同じ日で保存される（buildApplyRow）。そのまま読むと開始日だけ後ろへ直したときに
+    // 「終了日は開始日より後に」で止まるので、1日の点検は終了日を空に戻す（保存時にまた開始日が入る）
+    endDate: entry.inspection_end && entry.inspection_end !== entry.inspection_start ? entry.inspection_end : '',
     noticeText: entry.announcement ?? '',
     remarks: entry.remarks ?? '',
     displayStartDate: entry.display_start_date ?? '',

@@ -127,7 +127,9 @@ export function InspectionPortal() {
       inspection: item.inspection,
       targetMonth: item.targetMonth,
       entryId: appliedEntry(item)?.id ?? null,
-      previous: item.report?.status === 'returned' ? item.report : null,
+      // 提出中・受領済みの版があるときも置き換わる（DB が同じ点検・対象月の版を superseded にする）ので、前の版として見せる。
+      // DB が置き換えるのは同じ保守会社の版だけ（台ごとに別の会社が居る点検）なので、他社の版は前の版にしない
+      previous: item.report && (isAdmin || item.report.vendor_id === vendorId) ? item.report : null,
     });
 
   // 点検月の無い点検行: 申請・報告書は月をまたいでまとめてあるので、別の月の申請を紐付けない（entryId は付けない）。

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import { makeEntry, makeInspection } from './fixtures';
+import { makeReport } from '@/features/inspection-documents/__tests__/fixtures';
 
 const portal = vi.hoisted(() => ({
   fetchPortalInspections: vi.fn(),
@@ -17,9 +18,10 @@ const toast = vi.hoisted(() => ({ addToast: vi.fn() }));
 vi.mock('@/components/ui/Toast', () => ({ useToast: () => toast }));
 // 申請・報告書のモーダルはそれぞれのテストで見る（ここではマスタを読ませない）
 vi.mock('../components/ApplyModal', () => ({ ApplyModal: () => null }));
-const upload = vi.hoisted(() => ({ props: null as null | { open: boolean; targetMonth: string | null; entryId?: string | null } }));
+type UploadProps = { open: boolean; targetMonth: string | null; entryId?: string | null; previous?: { id: string } | null };
+const upload = vi.hoisted(() => ({ props: null as null | UploadProps }));
 vi.mock('@/features/inspection-documents/components/ReportUploadModal', () => ({
-  ReportUploadModal: (p: { open: boolean; targetMonth: string | null; entryId?: string | null }) => {
+  ReportUploadModal: (p: UploadProps) => {
     upload.props = p;
     return null;
   },
@@ -82,6 +84,18 @@ describe('点検一覧（InspectionPortal）', () => {
     const row = await screen.findByTestId('unscheduled-row');
     fireEvent.click(within(row).getByText('報告書'));
     expect(upload.props).toMatchObject({ open: true, targetMonth: null, entryId: null });
+  });
+
+  it('受領済みの版がある月の報告書は、置き換わる前の版として渡す', async () => {
+    // DB は同じ点検・対象月の版を superseded にするので、受領済みでも「前の版」の注意を出す
+    portal.fetchInspectionReports.mockResolvedValue([
+      makeReport({ id: 'r5', property_inspection_id: 'i1', target_month: '2026-05-01', status: 'accepted' }),
+    ]);
+    render(<InspectionPortal />);
+    await screen.findByText('点検一覧');
+    const may = rows().find((r) => r.textContent?.includes('2026年5月'))!;
+    fireEvent.click(within(may).getByRole('button', { name: '報告書' }));
+    expect(upload.props).toMatchObject({ open: true, targetMonth: '2026-05-01', previous: { id: 'r5' } });
   });
 
   it('保守会社には申請・報告書を出し、承認・差戻しは出さない', async () => {
