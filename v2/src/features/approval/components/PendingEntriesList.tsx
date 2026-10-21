@@ -197,9 +197,15 @@ export function PendingEntriesList() {
       <Card>
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-gray-900">
-              データ承認待ち ({entries.length}件)
-            </h2>
+            <div>
+              <h2 className="text-sm font-semibold text-gray-900">
+                データ承認待ち ({entries.length}件)
+              </h2>
+              {/* 管理会社の「差戻し」（点検一覧）と同じ申請を扱うので、結果の違いを言葉で示す（挙動は v1 どおり） */}
+              <p className="text-xs text-gray-500">
+                「却下」は申請データを削除します。削除せず理由を付けて保守会社へ戻す「差戻し」は点検一覧から行います。
+              </p>
+            </div>
             <div className="flex flex-wrap items-center gap-2">
               {selected.length > 0 && (
                 <span className="text-sm font-medium text-blue-800">{selected.length}件選択中</span>

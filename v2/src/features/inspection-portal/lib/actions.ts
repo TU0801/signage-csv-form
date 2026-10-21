@@ -1,5 +1,5 @@
 import type { PortalEntryRow } from '@/types/portal';
-import type { ScheduleItem } from './schedule';
+import { focusEntry, type ScheduleItem } from './schedule';
 
 /*
  * 点検一覧の行に出す操作（ロール別）。
@@ -38,22 +38,20 @@ export function appliedEntry(item: Pick<ScheduleItem, 'entries'>): PortalEntryRo
 }
 
 export function rowActions(item: Pick<ScheduleItem, 'application' | 'entries'>, role: PortalRole): RowActions {
-  // entries は新しい順
-  const draft = item.entries.find((e) => e.status === 'draft') ?? null;
-  const ready = item.entries.find((e) => e.status === 'ready') ?? null;
-  const sentBack = item.entries.find((e) => e.status === 'pending' && e.review_comment) ?? null;
+  // 状態を決めた申請（focusEntry）だけを操作の対象にする。別の申請（過去の月の承認済みなど）を差し戻さないように
+  const focus = focusEntry(item.entries);
 
   let apply: RowActions['apply'] = null;
   if (canSubmit(role)) {
     if (item.application === 'not_applied') apply = { kind: 'new' };
-    else if (item.application === 'sent_back' && sentBack) apply = { kind: 'resubmit', entry: sentBack };
+    else if (item.application === 'sent_back' && focus) apply = { kind: 'resubmit', entry: focus };
   }
 
   const review = canReview(role);
   return {
     apply,
     report: canSubmit(role),
-    approve: review && item.application === 'applied' ? draft : null,
-    sendBack: review ? (draft ?? ready) : null,
+    approve: review && item.application === 'applied' ? focus : null,
+    sendBack: review && focus && (focus.status === 'draft' || focus.status === 'ready') ? focus : null,
   };
 }

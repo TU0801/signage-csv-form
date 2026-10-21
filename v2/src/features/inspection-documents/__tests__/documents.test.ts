@@ -6,6 +6,7 @@ import {
   filterReports,
   matchesTreeSelection,
   reportsToCsv,
+  revealReport,
 } from '../lib/documents';
 import { makeReport } from './fixtures';
 
@@ -94,5 +95,19 @@ describe('reportsToCsv', () => {
   it('= などで始まる値は数式として動かないよう先頭に \' を付ける', () => {
     const row = reportsToCsv([makeReport({ note: '=HYPERLINK("x")' })]).split('\r\n')[1];
     expect(row).toContain(`"'=HYPERLINK(""x"")"`);
+  });
+});
+
+describe('revealReport（?report=<id> で指した版を隠さない）', () => {
+  it('旧版でも見えるよう条件を外し、ツリーをその建物・年・点検種別に合わせる', () => {
+    const target = makeReport({ id: 'old', status: 'superseded', performed_on: '2025-04-01' });
+    const { filters, selection } = revealReport(target, {
+      ...DEFAULT_REPORT_FILTERS,
+      status: 'accepted',
+      from: '2026-01-01',
+      search: 'ほか',
+    });
+    expect(filterReports([target], filters)).toHaveLength(1);
+    expect(selection).toEqual({ propertyCode: '100001', year: '2025', inspectionType: '消防設備点検' });
   });
 });

@@ -27,6 +27,16 @@ export function ReportTree({ tree, total, selection, onSelect }: ReportTreeProps
       return next;
     });
 
+  // 外から（?report=<id> のリンクで）年や点検種別の位置を選ばれたとき、選んだ行が見えるよう上の階層を開く
+  const [prevSelection, setPrevSelection] = useState(selection);
+  if (selection !== prevSelection) {
+    setPrevSelection(selection);
+    const ancestors: string[] = [];
+    if (selection?.year || selection?.inspectionType) ancestors.push(selection.propertyCode);
+    if (selection?.year && selection.inspectionType) ancestors.push(`${selection.propertyCode}/${selection.year}`);
+    if (ancestors.some((k) => !expanded.has(k))) setExpanded(new Set([...expanded, ...ancestors]));
+  }
+
   const item = (label: string, count: number, sel: TreeSelection | null, depth: number, toggleKey?: string, open?: boolean) => (
     <div className="flex items-center" style={{ paddingLeft: `${depth * 0.75}rem` }}>
       {toggleKey ? (
@@ -91,7 +101,7 @@ export function ReportTree({ tree, total, selection, onSelect }: ReportTreeProps
           </div>
         );
       })}
-      {tree.length === 0 && <p className="px-1 py-2 text-gray-400">該当する報告書はありません</p>}
+      {tree.length === 0 && <p className="px-1 py-1 text-gray-400">なし</p>}
     </nav>
   );
 }

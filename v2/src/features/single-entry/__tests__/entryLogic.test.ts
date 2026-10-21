@@ -261,4 +261,9 @@ describe('申請済み一覧のステータス（v1 renderDataList）', () => {
     expect(submittedStatusLabel('exported').label).toBe('承認済み');
     expect(submittedStatusLabel('draft').label).toBe('申請済み');
   });
+
+  it('理由の付いた pending は点検一覧と同じく「差戻し」', () => {
+    expect(submittedStatusLabel('pending', '日付の誤り')).toEqual({ label: '差戻し', variant: 'danger' });
+    expect(submittedStatusLabel('pending', '  ').label).toBe('未申請');
+  });
 });

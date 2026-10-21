@@ -510,7 +510,12 @@ export function computePosterSize(
 
 /** 申請済み一覧のステータス表示 */
 // v1: js/script.js renderDataList（statusBadge）
-export function submittedStatusLabel(status: string | null): { label: string; variant: 'warning' | 'success' | 'primary' } {
+// 差し戻された申請（pending＋理由）は点検一覧と同じく「差戻し」と呼ぶ（「未申請」だと理由のある戻しと見分けられない）
+export function submittedStatusLabel(
+  status: string | null,
+  reviewComment?: string | null,
+): { label: string; variant: 'warning' | 'success' | 'primary' | 'danger' } {
+  if (status === EntryStatus.PENDING && reviewComment?.trim()) return { label: '差戻し', variant: 'danger' };
   if (status === EntryStatus.PENDING) return { label: '未申請', variant: 'warning' };
   if (status === EntryStatus.READY || status === EntryStatus.EXPORTED) return { label: '承認済み', variant: 'success' };
   return { label: '申請済み', variant: 'primary' };

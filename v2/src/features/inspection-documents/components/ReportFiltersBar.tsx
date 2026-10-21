@@ -1,17 +1,19 @@
 import { Button } from '@/components/ui/Button';
-import { DEFAULT_REPORT_FILTERS, type ReportFilters } from '../lib/documents';
+import { DEFAULT_REPORT_FILTERS, REPORT_STATUS, type ReportFilters } from '../lib/documents';
 
 interface ReportFiltersBarProps {
   filters: ReportFilters;
   onChange: (filters: ReportFilters) => void;
+  /** 「条件をクリア」で絞り込み以外（ツリーの選択・指定の1件）も外す */
+  onClear?: () => void;
   /** 保守会社の絞り込み（管理者・管理会社だけ。保守会社は自社の分しか見えない） */
   vendorOptions: { value: string; label: string }[] | null;
 }
 
 const FIELD =
-  'rounded-md border border-gray-300 px-1.5 py-1 text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
+  'rounded-md border border-gray-300 bg-white px-1.5 py-1 text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
 
-export function ReportFiltersBar({ filters, onChange, vendorOptions }: ReportFiltersBarProps) {
+export function ReportFiltersBar({ filters, onChange, onClear, vendorOptions }: ReportFiltersBarProps) {
   const set = <K extends keyof ReportFilters>(key: K, value: ReportFilters[K]) => onChange({ ...filters, [key]: value });
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
@@ -30,9 +32,9 @@ export function ReportFiltersBar({ filters, onChange, vendorOptions }: ReportFil
         className={FIELD}
       >
         <option value="">状態: すべて</option>
-        <option value="submitted">提出（確認待ち）</option>
-        <option value="accepted">受領</option>
-        <option value="returned">差戻し</option>
+        <option value="submitted">{REPORT_STATUS.submitted.label}（確認待ち）</option>
+        <option value="accepted">{REPORT_STATUS.accepted.label}</option>
+        <option value="returned">{REPORT_STATUS.returned.label}</option>
       </select>
       <span className="flex items-center gap-1">
         <span className="text-gray-500">実施日</span>
@@ -79,7 +81,10 @@ export function ReportFiltersBar({ filters, onChange, vendorOptions }: ReportFil
         />
         旧版も表示
       </label>
-      <Button variant="ghost" size="sm" className="text-xs" onClick={() => onChange(DEFAULT_REPORT_FILTERS)}>
+      <Button variant="ghost" size="sm" className="text-xs" onClick={() => {
+          onChange(DEFAULT_REPORT_FILTERS);
+          onClear?.();
+        }}>
         条件をクリア
       </Button>
     </div>

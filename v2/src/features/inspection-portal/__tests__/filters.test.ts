@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildSchedule, countSchedule } from '../lib/schedule';
-import { COUNT_TO_STATUS, filterSchedule, INITIAL_FILTERS } from '../lib/filters';
+import { COUNT_TO_STATUS, filterSchedule, filterUnscheduled, INITIAL_FILTERS } from '../lib/filters';
+import { buildUnscheduledItems } from '../components/UnscheduledTable';
 import { makeEntry, makeInspection, makeReport } from './fixtures';
 
 const TODAY = '2026-10-21';
@@ -56,5 +57,15 @@ describe('点検一覧の絞り込み', () => {
     expect(ids({ search: '第一' })).toEqual(['i1']);
     expect(ids({ vendorId: 'v3' })).toEqual(['i2']);
     expect(ids({ managementCompanyId: '__none__' })).toEqual(['i2']);
+  });
+
+  it('点検月の無い点検の行にも申請状況で絞り込みをかけ、超過（起きない）では出さない', () => {
+    const items = buildUnscheduledItems(
+      [makeInspection({ inspection_months: [] }), makeInspection({ inspection_id: 'i2', inspection_months: [] })],
+      [makeEntry({ property_inspection_id: 'i1', status: 'draft' })],
+      [],
+    );
+    expect(filterUnscheduled(items, { ...INITIAL_FILTERS, status: 'applied' }).map((i) => i.inspection.inspection_id)).toEqual(['i1']);
+    expect(filterUnscheduled(items, { ...INITIAL_FILTERS, timing: 'overdue' })).toEqual([]);
   });
 });

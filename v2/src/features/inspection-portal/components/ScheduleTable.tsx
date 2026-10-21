@@ -1,16 +1,17 @@
+import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
 import type { DbInspectionReport, PortalEntryRow } from '@/types/portal';
 import { appliedEntry, rowActions, type PortalRole } from '../lib/actions';
-import { formatMonth, type ScheduleItem } from '../lib/schedule';
+import { focusEntry, formatDate, formatMonth, type ScheduleItem } from '../lib/schedule';
 
 /** 行の操作（ページが申請・報告書・承認・差戻しのモーダルを開く） */
 export interface ScheduleRowHandlers {
   onApply: (item: ScheduleItem, resubmit: PortalEntryRow | null) => void;
   onReport: (item: ScheduleItem) => void;
-  onApprove: (item: ScheduleItem, entry: PortalEntryRow) => void;
-  onSendBack: (item: ScheduleItem, entry: PortalEntryRow) => void;
+  /** 申請の内容を開く（承認・差戻しはそこから。中身を見ずに承認させない） */
+  onReview: (item: ScheduleItem, entry: PortalEntryRow) => void;
 }
 
 interface ScheduleTableProps extends ScheduleRowHandlers {
@@ -20,16 +21,11 @@ interface ScheduleTableProps extends ScheduleRowHandlers {
   busyEntryId: string | null;
 }
 
-/** 2026-11-05 → 11/5 */
-function md(date: string | null): string {
-  if (!date) return '';
-  return `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`;
-}
-
 function inspectionDates(entry: PortalEntryRow | null): string {
   if (!entry?.inspection_start) return '';
-  const end = entry.inspection_end && entry.inspection_end !== entry.inspection_start ? `〜${md(entry.inspection_end)}` : '';
-  return `${md(entry.inspection_start)}${end}`;
+  const end =
+    entry.inspection_end && entry.inspection_end !== entry.inspection_start ? `〜${formatDate(entry.inspection_end)}` : '';
+  return `${formatDate(entry.inspection_start)}${end}`;
 }
 
 const REPORT_LABEL: Record<string, { label: string; variant: 'primary' | 'success' | 'warning' }> = {
@@ -57,15 +53,63 @@ export function ApplicationBadge({ item }: { item: Pick<ScheduleItem, 'applicati
   }
 }
 
+/**
+ * 報告書の状態。押すとその報告書に絞った点検報告書の画面を開く（受領・差戻し・プレビューはそちらで行う。
+ * 管理会社は点検一覧から報告書を扱う手段がほかに無い）
+ */
 export function ReportCell({ report }: { report: DbInspectionReport | null }) {
   if (!report) return <span className="text-gray-400">－</span>;
   const r = REPORT_LABEL[report.status];
   return (
-    <span className="inline-flex items-center gap-1" title={report.review_comment ?? undefined}>
+    <Link
+      to={`/portal/documents?report=${encodeURIComponent(report.id)}`}
+      className="inline-flex items-center gap-1 whitespace-nowrap hover:underline"
+      title={report.review_comment ? `差戻しの理由: ${report.review_comment}` : '点検報告書の画面で開く'}
+    >
       {r && <Badge variant={r.variant}>{r.label}</Badge>}
-      <span className="tabular-nums text-gray-600">{md(report.performed_on)}実施</span>
-    </span>
+      <span className="tabular-nums text-blue-700">{formatDate(report.performed_on)}実施</span>
+    </Link>
   );
+}
+
+const small = 'px-2 py-0.5 text-xs';
+
+/**
+ * 承認・差戻しのボタン（予定の表と点検月の無い点検の表で共通）。承認待ちは内容を開いてから承認・差戻しする。
+ * 承認済みの差戻しは承認の取り消しなので、塗りの赤ではなく控えめな見た目にして名前で意味を示す（これも内容を開いてから）
+ */
+export function ReviewButtons({
+  approve,
+  sendBack,
+  busy,
+  onReview,
+}: {
+  approve: PortalEntryRow | null;
+  sendBack: PortalEntryRow | null;
+  busy: boolean;
+  onReview: (entry: PortalEntryRow) => void;
+}) {
+  if (approve) {
+    return (
+      <Button variant="success" size="sm" className={small} disabled={busy} onClick={() => onReview(approve)}>
+        内容を確認して承認
+      </Button>
+    );
+  }
+  if (sendBack?.status === 'ready') {
+    return (
+      <Button
+        variant="ghost"
+        size="sm"
+        className={cn(small, 'border border-gray-300 text-gray-700')}
+        disabled={busy}
+        onClick={() => onReview(sendBack)}
+      >
+        承認を取り消して差戻し
+      </Button>
+    );
+  }
+  return null;
 }
 
 const th = 'whitespace-nowrap px-2 py-1 text-left font-medium text-gray-600';
@@ -78,8 +122,7 @@ export function ScheduleTable({
   busyEntryId,
   onApply,
   onReport,
-  onApprove,
-  onSendBack,
+  onReview,
 }: ScheduleTableProps) {
   const showManagement = role.isAdmin;
   if (items.length === 0) {
@@ -105,7 +148,7 @@ export function ScheduleTable({
           {items.map((item) => {
             const a = rowActions(item, role);
             const { inspection } = item;
-            const sentBackEntry = item.application === 'sent_back' ? item.entries.find((e) => e.review_comment) : null;
+            const sentBackEntry = item.application === 'sent_back' ? focusEntry(item.entries) : null;
             const busy = !!busyEntryId && (a.approve?.id === busyEntryId || a.sendBack?.id === busyEntryId);
             return (
               <tr key={item.key} className={cn(item.overdueUnapplied && 'bg-red-50/60')} data-testid="schedule-row">
@@ -134,7 +177,7 @@ export function ScheduleTable({
                     {a.apply && (
                       <Button
                         size="sm"
-                        className="px-2 py-0.5 text-xs"
+                        className={small}
                         onClick={() => onApply(item, a.apply?.kind === 'resubmit' ? a.apply.entry : null)}
                       >
                         {a.apply.kind === 'resubmit' ? '修正して再申請' : '申請'}
@@ -144,34 +187,18 @@ export function ScheduleTable({
                       <Button
                         variant="secondary"
                         size="sm"
-                        className="px-2 py-0.5 text-xs"
+                        className={small}
                         onClick={() => onReport(item)}
                       >
                         {item.report?.status === 'returned' ? '報告書を再提出' : '報告書'}
                       </Button>
                     )}
-                    {a.approve && (
-                      <Button
-                        variant="success"
-                        size="sm"
-                        className="px-2 py-0.5 text-xs"
-                        disabled={busy}
-                        onClick={() => onApprove(item, a.approve!)}
-                      >
-                        承認
-                      </Button>
-                    )}
-                    {a.sendBack && (
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        className="px-2 py-0.5 text-xs"
-                        disabled={busy}
-                        onClick={() => onSendBack(item, a.sendBack!)}
-                      >
-                        差戻し
-                      </Button>
-                    )}
+                    <ReviewButtons
+                      approve={a.approve}
+                      sendBack={a.sendBack}
+                      busy={busy}
+                      onReview={(entry) => onReview(item, entry)}
+                    />
                   </div>
                 </td>
               </tr>

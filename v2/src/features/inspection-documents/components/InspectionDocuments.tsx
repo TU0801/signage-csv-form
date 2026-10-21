@@ -1,6 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import type { DbInspectionReport, PortalInspectionRow } from '@/types/portal';
 import { Button } from '@/components/ui/Button';
+import { cn } from '@/lib/utils';
 import { Spinner } from '@/components/ui/Spinner';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
@@ -17,6 +19,7 @@ import {
   matchesTreeSelection,
   reportPermissions,
   reportsToCsv,
+  revealReport,
   type ReportFilters,
   type TreeSelection,
 } from '../lib/documents';
@@ -31,19 +34,41 @@ import type { ReportAction } from './ReportRowActions';
 
 /**
  * 点検報告書の整理（DocFlow 相当・OCR なし）。左に建物 → 年 → 点検種別の仮想ツリー、右に表。
- * 見える範囲は RLS（保守会社は担当の点検、管理会社は自社物件、管理者は全件）、操作の可否は RPC が最終判断する
+ * 見える範囲は RLS（保守会社は担当の点検、管理会社は自社物件、管理者は全件）、操作の可否は RPC が最終判断する。
+ * ?report=<id> で開くと（点検一覧の報告書のリンク）、その1件だけに絞って行を強調する
  */
 export function InspectionDocuments() {
   const { addToast } = useToast();
   const { isAdmin, isManagement, vendorId } = useAuth();
-  const onLoadError = useCallback(
-    (err: unknown) => addToast(`報告書の読み込みに失敗しました: ${entryErrorReason(err)}`, 'error'),
-    [addToast],
-  );
-  const { reports, inspections, loading, reload, replaceReport } = useInspectionDocuments(onLoadError);
+  const { reports, inspections, loading, error, inspectionsError, reload, replaceReport } = useInspectionDocuments();
 
   const [filters, setFilters] = useState<ReportFilters>(DEFAULT_REPORT_FILTERS);
   const [treeSelection, setTreeSelection] = useState<TreeSelection | null>(null);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const focusId = searchParams.get('report');
+  const focusReport = useMemo(
+    () => (focusId ? (reports.find((r) => r.id === focusId) ?? null) : null),
+    [reports, focusId],
+  );
+  // 指された版が絞り込みやツリーで隠れないよう、見つかったときに一度だけ条件を合わせる（以後は利用者が自由に変えられる）
+  const [revealedId, setRevealedId] = useState<string | null>(null);
+  if (focusReport && revealedId !== focusReport.id) {
+    setRevealedId(focusReport.id);
+    const revealed = revealReport(focusReport, filters);
+    setFilters(revealed.filters);
+    setTreeSelection(revealed.selection);
+  }
+  const clearFocus = useCallback(() => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('report');
+        return next;
+      },
+      { replace: true },
+    );
+  }, [setSearchParams]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [keepHierarchy, setKeepHierarchy] = useState(true);
   const [zipProgress, setZipProgress] = useState<{ done: number; total: number } | null>(null);
@@ -56,7 +81,12 @@ export function InspectionDocuments() {
   const viewer = useMemo(() => ({ isAdmin, isManagement, vendorId }), [isAdmin, isManagement, vendorId]);
   const filtered = useMemo(() => filterReports(reports, filters), [reports, filters]);
   const tree = useMemo(() => buildReportTree(filtered), [filtered]);
-  const visible = useMemo(() => filtered.filter((r) => matchesTreeSelection(r, treeSelection)), [filtered, treeSelection]);
+  const visible = useMemo(
+    () => filtered.filter((r) => matchesTreeSelection(r, treeSelection) && (!focusId || r.id === focusId)),
+    [filtered, treeSelection, focusId],
+  );
+  // 読み込みが終わっても見つからない（範囲外・既に無い）ときは、黙って0件にせず理由を出す
+  const focusMissing = !!focusId && !focusReport && !loading && !error;
   const selectedVisible = useMemo(() => visible.filter((r) => selected.has(r.id)), [visible, selected]);
   const inspectionsById = useMemo(() => new Map(inspections.map((i) => [i.inspection_id, i])), [inspections]);
   const vendorOptions = useMemo(() => {
@@ -131,6 +161,11 @@ export function InspectionDocuments() {
         setReturning(report);
         return;
       case 'resubmit': {
+        // 点検行が業務システムで消された版は出し直す点検を選べない（ボタンも出さないが、念のため止める）
+        if (report.property_inspection_id === null) {
+          addToast('この報告書の点検は削除されているため、再提出できません', 'error');
+          return;
+        }
         const inspection = inspectionsById.get(report.property_inspection_id);
         if (!inspection) {
           addToast('この報告書の点検が見つかりません（担当から外れた可能性があります）', 'error');
@@ -194,7 +229,47 @@ export function InspectionDocuments() {
           建物・年・点検種別で整理して表示します。左のフォルダを選ぶと表を絞り込めます。
         </p>
       </div>
-      <ReportFiltersBar filters={filters} onChange={setFilters} vendorOptions={vendorOptions} />
+      <ReportFiltersBar
+        filters={filters}
+        onChange={setFilters}
+        onClear={() => {
+          clearFocus();
+          setTreeSelection(null);
+        }}
+        vendorOptions={vendorOptions}
+      />
+      {focusId && (
+        <div
+          role="status"
+          className={cn(
+            'flex flex-wrap items-center gap-2 rounded px-2 py-1 text-xs',
+            focusMissing ? 'bg-red-50 text-red-800' : 'bg-amber-50 text-amber-900',
+          )}
+        >
+          <span>
+            {focusMissing
+              ? '指定された報告書は見つかりません（見る権限が無いか、すでに無い報告書です）。'
+              : focusReport
+                ? `点検一覧から指定された報告書（${focusReport.file_name}）だけを表示しています。`
+                : error != null
+                  ? '指定された報告書を表示できません（読み込みに失敗しました）。'
+                  : '指定された報告書を読み込んでいます…'}
+          </span>
+          <Button variant="secondary" size="sm" className="text-xs" onClick={clearFocus}>
+            すべての報告書を表示
+          </Button>
+        </div>
+      )}
+      {error != null && reports.length > 0 && (
+        <p role="alert" className="text-xs text-red-700">
+          報告書を読み直せませんでした（{entryErrorReason(error)}）。表は前回読み込んだ内容です。
+        </p>
+      )}
+      {inspectionsError != null && error == null && (
+        <p className="text-xs text-amber-800">
+          点検の一覧を読み込めなかったため、いまは再提出できません（{entryErrorReason(inspectionsError)}）。
+        </p>
+      )}
 
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className="text-gray-600">
@@ -222,13 +297,30 @@ export function InspectionDocuments() {
       </div>
 
       <div className="flex min-h-0 flex-1 gap-2">
-        <aside className="w-56 shrink-0 overflow-y-auto rounded border border-gray-200 bg-white p-1">
-          <ReportTree tree={tree} total={filtered.length} selection={treeSelection} onSelect={setTreeSelection} />
+        <aside className="w-48 shrink-0 overflow-y-auto 2xl:w-56 rounded border border-gray-200 bg-white p-1">
+          <ReportTree
+            tree={tree}
+            total={filtered.length}
+            selection={treeSelection}
+            onSelect={(sel) => {
+              // フォルダを選び直したら、指定の1件への絞り込みは外す
+              clearFocus();
+              setTreeSelection(sel);
+            }}
+          />
         </aside>
         <div className="min-w-0 flex-1 overflow-auto rounded border border-gray-200 bg-white">
           {loading && reports.length === 0 ? (
             <div className="flex justify-center p-6">
               <Spinner />
+            </div>
+          ) : error != null && reports.length === 0 ? (
+            // 読み込みの失敗を「該当なし」と見分けられるよう、表の場所に理由と再読み込みを出す
+            <div role="alert" className="flex flex-col items-center gap-2 p-6 text-xs text-red-700">
+              <p>報告書を読み込めませんでした（{entryErrorReason(error)}）。</p>
+              <Button variant="secondary" size="sm" className="text-xs" onClick={() => void reload()}>
+                再読み込み
+              </Button>
             </div>
           ) : (
             <ReportsTable
@@ -253,6 +345,7 @@ export function InspectionDocuments() {
                 })
               }
               permissionsOf={permissionsOf}
+              highlightId={focusReport?.id ?? null}
               busyId={busyId}
               onAction={(r, a) => void handleAction(r, a)}
             />

@@ -32,6 +32,12 @@ export function addMonths(month: string, n: number): string {
   return `${yy}-${String(mm + 1).padStart(2, '0')}-01`;
 }
 
+/** 2026-11-13 → 2026/11/13（新しい画面の日付の書き方。月は formatMonth） */
+export function formatDate(date: string | null | undefined): string {
+  if (!date) return '';
+  return date.slice(0, 10).replace(/-/g, '/');
+}
+
 /** 2026-11-01 → 2026年11月 */
 export function formatMonth(month: string): string {
   return `${month.slice(0, 4)}年${Number(month.slice(5, 7))}月`;
@@ -79,11 +85,27 @@ export function entryMatches(entry: PortalEntryRow, inspection: PortalInspection
   );
 }
 
+/**
+ * 状態と操作の対象にする申請（entries は新しい順）。まだ片付いていないもの（承認待ち → 差戻し）を、
+ * 承認済みより先に選ぶ。承認済みを先にすると、過去に承認済みの申請がある点検で新しい申請が隠れ、
+ * 管理会社に承認ボタンが出ず、保守会社にも再申請ボタンが出なくなる
+ */
+export function focusEntry(entries: PortalEntryRow[]): PortalEntryRow | null {
+  return (
+    entries.find((e) => e.status === 'draft') ??
+    entries.find((e) => e.status === 'pending' && e.review_comment) ??
+    entries.find((e) => e.status === 'ready' || e.status === 'exported') ??
+    entries[0] ??
+    null
+  );
+}
+
 export function applicationState(entries: PortalEntryRow[]): ApplicationState {
-  if (entries.some((e) => e.status === 'ready' || e.status === 'exported')) return 'approved';
-  if (entries.some((e) => e.status === 'draft')) return 'applied';
-  if (entries.some((e) => e.status === 'pending' && e.review_comment)) return 'sent_back';
-  return 'not_applied';
+  const e = focusEntry(entries);
+  if (!e) return 'not_applied';
+  if (e.status === 'draft') return 'applied';
+  if (e.status === 'pending') return e.review_comment ? 'sent_back' : 'not_applied';
+  return 'approved';
 }
 
 const LIVE_REPORT_STATUSES = new Set<ReportStatus>(['submitted', 'accepted', 'returned']);
@@ -171,6 +193,7 @@ export interface ScheduleCounts {
   reportsReturned: number;
 }
 
+/** 件数バッジ。点検月の無い点検の行（buildUnscheduledItems）も渡す（その行は超過にならないので超過の数には入らない） */
 export function countSchedule(items: ScheduleItem[]): ScheduleCounts {
   return {
     overdueUnapplied: items.filter((i) => i.overdueUnapplied).length,

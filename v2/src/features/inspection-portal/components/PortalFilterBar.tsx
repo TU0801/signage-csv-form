@@ -45,7 +45,7 @@ export function PortalFilterBar({ filters, onChange, vendorOptions, managementOp
         type="search"
         aria-label="物件名・コードで検索"
         placeholder="物件名・コード"
-        className="w-40 rounded border border-gray-300 px-1.5 py-1 text-xs"
+        className="w-40 rounded border border-gray-300 bg-white px-1.5 py-1 text-xs"
         value={filters.search}
         onChange={(e) => set({ search: e.target.value })}
       />

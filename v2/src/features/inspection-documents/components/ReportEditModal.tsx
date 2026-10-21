@@ -7,7 +7,7 @@ import { TextArea } from '@/components/ui/TextArea';
 import { useToast } from '@/components/ui/Toast';
 import { updateInspectionReport } from '@/lib/api/portal';
 import { entryErrorReason } from '@/lib/api/admin-entries';
-import { buildReportFileName, normalizeEditedFileName } from '../lib/fileName';
+import { buildReportFileName, isGeneratedFileName, normalizeEditedFileName } from '../lib/fileName';
 
 interface ReportEditModalProps {
   report: DbInspectionReport | null;
@@ -17,7 +17,8 @@ interface ReportEditModalProps {
 
 /**
  * 報告書の項目の修正（実施日・対象月・ファイル名・メモ）。表示名だけを変え、Storage のキーは変えない。
- * 同じ名前があれば DB 側で _2 などを付ける
+ * 同じ名前があれば DB 側で _2 などを付ける。
+ * 実施日を変えたら名前の日付がずれないよう作り直す。ただし手で直した名前は黙って消さず、作り直すかを聞く
  */
 export function ReportEditModal({ report, onClose, onSaved }: ReportEditModalProps) {
   const { addToast } = useToast();
@@ -25,6 +26,10 @@ export function ReportEditModal({ report, onClose, onSaved }: ReportEditModalPro
   const [targetMonth, setTargetMonth] = useState('');
   const [fileName, setFileName] = useState('');
   const [note, setNote] = useState('');
+  /** 今の名前が手で付けたものか（規則どおりの名前なら実施日の変更で黙って作り直してよい） */
+  const [nameTouched, setNameTouched] = useState(false);
+  /** 手で直した名前があるときに、実施日の変更で作り直す候補（確認の行に出す） */
+  const [renameProposal, setRenameProposal] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,6 +41,14 @@ export function ReportEditModal({ report, onClose, onSaved }: ReportEditModalPro
       setTargetMonth(report.target_month?.slice(0, 7) ?? '');
       setFileName(report.file_name);
       setNote(report.note ?? '');
+      setNameTouched(
+        !isGeneratedFileName(report.file_name, {
+          performedOn: report.performed_on,
+          propertyName: report.property_name,
+          inspectionTypeLabel: report.inspection_type_label,
+        }),
+      );
+      setRenameProposal(null);
       setError(null);
     }
   }
@@ -46,6 +59,28 @@ export function ReportEditModal({ report, onClose, onSaved }: ReportEditModalPro
       targetMonth !== (report.target_month?.slice(0, 7) ?? '') ||
       fileName !== report.file_name ||
       note !== (report.note ?? ''));
+
+  const nameFor = (date: string) =>
+    report
+      ? buildReportFileName({
+          performedOn: date,
+          propertyName: report.property_name,
+          inspectionTypeLabel: report.inspection_type_label,
+        })
+      : '';
+
+  const handlePerformedOnChange = (date: string) => {
+    setPerformedOn(date);
+    if (!date) return;
+    if (nameTouched) setRenameProposal(nameFor(date));
+    else setFileName(nameFor(date));
+  };
+
+  const regenerateName = () => {
+    setFileName(nameFor(performedOn));
+    setNameTouched(false);
+    setRenameProposal(null);
+  };
 
   const handleSave = async () => {
     if (!report) return;
@@ -87,6 +122,8 @@ export function ReportEditModal({ report, onClose, onSaved }: ReportEditModalPro
       open={!!report}
       onClose={onClose}
       title="報告書の編集"
+      // 長いファイル名（建物名・点検種別は各50文字まで）が欄に収まるよう広げる
+      className="max-w-2xl"
       dirty={dirty && !saving}
       footer={
         <>
@@ -110,7 +147,7 @@ export function ReportEditModal({ report, onClose, onSaved }: ReportEditModalPro
               id="report-edit-performed-on"
               type="date"
               value={performedOn}
-              onChange={(e) => setPerformedOn(e.target.value)}
+              onChange={(e) => handlePerformedOnChange(e.target.value)}
             />
             <Input
               label="対象月"
@@ -121,34 +158,53 @@ export function ReportEditModal({ report, onClose, onSaved }: ReportEditModalPro
             />
           </div>
           <div className="space-y-0.5">
-            <div className="flex items-end gap-1">
-              <div className="flex-1">
-                <Input
-                  label="ファイル名"
-                  id="report-edit-file-name"
-                  value={fileName}
-                  onChange={(e) => setFileName(e.target.value)}
-                />
+            {/* 名前は長いので欄を全幅にし、作り直すボタンは下に置く */}
+            <Input
+              label="ファイル名"
+              id="report-edit-file-name"
+              value={fileName}
+              onChange={(e) => {
+                setFileName(e.target.value);
+                setNameTouched(true);
+              }}
+            />
+            {renameProposal && renameProposal !== fileName && (
+              <div
+                role="status"
+                className="flex flex-wrap items-center gap-1 rounded bg-amber-50 px-1.5 py-1 text-xs text-amber-900"
+              >
+                <span className="min-w-0 break-all">
+                  実施日を変えました。手で直したファイル名を「{renameProposal}」に作り直しますか？
+                </span>
+                <Button variant="secondary" size="sm" type="button" className="text-xs" onClick={regenerateName}>
+                  作り直す
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  type="button"
+                  className="text-xs"
+                  onClick={() => setRenameProposal(null)}
+                >
+                  このまま
+                </Button>
               </div>
+            )}
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 variant="secondary"
                 size="sm"
                 type="button"
+                className="text-xs"
                 disabled={!performedOn}
-                onClick={() =>
-                  setFileName(
-                    buildReportFileName({
-                      performedOn,
-                      propertyName: report.property_name,
-                      inspectionTypeLabel: report.inspection_type_label,
-                    }),
-                  )
-                }
+                onClick={regenerateName}
               >
                 ファイル名を作り直す
               </Button>
+              <p className="text-xs text-gray-400">
+                実施日を変えると名前の日付も作り直します（手で直した名前は、作り直すかを確かめます）。
+              </p>
             </div>
-            <p className="text-xs text-gray-400">実施日を直したときは「作り直す」で名前の日付も合わせてください。</p>
           </div>
           <TextArea label="メモ" id="report-edit-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
           {error && <p className="text-xs text-red-600">{error}</p>}

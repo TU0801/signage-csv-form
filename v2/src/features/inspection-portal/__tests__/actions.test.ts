@@ -42,6 +42,13 @@ describe('行の操作（ロール別）', () => {
     expect(exported.sendBack).toBeNull();
   });
 
+  it('差戻し中の申請があれば、過去の承認済みの申請ではなく差戻しを操作の対象にする', () => {
+    const sentBack = makeEntry({ id: 'new', status: 'pending', review_comment: '日付違い' });
+    const oldReady = makeEntry({ id: 'old', status: 'ready', created_at: '2026-04-01T00:00:00Z' });
+    expect(rowActions({ application: 'sent_back', entries: [sentBack, oldReady] }, vendor).apply).toEqual({ kind: 'resubmit', entry: sentBack });
+    expect(rowActions({ application: 'sent_back', entries: [sentBack, oldReady] }, management).sendBack).toBeNull();
+  });
+
   it('管理者は申請・報告書・承認・差戻しのすべて', () => {
     expect(rowActions({ application: 'not_applied', entries: [] }, admin).apply).toEqual({ kind: 'new' });
     const draft = makeEntry();

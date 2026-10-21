@@ -1,17 +1,20 @@
 import { useMemo, useState } from 'react';
+import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
 import { useAuth } from '@/hooks/useAuth';
+import { entryErrorReason } from '@/lib/api/admin-entries';
 import { reviewEntry } from '@/lib/api/portal';
 import type { PortalEntryRow, PortalInspectionRow } from '@/types/portal';
 import { useRefetchOnVisible } from '@/features/approval/hooks/useRefetchOnVisible';
 import { ReportUploadModal } from '@/features/inspection-documents/components/ReportUploadModal';
 import { usePortalData } from '../hooks/usePortalData';
 import { appliedEntry, canSubmit, type PortalRole } from '../lib/actions';
-import { companyOptions, filterSchedule, INITIAL_FILTERS, matchInspection, type PortalFilters } from '../lib/filters';
+import { companyOptions, filterSchedule, filterUnscheduled, INITIAL_FILTERS, type PortalFilters } from '../lib/filters';
 import { buildSchedule, countSchedule, formatMonth, todayJst, unscheduledInspections, type ScheduleItem } from '../lib/schedule';
 import { ApplyModal, type ApplyTarget } from './ApplyModal';
 import { CountBadges } from './CountBadges';
+import { EntryDetailModal, type EntryDetailTarget } from './EntryDetailModal';
 import { PortalFilterBar } from './PortalFilterBar';
 import { ScheduleTable } from './ScheduleTable';
 import { SendBackDialog } from './SendBackDialog';
@@ -30,11 +33,6 @@ interface ReportTarget {
 interface SendBackTarget {
   entry: PortalEntryRow;
   subject: string;
-}
-
-function errorMessage(err: unknown): string {
-  if (err && typeof err === 'object' && 'message' in err) return String((err as { message: unknown }).message ?? '');
-  return '';
 }
 
 function subjectOf(inspection: PortalInspectionRow, month: string | null): string {
@@ -57,26 +55,27 @@ export function InspectionPortal() {
   const [applyTarget, setApplyTarget] = useState<ApplyTarget | null>(null);
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
   const [sendBackTarget, setSendBackTarget] = useState<SendBackTarget | null>(null);
+  const [detailTarget, setDetailTarget] = useState<EntryDetailTarget | null>(null);
   const [busyEntryId, setBusyEntryId] = useState<string | null>(null);
 
   // モーダルを開いている間は読み直さない（操作中の行が入れ替わらないように）
-  useRefetchOnVisible(data.refetch, !applyTarget && !reportTarget && !sendBackTarget && !data.loading);
+  useRefetchOnVisible(
+    data.refetch,
+    !applyTarget && !reportTarget && !sendBackTarget && !detailTarget && !data.loading,
+  );
 
   const schedule = useMemo(
     () => buildSchedule(data.inspections, data.entries, data.reports, { today, monthsAhead: MONTHS_AHEAD }),
     [data.inspections, data.entries, data.reports, today],
   );
-  const counts = useMemo(() => countSchedule(schedule), [schedule]);
-  const visible = useMemo(() => filterSchedule(schedule, filters, today), [schedule, filters, today]);
-  const unscheduled = useMemo(
-    () =>
-      buildUnscheduledItems(
-        unscheduledInspections(data.inspections).filter((i) => matchInspection(i, filters)),
-        data.entries,
-        data.reports,
-      ),
-    [data.inspections, data.entries, data.reports, filters],
+  // 点検月の無い点検（本番の大半）も件数バッジと申請状況の絞り込みに含める
+  const unscheduledAll = useMemo(
+    () => buildUnscheduledItems(unscheduledInspections(data.inspections), data.entries, data.reports),
+    [data.inspections, data.entries, data.reports],
   );
+  const counts = useMemo(() => countSchedule([...schedule, ...unscheduledAll]), [schedule, unscheduledAll]);
+  const visible = useMemo(() => filterSchedule(schedule, filters, today), [schedule, filters, today]);
+  const unscheduled = useMemo(() => filterUnscheduled(unscheduledAll, filters), [unscheduledAll, filters]);
 
   const vendorOptions = useMemo(
     () => (isAdmin || isManagement ? companyOptions(data.inspections, (i) => ({ id: i.vendor_id, name: i.vendor_name })) : null),
@@ -96,14 +95,19 @@ export function InspectionPortal() {
     try {
       await reviewEntry(entry.id, 'approve');
       addToast('承認しました', 'success');
+      setDetailTarget(null);
       await data.refetch();
     } catch (err) {
       console.error('Approve failed:', err);
-      addToast(`承認に失敗しました: ${errorMessage(err)}`, 'error');
+      addToast(`承認に失敗しました: ${entryErrorReason(err)}`, 'error');
+      throw err;
     } finally {
       setBusyEntryId(null);
     }
   };
+
+  const openDetail = (item: ScheduleItem, entry: PortalEntryRow, month: string | null) =>
+    setDetailTarget({ entry, subject: subjectOf(item.inspection, month), history: item.entries });
 
   const sendBack = async (reason: string) => {
     if (!sendBackTarget) return;
@@ -115,7 +119,7 @@ export function InspectionPortal() {
       void data.refetch();
     } catch (err) {
       console.error('Send back failed:', err);
-      addToast(`差戻しに失敗しました: ${errorMessage(err)}`, 'error');
+      addToast(`差戻しに失敗しました: ${entryErrorReason(err)}`, 'error');
       throw err;
     } finally {
       setBusyEntryId(null);
@@ -148,9 +152,11 @@ export function InspectionPortal() {
   }
   if (!data.loaded && data.error) {
     return (
-      <div className="py-12 text-center text-red-600">
-        <p>点検一覧の読み込みに失敗しました</p>
-        <p className="mt-1 text-sm">{data.error}</p>
+      <div className="space-y-2 py-12 text-center">
+        <p className="text-sm text-red-600">点検一覧を読み込めませんでした（{data.error}）</p>
+        <Button variant="secondary" size="sm" onClick={() => void data.refetch()} disabled={data.loading}>
+          再読み込み
+        </Button>
       </div>
     );
   }
@@ -172,12 +178,22 @@ export function InspectionPortal() {
         managementOptions={managementOptions}
       />
       {data.loaded && data.error && (
-        // 読み直しに失敗しても前の一覧は残す（古い状態であることだけ知らせる）
-        <p className="text-xs text-red-600">最新の状態を読み込めませんでした（表示は前回の内容です）: {data.error}</p>
+        // 読み直しに失敗しても前の一覧は残す（古い状態であることだけ知らせ、読み直せるようにする）
+        <div className="flex items-center gap-2 text-xs text-red-600">
+          <span>最新の状態を読み込めませんでした（表示は前回の内容です）: {data.error}</span>
+          <Button variant="secondary" size="sm" className="px-2 py-0.5 text-xs" onClick={() => void data.refetch()} disabled={data.loading}>
+            再読み込み
+          </Button>
+        </div>
       )}
-      <p className="text-xs text-gray-500">
-        {visible.length}件／点検月を過ぎて承認待ち・承認済みの申請が無いものを「点検月超過」と表示します（日本時間の月末で判定）。
-      </p>
+      <div className="flex flex-wrap items-baseline gap-x-3 text-xs">
+        <span className="font-medium tabular-nums text-gray-800" data-testid="schedule-count">
+          {visible.length}件
+        </span>
+        <span className="text-gray-500">
+          点検月を過ぎて承認待ち・承認済みの申請が無いものを「点検月超過」と表示します（日本時間の月末で判定）。
+        </span>
+      </div>
 
       <ScheduleTable
         items={visible}
@@ -185,10 +201,7 @@ export function InspectionPortal() {
         busyEntryId={busyEntryId}
         onApply={(item, resubmit) => setApplyTarget({ inspection: item.inspection, targetMonth: item.targetMonth, resubmit })}
         onReport={openReport}
-        onApprove={(_item, entry) => void approve(entry)}
-        onSendBack={(item, entry) =>
-          setSendBackTarget({ entry, subject: subjectOf(item.inspection, item.targetMonth) })
-        }
+        onReview={(item, entry) => openDetail(item, entry, item.targetMonth)}
       />
 
       <UnscheduledTable
@@ -198,8 +211,8 @@ export function InspectionPortal() {
         onApply={(item) => setApplyTarget({ inspection: item.inspection, targetMonth: null, resubmit: null })}
         onResubmit={(item, entry) => setApplyTarget({ inspection: item.inspection, targetMonth: null, resubmit: entry })}
         onReport={openUnscheduledReport}
-        onApprove={(_item, entry) => void approve(entry)}
-        onSendBack={(item, entry) => setSendBackTarget({ entry, subject: subjectOf(item.inspection, entry.target_month) })}
+        onReview={(item, entry) => openDetail(item, entry, entry.target_month)}
+        forceOpen={filters.status !== '' && unscheduled.length > 0}
       />
 
       {canSubmit(role) && (
@@ -226,6 +239,18 @@ export function InspectionPortal() {
           }}
         />
       )}
+      <EntryDetailModal
+        target={detailTarget}
+        busy={!!busyEntryId}
+        onClose={() => setDetailTarget(null)}
+        onApprove={approve}
+        onSendBack={(entry) => {
+          // 理由を聞くダイアログへ引き継ぐ（内容のモーダルは閉じる）
+          const subject = detailTarget?.subject ?? '';
+          setDetailTarget(null);
+          setSendBackTarget({ entry, subject });
+        }}
+      />
       <SendBackDialog
         open={!!sendBackTarget}
         subject={sendBackTarget?.subject ?? ''}

@@ -8,12 +8,13 @@ import { sanitizeFileNamePart } from './fileName';
  * 画面から切り離した純関数にしておき、テストで集計と組み立てを確かめる。
  */
 
-export const REPORT_STATUS_LABELS: Record<ReportStatus, string> = {
-  submitted: '提出',
-  accepted: '受領',
-  returned: '差戻し',
-  superseded: '置き換え済み',
-  deleted: '削除済み',
+/** 状態の名前と色（表・絞り込み・CSV で同じ呼び名を使うため、ここだけで決める） */
+export const REPORT_STATUS: Record<ReportStatus, { label: string; variant: 'primary' | 'success' | 'danger' | 'default' }> = {
+  submitted: { label: '提出', variant: 'primary' },
+  accepted: { label: '受領', variant: 'success' },
+  returned: { label: '差戻し', variant: 'danger' },
+  superseded: { label: '置き換え済み', variant: 'default' },
+  deleted: { label: '削除済み', variant: 'default' },
 };
 
 /** 提出中・受領・差戻し（置き換え済み・削除済みでない版） */
@@ -55,6 +56,33 @@ function statusVisible(status: ReportStatus, f: ReportFilters): boolean {
   if (status === 'deleted') return f.showDeleted;
   if (status === 'superseded') return f.showSuperseded;
   return !f.status || f.status === status;
+}
+
+/**
+ * 点検一覧のリンク（?report=<id>）で1件を指したとき、その版が隠れないように絞り込みとツリーの位置を合わせる。
+ * 状態・期間・保守会社の条件は外し、旧版・削除済みなら表示の切り替えを入れる（検索も外す）
+ */
+export function revealReport(
+  report: DbInspectionReport,
+  f: ReportFilters,
+): { filters: ReportFilters; selection: TreeSelection } {
+  return {
+    filters: {
+      ...f,
+      search: '',
+      status: '',
+      from: '',
+      to: '',
+      vendorId: '',
+      showDeleted: f.showDeleted || report.status === 'deleted',
+      showSuperseded: f.showSuperseded || report.status === 'superseded',
+    },
+    selection: {
+      propertyCode: report.property_code,
+      year: reportYear(report),
+      inspectionType: report.inspection_type_label || '（点検種別なし）',
+    },
+  };
 }
 
 export function filterReports(reports: DbInspectionReport[], f: ReportFilters): DbInspectionReport[] {
@@ -234,7 +262,7 @@ export function reportsToCsv(reports: DbInspectionReport[]): string {
     r.performed_on,
     r.target_month ? r.target_month.slice(0, 7) : '',
     r.vendor_name ?? '',
-    REPORT_STATUS_LABELS[r.status],
+    REPORT_STATUS[r.status].label,
     r.status === 'returned' ? (r.review_comment ?? '') : '',
     r.note ?? '',
     formatDateTimeJst(r.created_at),
@@ -289,6 +317,7 @@ export function reportPermissions(report: DbInspectionReport, viewer: ReportView
     canRestore: writable && report.status === 'deleted',
     canAccept: reviewer && live && report.status !== 'accepted',
     canReturn: reviewer && live && report.status !== 'returned',
-    canResubmit: writable && live,
+    // 業務システムで点検行が消された版は、出し直す先の点検を選べないので再提出を出さない
+    canResubmit: writable && live && report.property_inspection_id !== null,
   };
 }

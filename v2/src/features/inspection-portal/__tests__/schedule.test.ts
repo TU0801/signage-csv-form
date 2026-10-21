@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   addMonths,
+  applicationState,
   buildSchedule,
   countSchedule,
   entryMatches,
@@ -46,6 +47,16 @@ const entry = (over: Partial<PortalEntryRow> = {}): PortalEntryRow => ({
   created_at: '2026-05-01T00:00:00Z',
   updated_at: null,
   is_mine: true,
+  terminal_id: 'T001',
+  template_no: null,
+  announcement: null,
+  remarks: null,
+  poster_type: 'template',
+  poster_image: null,
+  display_start_date: null,
+  display_start_time: null,
+  display_end_date: null,
+  display_end_time: null,
   ...over,
 });
 
@@ -145,6 +156,21 @@ describe('buildSchedule', () => {
     const may = items.find((i) => i.targetMonth === '2026-05-01')!;
     expect(may.report?.id).toBe('cur');
     expect(countSchedule(items).reportsReturned).toBe(1);
+  });
+});
+
+describe('applicationState', () => {
+  it('承認済みより、まだ片付いていない申請（承認待ち・差戻し）の状態を出す', () => {
+    const ready = entry({ id: 'old', status: 'ready', created_at: '2026-04-01T00:00:00Z' });
+    expect(applicationState([entry({ id: 'new', status: 'draft' }), ready])).toBe('applied');
+    expect(applicationState([entry({ id: 'new', status: 'pending', review_comment: '日付違い' }), ready])).toBe('sent_back');
+    expect(applicationState([ready])).toBe('approved');
+  });
+
+  it('同じ月に旧来の承認済みの申請があっても、点検ポータルの承認待ちを隠さない', () => {
+    const legacy = entry({ id: 'legacy', property_inspection_id: null, target_month: null, property_code: '120409', status: 'ready' });
+    const items = buildSchedule([inspection()], [legacy, entry({ id: 'new', status: 'draft' })], [], { today: '2026-10-21' });
+    expect(items.find((i) => i.targetMonth === '2026-05-01')!.application).toBe('applied');
   });
 });
 

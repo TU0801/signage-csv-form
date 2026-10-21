@@ -20,7 +20,7 @@ export function ReportRowActions({ permissions: p, archived, busy, onAction }: R
     </button>
   );
   return (
-    <div className="flex flex-wrap items-center gap-x-0.5">
+    <div className="flex flex-nowrap items-center gap-x-0.5">
       {archived ? (
         <span className="px-1 text-xs text-gray-500">保管庫へ移動済み</span>
       ) : (

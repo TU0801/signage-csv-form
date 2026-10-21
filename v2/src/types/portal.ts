@@ -47,6 +47,17 @@ export interface PortalEntryRow {
   updated_at: string | null;
   /** ログイン中のアカウントが作った申請か */
   is_mine: boolean;
+  /** 掲示の内容（管理会社が承認の前に確かめる）。同じ点検の台を受け持つ別の保守会社には null で返る */
+  terminal_id: string | null;
+  template_no: string | null;
+  announcement: string | null;
+  remarks: string | null;
+  poster_type: 'template' | 'custom' | null;
+  poster_image: string | null;
+  display_start_date: string | null;
+  display_start_time: string | null;
+  display_end_date: string | null;
+  display_end_time: string | null;
 }
 
 /** 点検報告書の状態 */
@@ -55,7 +66,8 @@ export type ReportStatus = 'submitted' | 'accepted' | 'returned' | 'superseded' 
 /** signage_inspection_reports の1行 */
 export interface DbInspectionReport {
   id: string;
-  property_inspection_id: string;
+  /** 業務システムで点検行が消されると null（報告書は写しの列で残る） */
+  property_inspection_id: string | null;
   property_code: string;
   property_name: string;
   inspection_type_id: string | null;

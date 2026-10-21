@@ -38,6 +38,16 @@ export const makeEntry = (over: Partial<PortalEntryRow> = {}): PortalEntryRow =>
   created_at: '2026-10-01T00:00:00Z',
   updated_at: null,
   is_mine: true,
+  terminal_id: 'T001',
+  template_no: null,
+  announcement: null,
+  remarks: null,
+  poster_type: 'template',
+  poster_image: null,
+  display_start_date: null,
+  display_start_time: null,
+  display_end_date: null,
+  display_end_time: null,
   ...over,
 });
 

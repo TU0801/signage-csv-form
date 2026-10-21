@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { entryErrorReason } from '@/lib/api/admin-entries';
 import { fetchInspectionReports, fetchPortalEntries, fetchPortalInspections } from '@/lib/api/portal';
 import type { DbInspectionReport, PortalEntryRow, PortalInspectionRow } from '@/types/portal';
 
@@ -38,7 +39,8 @@ export function usePortalData() {
     } catch (err) {
       if (mine !== seq.current) return;
       console.error('Portal load failed:', err);
-      setError(err instanceof Error ? err.message : '点検一覧の読み込みに失敗しました');
+      // Supabase のエラーは Error のインスタンスではない（PostgrestError）ので、message を日本語の理由に直して出す
+      setError(entryErrorReason(err) || '原因が分かりませんでした');
     } finally {
       if (mine === seq.current) setLoading(false);
     }

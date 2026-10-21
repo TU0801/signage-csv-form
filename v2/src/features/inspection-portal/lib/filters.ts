@@ -137,6 +137,15 @@ export function filterSchedule(items: ScheduleItem[], f: PortalFilters, today: s
   );
 }
 
+/**
+ * 点検月の無い点検の行（buildUnscheduledItems）の絞り込み。時期は月が無いので見ないが、
+ * 「超過」はこの行には起きないので出さない。申請状況・報告書状況は予定の表と同じ条件で絞る
+ */
+export function filterUnscheduled<T extends ScheduleItem>(items: T[], f: PortalFilters): T[] {
+  if (f.timing === 'overdue') return [];
+  return items.filter((i) => matchStatus(i, f.status) && matchInspection(i.inspection, f));
+}
+
 /** 絞り込みの選択肢にする会社（点検行に出てくるものだけ、名前順） */
 export function companyOptions(
   inspections: PortalInspectionRow[],

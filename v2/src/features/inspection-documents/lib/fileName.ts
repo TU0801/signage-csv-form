@@ -31,6 +31,14 @@ export function buildReportFileName({ performedOn, propertyName, inspectionTypeL
   return `${parts.join('_')}.pdf`;
 }
 
+/**
+ * 今の名前が規則どおりに作った名前か（利用者が手で直していないか）。
+ * 同じ名前があると DB が _2 などを付けるので、末尾の連番は無視して比べる
+ */
+export function isGeneratedFileName(fileName: string, parts: ReportFileNameParts): boolean {
+  return fileName.replace(/_\d+(?=\.pdf$)/i, '') === buildReportFileName(parts);
+}
+
 /** 利用者が直した表示名を保存できる形にそろえる（禁止文字を除き、.pdf を付ける） */
 export function normalizeEditedFileName(name: string): string {
   const base = name.replace(/\.pdf$/i, '');

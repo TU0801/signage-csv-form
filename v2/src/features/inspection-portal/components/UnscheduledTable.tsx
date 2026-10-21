@@ -3,12 +3,12 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import type { DbInspectionReport, PortalEntryRow, PortalInspectionRow } from '@/types/portal';
 import { rowActions, type PortalRole } from '../lib/actions';
-import { applicationState, formatMonth, monthOf, type ScheduleItem } from '../lib/schedule';
-import { ReportCell } from './ScheduleTable';
+import { applicationState, focusEntry, formatMonth, monthOf, type ScheduleItem } from '../lib/schedule';
+import { ReportCell, ReviewButtons } from './ScheduleTable';
 
 /** 点検月の無い点検行の1行（予定の行と同じ操作を使えるよう ScheduleItem の形に寄せる） */
 export interface UnscheduledItem extends ScheduleItem {
-  /** 最新の申請の対象月（表示用） */
+  /** 状態を決めた申請（focusEntry）の対象月（表示用） */
   latestMonth: string | null;
 }
 
@@ -16,7 +16,8 @@ const LIVE = new Set(['submitted', 'accepted', 'returned']);
 
 /**
  * 点検月が無いので月ごとの予定は作れない。点検行に紐付いた申請・報告書を月を問わずまとめ、
- * 最新の申請の状態を出す（承認・差戻しの対象も最新の申請）
+ * まだ片付いていない申請（承認待ち → 差戻し → 承認済みの順。focusEntry）の状態を出す。承認・差戻しの対象もその申請。
+ * 単に最新の申請を見ると、承認待ちの後に別の月の申請が出たときなどに承認待ちが隠れる
  */
 export function buildUnscheduledItems(
   inspections: PortalInspectionRow[],
@@ -31,7 +32,7 @@ export function buildUnscheduledItems(
       reports
         .filter((r) => r.property_inspection_id === inspection.inspection_id && LIVE.has(r.status))
         .sort((a, b) => b.created_at.localeCompare(a.created_at))[0] ?? null;
-    const latest = mine[0] ?? null;
+    const latest = focusEntry(mine);
     return {
       key: `${inspection.inspection_id}:unscheduled`,
       inspection,
@@ -54,8 +55,9 @@ interface UnscheduledTableProps {
   onApply: (item: UnscheduledItem) => void;
   onResubmit: (item: UnscheduledItem, entry: PortalEntryRow) => void;
   onReport: (item: UnscheduledItem) => void;
-  onApprove: (item: UnscheduledItem, entry: PortalEntryRow) => void;
-  onSendBack: (item: UnscheduledItem, entry: PortalEntryRow) => void;
+  onReview: (item: UnscheduledItem, entry: PortalEntryRow) => void;
+  /** 申請状況で絞っているときは開いて出す（件数バッジで絞った行がここにだけあると見落とすため） */
+  forceOpen: boolean;
 }
 
 const th = 'whitespace-nowrap px-2 py-1 text-left font-medium text-gray-600';
@@ -82,7 +84,7 @@ function LatestBadge({ item }: { item: UnscheduledItem }) {
   );
 }
 
-/** 点検月が未登録の点検。件数が多いので既定は閉じておく */
+/** 点検月が未登録の点検。件数が多いので既定は閉じておく（申請状況で絞ったときは開く） */
 export function UnscheduledTable({
   items,
   role,
@@ -90,8 +92,8 @@ export function UnscheduledTable({
   onApply,
   onResubmit,
   onReport,
-  onApprove,
-  onSendBack,
+  onReview,
+  forceOpen,
 }: UnscheduledTableProps) {
   const rows = useMemo(
     () =>
@@ -105,7 +107,8 @@ export function UnscheduledTable({
   );
   if (items.length === 0) return null;
   return (
-    <details className="rounded border border-gray-200 bg-white">
+    // key で開閉の既定を切り替える（open を属性で固定すると、利用者が開け閉めできなくなる）
+    <details key={forceOpen ? 'open' : 'closed'} open={forceOpen} className="rounded border border-gray-200 bg-white">
       <summary className="cursor-pointer select-none px-2 py-1.5 text-sm font-medium text-gray-800">
         点検月が未登録の点検（超過の判定ができません）
         <span className="ml-1 text-xs font-normal text-gray-500">{items.length}件</span>
@@ -121,7 +124,7 @@ export function UnscheduledTable({
               <th className={th}>点検種別</th>
               <th className={th}>保守会社</th>
               {role.isAdmin && <th className={th}>管理会社</th>}
-              <th className={th}>最新の申請</th>
+              <th className={th}>申請</th>
               <th className={th}>報告書</th>
               <th className={th}>操作</th>
             </tr>
@@ -162,28 +165,12 @@ export function UnscheduledTable({
                           {item.report?.status === 'returned' ? '報告書を再提出' : '報告書'}
                         </Button>
                       )}
-                      {a.approve && (
-                        <Button
-                          variant="success"
-                          size="sm"
-                          className="px-2 py-0.5 text-xs"
-                          disabled={busy}
-                          onClick={() => onApprove(item, a.approve!)}
-                        >
-                          承認
-                        </Button>
-                      )}
-                      {a.sendBack && (
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          className="px-2 py-0.5 text-xs"
-                          disabled={busy}
-                          onClick={() => onSendBack(item, a.sendBack!)}
-                        >
-                          差戻し
-                        </Button>
-                      )}
+                      <ReviewButtons
+                        approve={a.approve}
+                        sendBack={a.sendBack}
+                        busy={busy}
+                        onReview={(entry) => onReview(item, entry)}
+                      />
                     </div>
                   </td>
                 </tr>

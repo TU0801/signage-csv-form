@@ -1,3 +1,4 @@
+import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import type { DbEntry } from '@/types/database';
 import {
@@ -53,7 +54,17 @@ export function PendingEntryRow({
           className="h-4 w-4 rounded border-gray-300 text-blue-600"
         />
       </td>
-      <td className={nowrap}>{entry.property_code}</td>
+      <td className={nowrap}>
+        {entry.property_code}
+        {/* 点検一覧（/portal）からの申請は管理会社も承認・差戻しを扱うので、見分けられるよう印を付ける */}
+        {entry.property_inspection_id && (
+          <span title="点検一覧からの申請。管理会社も承認・差戻しできます。差戻し（削除せず保守会社へ戻す）は点検一覧から行います">
+            <Badge variant="primary" className="ml-1 px-1 py-0 text-[10px]">
+              点検一覧
+            </Badge>
+          </span>
+        )}
+      </td>
       <td className={td}>
         <div className={NAME_CELL} title={propertyName || undefined}>
           {propertyName || '-'}

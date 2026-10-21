@@ -110,7 +110,8 @@ export function EntryDataList({
             </tr>
           ))}
           {submitted.map((e) => {
-            const status = submittedStatusLabel(e.status);
+            const status = submittedStatusLabel(e.status, e.review_comment);
+            const returnedReason = status.label === '差戻し' ? e.review_comment : null;
             const name = nameOf(e.property_code);
             return (
               <tr key={e.id} className="border-b border-gray-100 bg-slate-50 text-gray-600">
@@ -137,6 +138,12 @@ export function EntryDataList({
                 <td className={tdNowrap}>{formatRegisteredAt(e.created_at)}</td>
                 <td className={tdNowrap}>
                   <Badge variant={status.variant}>{status.label}</Badge>
+                  {/* 差戻しの理由は1行で切って出し、全文は title で見せる（行の高さを増やさない） */}
+                  {returnedReason && (
+                    <span className={cn(nameBox, 'text-xs text-red-700')} title={returnedReason}>
+                      理由: {returnedReason}
+                    </span>
+                  )}
                 </td>
               </tr>
             );
