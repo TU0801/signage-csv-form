@@ -55,7 +55,7 @@ function ClosingHarness({ rowId }: { rowId: number }) {
   );
 }
 
-const IMG = (n: string) => `https://storage/poster-images/user-1/${n}.png`;
+const IMG = (n: string) => `https://example.supabase.co/storage/v1/object/public/poster-images/user-1/${n}.png`;
 
 const rowOf = (id: number) => useBulkStore.getState().rows.find((r) => r.id === id)!;
 
