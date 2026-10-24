@@ -184,18 +184,21 @@ describe('BulkReportUploadModal', { timeout: 20000 }, () => {
     expect(api.registerInspectionReport).toHaveBeenCalledTimes(1);
   });
 
-  it('切り出した区間が置き換える版と同じ内容（SHA-256 が同じ）なら送らず、結果にそう出す', async () => {
+  it('切り出した区間が置き換える版と同じ内容（SHA-256 が同じ）なら、置き換えの確認に数えず送らず、結果にそう出す', async () => {
     api.fetchInspectionReports.mockResolvedValue([
       makeReport({ property_inspection_id: 'i1', target_month: '2026-10-01', vendor_id: 'v1', content_hash: 'hash-new' }),
     ]);
     await setup();
     fireEvent.change(screen.getByLabelText('実施日（全区間の既定）'), { target: { value: '2026-10-05' } });
     pick(1, /テスト第一マンション/);
+    expect(within(screen.getByTestId('bulk-segment-1')).getByText(/提出済みの報告書を置き換えます/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '1区間を提出する' }));
-    fireEvent.click(await screen.findByRole('button', { name: '置き換えて提出する' }));
+    // 確認の前にハッシュを見比べるので、送らない区間は置き換えの確認に数えない（この区間だけなら確認を出さない）
     expect(
       await within(screen.getByTestId('bulk-segment-1')).findByText('同じ内容の報告書が提出済みです（送っていません）'),
     ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '置き換えて提出する' })).toBeNull();
+    expect(within(screen.getByTestId('bulk-segment-1')).queryByText(/提出済みの報告書を置き換えます/)).toBeNull();
     expect(api.registerInspectionReport).not.toHaveBeenCalled();
     expect(toast).toHaveBeenCalledWith('同じ内容の報告書が提出済みのため、1件とも送っていません', 'info');
     // 済みの区間なので、もう一度送るボタンは出ない
