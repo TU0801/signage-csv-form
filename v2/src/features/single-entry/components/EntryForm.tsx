@@ -280,9 +280,9 @@ export function EntryForm({
         <div className="space-y-0.5 sm:col-span-2">
           <TextArea
             id="se-remarks"
-            label="作業時間及び備考"
+            label="備考（作業時間を記載下さい）"
             rows={3}
-            placeholder="例：10:00〜12:00"
+            placeholder="例: 10:00～12:00 / No2号機11:00～12:00"
             value={values.remarks}
             disabled={isCustom}
             className={isCustom ? 'bg-gray-200' : undefined}
@@ -293,6 +293,17 @@ export function EntryForm({
               {remarks.lines}/{remarks.maxLines}行・1行最長 {remarks.longest}/{remarks.perLine}字
             </p>
           )}
+        </div>
+        {/* メモは掲示・CSV に出さない（点検月の変更などの覚え書き。承認の画面で管理者が見る） */}
+        <div className="sm:col-span-2">
+          <Input
+            id="se-memo"
+            label="メモ（掲示・CSVには出ません）"
+            placeholder="例: 点検月を11月に変更"
+            value={values.memo}
+            maxLength={500}
+            onChange={(e) => form.setField('memo', e.target.value)}
+          />
         </div>
       </div>
       <div className="flex shrink-0 gap-2 border-t border-gray-200 px-3 py-2">

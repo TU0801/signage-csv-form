@@ -16,6 +16,8 @@ export interface SingleEntryValues {
   startDate: string;
   endDate: string;
   remarks: string;
+  /** メモ（CSV に出さない。点検月の変更などの覚え書き。signage_entries.memo） */
+  memo: string;
   displayStartDate: string;
   displayStartTime: string;
   displayEndDate: string;
@@ -46,6 +48,8 @@ export interface LocalEntry {
   startDate: string;
   endDate: string;
   remarks: string;
+  /** メモ（CSV に出さない）。古い作成データには無い */
+  memo?: string;
   noticeText: string;
   frameNo: number;
   displayStartDate: string;
