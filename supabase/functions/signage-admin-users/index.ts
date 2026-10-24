@@ -105,6 +105,8 @@ Deno.serve(async (req) => {
       // 管理会社: 作れるのは自社の管理会社ユーザーだけ（会社は自社に固定）。管理者・保守会社のアカウントは管理者が作る
       if (role === 'admin') return json({ error: '管理者のアカウントは作成できません' }, 403);
       if (role === 'user') return json({ error: '保守会社のアカウントは管理者が作成します' }, 403);
+      // 将来 role が増えても管理会社が作れるのは management だけ（保守会社は持たせない）
+      if (role !== 'management' || vendorId) return json({ error: '管理会社のアカウントだけ作成できます' }, 403);
       finalManagementCompanyId = callerCompanyId;
     }
     if (role === 'management' && !finalManagementCompanyId) return json({ error: '管理会社を選択してください' }, 400);
