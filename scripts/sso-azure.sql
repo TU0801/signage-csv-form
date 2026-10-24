@@ -11,7 +11,8 @@
 -- 有効にする順番（逆にすると、トリガーが無い間に他テナントからの自動リンクが通る）:
 --   1. この SQL を Management API に1リクエストで流す（BEGIN/COMMIT は付けない）
 --   2. 読み取りで確認: auth.identities のトリガー signage_guard_azure_identity、関数2本、sso_tenants 3行、
---      has_function_privilege('supabase_auth_admin', 'signage.hook_before_user_created(jsonb)', 'EXECUTE')
+--      has_function_privilege('supabase_auth_admin', 'signage.hook_before_user_created(jsonb)', 'EXECUTE')、
+--      has_schema_privilege('supabase_auth_admin', 'signage', 'USAGE')（適用前の本番は false。無いとフックが呼べず新規作成が全部失敗する）
 --   3. Auth 設定 hook_before_user_created_enabled=true / hook_before_user_created_uri=pg-functions://postgres/signage/hook_before_user_created
 --   4. Auth 設定 uri_allow_list に https://signage.1984.jp/** を追記（共用なので現在の値を読み、末尾に足した全体を送る。
 --      無いと Microsoft ログインの戻り先が site_url の noj になり、ログインが完了しない）
