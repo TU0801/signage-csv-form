@@ -151,6 +151,8 @@ export function BulkTable({
 
   const visibleRows = rows.filter(isVisible);
   const allSelected = visibleRows.length > 0 && visibleRows.every((r) => selectedIds.has(r.id));
+  // No は表示中の行の通し番号（時期などで隠れた予定の行は数えない。申請時のエラーの「N行目」も同じ番号）
+  const visibleNo = new Map(visibleRows.map((r, i) => [r.id, i + 1]));
 
   // v1: js/bulk-table.js handleCellKeyDown
   const handleCellKeyDown = useCallback(
@@ -250,20 +252,20 @@ export function BulkTable({
             </th>
             <th className={cn(th, 'min-w-[7rem]')}>ステータス</th>
             <th className={cn(th, 'min-w-[8.5rem]')}>報告書UP・完了連絡</th>
-            <th className={cn(th, 'min-w-[18rem]')}>
+            <th className={cn(th, 'min-w-[15rem]')}>
               物件<span className="text-red-500">*</span>
             </th>
-            {showManagement && <th className={cn(th, 'min-w-[8rem]')}>管理会社</th>}
-            {showVendor && <th className={cn(th, 'min-w-[8rem]')}>保守会社</th>}
-            <th className={cn(th, 'min-w-[13rem]')}>
+            {showManagement && <th className={cn(th, 'w-32 min-w-[7rem]')}>管理会社</th>}
+            {showVendor && <th className={cn(th, 'w-32 min-w-[7rem]')}>保守会社</th>}
+            <th className={cn(th, 'min-w-[12rem]')}>
               点検種別<span className="text-red-500">*</span>
             </th>
             <th className={cn(th, 'min-w-[5rem]')}>点検月</th>
             <th className={cn(th, 'min-w-[5.5rem]')}>検査月</th>
             <th className={cn(th, 'w-36 min-w-[9rem]')}>点検開始日</th>
             <th className={cn(th, 'w-36 min-w-[9rem]')}>点検終了日</th>
-            <th className={cn(th, 'min-w-[16rem]')}>備考（作業時間を記載下さい）</th>
-            <th className={cn(th, 'min-w-[10rem]')} title="CSV には出ません（点検月の変更などの覚え書き）">
+            <th className={cn(th, 'min-w-[14rem]')}>備考（作業時間を記載下さい）</th>
+            <th className={cn(th, 'min-w-[9rem]')} title="CSV には出ません（点検月の変更などの覚え書き）">
               メモ
             </th>
             {/* 幅は w-* だけだと表が入れ物より広いときに縮むので min-w も付ける。詳細は横スクロールしても右端に残す */}
@@ -313,14 +315,14 @@ export function BulkTable({
                 <td className="cell text-center align-middle">
                   <input
                     type="checkbox"
-                    aria-label={`${index + 1}行目を選択`}
+                    aria-label={`${visibleNo.get(row.id)}行目を選択`}
                     checked={selected}
                     onChange={() => toggleSelection(row.id)}
                     className="h-4 w-4 rounded border-gray-300"
                   />
                 </td>
                 <td className="cell whitespace-nowrap text-xs text-gray-400">
-                  <div>{index + 1}</div>
+                  <div>{visibleNo.get(row.id)}</div>
                   {schedule && (
                     <div className="text-[11px] tabular-nums text-gray-700" data-testid="target-month">
                       {schedule.targetMonth ? formatMonth(schedule.targetMonth) : '点検月未登録'}
@@ -386,12 +388,16 @@ export function BulkTable({
                 </td>
                 {showManagement && (
                   <td className="cell">
-                    <span className={cn(cellText, 'text-gray-700')}>{info.managementName || '－'}</span>
+                    <span className={cn(cellText, 'block max-w-[9rem] truncate text-gray-700')} title={info.managementName}>
+                      {info.managementName || '－'}
+                    </span>
                   </td>
                 )}
                 {showVendor && (
                   <td className="cell">
-                    <span className={cn(cellText, 'text-gray-700')}>{info.vendorName || '－'}</span>
+                    <span className={cn(cellText, 'block max-w-[9rem] truncate text-gray-700')} title={info.vendorName}>
+                      {info.vendorName || '－'}
+                    </span>
                   </td>
                 )}
                 <td className="cell">

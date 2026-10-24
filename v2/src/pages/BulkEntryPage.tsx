@@ -208,7 +208,11 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
     (row: BulkEntryRow) => {
       if (row.schedule) {
         const item = itemsByKey.get(row.schedule.key);
-        if (item && item.targetMonth && !matchTiming(item, timing, today)) return false;
+        // 既定の時期では、過去の月も片付いていない予定（申請中・報告書未提出・提出済・差戻し）は出す。
+        // 点検一覧の既定（過去は超過だけ）のままだと、超過の行を申請した直後に行が消え、報告書未提出も既定では見えないため
+        const pendingPast =
+          timing === 'default' && item?.timing === 'overdue' && itemStatus(item, completed, today) !== 'completed';
+        if (item && item.targetMonth && !pendingPast && !matchTiming(item, timing, today)) return false;
         if (item && !item.targetMonth && timing === 'overdue') return false;
       }
       if (managementCompanyId && managementIndex) {
@@ -223,7 +227,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       }
       return true;
     },
-    [itemsByKey, timing, today, managementCompanyId, managementIndex, managementOf, search, propertyNameOf],
+    [itemsByKey, timing, today, completed, managementCompanyId, managementIndex, managementOf, search, propertyNameOf],
   );
 
   // 選択中の保守会社の点検行（手で足した行を点検行に結び付ける・点検月を出すため）
@@ -480,7 +484,8 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
     const errorRows = targets.filter((r) => !r.isValid);
     if (errorRows.length > 0) {
       const first = firstError(errorRows)!;
-      const rowNo = all.findIndex((r) => r.id === first.rowId) + 1;
+      // 表の No と同じ（表示中の行の通し番号）
+      const rowNo = all.filter(isVisible).findIndex((r) => r.id === first.rowId) + 1;
       addToast(
         `入力にエラーがある行が${errorRows.length}件あります。直してから申請してください\n${rowNo}行目: ${errorLabel(first.message)}`,
         'error',

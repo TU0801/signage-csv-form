@@ -270,9 +270,11 @@ export const useBulkStore = create<BulkState>((set, get) => {
     },
 
     // 最後の行の物件・端末・点検種別・点検日・表示時間・位置を引き継ぐ（備考は空）。v1: js/bulk-table.js addRowWithCopy
+    // 点検予定の行は写さない（手で足した行が無ければ空の行）
     addRowWithCopy: () => {
       const { rows, addRow } = get();
-      const last = rows[rows.length - 1];
+      const manual = rows.filter((r) => !r.schedule);
+      const last = manual[manual.length - 1];
       if (!last) {
         addRow({});
         return;
