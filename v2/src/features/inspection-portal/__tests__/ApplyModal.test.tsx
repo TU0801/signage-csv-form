@@ -203,6 +203,9 @@ describe('ApplyModal（点検ポータルの申請）', () => {
     expect(await screen.findByLabelText('点検開始日 *')).toHaveValue('2026-11-03');
     expect(screen.getByRole('img', { name: '追加画像' })).toHaveAttribute('src', image);
     expect(screen.queryByText('テンプレートNo')).toBeNull();
+    // 保守会社の表示も、保存される元の申請の保守会社名（アカウントの保守会社「テスト保守」ではない）
+    expect(screen.getByText('三菱電機ビルソリューションズ')).toBeInTheDocument();
+    expect(screen.queryByText('テスト保守')).toBeNull();
     fireEvent.change(screen.getByLabelText('点検開始日 *'), { target: { value: '2026-11-12' } });
     fireEvent.click(screen.getByRole('button', { name: '再申請する' }));
 

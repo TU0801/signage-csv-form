@@ -149,6 +149,8 @@ function ApplyForm({
     return ctx.property ? initial : { ...initial, terminalId: normalizeTerminalId(inspection.terminal_ids[0] ?? '') };
   });
   const [loadingEntry, setLoadingEntry] = useState(!!resubmit);
+  // 再申請では保守会社名を書き換えない（toResubmitPatch）ので、表示も元の申請の保守会社名にする
+  const [existingVendorName, setExistingVendorName] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   // 他の方が作った差戻しは直せない（RLS）ので、新しい申請として出す
   const canEditExisting = !!resubmit && (resubmit.is_mine || isAdmin);
@@ -161,7 +163,9 @@ function ApplyForm({
     let cancelled = false;
     fetchEntryForEdit(resubmit.id)
       .then((row) => {
-        if (!cancelled) setValues(valuesFromDbEntry(row, defaultMonth));
+        if (cancelled) return;
+        setValues(valuesFromDbEntry(row, defaultMonth));
+        setExistingVendorName(row.vendor_name ?? '');
       })
       .catch((err: unknown) => {
         if (!cancelled) addToast(`申請を読み込めませんでした: ${errorMessage(err)}`, 'error');
@@ -248,7 +252,7 @@ function ApplyForm({
         <dt className="text-gray-500">点検種別</dt>
         <dd>{inspection.inspection_type_label ?? '（未設定）'}</dd>
         <dt className="text-gray-500">保守会社</dt>
-        <dd>{ctx.vendor?.vendor_name || <span className="text-red-600">未設定</span>}</dd>
+        <dd>{(existingVendorName ?? ctx.vendor?.vendor_name) || <span className="text-red-600">未設定</span>}</dd>
         {customPoster ? (
           <>
             <dt className="text-gray-500">貼紙</dt>
