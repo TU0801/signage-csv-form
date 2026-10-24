@@ -15,8 +15,8 @@ interface CompanyFieldProps {
   onManagementCompanyChange: (value: string) => void;
   error?: string;
   /**
-   * 管理会社のアカウントが操作するとき（修正依頼1024 C3）。管理会社は自社に固定して選ばせず、
-   * 保守会社の候補は自社物件を担当する保守会社だけ（呼ぶ側が絞った vendors を渡す）
+   * 管理会社のアカウントが操作するとき（修正依頼1024 C3）。作れるのは自社の管理会社ユーザーだけなので、
+   * 管理会社は自社に固定して選ばせない
    */
   managementCaller?: boolean;
 }
@@ -80,9 +80,7 @@ export function CompanyField({
         error={error}
       />
       <p className="text-xs text-gray-500">
-        {managementCaller
-          ? '必須です。自社が管理する物件を担当する保守会社だけを選べます'
-          : '権限「保守会社」は必須です。管理者は未選択のままで構いません'}
+        権限「保守会社」は必須です。管理者は未選択のままで構いません
       </p>
     </div>
   );

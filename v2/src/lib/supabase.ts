@@ -68,7 +68,6 @@ export const RPC = {
   mgmtAddBuildingVendor: 'mgmt_add_building_vendor',
   mgmtRemoveBuildingVendor: 'mgmt_remove_building_vendor',
   mgmtOwnCompany: 'mgmt_own_company',
-  mgmtVendorIds: 'mgmt_vendor_ids',
 } as const;
 
 /** Storage のバケット */

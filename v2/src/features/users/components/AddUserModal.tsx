@@ -21,7 +21,7 @@ interface AddUserModalProps {
     vendor_id: string | null;
     management_company_id: string | null;
   }) => Promise<void>;
-  /** 管理会社のアカウントが操作する（管理者は作れない・管理会社は自社に固定。修正依頼1024 C3） */
+  /** 管理会社のアカウントが操作する（作れるのは自社の管理会社ユーザーだけ。修正依頼1024 C3） */
   managementCaller?: boolean;
 }
 
@@ -39,7 +39,9 @@ export function AddUserModal({
   const { addToast } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<DbProfile['role']>('user');
+  // 既定の権限: 管理者は保守会社（v1 どおり）、管理会社は管理会社（それしか作れない）
+  const initialRole: DbProfile['role'] = managementCaller ? 'management' : 'user';
+  const [role, setRole] = useState<DbProfile['role']>(initialRole);
   const [vendorId, setVendorId] = useState('');
   const [managementCompanyIdInput, setManagementCompanyId] = useState('');
   // 管理会社のアカウントは自社に固定（選ばせない）
@@ -48,12 +50,12 @@ export function AddUserModal({
   const [submitting, setSubmitting] = useState(false);
 
   // 何か入れていたら、Escape・背景クリック・× では破棄の確認を出す
-  const dirty = !!(email || password || vendorId || managementCompanyIdInput || role !== 'user');
+  const dirty = !!(email || password || vendorId || managementCompanyIdInput || role !== initialRole);
 
   const resetForm = () => {
     setEmail('');
     setPassword('');
-    setRole('user');
+    setRole(initialRole);
     setVendorId('');
     setManagementCompanyId('');
     setErrors({});

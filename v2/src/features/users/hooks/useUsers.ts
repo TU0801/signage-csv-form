@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase, TABLES } from '@/lib/supabase';
 import {
   createUser,
-  fetchManagementVendorIds,
   fetchOwnManagementCompany,
   setUserPassword,
   setUserStatus,
@@ -17,9 +16,9 @@ import { MIN_PASSWORD_LENGTH, companyColumns, companyRequiredError } from '../co
 
 /**
  * ユーザー管理。管理会社のアカウント（修正依頼1024 C3）は:
- * - 一覧: 自社の管理会社ユーザーと、自社物件を担当する保守会社のユーザー（RLS mgmt_select_profiles が絞る）
- * - 作成: 自社の管理会社ユーザーと、自社物件を担当する保守会社のユーザー（保守会社の候補も絞る。Edge Function が確かめる）
- * - 編集はパスワードだけ、無効化・有効化も Edge Function 経由で、自社の管理会社ユーザーだけ（保守会社のユーザーは閲覧のみ）
+ * - 一覧: 自社の管理会社ユーザーだけ（RLS mgmt_select_profiles が絞る。保守会社のユーザーは管理者だけが扱う）
+ * - 作成: 自社の管理会社ユーザーだけ（Edge Function が確かめる）
+ * - 編集はパスワードだけ、無効化・有効化も Edge Function 経由で、自社の管理会社ユーザーだけ
  */
 export function useUsers() {
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
@@ -51,13 +50,8 @@ export function useUsers() {
   // v1: js/admin-users.js openUserModal / loadUsers の保守会社（getMasterVendors。保守会社名順）
   const fetchVendors = useCallback(async () => {
     try {
-      if (isManagement) {
-        // 管理会社: 自社物件を担当する保守会社だけ（作成の候補・一覧の会社名）
-        const [all, ids] = await Promise.all([fetchMasterVendors(), fetchManagementVendorIds()]);
-        setVendors(all.filter((v) => ids.has(String(v.id))));
-        return;
-      }
-      setVendors(await fetchMasterVendors());
+      // 管理会社は保守会社のユーザーを扱わないので読まない
+      setVendors(isManagement ? [] : await fetchMasterVendors());
     } catch (err) {
       console.error('Failed to load vendors:', err);
     }

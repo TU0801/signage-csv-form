@@ -67,11 +67,3 @@ export async function fetchOwnManagementCompany(): Promise<ManagementCompanyRow[
   if (error) throw error;
   return (data ?? []) as ManagementCompanyRow[];
 }
-
-/** 管理会社の物件を担当する保守会社の id（ユーザー作成で選べる保守会社）。RPC mgmt_vendor_ids */
-export async function fetchManagementVendorIds(): Promise<Set<string>> {
-  const { data, error } = await supabase.rpc(RPC.mgmtVendorIds);
-  if (error) throw error;
-  // SETOF uuid は uuid の配列で返る
-  return new Set(((data ?? []) as string[]).map(String));
-}

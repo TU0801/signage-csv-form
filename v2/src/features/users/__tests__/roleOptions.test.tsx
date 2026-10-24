@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { AddUserModal } from '../components/AddUserModal';
 import { roleLabel } from '../constants';
 
@@ -25,7 +25,7 @@ describe('権限の表示名（修正依頼1024 C4）', () => {
 });
 
 describe('管理会社のアカウントのユーザー追加（修正依頼1024 C3）', () => {
-  it('管理者は選べず、管理会社を選ぶと会社は自社に固定して出す', () => {
+  it('作れる権限は管理会社だけ（管理者・保守会社は選べない）で、会社は自社に固定して出す', () => {
     render(
       <AddUserModal
         open
@@ -37,10 +37,36 @@ describe('管理会社のアカウントのユーザー追加（修正依頼1024
       />,
     );
     const select = document.getElementById('newUserRole') as HTMLSelectElement;
-    expect(optionLabels(select)).toEqual(['保守会社', '管理会社']);
-    // 保守会社の欄の説明（自社物件の担当だけ）
-    expect(screen.getByText(/自社が管理する物件を担当する保守会社だけ/, { selector: 'p' })).toBeInTheDocument();
-    fireEvent.change(select, { target: { value: 'management' } });
+    expect(optionLabels(select)).toEqual(['管理会社']);
+    expect(select.value).toBe('management');
     expect(document.getElementById('newUserManagementCompany')).toHaveTextContent('自社管理');
+    // 保守会社の選択欄は出さない
+    expect(document.getElementById('newUserVendor')).toBeNull();
+  });
+
+  it('送信すると権限 management・自社の会社で作成する（保守会社は付けない）', async () => {
+    const onAdd = vi.fn().mockResolvedValue(undefined);
+    render(
+      <AddUserModal
+        open
+        onClose={vi.fn()}
+        vendors={[]}
+        managementCompanies={[{ id: 'm1', name: '自社管理' }]}
+        onAdd={onAdd}
+        managementCaller
+      />,
+    );
+    fireEvent.change(document.getElementById('newUserEmail')!, { target: { value: 'new@example.com' } });
+    fireEvent.change(document.getElementById('newUserPassword')!, { target: { value: 'secret1' } });
+    fireEvent.click(screen.getByRole('button', { name: '追加', hidden: true }));
+    await waitFor(() =>
+      expect(onAdd).toHaveBeenCalledWith({
+        email: 'new@example.com',
+        password: 'secret1',
+        role: 'management',
+        vendor_id: null,
+        management_company_id: 'm1',
+      }),
+    );
   });
 });

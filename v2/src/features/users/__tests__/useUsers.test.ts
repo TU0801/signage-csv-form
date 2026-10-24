@@ -32,13 +32,11 @@ vi.mock('@/lib/supabase', () => ({
 
 const mockSetUserStatus = vi.fn();
 const mockFetchOwnCompany = vi.fn();
-const mockFetchVendorIds = vi.fn();
 vi.mock('@/lib/api/users', () => ({
   createUser: (...args: unknown[]) => mockCreateUser(...args),
   setUserPassword: (...args: unknown[]) => mockSetUserPassword(...args),
   setUserStatus: (...args: unknown[]) => mockSetUserStatus(...args),
   fetchOwnManagementCompany: () => mockFetchOwnCompany(),
-  fetchManagementVendorIds: () => mockFetchVendorIds(),
 }));
 
 vi.mock('@/lib/api/masterData', () => ({
@@ -287,14 +285,14 @@ describe('useUsers（管理会社: 修正依頼1024 C3）', () => {
       { id: 'v1', vendor_name: '保守A' },
       { id: 'v2', vendor_name: '保守B' },
     ]);
-    mockFetchVendorIds.mockResolvedValue(new Set(['v1']));
     mockFetchOwnCompany.mockResolvedValue([{ id: 'm1', name: '自社' }]);
   });
 
-  it('保守会社の候補は自社物件の担当だけ、管理会社は自社だけ。編集はパスワードだけ、無効化は Edge Function で行う', async () => {
+  it('保守会社は読まず、管理会社は自社だけ。編集はパスワードだけ、無効化は Edge Function で行う', async () => {
     const { result } = await renderReady();
-    await waitFor(() => expect(result.current.vendors).toEqual([{ id: 'v1', vendor_name: '保守A' }]));
-    expect(result.current.managementCompanies).toEqual([{ id: 'm1', name: '自社' }]);
+    await waitFor(() => expect(result.current.managementCompanies).toEqual([{ id: 'm1', name: '自社' }]));
+    expect(result.current.vendors).toEqual([]);
+    expect(mockFetchVendors).not.toHaveBeenCalled();
     expect(mockFetchManagementCompanies).not.toHaveBeenCalled();
 
     await act(() =>

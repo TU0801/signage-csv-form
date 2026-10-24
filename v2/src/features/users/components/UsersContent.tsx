@@ -93,8 +93,8 @@ export function UsersContent() {
 
       {isManagement && (
         <p className="text-xs text-gray-500">
-          自社の管理会社ユーザーと、自社が管理する物件を担当する保守会社のユーザーを表示します。
-          編集・無効化できるのは自社の管理会社ユーザーだけです（保守会社のユーザーは複数の管理会社にまたがるため閲覧のみ）。
+          自社の管理会社ユーザーを表示します。追加・編集・無効化できるのも自社の管理会社ユーザーだけです
+          （保守会社のユーザーは複数の管理会社にまたがるため、作成・管理は管理者が行います）。
         </p>
       )}
 
@@ -122,7 +122,7 @@ export function UsersContent() {
             ) : (
               users.map((user) => {
                 const isSelf = currentUserId === user.id;
-                // 管理会社は自社の管理会社ユーザーだけを編集・無効化できる（一覧に出る管理会社ユーザーは自社のものだけ）
+                // 管理会社は自社の管理会社ユーザーだけを編集・無効化できる（一覧も RLS で自社の管理会社ユーザーだけ。念のため画面でも絞る）
                 const readOnly = isManagement && user.role !== 'management';
                 const status = user.status || 'active';
                 const company = companyLabel(user, vendors, managementCompanies);

@@ -15,10 +15,10 @@ export const ROLE_OPTIONS = [
 ];
 
 /**
- * 管理会社のアカウントが作れる権限（管理者は作れない。修正依頼1024 C3）。
- * 保守会社は自社物件を担当する保守会社だけ、管理会社は自社だけ（Edge Function が確かめる）
+ * 管理会社のアカウントが作れる権限（修正依頼1024 C3）: 自社の管理会社だけ（Edge Function も確かめる）。
+ * 管理者と保守会社は作れない。保守会社のアカウントは全管理会社分の点検を見られるため、管理者だけが作る
  */
-export const MANAGEMENT_ROLE_OPTIONS = ROLE_OPTIONS.filter((o) => o.value !== 'admin');
+export const MANAGEMENT_ROLE_OPTIONS = ROLE_OPTIONS.filter((o) => o.value === 'management');
 
 /** 一覧のバッジに出す権限名 */
 export function roleLabel(role: DbProfile['role']): string {
