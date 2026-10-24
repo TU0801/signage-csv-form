@@ -28,8 +28,8 @@ describe('新規建物の申請の承認・却下', () => {
       if (code === '120410') throw { message: '物件コード「120410」は既に使われています' };
     });
     render(<ApproveDialog target={target} onClose={vi.fn()} onConfirm={onConfirm} />);
-    // できる物件には端末が無いことを承認前に知らせる
-    expect(screen.getByTestId('propertyRequestTerminalNote')).toHaveTextContent('端末を登録した後');
+    // できる物件には端末が無く、端末を登録するまでは申請してもサイネージに出ないことを承認前に知らせる（F7）
+    expect(screen.getByTestId('propertyRequestTerminalNote')).toHaveTextContent('申請してもサイネージには表示されません');
     const input = document.getElementById('propertyRequestCode')!;
     const submit = screen.getByRole('button', { name: '物件を登録して承認', hidden: true });
 

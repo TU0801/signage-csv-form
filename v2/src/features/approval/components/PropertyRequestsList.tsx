@@ -284,7 +284,7 @@ export function ApproveDialog({ target, onClose, onConfirm }: DialogProps) {
             className="text-xs font-medium text-amber-700"
             data-testid="propertyRequestTerminalNote"
           >
-            できる物件には端末がありません。保守会社が掲示を申請できるのは、業務システムでこの物件に端末を登録した後です。
+            できる物件には端末がありません。業務システムでこの物件に端末を登録するまでは、保守会社が申請してもサイネージには表示されません。
           </p>
         </div>
       )}

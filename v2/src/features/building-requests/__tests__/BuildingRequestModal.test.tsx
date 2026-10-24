@@ -156,8 +156,10 @@ describe('BuildingRequestModal（管理者・点検種別を指定しない）',
     expect(
       (document.getElementById('buildingRequestInspectionType') as HTMLSelectElement).value,
     ).toBe('');
-    // 承認済みの申請があれば、端末が登録されるまで掲示を申請できないことを知らせる
-    expect(await screen.findByTestId('buildingRequestHistoryTerminalNote')).toBeInTheDocument();
+    // 承認済みの申請があれば、端末が登録されるまでは申請してもサイネージに出ないことを知らせる（F7）
+    expect(await screen.findByTestId('buildingRequestHistoryTerminalNote')).toHaveTextContent(
+      '申請してもサイネージには表示されません',
+    );
 
     fireEvent.change(document.getElementById('buildingRequestName')!, {
       target: { value: '新築マンション' },

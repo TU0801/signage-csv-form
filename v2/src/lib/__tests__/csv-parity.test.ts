@@ -86,6 +86,18 @@ describe('CSV parity with v1 admin-export.js', () => {
     expect(actual).toContain('0:00:10'); // display_duration 空 → 設定値
   });
 
+  it('端末ID が空の申請（端末の無い物件の予定行から。F7）は端末ID を空欄にし、列はずれない', () => {
+    // 案内文・備考の改行（クォート内の CRLF）を入れず、1行で列を数える
+    const entry = { ...csvEntries[0]!, terminal_id: '', announcement: '', remarks: '' };
+    const [header, line] = generateAdminCsv([entry], settings.display_time_default)
+      .split('\n')
+      .map((l) => l.split(','));
+    expect(line).toHaveLength(header!.length);
+    expect(header![1]).toBe('端末ID');
+    expect(line![1]).toBe('');
+    expect(line![2]).toBe(entry.property_code);
+  });
+
   it('matches v1 per row, including every single-entry case', () => {
     for (const entry of csvEntries) {
       expect(generateAdminCsv([entry], settings.display_time_default)).toBe(v1.generateCSV([entry]));

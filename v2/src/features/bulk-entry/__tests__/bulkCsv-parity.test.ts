@@ -154,6 +154,22 @@ describe('bulk CSV parity with v1 js/bulk-data.js generateCSV', () => {
     expect(custom![27]).toBe('追加');
   });
 
+  it('端末の無い物件の予定行（承認したばかりの建物追加申請など）は端末ID を空欄にし、列はずれない（F7）', () => {
+    const schedule = { key: 'i9:2026-11-01', inspectionId: 'i9', targetMonth: '2026-11-01', locked: false, propertyName: '新築マンション', terminalIds: [] };
+    const csv = generateBulkCsv(
+      // 定型文の無い点検種別にして、改行の入らない1行で列を数える
+      [row({ id: 1, propertyCode: '900099-00', terminalId: '', inspectionType: '消防設備点検', schedule })],
+      master,
+      { id: 'v1', name: '株式会社テスト保守' },
+      applySettings(DEFAULT_BULK_SETTINGS, settingsRows),
+    );
+    const [header, line] = csv.split('\n').map((l) => l.split(','));
+    expect(line).toHaveLength(header!.length);
+    expect(header![1]).toBe('端末ID');
+    expect(line![1]).toBe('');
+    expect(line![2]).toBe('900099-00');
+  });
+
   it('returns empty string when no valid rows (same as v1)', () => {
     v1State.state.rows = [row({ isValid: false })];
     expect(generateBulkCsv([row({ isValid: false })], master, { id: null, name: null }, DEFAULT_BULK_SETTINGS)).toBe(
