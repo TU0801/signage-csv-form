@@ -1,46 +1,35 @@
 import { normalizeTerminalId } from '@/lib/terminal';
 import { todayUtc } from '@/lib/utils';
 import { submittedDisplayPeriod } from './rowDetail';
+import { monthOf } from '@/features/inspection-portal/lib/schedule';
+import {
+  matchInspectionLink,
+  type InspectionLink,
+  type InspectionLinkRow,
+} from '@/features/inspection-portal/lib/inspectionLink';
 import type { BulkEntryInsert } from '@/lib/api/bulk-entry';
 import type { BulkEntryRow, BulkMasterData, BulkSettings, BulkVendorSelection } from '../types';
 
-/** 申請を点検行に結び付けるための、選択中の保守会社の点検行（portal_inspections の一部） */
-export interface BulkInspectionLink {
-  inspection_id: string;
-  property_code: string;
-  inspection_type_label: string | null;
-}
-
-/** YYYY-MM-DD → YYYY-MM-01 */
-function monthOfDate(date: string): string {
-  return `${date.slice(0, 7)}-01`;
-}
+/** 申請を点検行に結び付けるための、選択中の保守会社の点検行（portal_inspections の一部。1件入力と共有） */
+export type BulkInspectionLink = InspectionLinkRow;
 
 /**
  * 申請の点検行・保守会社・対象月（修正依頼1024 B6〜B14）。点検予定の行はその点検行と対象月（点検月の無い点検は点検開始日の月）。
- * 手で足した行は、保守会社の点検行と物件コード＋点検種別が一致すれば紐付け、対象月は点検開始日の月。一致しなければ紐付けない
+ * 手で足した行は、1件入力と同じ照合（matchInspectionLink: 物件コード＋点検種別、対象月は点検開始日の月）。一致しなければ紐付けない
  */
 export function inspectionLinkOf(
   row: Pick<BulkEntryRow, 'schedule' | 'propertyCode' | 'inspectionType' | 'startDate'>,
   links: BulkInspectionLink[],
   vendorId: string | null,
-): { property_inspection_id: string; vendor_id: string | null; target_month: string | null } | null {
+): InspectionLink | null {
   if (row.schedule) {
     return {
       property_inspection_id: row.schedule.inspectionId,
       vendor_id: vendorId,
-      target_month: row.schedule.targetMonth ?? (row.startDate ? monthOfDate(row.startDate) : null),
+      target_month: row.schedule.targetMonth ?? (row.startDate ? monthOf(row.startDate) : null),
     };
   }
-  const hit = links.find(
-    (l) => l.property_code === String(row.propertyCode) && (l.inspection_type_label ?? '') === row.inspectionType,
-  );
-  if (!hit) return null;
-  return {
-    property_inspection_id: hit.inspection_id,
-    vendor_id: vendorId,
-    target_month: row.startDate ? monthOfDate(row.startDate) : null,
-  };
+  return matchInspectionLink(row, links, vendorId);
 }
 
 /**

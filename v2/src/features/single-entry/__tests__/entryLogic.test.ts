@@ -19,10 +19,12 @@ import {
   remarksUsage,
   submittedStatusLabel,
   toInsertRow,
+  entryInspectionLink,
   valuesFromEntry,
   type EntryContext,
 } from '../lib/entryLogic';
 import { PROPERTIES, SETTINGS, TYPES, VENDOR, localEntry, values } from './fixtures';
+import { makeInspection } from '@/features/inspection-portal/__tests__/fixtures';
 
 vi.mock('@/lib/supabase', () => ({ supabase: {}, TABLES: {} }));
 
@@ -224,6 +226,24 @@ describe('申請する行（v1 submitEntries）', () => {
       status: 'draft',
     });
     expect(row).not.toHaveProperty('frame_no');
+  });
+
+  it('保守会社の点検行に物件コード（-00 の有無は同じ物件）＋点検種別が一致すれば、点検行・保守会社・点検開始日の月を入れる', () => {
+    const inspections = [
+      makeInspection({ inspection_id: 'i-clean', property_code: '120273', inspection_type_label: '排水管清掃', vendor_id: 'v-other', unit_vendor_ids: ['v-a'] }),
+    ];
+    // 保守会社のアカウント: DB が絞った点検行をそのまま見る。古い作成データ（linkVendorId 無し）は申請時の自社で補う
+    const link = entryInspectionLink(localEntry(), inspections, false, 'v-mine');
+    expect(link).toEqual({ property_inspection_id: 'i-clean', vendor_id: 'v-mine', target_month: '2026-10-01' });
+    expect(toInsertRow(localEntry(), null, 'user-1', SETTINGS, '2026-10-15', link)).toMatchObject(link!);
+    // 点検種別が違えば結び付けない（列も送らない）
+    const other = entryInspectionLink(localEntry({ inspectionType: '追加画像' }), inspections, false, 'v-mine');
+    expect(other).toBeNull();
+    expect(toInsertRow(localEntry(), null, 'user-1', SETTINGS, '2026-10-15', other)).not.toHaveProperty('property_inspection_id');
+    // 管理者は追加した時点で選んでいた保守会社の点検行（台の会社を含む）だけ。未選択なら結び付けない
+    expect(entryInspectionLink(localEntry({ linkVendorId: 'v-a' }), inspections, true, 'v-b')?.vendor_id).toBe('v-a');
+    expect(entryInspectionLink(localEntry({ linkVendorId: 'v-b' }), inspections, true, 'v-a')).toBeNull();
+    expect(entryInspectionLink(localEntry({ linkVendorId: null }), inspections, true, 'v-a')).toBeNull();
   });
 });
 

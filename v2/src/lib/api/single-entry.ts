@@ -100,7 +100,8 @@ export async function fetchMyEntriesThisMonth(userId: string, now: Date = new Da
 
 /**
  * 申請で INSERT する1行（frame_no は v1 も送らない。DB の既定値 '1' が入る）。
- * property_inspection_id・vendor_id・target_month は点検ポータルから申請したときだけ入れる（1件入力・一括入力は送らない）
+ * property_inspection_id・vendor_id・target_month は保守会社の点検行に結び付くときだけ入れる（点検ポータル・点検登録フォームの予定、
+ * 1件入力・一括入力の手の行は物件コード＋点検種別が一致したとき）
  */
 export type EntryInsertRow = Pick<
   DbEntry,

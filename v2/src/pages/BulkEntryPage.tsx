@@ -31,6 +31,7 @@ import { clearAutoSave } from '@/features/bulk-entry/utils/bulkAutoSave';
 import { getStoredTemplates, getVisibleTemplates, templateRows } from '@/features/bulk-entry/utils/bulkTemplates';
 import type { BulkEntryRow } from '@/features/bulk-entry/types';
 import { usePortalData } from '@/features/inspection-portal/hooks/usePortalData';
+import { inspectionsOfVendor } from '@/features/inspection-portal/lib/inspectionLink';
 import { reportEntryId } from '@/features/inspection-portal/lib/actions';
 import { matchTiming, TIMING_OPTIONS, type TimingFilter } from '@/features/inspection-portal/lib/filters';
 import {
@@ -146,12 +147,10 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
 
   // ---- 点検予定（選択中の保守会社の点検行 × 対象月） ----
   // 保守会社のアカウントは DB が担当の点検（台の保守会社を含む）に絞って返す。管理者は選んだ保守会社の点検だけ（未選択なら出さない）
-  const vendorInspections = useMemo(() => {
-    if (!isAdmin) return portal.inspections;
-    const v = currentVendor.id;
-    if (!v) return [];
-    return portal.inspections.filter((i) => i.vendor_id === v || i.unit_vendor_ids.includes(v));
-  }, [portal.inspections, isAdmin, currentVendor.id]);
+  const vendorInspections = useMemo(
+    () => inspectionsOfVendor(portal.inspections, isAdmin, currentVendor.id),
+    [portal.inspections, isAdmin, currentVendor.id],
+  );
 
   const scheduleItems = useMemo<ScheduleItem[]>(() => {
     const scheduled = buildSchedule(vendorInspections, portal.entries, portal.reports, { today, monthsAhead: MONTHS_AHEAD });
