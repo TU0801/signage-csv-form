@@ -1,7 +1,11 @@
 -- 修正依頼1024 core（点検登録フォーム）: メモ列・完了連絡・管理会社フィルターの候補・検査月
 -- 2026-10-24 作成。本番へは未適用（適用はユーザー承認後）。すべて追加（既存の表・関数・ポリシーは変えない）。冪等。
--- 適用方法: Management API で1文ずつ流すか、psql -f でファイル全体を流す（BEGIN/COMMIT は付けない）。
+-- 適用方法: ファイル全体を1つのクエリとして流す（Management API なら1回の query に全文を入れる。psql なら psql -1 -f）。
+--   1つのクエリは暗黙の1トランザクションになるので、途中の1文が失敗しても半分だけ適用された状態にならない（全部戻る）。
+--   BEGIN/COMMIT は付けない。先頭の lock_timeout で、表のロックが取れないときは待ち続けずに失敗させる。
 -- 戻し手順は末尾。
+
+SET lock_timeout = '5s';
 
 -- ============================================================
 -- 1. 申請のメモ（B12）。CSV には出さない。点検月の変更などの覚え書き。承認画面の詳細（管理者）で見る
@@ -30,7 +34,9 @@ DROP POLICY IF EXISTS "inspection_completions_select" ON signage.signage_inspect
 CREATE POLICY "inspection_completions_select" ON signage.signage_inspection_completions
   FOR SELECT TO authenticated USING (signage.inspection_in_scope(property_inspection_id));
 
-REVOKE ALL ON signage.signage_inspection_completions FROM PUBLIC, anon;
+-- authenticated からも外す: 本番の signage スキーマは新しい表に anon・authenticated へ全権限を付ける default privileges を持つ。
+-- 外さないと書き込みを止めるのが RLS（SELECT のポリシーしか無い）だけになる（ローカル DB にはこの既定が無いので気づけない）
+REVOKE ALL ON signage.signage_inspection_completions FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON signage.signage_inspection_completions TO authenticated;
 GRANT ALL ON signage.signage_inspection_completions TO service_role;
 
