@@ -176,6 +176,11 @@ describe('データを追加（v1 addEntry）', () => {
     });
     expect(buildLocalEntry(values(), ctx())).toEqual({ ok: false, message: '物件コードを選択してください' });
     expect(buildLocalEntry(ok, ctx({ vendor: null }))).toEqual({ ok: false, message: '保守会社を選択してください' });
+    // 保守会社のアカウントには選択欄が無いので、管理者への連絡を促す（修正依頼1024 本番確認 ③）
+    expect(buildLocalEntry(ok, ctx({ vendor: null, isAdmin: false }))).toEqual({
+      ok: false,
+      message: 'アカウントに保守会社が設定されていません。管理者に連絡してください',
+    });
     expect(buildLocalEntry(values({ ...ok, inspectionTypeId: '' }), ctx())).toEqual({
       ok: false,
       message: '点検工事案内を選択してください',

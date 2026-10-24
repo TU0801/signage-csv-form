@@ -228,6 +228,7 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
       hasTemplateImage: (key) => templateUrlOf(key) !== null,
       settings,
       linkVendorId: vendorCtx.linkVendorId,
+      isAdmin,
     });
     if (!result.ok) {
       // 表示設定タブの項目の誤りは、そのタブを開いて欄を見せる

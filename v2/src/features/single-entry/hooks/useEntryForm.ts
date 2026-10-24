@@ -61,13 +61,15 @@ export function useEntryForm({
   );
 
   // v1: js/script.js onPropertyChange
-  // 点検工事案内が空か自動で入った値なら、その物件の点検行の種別（無ければ紐付けの先頭）を入れる（一括入力 B9 と同じ規則）
+  // 点検工事案内が空なら、その物件の点検行の種別（無ければ紐付けの先頭）を入れる（一括入力 B9 と同じ規則）。
+  // 自動で入った値は、その物件の点検行があるときだけその種別に入れ替える
   const changeProperty = useCallback(
     (code: string) =>
       setValues((v) => {
         const next = applyPropertyChange(v, code, properties);
         if (v.inspectionTypeId && !autoTypeRef.current) return next;
-        return applyPropertyInspectionDefault(next, inspectionTypes, inspections, linkedIds);
+        // 空なら一括入力と同じ (a)→(b)。自動で入った値は物件の点検行があるときだけ入れ替える（紐付けの先頭で上書きしない）
+        return applyPropertyInspectionDefault(next, inspectionTypes, inspections, linkedIds, !v.inspectionTypeId);
       }),
     [properties, inspectionTypes, inspections, linkedIds],
   );

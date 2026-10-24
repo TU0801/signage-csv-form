@@ -359,6 +359,22 @@ describe('1件入力画面（物件を選んだときの点検工事案内。修
     fireEvent.click(screen.getByRole('radio', { name: '追加' }));
     expect(typeBox()).toHaveValue('外壁工事');
   });
+
+  it('カテゴリで選び直した点検種別は、点検行の無い物件を選んでも紐付けの先頭に置き換えない', async () => {
+    render(
+      <ToastProvider>
+        <SingleEntryPage />
+      </ToastProvider>,
+    );
+    const typeBox = () => screen.getByRole('combobox', { name: '点検工事案内 *' });
+    await waitFor(() => expect(typeBox()).toHaveValue('排水管清掃'));
+    fireEvent.change(screen.getByLabelText('案内カテゴリ'), { target: { value: '点検' } });
+    expect(typeBox()).toHaveValue('エレベーター定期点検');
+    // 120273-00 には点検行が無い
+    pick('物件コード *', '120273-00');
+    expect(typeBox()).toHaveValue('エレベーター定期点検');
+    expect(screen.getByLabelText('案内カテゴリ')).toHaveValue('点検');
+  });
 });
 
 describe('1件入力画面（記録する保守会社。修正依頼1024 本番確認 ③・ユーザー決定 2026-10-25）', () => {
