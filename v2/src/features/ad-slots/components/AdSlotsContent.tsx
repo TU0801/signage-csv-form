@@ -14,7 +14,7 @@ const SLOT_INDEXES = Array.from({ length: MAX_AD_SLOTS }, (_, i) => i + 1);
  */
 // v1: js/admin-masters-ads.js initAdSlotsAdmin / renderAdSlotsGrid（admin.html #tab-ads）
 export function AdSlotsContent() {
-  const { slots, loading, error, saveSlot } = useAdSlots();
+  const { slots, loading, error, saveSlot, clearSlot } = useAdSlots();
   const [editing, setEditing] = useState<DbAdSlot | null>(null);
 
   const slotMap = new Map(slots.map((s) => [s.slot_index, s]));
@@ -55,7 +55,13 @@ export function AdSlotsContent() {
       </div>
 
       {/* 開くたびに作り直して、前回選んだファイルを残さない（v1 は開くときに file input を空にする） */}
-      <AdSlotModal key={editing?.id ?? 'closed'} slot={editing} onClose={() => setEditing(null)} onSave={saveSlot} />
+      <AdSlotModal
+        key={editing?.id ?? 'closed'}
+        slot={editing}
+        onClose={() => setEditing(null)}
+        onSave={saveSlot}
+        onClear={clearSlot}
+      />
     </div>
   );
 }

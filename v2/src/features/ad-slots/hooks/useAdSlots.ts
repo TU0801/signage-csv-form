@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, TABLES } from '@/lib/supabase';
 import { MAX_AD_SLOTS } from '@/lib/constants';
-import { uploadAdImage } from '@/lib/storage';
+import { uploadAdImage, deleteStorageFile } from '@/lib/storage';
 import type { DbAdSlot } from '@/types/database';
+import { storagePathFromPublicUrl, withCacheBuster } from '../lib/adImage';
 
 export interface AdSlotInput {
   /** 差し替える画像。無ければ今の image_url のまま */
@@ -27,6 +28,11 @@ export function adImageFileError(file: Pick<File, 'name' | 'size'>): string | nu
   if (!AD_IMAGE_EXTENSIONS.includes(extension)) return 'PNG、JPG形式の画像のみアップロードできます';
   if (file.size > AD_IMAGE_MAX_BYTES) return 'ファイルサイズは5MB以下にしてください';
   return null;
+}
+
+/** 切り抜く前の元画像の確認（拡張子だけ。大きさは切り抜いて書き出した後の File を adImageFileError で確かめる） */
+export function adImageExtensionError(file: Pick<File, 'name'>): string | null {
+  return adImageFileError({ name: file.name, size: 0 });
 }
 
 /**
@@ -94,13 +100,23 @@ export function useAdSlots({ activeOnly = false } = {}) {
   /**
    * 1枠を保存する。画像を選んでいれば先に poster-images の ads/slot_{n}.{拡張子} へ上書きアップロードし、
    * 画像・キャプション・リンク・表示をまとめて UPDATE する（枠の行は DB に既にあり、INSERT はしない）。
+   * 画像の URL には ?v=<更新時刻> を付ける（同じパスへの上書きでもブラウザ・CDN の古い画像を出さない）。
+   * 拡張子が変わった（png ⇄ jpg）ときは、行を更新した後で前のファイルを消す。
    */
   // v1: js/admin-masters-ads.js saveAdSlot → js/supabase/ads.js uploadAdImage / upsertAdSlot
   const saveSlot = useCallback(
     async (slot: DbAdSlot, input: AdSlotInput) => {
+      const now = Date.now();
       let imageUrl = slot.image_url;
+      let staleOldPath: string | null = null;
       if (input.imageFile) {
-        imageUrl = await uploadAdImageV1(input.imageFile, slot.slot_index);
+        const uploadedUrl = await uploadAdImageV1(input.imageFile, slot.slot_index);
+        imageUrl = withCacheBuster(uploadedUrl, now);
+        const oldPath = storagePathFromPublicUrl(slot.image_url);
+        const newPath = storagePathFromPublicUrl(uploadedUrl);
+        if (oldPath && newPath && oldPath !== newPath && isSlotImagePath(oldPath, slot.slot_index)) {
+          staleOldPath = oldPath;
+        }
       }
       const { error: err } = await supabase
         .from(TABLES.adSlots)
@@ -109,13 +125,46 @@ export function useAdSlots({ activeOnly = false } = {}) {
           caption: input.caption.trim(),
           link_url: input.linkUrl.trim(),
           is_active: input.isActive,
+          updated_at: new Date(now).toISOString(),
+        })
+        .eq('slot_index', slot.slot_index);
+      if (err) throw err;
+      // 失敗しても保存は済んでいる（消し損ねたファイルはどの行からも参照されないだけ。deleteStorageFile がログに残す）
+      if (staleOldPath) await deleteStorageFile(staleOldPath);
+      await fetchSlots();
+    },
+    [fetchSlots],
+  );
+
+  /**
+   * 枠の中身を消す（行は残す。行が無いと管理画面で枠を開けず、作り直す経路も無いため）。
+   * 先に行を空・非表示にしてから、ads/slot_{n}.png・.jpg と今の画像のファイルを Storage から消す（元に戻せない）
+   * （行を先に変えるので、ファイルの削除に失敗してもログイン画面が消えたファイルを指すことはない）。
+   */
+  const clearSlot = useCallback(
+    async (slot: DbAdSlot) => {
+      const { error: err } = await supabase
+        .from(TABLES.adSlots)
+        .update({
+          image_url: null,
+          caption: '',
+          link_url: '',
+          is_active: false,
           updated_at: new Date().toISOString(),
         })
         .eq('slot_index', slot.slot_index);
       if (err) throw err;
+      const paths = new Set([`ads/slot_${slot.slot_index}.png`, `ads/slot_${slot.slot_index}.jpg`]);
+      const currentPath = storagePathFromPublicUrl(slot.image_url);
+      // 今の画像が ads/slot_{n} 以外の名前でも消す（ads/ の中で、他の枠が使っていないものだけ）
+      const usedByOthers = slots.some(
+        (s) => s.slot_index !== slot.slot_index && storagePathFromPublicUrl(s.image_url) === currentPath,
+      );
+      if (currentPath && currentPath.startsWith('ads/') && !usedByOthers) paths.add(currentPath);
+      for (const path of paths) await deleteStorageFile(path);
       await fetchSlots();
     },
-    [fetchSlots],
+    [fetchSlots, slots],
   );
 
   return {
@@ -124,5 +173,11 @@ export function useAdSlots({ activeOnly = false } = {}) {
     error,
     refetch: fetchSlots,
     saveSlot,
+    clearSlot,
   };
+}
+
+/** その枠の画像として置いたファイル（ads/slot_{n}.{拡張子}）か。他の枠や ads/ 以外のファイルは消さない */
+function isSlotImagePath(path: string, slotIndex: number): boolean {
+  return new RegExp(`^ads/slot_${slotIndex}\\.(png|jpe?g)$`, 'i').test(path);
 }
