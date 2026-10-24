@@ -12,6 +12,7 @@ import { templateFileUrl } from '@/lib/templateStorage';
 import { cn, todayUtc } from '@/lib/utils';
 import { PosterType } from '@/lib/constants';
 import { insertEntries, type AppSettings } from '@/lib/api/single-entry';
+import { fetchPortalInspections } from '@/lib/api/portal';
 import type { MasterData } from '@/types/app';
 import { useAppSettings } from '@/features/single-entry/hooks/useAppSettings';
 import { useEntryForm } from '@/features/single-entry/hooks/useEntryForm';
@@ -31,6 +32,7 @@ import { resolveTemplateImageUrl } from '@/features/single-entry/lib/templateIma
 import {
   buildLocalEntry,
   buildPropertyOptions,
+  entryInspectionLink,
   filterByManagementCompany,
   filterInspectionTypes,
   formatPosterDate,
@@ -203,6 +205,7 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
       customImage: form.customImage,
       hasTemplateImage: (key) => templateUrlOf(key) !== null,
       settings,
+      linkVendorId: vendorCtx.linkVendorId,
     });
     if (!result.ok) {
       // 表示設定タブの項目の誤りは、そのタブを開いて欄を見せる
@@ -283,8 +286,25 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
           });
         }),
       );
+      // 保守会社の点検行に一致する申請は点検に結び付ける（点検登録フォームに申請中として出て、報告書UP が通る）。
+      // 点検行が読めなければ結び付けずに申請する（今までどおり）
+      const inspections = await fetchPortalInspections().catch((err: unknown) => {
+        console.error('点検行の取得に失敗しました（点検に結び付けずに申請します）:', err);
+        return [];
+      });
       const today = todayUtc();
-      await insertEntries(sending.map((e, i) => toInsertRow(e, urls[i] ?? null, user.id, settings, today)));
+      await insertEntries(
+        sending.map((e, i) =>
+          toInsertRow(
+            e,
+            urls[i] ?? null,
+            user.id,
+            settings,
+            today,
+            entryInspectionLink(e, inspections, isAdmin, vendorCtx.linkVendorId),
+          ),
+        ),
+      );
       addToast(`${sending.length}件を申請しました`, 'success');
       setLocalEntries((prev) => prev.filter((e) => !sentIds.has(e._id)));
       setEditingId((id) => (id && sentIds.has(id) ? null : id));

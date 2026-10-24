@@ -7,15 +7,37 @@ import { makeEntry, makeInspection } from '@/features/inspection-portal/__tests_
 import type { BulkEntryRow } from '../types';
 
 const links = [
-  { inspection_id: 'i1', property_code: '900001-00', inspection_type_label: 'エレベーター定期点検' },
-  { inspection_id: 'i2', property_code: '900001-00', inspection_type_label: '消防設備点検' },
+  makeInspection({ inspection_id: 'i1', inspection_type_label: 'エレベーター定期点検' }),
+  makeInspection({ inspection_id: 'i2', inspection_type_label: '消防設備点検', inspection_months: [6, 12] }),
 ];
 
 describe('点検登録フォームの点検行との結び付け', () => {
+  it('点検開始日の月が点検行の予定に無い（点検月でない・数え始める月より前）なら結び付けない。複数一致はその保守会社が点検行の会社のものを選ぶ', () => {
+    const row = { propertyCode: '900001', inspectionType: 'エレベーター定期点検', startDate: '2026-11-10' };
+    // 点検月は 5・11 月（schedule_from 2026-04）
+    expect(inspectionLinkOf(row, links, 'v1')?.target_month).toBe('2026-11-01');
+    expect(inspectionLinkOf({ ...row, startDate: '2027-03-10' }, links, 'v1')).toBeNull();
+    expect(inspectionLinkOf({ ...row, startDate: '2025-11-10' }, links, 'v1')).toBeNull();
+    // 点検月の無い点検行は予定の行を作らない（月を選んで申請する）ので、どの月でも結び付ける
+    const unscheduled = [makeInspection({ inspection_id: 'i3', inspection_months: [] })];
+    expect(inspectionLinkOf({ ...row, startDate: '2027-03-10' }, unscheduled, 'v1')?.target_month).toBe('2027-03-01');
+    // 同じ物件・点検種別の点検行が複数: 台だけの会社の行より点検行の会社の行。月が予定に無い行は候補にしない
+    const dup = [
+      makeInspection({ inspection_id: 'unit', vendor_id: 'v-other', unit_vendor_ids: ['v1'] }),
+      makeInspection({ inspection_id: 'own', vendor_id: 'v1' }),
+      makeInspection({ inspection_id: 'march', vendor_id: 'v1', inspection_months: [3] }),
+    ];
+    expect(inspectionLinkOf(row, dup, 'v1')?.property_inspection_id).toBe('own');
+    expect(inspectionLinkOf(row, dup, 'v2')?.property_inspection_id).toBe('unit');
+    expect(inspectionLinkOf({ ...row, startDate: '2027-03-10' }, dup, 'v1')?.property_inspection_id).toBe('march');
+  });
+
   it('手で足した行は物件コード＋点検種別が一致する点検行に結び付け、対象月は点検開始日の月。一致しなければ結び付けない', () => {
     const row = { propertyCode: '900001-00', inspectionType: '消防設備点検', startDate: '2026-12-15' };
     expect(inspectionLinkOf(row, links, 'v1')).toEqual({ property_inspection_id: 'i2', vendor_id: 'v1', target_month: '2026-12-01' });
     expect(inspectionLinkOf({ ...row, inspectionType: '定期清掃' }, links, 'v1')).toBeNull();
+    // 物件コードの -00 の有無は同じ物件（1件入力と同じ照合）
+    expect(inspectionLinkOf({ ...row, propertyCode: '900001' }, links, 'v1')?.property_inspection_id).toBe('i2');
     // 予定の行はその点検行と対象月（点検月の無い点検は開始日の月）
     const schedule = { key: 'k', inspectionId: 'i9', targetMonth: '2026-11-01', locked: false, propertyName: '', terminalIds: [] };
     expect(inspectionLinkOf({ ...row, schedule }, links, 'v1')).toEqual({ property_inspection_id: 'i9', vendor_id: 'v1', target_month: '2026-11-01' });

@@ -94,6 +94,8 @@ export function useVendorContext({
     adminVendorId,
     selectAdminVendor,
     vendor,
+    /** 点検行に結び付ける保守会社（一般ユーザーは自社、管理者は選んだ会社。未選択は null）。vendor（記録する会社名）とは別 */
+    linkVendorId: vendorId,
     visibleProperties,
     linkedIds: current?.linkedIds ?? EMPTY_IDS,
   };

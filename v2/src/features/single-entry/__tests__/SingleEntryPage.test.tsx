@@ -53,6 +53,16 @@ vi.mock('@/hooks/useMasterData', () => ({
   }),
 }));
 vi.mock('@/lib/api/relationships', () => ({ fetchActivePropertyCodes: vi.fn() }));
+// 申請を結び付ける点検行（portal_inspections。保守会社のアカウントは DB が担当の点検に絞って返す）。点検月の無い点検行はどの月の申請も結び付く
+vi.mock('@/lib/api/portal', async () => {
+  const { makeInspection } = await import('@/features/inspection-portal/__tests__/fixtures');
+  return {
+    fetchPortalInspections: () =>
+      Promise.resolve([
+        makeInspection({ inspection_id: 'i-clean', property_code: 'z0015A01', inspection_type_label: '排水管清掃', vendor_id: 'v-mine', inspection_months: [] }),
+      ]),
+  };
+});
 vi.mock('@/lib/api/single-entry', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api/single-entry')>();
   return {
@@ -119,6 +129,10 @@ describe('1件入力画面（一般ユーザー）', () => {
       inspection_type: '排水管清掃',
       display_duration: 10,
       status: 'draft',
+      // 点検行に一致したので結び付ける。保守会社は記録する会社名（社名順の先頭）ではなく自社（DB が自社以外を拒む）
+      property_inspection_id: 'i-clean',
+      vendor_id: 'v-mine',
+      target_month: `${String(rows[0]!.inspection_start).slice(0, 7)}-01`,
     });
   });
 });
