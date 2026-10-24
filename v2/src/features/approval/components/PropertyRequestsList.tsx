@@ -28,6 +28,9 @@ export interface PropertyRequestRow extends DbPropertyRequest {
 /** 物件コードの形（DB の approve_property_request と同じ。本番の物件コードはすべてこの形） */
 export const PROPERTY_CODE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$/;
 
+/** 端末番号の形（DB の approve_property_request と同じ。本番の端末番号 157 件はすべてこの形。例 z0090A01） */
+export const TERMINAL_ID_PATTERN = /^[a-z][0-9]{4}[A-Z][0-9]{2}$/;
+
 /** RPC のエラーから利用者に見せる文言（DB が日本語で返したものはそのまま） */
 function rpcMessage(err: unknown, fallback: string): string {
   const message = (err as { message?: string })?.message;
@@ -83,10 +86,13 @@ export function PropertyRequestsList() {
   }, [load]);
   useRefetchOnVisible(load, !loading && !approveTarget && !rejectTarget);
 
-  const approve = async (code: string) => {
+  const approve = async (code: string, terminalId: string | null) => {
     if (!approveTarget) return;
-    await approvePropertyRequest(approveTarget.id, code);
-    addToast(`「${approveTarget.property_name}」を物件コード ${code} で登録しました`, 'success');
+    await approvePropertyRequest(approveTarget.id, code, terminalId);
+    addToast(
+      `「${approveTarget.property_name}」を物件コード ${code}${terminalId ? `・端末 ${terminalId}` : ''} で登録しました`,
+      'success',
+    );
     setApproveTarget(null);
     await load();
   };
@@ -218,22 +224,49 @@ function subject(t: PropertyRequestRow): string {
   return `${t.property_name}（管理会社: ${t.managementCompanyName} / 保守会社: ${t.vendorName}）`;
 }
 
-/** 承認: 物件コードを入れる（形式と重複は DB 側でも確かめる） */
-export function ApproveDialog({ target, onClose, onConfirm }: DialogProps) {
+interface ApproveDialogProps extends Omit<DialogProps, 'onConfirm'> {
+  /** 端末番号は空なら null。失敗したら throw（ダイアログは開いたまま、理由を出す） */
+  onConfirm: (code: string, terminalId: string | null) => Promise<void>;
+}
+
+/** 承認: 物件コードと端末番号（任意）を入れる（形式と重複は DB 側でも確かめる） */
+export function ApproveDialog({ target, onClose, onConfirm }: ApproveDialogProps) {
   const { value, setValue, error, setError, sending, setSending } = useDialogValue(target);
+  const [terminal, setTerminal] = useState('');
+  const [terminalError, setTerminalError] = useState('');
+  const [prevTarget, setPrevTarget] = useState(target);
+  if (target !== prevTarget) {
+    setPrevTarget(target);
+    setTerminal('');
+    setTerminalError('');
+  }
+  const terminalId = terminal.trim();
   const submit = async () => {
     const code = value.trim();
+    let invalid = false;
     if (!PROPERTY_CODE_PATTERN.test(code)) {
       setError(
         '物件コードは英数字・ハイフン・アンダーバーの32文字以内で入力してください（例: 120074-00）',
       );
-      return;
+      invalid = true;
     }
+    if (terminalId && !TERMINAL_ID_PATTERN.test(terminalId)) {
+      setTerminalError(
+        '端末番号は「英小文字1字＋数字4桁＋英大文字1字＋数字2桁」で入力してください（例: z0090A01）',
+      );
+      invalid = true;
+    }
+    if (invalid) return;
+    setError('');
+    setTerminalError('');
     setSending(true);
     try {
-      await onConfirm(code);
+      await onConfirm(code, terminalId || null);
     } catch (err) {
-      setError(rpcMessage(err, '承認に失敗しました'));
+      const message = rpcMessage(err, '承認に失敗しました');
+      // 端末番号の形・重複の理由は端末番号の欄に出す
+      if (message.startsWith('端末番号')) setTerminalError(message);
+      else setError(message);
     } finally {
       setSending(false);
     }
@@ -243,7 +276,7 @@ export function ApproveDialog({ target, onClose, onConfirm }: DialogProps) {
       open={!!target}
       onClose={onClose}
       title="新規建物の申請の承認"
-      dirty={value.trim() !== ''}
+      dirty={value.trim() !== '' || terminalId !== ''}
       footer={
         <>
           <Button variant="secondary" size="sm" onClick={onClose} disabled={sending}>
@@ -273,6 +306,21 @@ export function ApproveDialog({ target, onClose, onConfirm }: DialogProps) {
               if (e.key === 'Enter' && !e.nativeEvent.isComposing) void submit();
             }}
           />
+          <Input
+            id="propertyRequestTerminal"
+            label="端末番号（任意）"
+            value={terminal}
+            maxLength={16}
+            placeholder="例: z0090A01"
+            error={terminalError || undefined}
+            onChange={(e) => {
+              setTerminal(e.target.value);
+              if (terminalError) setTerminalError('');
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.nativeEvent.isComposing) void submit();
+            }}
+          />
           <p className="text-xs text-gray-400">
             業務システムに物件（点検物件・請求対象外）を作り、保守会社の担当にします。
             {target.inspection_type_id
@@ -280,12 +328,18 @@ export function ApproveDialog({ target, onClose, onConfirm }: DialogProps) {
               : '点検種別の指定が無いので、点検は登録しません（マスター管理で追加できます）。'}
             物件コードは後から変えられません。
           </p>
-          <p
-            className="text-xs font-medium text-amber-700"
-            data-testid="propertyRequestTerminalNote"
-          >
-            できる物件には端末がありません。業務システムでこの物件に端末を登録するまでは、保守会社が申請してもサイネージには表示されません。
-          </p>
+          {terminalId ? (
+            <p className="text-xs text-gray-600" data-testid="propertyRequestTerminalNote">
+              端末「{terminalId}」を業務システムの物件に登録します（他の物件で使われている端末番号は登録できません）。保守会社の申請はこの端末に表示されます。
+            </p>
+          ) : (
+            <p
+              className="text-xs font-medium text-amber-700"
+              data-testid="propertyRequestTerminalNote"
+            >
+              端末番号を入れないと、できる物件には端末がありません。業務システムでこの物件に端末を登録するまでは、保守会社が申請してもサイネージには表示されません。
+            </p>
+          )}
         </div>
       )}
     </Modal>

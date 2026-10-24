@@ -178,3 +178,25 @@ describe('BuildingRequestModal（管理者・点検種別を指定しない）',
     expect(screen.queryByText('承認されると点検登録フォームに行が出ます。')).toBeNull();
   });
 });
+
+describe('BuildingRequestModal（これまでの申請・承認時の端末）', () => {
+  it('承認時に端末を登録した申請は「登録済み」と出し、端末未設置の注意は出さない', async () => {
+    useAuthStore.setState({ profile: { id: 'u1', role: 'user', vendor_id: 'v1' } as DbProfile });
+    api.history = [
+      {
+        id: 'r0',
+        property_name: '端末つきの建物',
+        management_company_id: '11111111-1111-4111-8111-111111111111',
+        status: 'approved',
+        created_property_code: 'RV-02',
+        created_terminal_id: 'z0090A01',
+        created_at: '2026-10-20T00:00:00Z',
+      },
+    ];
+    render(
+      <BuildingRequestModal open onClose={vi.fn()} vendorId="v1" managementCompanyId="" />,
+    );
+    expect(await screen.findByText('RV-02（端末 z0090A01 登録済み）')).toBeInTheDocument();
+    expect(screen.queryByTestId('buildingRequestHistoryTerminalNote')).toBeNull();
+  });
+});
