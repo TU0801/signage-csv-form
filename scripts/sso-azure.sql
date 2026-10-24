@@ -61,8 +61,9 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'azure identity rejected: tenant or email domain not allowed';
   END IF;
-  -- xms_edov を出す設定なら、メールのドメインがテナントで検証済みであることも求める（出ていなければ tid の照合に頼る）
-  IF v_edov IS NOT NULL AND v_edov NOT IN ('true', '1') THEN
+  -- メールのドメインがテナントで検証済みであることも求める。Entra アプリで xms_edov をオプション要求に入れるので、
+  -- 出ていない（設定漏れ）ときも拒否する（試験ログインで identity_data に出ていることを確かめる）
+  IF v_edov IS NULL OR v_edov NOT IN ('true', '1') THEN
     RAISE EXCEPTION 'azure identity rejected: email domain not verified';
   END IF;
   -- 1人に紐づく Entra のアカウントは1つ（同じメールを名乗る別アカウントの自動リンクを防ぐ）。付け替えは管理者が古い行を消す
@@ -83,6 +84,9 @@ CREATE TRIGGER signage_guard_azure_identity
 -- before user created フック（Auth 設定 hook_before_user_created_uri=pg-functions://postgres/signage/hook_before_user_created）。
 -- 呼ばれるのは公開サインアップ・マジックリンク/OTP・外部プロバイダでの新規作成と、招待（inviteUserByEmail・generateLink の
 -- signup/invite）。対象ドメインで通るのは admin.createUser（signage の Edge Function・biz・ダッシュボードの Create new user）だけ。
+-- 既存ユーザーのメールを対象ドメインへ変える経路はフックを通らない。今これが塞がっているのは、変更が新しいアドレスへの
+-- 確認メール経由でしか完了しないため（確認無しで即反映するのは匿名ユーザー×autoconfirm だけ。internal/api/user.go）。
+-- 共用 Auth の external_anonymous_users_enabled=false と mailer_secure_email_change_enabled=true を変えないこと。
 -- 対象ドメインは管理者の事前登録だけで作る。事前登録した人の Microsoft ログインはリンク（作成ではない）なので影響しない。
 -- 未登録の人の Microsoft ログインも止める（プロファイル無しのユーザーが残ると、後の管理者登録が「既に登録」になるため）
 CREATE OR REPLACE FUNCTION signage.hook_before_user_created(event jsonb)

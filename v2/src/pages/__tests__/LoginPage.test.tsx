@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom';
 import { LoginPage } from '../LoginPage';
 import { useAuthStore } from '@/stores/authStore';
-import { MICROSOFT_LOGIN_FAILED_MESSAGE } from '@/lib/api/auth';
+import { MICROSOFT_LOGIN_FAILED_MESSAGE, PRE_REGISTRATION_REQUIRED_MESSAGE } from '@/lib/api/auth';
 
 vi.mock('@/lib/supabase', () => ({ supabase: {}, TABLES: {} }));
 vi.mock('@/lib/storage', () => ({ uploadAdImage: vi.fn() }));
@@ -85,5 +85,26 @@ describe('ログイン画面（v1 login.html）', () => {
     );
     expect(screen.getByText(MICROSOFT_LOGIN_FAILED_MESSAGE)).toBeInTheDocument();
     expect(window.location.search).toBe('');
+  });
+
+  it('URL に付けた任意の日本語は出さず、フックの断り文言のときだけその案内を出す', () => {
+    window.history.replaceState(null, '', `/login?error=x&error_description=${encodeURIComponent('至急こちらへお電話ください')}`);
+    useAuthStore.setState({ initialized: true, loading: false, user: null, profile: null });
+    const { unmount } = render(
+      <MemoryRouter>
+        <LoginPage />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByText('至急こちらへお電話ください')).not.toBeInTheDocument();
+    expect(screen.getByText(MICROSOFT_LOGIN_FAILED_MESSAGE)).toBeInTheDocument();
+    unmount();
+
+    window.history.replaceState(null, '', `/login?error=x&error_description=${encodeURIComponent(PRE_REGISTRATION_REQUIRED_MESSAGE)}`);
+    render(
+      <MemoryRouter>
+        <LoginPage />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText(PRE_REGISTRATION_REQUIRED_MESSAGE)).toBeInTheDocument();
   });
 });
