@@ -392,7 +392,7 @@ function PositionPicker({ name, value, onChange }: { name: string; value: string
     <label
       key={v}
       className={cn(
-        'flex cursor-pointer items-center justify-center rounded-sm border-2 text-xs font-semibold transition-colors',
+        'flex cursor-pointer flex-col items-center justify-center gap-0.5 rounded-sm border-2 text-xs leading-tight font-semibold transition-colors',
         'has-[input:focus-visible]:ring-2 has-[input:focus-visible]:ring-blue-500 has-[input:focus-visible]:ring-offset-1',
         value === v
           ? 'border-blue-600 bg-blue-100 text-blue-800'
@@ -408,10 +408,8 @@ function PositionPicker({ name, value, onChange }: { name: string; value: string
         onChange={() => onChange(v)}
         className="sr-only"
       />
-      <span aria-hidden="true" className="mr-1">
-        {value === v ? '●' : '○'}
-      </span>
-      {POSITION_LABEL[v]}
+      <span aria-hidden="true">{value === v ? '●' : '○'}</span>
+      <span className="whitespace-nowrap">{POSITION_LABEL[v]}</span>
     </label>
   );
 
@@ -420,7 +418,7 @@ function PositionPicker({ name, value, onChange }: { name: string; value: string
       <legend className="text-sm font-semibold text-gray-800">貼紙表示位置</legend>
       <p className="text-xs text-gray-500">サイネージの画面図の上で、貼紙を出す枠をクリックして選びます</p>
       <div className="flex flex-wrap items-start gap-4">
-        <div className="w-48" aria-label="サイネージ画面（枠ごと）">
+        <div className="w-52" role="group" aria-label="サイネージ画面（枠ごと）">
           <div className="flex aspect-[3/4] flex-col gap-1 rounded-md border-4 border-gray-800 bg-gray-800 p-1">
             <div className="grid flex-[25] grid-cols-3 gap-1">
               {cell('1', '')}
@@ -436,7 +434,7 @@ function PositionPicker({ name, value, onChange }: { name: string; value: string
             </div>
           </div>
         </div>
-        <div className="w-48">
+        <div className="w-52">
           <div className="flex aspect-[3/4] flex-col rounded-md border-4 border-gray-800 bg-gray-800 p-1">
             {cell('0', 'flex-1')}
           </div>
