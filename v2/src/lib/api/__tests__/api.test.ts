@@ -19,6 +19,8 @@ vi.mock('@/lib/supabase', () => ({
   },
   RPC: {
     inspectionsAll: 'inspections_all',
+    mgmtInspectionsAll: 'mgmt_inspections_all',
+    mgmtAddBuildingVendor: 'mgmt_add_building_vendor',
   },
 }));
 
@@ -203,5 +205,31 @@ describe('addBuildingVendor（一般ユーザーの申請。v1 relationships.js 
     await expect(addBuildingVendor({ propertyCode: 'A', profile: user })).rejects.toThrow(
       BUILDING_REQUEST_DUPLICATE_MESSAGE,
     );
+  });
+});
+
+describe('管理会社の範囲つき RPC（修正依頼1024 C2）', () => {
+  beforeEach(() => {
+    mockRpc.mockReset();
+    mockFrom.mockReset();
+  });
+
+  it('管理会社の点検情報は mgmt_inspections_all、紐付けの追加は mgmt_add_building_vendor（表へ直接書かない）', async () => {
+    mockRpc.mockResolvedValue({ data: [], error: null });
+    await overlayInspections([], 'management');
+    expect(mockRpc).toHaveBeenCalledWith('mgmt_inspections_all');
+
+    mockRpc.mockResolvedValue({ data: { id: 'bv1', status: 'active' }, error: null });
+    const row = await addBuildingVendor({
+      propertyCode: '120409-00',
+      vendorId: 'v1',
+      profile: { id: 'm1', role: 'management', vendor_id: null },
+    });
+    expect(mockRpc).toHaveBeenLastCalledWith('mgmt_add_building_vendor', {
+      p_property_code: '120409-00',
+      p_vendor_id: 'v1',
+    });
+    expect(row).toEqual({ id: 'bv1', status: 'active' });
+    expect(mockFrom).not.toHaveBeenCalled();
   });
 });

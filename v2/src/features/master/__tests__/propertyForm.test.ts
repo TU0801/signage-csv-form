@@ -119,7 +119,8 @@ describe('savePropertyForm (v1 handleMasterFormSubmit)', () => {
   // 物件そのもの（コード・名前・端末）は保存しない（2026-10-15。正本は業務システム）。送るのは RPC だけ
   it('saves biz inspections with skip ids, the unit diff, and vendor links (not the property row)', async () => {
     await expect(savePropertyForm(base)).resolves.toEqual({ added: 2, errors: [] });
-    expect(saveInspectionsToBiz).toHaveBeenCalledWith('z0023A01', inspections, managed);
+    // 4つ目は権限（管理会社は mgmt_* の RPC で送る）。base の profile は role を持たない
+    expect(saveInspectionsToBiz).toHaveBeenCalledWith('z0023A01', inspections, managed, undefined);
     // 差分だけ（保守会社を変えた1行）
     expect(saveUnitInspectionsToBiz).toHaveBeenCalledWith({
       upserts: [
@@ -132,7 +133,7 @@ describe('savePropertyForm (v1 handleMasterFormSubmit)', () => {
         },
       ],
       deletes: [],
-    });
+    }, undefined);
     // 設備情報と台ごとの保守の両方の保守会社を紐付けに足す
     const [, rows, profile] = syncBuildingVendorsFromEquipment.mock.calls[0] as [string, { vendor_id: string }[], unknown];
     expect(rows.map((r) => r.vendor_id)).toEqual(['v2', 'v3']);
