@@ -24,6 +24,8 @@ interface EntryActionsProps {
   displayTimeDefault: string | undefined;
   onStatusChange: (ids: string[], status: AdminEntryStatus) => Promise<void>;
   onBulkDelete: (ids: string[]) => Promise<void>;
+  /** 閲覧・出力だけ（管理会社）。削除と取込状態の変更を出さない */
+  readOnly?: boolean;
 }
 
 type PendingConfirm = { kind: 'status'; status: AdminEntryStatus } | { kind: 'delete' };
@@ -37,6 +39,7 @@ export function EntryActions({
   displayTimeDefault,
   onStatusChange,
   onBulkDelete,
+  readOnly = false,
 }: EntryActionsProps) {
   const { addToast } = useToast();
   const [downloading, setDownloading] = useState(false);
@@ -130,40 +133,44 @@ export function EntryActions({
           {!hasSelection && ': 行のチェックで選びます'}
         </p>
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            size="sm"
-            variant="danger"
-            disabled={!hasSelection}
-            onClick={() => setConfirm({ kind: 'delete' })}
-          >
-            一括削除
-          </Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={!hasSelection}
-            onClick={() => setConfirm({ kind: 'status', status: 'exported' })}
-          >
-            <CheckIcon size={14} className="mr-1" />
-            取込済みにする
-          </Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={!hasSelection}
-            onClick={() => setConfirm({ kind: 'status', status: 'ready' })}
-          >
-            <UndoIcon size={14} className="mr-1" />
-            未取込に戻す
-          </Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={!hasSelection}
-            onClick={() => setConfirm({ kind: 'status', status: 'pending' })}
-          >
-            未申請に戻す
-          </Button>
+          {!readOnly && (
+            <>
+              <Button
+                size="sm"
+                variant="danger"
+                disabled={!hasSelection}
+                onClick={() => setConfirm({ kind: 'delete' })}
+              >
+                一括削除
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={!hasSelection}
+                onClick={() => setConfirm({ kind: 'status', status: 'exported' })}
+              >
+                <CheckIcon size={14} className="mr-1" />
+                取込済みにする
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={!hasSelection}
+                onClick={() => setConfirm({ kind: 'status', status: 'ready' })}
+              >
+                <UndoIcon size={14} className="mr-1" />
+                未取込に戻す
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={!hasSelection}
+                onClick={() => setConfirm({ kind: 'status', status: 'pending' })}
+              >
+                未申請に戻す
+              </Button>
+            </>
+          )}
           <Button size="sm" variant="success" onClick={handleExportReport}>
             点検レポート
           </Button>

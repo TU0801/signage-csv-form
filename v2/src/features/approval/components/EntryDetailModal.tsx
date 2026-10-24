@@ -21,6 +21,8 @@ interface EntryDetailModalProps {
   onApprove?: (entry: DbEntry) => void;
   onReject?: (entry: DbEntry) => void;
   onEdit?: (entry: DbEntry) => void;
+  /** 差戻し（管理会社。却下＝削除の代わりに理由を付けて保守会社へ戻す） */
+  onSendBack?: (entry: DbEntry) => void;
 }
 
 function DetailRow({ label, children }: { label: string; children: ReactNode }) {
@@ -54,6 +56,7 @@ export function EntryDetailModal({
   onApprove,
   onReject,
   onEdit,
+  onSendBack,
 }: EntryDetailModalProps) {
   if (!entry) return null;
 
@@ -78,6 +81,11 @@ export function EntryDetailModal({
           {onReject && (
             <Button variant="danger" onClick={() => onReject(entry)}>
               却下
+            </Button>
+          )}
+          {onSendBack && (
+            <Button variant="danger" onClick={() => onSendBack(entry)}>
+              差戻し
             </Button>
           )}
           {onApprove && (
