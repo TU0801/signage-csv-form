@@ -191,7 +191,11 @@ describe('BulkReportUploadModal', { timeout: 20000 }, () => {
     await setup();
     fireEvent.change(screen.getByLabelText('実施日（全区間の既定）'), { target: { value: '2026-10-05' } });
     pick(1, /テスト第一マンション/);
-    expect(within(screen.getByTestId('bulk-segment-1')).getByText(/提出済みの報告書を置き換えます/)).toBeInTheDocument();
+    // 割り当てた時点で区間を切り出してハッシュを見比べ、提出の前から「送りません」と出す（置き換えの注意は出さない。修正依頼1024 本番確認）
+    expect(
+      await within(screen.getByTestId('bulk-segment-1')).findByText('同じ内容の報告書が提出済みです（送りません）'),
+    ).toBeInTheDocument();
+    expect(within(screen.getByTestId('bulk-segment-1')).queryByText(/提出済みの報告書を置き換えます/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '1区間を提出する' }));
     // 確認の前にハッシュを見比べるので、送らない区間は置き換えの確認に数えない（この区間だけなら確認を出さない）
     expect(

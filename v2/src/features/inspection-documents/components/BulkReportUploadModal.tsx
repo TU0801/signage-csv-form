@@ -68,6 +68,12 @@ type SegmentResult =
 
 const isFinished = (r: SegmentResult | undefined) => r?.state === 'ok' || r?.state === 'skipped';
 
+/** 区間の中身はページの範囲（と回転）で決まるので、切り出しとハッシュは先頭〜末尾ページで覚える */
+const segKey = (seg: Segment) => `${seg.start}-${seg.end}`;
+
+/** 区間を割り当ててからハッシュを計算するまで待つ時間（区切り・割り当てを続けて変えている間は切り出さない） */
+const HASH_DEBOUNCE_MS = 300;
+
 /** 提出の前に切り出した区間の PDF と SHA-256 */
 interface PreparedSegment {
   file: File;
@@ -103,13 +109,24 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
   const [confirmReplace, setConfirmReplace] = useState<{
     count: number;
     reports: DbInspectionReport[];
-    prepared: Map<number, PreparedSegment>;
+    prepared: Map<string, PreparedSegment>;
   } | null>(null);
   /**
-   * 提出の前に切り出した区間の SHA-256（区間の先頭ページ → ハッシュ）。同じ内容の報告書が提出済みの区間は送らないので、
-   * 区間の「置き換えます」の注意から外す。区切り・回転・PDF を変えると中身が変わるので消す
+   * 切り出した区間の SHA-256（segKey → ハッシュ）。点検を割り当てた区間は、提出を待たずに切り出して計算する。
+   * 同じ内容の報告書が提出済みの区間は送らないので、区間に「送りません」と出し、「置き換えます」の注意から外す
+   * （修正依頼1024 本番確認: 提出の前は同じ内容でも「置き換えます」と出ていた）。回転・PDF を変えると中身が変わるので消す
    */
-  const [hashes, setHashes] = useState<Record<number, string>>({});
+  const [hashes, setHashes] = useState<Record<string, string>>({});
+  /** 切り出した区間（segKey → PDF とハッシュ）。提出のときにもう一度切り出さないよう使い回す */
+  const preparedRef = useRef(new Map<string, PreparedSegment>());
+  const sourceRef = useRef<ReturnType<typeof loadSourcePdf> | null>(null);
+  /** 回転・PDF を変えるたびに進める。古い回転で切り出した結果を覚えないため */
+  const generationRef = useRef(0);
+  const resetPrepared = () => {
+    generationRef.current += 1;
+    preparedRef.current = new Map();
+    setHashes({});
+  };
 
   // 閉じたら pdfjs の文書を片付ける
   useEffect(() => () => pdf?.pages.destroy(), [pdf]);
@@ -156,7 +173,8 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
       setBreaks(new Set());
       setInputs({});
       setResults({});
-      setHashes({});
+      sourceRef.current = null;
+      resetPrepared();
       setTouched(false);
     } catch (err) {
       console.error('PDF open failed:', err);
@@ -173,8 +191,64 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
 
   const rotate = (page: number, delta: number) => {
     setRotations((prev) => ({ ...prev, [page]: ((((prev[page] ?? 0) + delta) % 360) + 360) % 360 }));
-    setHashes({});
+    resetPrepared();
   };
+
+  /** 区間を切り出して SHA-256 を計算する（済みなら覚えたものを返す）。切り出せなければ例外 */
+  const prepareSegment = async (current: LoadedPdf, seg: Segment): Promise<PreparedSegment> => {
+    const key = segKey(seg);
+    const cached = preparedRef.current.get(key);
+    if (cached) return cached;
+    const generation = generationRef.current;
+    sourceRef.current ??= loadSourcePdf(current.bytes);
+    const source = sourceRef.current;
+    let doc;
+    try {
+      doc = await source;
+    } catch (err) {
+      // 次に試すときに読み直す
+      if (sourceRef.current === source) sourceRef.current = null;
+      throw err;
+    }
+    const bytes = await extractRange(doc, seg, rotations);
+    const base = current.file.name.replace(/\.pdf$/i, '');
+    const file = new File([bytes as BlobPart], `${base}_${pageLabel(seg).replace('p.', 'p')}.pdf`, {
+      type: 'application/pdf',
+    });
+    const prepared = { file, hash: await sha256Hex(file) };
+    if (generation === generationRef.current) preparedRef.current.set(key, prepared);
+    return prepared;
+  };
+
+  // 点検を割り当てた区間は、提出の前に切り出してハッシュを計算する（同じ内容の報告書が提出済みかを区間に出すため）
+  const assignedKeys = segments
+    .filter((s) => !isFinished(results[s.start]) && (inputs[s.start] ?? EMPTY_INPUT).targetKey)
+    .map(segKey)
+    .join(',');
+  useEffect(() => {
+    if (!pdf || submitting || !assignedKeys) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void (async () => {
+        for (const seg of segments) {
+          if (cancelled) return;
+          if (!assignedKeys.split(',').includes(segKey(seg))) continue;
+          try {
+            const { hash } = await prepareSegment(pdf, seg);
+            if (!cancelled) setHashes((prev) => (prev[segKey(seg)] === hash ? prev : { ...prev, [segKey(seg)]: hash }));
+          } catch {
+            // 切り出せない区間は提出のときに区間の結果へ失敗を出す
+          }
+        }
+      })();
+    }, HASH_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // prepareSegment は回転（rotations）を読む。回転を変えると resetPrepared で覚えた区間が消える
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pdf, segments, rotations, assignedKeys, submitting]);
 
   const handleSubmit = async () => {
     setTouched(true);
@@ -193,38 +267,34 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
       addToast(`提出前の確認に失敗しました: ${entryErrorReason(err)}`, 'error');
       return;
     }
-    // 同じ内容で送らない区間は置き換えないので、確認の前に区間を切り出してハッシュを見比べる
-    let source;
+    // 同じ内容で送らない区間は置き換えないので、確認の前に区間を切り出してハッシュを見比べる（割り当てた時点で済んでいれば使い回す）
     try {
-      source = await loadSourcePdf(pdf.bytes);
+      sourceRef.current ??= loadSourcePdf(pdf.bytes);
+      await sourceRef.current;
     } catch (err) {
+      sourceRef.current = null;
       console.error('PDF load failed:', err);
       addToast('PDF を切り出せませんでした（パスワード付きの PDF は扱えません）', 'error');
       setSubmitting(false);
       return;
     }
-    const prepared = new Map<number, PreparedSegment>();
+    const prepared = new Map<string, PreparedSegment>();
     for (const seg of pending) {
       try {
-        const bytes = await extractRange(source, seg, rotations);
-        const base = pdf.file.name.replace(/\.pdf$/i, '');
-        const file = new File([bytes as BlobPart], `${base}_${pageLabel(seg).replace('p.', 'p')}.pdf`, {
-          type: 'application/pdf',
-        });
-        prepared.set(seg.start, { file, hash: await sha256Hex(file) });
+        prepared.set(segKey(seg), await prepareSegment(pdf, seg));
       } catch (err) {
         // 切り出せなかった区間は送信のときにもう一度切り出し、失敗を区間の結果に出す
         console.error('PDF extract failed:', err);
       }
     }
     setSubmitting(false);
-    setHashes(Object.fromEntries([...prepared].map(([start, p]) => [start, p.hash])));
+    setHashes((prev) => ({ ...prev, ...Object.fromEntries([...prepared].map(([key, p]) => [key, p.hash])) }));
     const replacing = pending.filter((seg) => {
       const input = inputs[seg.start] ?? EMPTY_INPUT;
       const target = targetMap.get(input.targetKey);
       if (!target) return false;
       const performedOn = effectivePerformedOn(input, defaultPerformedOn);
-      const hash = prepared.get(seg.start)?.hash;
+      const hash = prepared.get(segKey(seg))?.hash;
       const month = effectiveTargetMonth(target, performedOn);
       if (hash && identicalLiveReport(latest, target.inspection.inspection_id, month, hash)) return false;
       return !!reportToReplace(latest, target, performedOn, accountVendor);
@@ -236,11 +306,10 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
     await send(latest, prepared);
   };
 
-  const send = async (latest: DbInspectionReport[], prepared: Map<number, PreparedSegment>) => {
+  const send = async (latest: DbInspectionReport[], prepared: Map<string, PreparedSegment>) => {
     if (!pdf) return;
     const targetsToSend = pending;
     setSubmitting(true);
-    let source: Awaited<ReturnType<typeof loadSourcePdf>> | null = null;
     let ok = 0;
     let skipped = 0;
     let failed = 0;
@@ -252,17 +321,8 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
       const performedOn = effectivePerformedOn(input, defaultPerformedOn);
       try {
         if (!target) throw new Error('点検を選んでください');
-        let pre = prepared.get(seg.start);
-        if (!pre) {
-          // 確認の前に切り出せなかった区間（失敗はここで区間の結果に出す）
-          source ??= await loadSourcePdf(pdf.bytes);
-          const bytes = await extractRange(source, seg, rotations);
-          const base = pdf.file.name.replace(/\.pdf$/i, '');
-          const file = new File([bytes as BlobPart], `${base}_${pageLabel(seg).replace('p.', 'p')}.pdf`, {
-            type: 'application/pdf',
-          });
-          pre = { file, hash: await sha256Hex(file) };
-        }
+        // 確認の前に切り出せなかった区間はもう一度切り出す（失敗はここで区間の結果に出す）
+        const pre = prepared.get(segKey(seg)) ?? (await prepareSegment(pdf, seg));
         const { file } = pre;
         const invalid = validateReportFile(file);
         if (invalid) throw new Error(`${invalid}（${formatBytes(file.size)}）`);
@@ -422,7 +482,6 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
                         disabled={locked || submitting}
                         onClick={() => {
                           setBreaks((prev) => toggleBreak(prev, page));
-                          setHashes({});
                           // 区間の組み方が変わるので、前の失敗の表示は消す（別のページの区間に残さない）
                           setResults((prev) =>
                             Object.fromEntries(Object.entries(prev).filter(([, r]) => r.state === 'ok')),
@@ -471,7 +530,7 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
                     groups={groups}
                     target={targetMap.get((inputs[seg.start] ?? EMPTY_INPUT).targetKey) ?? null}
                     reports={data.reports}
-                    contentHash={hashes[seg.start] ?? null}
+                    contentHash={hashes[segKey(seg)] ?? null}
                     accountVendorId={accountVendor}
                     errors={touched ? errors[seg.start] : undefined}
                     result={results[seg.start]}
@@ -642,6 +701,13 @@ function SegmentRow({
             対象月: {month ? formatMonth(month) : '（実施日の月）'}
             {previous && (
               <span className="ml-1 text-amber-700">提出済みの報告書を置き換えます（{previous.file_name}）</span>
+            )}
+            {identical && !result && (
+              <span className="ml-1 text-gray-700">
+                同じ内容の報告書が提出済みです（
+                {identical.target_month !== month && identical.target_month ? `${formatMonth(identical.target_month)}分・` : ''}
+                送りません）
+              </span>
             )}
           </p>
         )}
