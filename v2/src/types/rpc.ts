@@ -1,6 +1,9 @@
 /**
  * signage スキーマの RPC（biz への窓口）の戻り値。
  * 列は pg_get_function_result で実DBから確認した形（2026-10-15）。
+ * 管理会社用の mgmt_inspections_all / mgmt_inspections_for_property / mgmt_unit_inspections_all /
+ * mgmt_unit_inspection_type_options（修正依頼1024 C2。scripts/fix-1024-mgmt.sql）は、mgmt_ を外した同名の RPC と同じ列を返す
+ * （範囲が自社の物件に絞られるだけ）ので、下の型をそのまま使う。
  */
 
 /** inspections_all() の1行（物件×点検種別） */
