@@ -12,6 +12,10 @@ vi.mock('@/lib/api/admin-entries', () => ({
 vi.mock('@/lib/api/relationships', () => ({
   countPendingBuildingRequests: async () => 1,
 }));
+const auth = vi.hoisted(() => ({ state: { profile: null as { role: string } | null } }));
+vi.mock('@/stores/authStore', () => ({
+  useAuthStore: (sel: (s: typeof auth.state) => unknown) => sel(auth.state),
+}));
 
 describe('AdminSidebar (v1 admin.html .sidebar-nav / admin.js updateSidebarCounts)', () => {
   it('follows the v1 order and labels, counts draft entries plus building requests as 承認待ち', async () => {
@@ -66,5 +70,27 @@ describe('AdminSidebar (v1 admin.html .sidebar-nav / admin.js updateSidebarCount
     expect(localStorage.getItem('sidebarCollapsed')).toBe('false');
     expect(screen.getByText('承認待ち')).toBeInTheDocument();
     vi.unstubAllGlobals();
+  });
+});
+
+describe('AdminSidebar（管理会社メニュー: 修正依頼1024 C2）', () => {
+  it('管理会社は見出し「管理会社メニュー」で、広告枠管理を出さない', async () => {
+    auth.state.profile = { role: 'management' };
+    render(
+      <MemoryRouter initialEntries={['/admin']}>
+        <AdminSidebar />
+      </MemoryRouter>,
+    );
+    const nav = screen.getByRole('navigation', { name: '管理会社メニュー' });
+    expect(screen.getByText('管理会社メニュー', { selector: 'p' })).toBeInTheDocument();
+    expect(within(nav).getAllByRole('link').map((a) => a.textContent?.replace(/\d+$/, ''))).toEqual([
+      '承認待ち',
+      '承認済み',
+      '紐付け管理',
+      'マスター管理',
+      'ユーザー管理',
+    ]);
+    await waitFor(() => expect(countApprovedEntries).toHaveBeenCalled());
+    auth.state.profile = null;
   });
 });

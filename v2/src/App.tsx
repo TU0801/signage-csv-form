@@ -80,7 +80,7 @@ export default function App() {
             <Route path="documents" element={<PortalDocumentsPage />} />
           </Route>
 
-          {/* Admin pages */}
+          {/* Admin pages（管理者メニュー。管理会社には自社物件の範囲だけを「管理会社メニュー」として開く） */}
           <Route
             path="admin"
             element={
@@ -96,7 +96,15 @@ export default function App() {
               <Route path="master" element={<MasterPage />} />
               <Route path="relationships" element={<RelationshipsPage />} />
               <Route path="users" element={<UsersPage />} />
-              <Route path="ad-slots" element={<AdSlotsPage />} />
+              {/* 広告枠管理は管理者だけ（管理会社メニューには出さない） */}
+              <Route
+                path="ad-slots"
+                element={
+                  <AdminRoute adminOnly>
+                    <AdSlotsPage />
+                  </AdminRoute>
+                }
+              />
               {/* 設定は v1 と同じくマスター管理のタブ */}
               <Route path="settings" element={<Navigate to="/admin/master?tab=settings" replace />} />
             </Route>

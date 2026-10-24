@@ -15,6 +15,7 @@ import { countApprovedEntries, countPendingEntries } from '@/lib/api/admin-entri
 import { countPendingBuildingRequests } from '@/lib/api/relationships';
 import { currentEntriesFilters } from '@/features/entries-list/hooks/useEntriesFilters';
 import { useAdminCountsStore } from '@/stores/adminCountsStore';
+import { useAuthStore } from '@/stores/authStore';
 
 type BadgeKey = 'pending' | 'approved';
 
@@ -26,13 +27,15 @@ const adminNav: {
   icon: ComponentType<{ size?: number; className?: string }>;
   exact?: boolean;
   badge?: BadgeKey;
+  /** 管理者だけ（管理会社メニューには出さない） */
+  adminOnly?: boolean;
 }[] = [
   { to: '/admin', label: '承認待ち', icon: InboxIcon, exact: true, badge: 'pending' },
   { to: '/admin/entries', label: '承認済み', icon: CircleCheckIcon, badge: 'approved' },
   { to: '/admin/relationships', label: '紐付け管理', icon: LinkIcon },
   { to: '/admin/master', label: 'マスター管理', icon: DatabaseIcon },
   { to: '/admin/users', label: 'ユーザー管理', icon: UsersIcon },
-  { to: '/admin/ad-slots', label: '広告枠管理', icon: MegaphoneIcon },
+  { to: '/admin/ad-slots', label: '広告枠管理', icon: MegaphoneIcon, adminOnly: true },
 ];
 
 // v1: js/admin.js initSidebarToggle（localStorage の 'sidebarCollapsed' に 'true' / 'false' を保存）
@@ -48,6 +51,9 @@ function readCollapsed(): boolean {
 
 export function AdminSidebar() {
   const location = useLocation();
+  // 管理会社: 見出し「管理会社メニュー」、広告枠管理は出さない（範囲は自社が管理する物件。DB 側で絞る）
+  const isManagement = useAuthStore((s) => s.profile?.role === 'management');
+  const navItems = isManagement ? adminNav.filter((item) => !item.adminOnly) : adminNav;
   const pendingEntries = useAdminCountsStore((s) => s.pendingEntries);
   const buildingRequests = useAdminCountsStore((s) => s.buildingRequests);
   const approved = useAdminCountsStore((s) => s.approved);
@@ -112,8 +118,14 @@ export function AdminSidebar() {
           {collapsed ? <PanelLeftOpenIcon size={16} /> : <PanelLeftCloseIcon size={16} />}
         </button>
       </div>
-      <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 py-1">
-        {adminNav.map((item) => {
+      {isManagement && !collapsed && (
+        <p className="px-3 pb-1 text-xs font-semibold text-gray-500">管理会社メニュー</p>
+      )}
+      <nav
+        aria-label={isManagement ? '管理会社メニュー' : undefined}
+        className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 py-1"
+      >
+        {navItems.map((item) => {
           const count = item.badge ? counts[item.badge] : 0;
           const active = isActive(item);
           const Icon = item.icon;

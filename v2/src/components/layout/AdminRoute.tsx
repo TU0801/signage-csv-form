@@ -8,12 +8,18 @@ export const ADMIN_REQUIRED_MESSAGE = '管理者権限が必要です';
 
 interface AdminRouteProps {
   children: React.ReactNode;
+  /**
+   * 管理者だけの画面（広告枠管理）。省略時は管理者と管理会社が入れる（修正依頼1024 C2: 管理会社メニュー）。
+   * 管理会社がここへ来たら管理会社メニューの先頭（/admin）へ戻す
+   */
+  adminOnly?: boolean;
 }
 
-export function AdminRoute({ children }: AdminRouteProps) {
-  const { isAuthenticated, isAdmin, loading, initialized } = useAuth();
+export function AdminRoute({ children, adminOnly = false }: AdminRouteProps) {
+  const { isAuthenticated, isAdmin, isManagement, loading, initialized } = useAuth();
   const { addToast } = useToast();
-  const denied = initialized && !loading && isAuthenticated && !isAdmin;
+  const allowed = isAdmin || (!adminOnly && isManagement);
+  const denied = initialized && !loading && isAuthenticated && !allowed;
   const notified = useRef(false);
 
   // v1: js/admin.js init（profile.role !== 'admin' なら alert('管理者権限が必要です') → index.html）
@@ -37,8 +43,8 @@ export function AdminRoute({ children }: AdminRouteProps) {
     return <Navigate to="/login" replace />;
   }
 
-  if (!isAdmin) {
-    return <Navigate to="/" replace />;
+  if (!allowed) {
+    return <Navigate to={isManagement ? '/admin' : '/'} replace />;
   }
 
   return <>{children}</>;
