@@ -80,10 +80,12 @@ export async function approvePropertyRequest(
   propertyCode: string,
   terminalId: string | null = null,
 ): Promise<DbPropertyRequest> {
+  // 端末番号が空なら p_terminal_id を送らない（DB 側の既定 NULL）。SQL より先に画面が出ても、端末なしの承認は 2引数版で通る
+  const term = terminalId?.trim();
   const { data, error } = await supabase.rpc(RPC.approvePropertyRequest, {
     p_id: id,
     p_property_code: propertyCode.trim(),
-    p_terminal_id: terminalId?.trim() || null,
+    ...(term ? { p_terminal_id: term } : {}),
   });
   if (error) throw error;
   return data as DbPropertyRequest;

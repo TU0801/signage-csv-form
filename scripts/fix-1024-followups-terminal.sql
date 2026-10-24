@@ -10,6 +10,12 @@
 --   - 本番の端末番号: biz 157件・signage 157件、すべて ^[a-z][0-9]{4}[A-Z][0-9]{2}$（先頭 z153/r1/h1/o1/s1、末尾 A01 155/A00 1/A02 1）。
 --     重複は biz・signage とも 0 件。ただし biz と signage で1件だけ食い違う物件がある（biz z0057A01 / signage z0056A01）ので、
 --     使われているかは両方を見る。biz の端末列に一意制約は無い（properties_terminal_idx は一意でない）。biz の表は変えない。
+--   - 業務システムの設備 biz.equipment.terminal_id にも端末番号がある（本番 152 行・重複 0・形式は上と同じ・active=false は 0 行）。
+--     うち3件（h0001A01〜A03、物件 h0001A00）は物件の端末列にも signage にも無いので、使われているかは設備も見る。
+--
+-- リリース順（必須）: このファイルを本番 DB に流してから、v2 をデプロイする（main への merge で Vercel が自動デプロイするなら merge の前）。
+--   v2 は端末番号を入れたときだけ p_terminal_id を送る。旧 DB（2引数版だけ）のままだと、端末番号を入れた承認は
+--   PostgREST が関数を見つけられず失敗する（端末番号を空にした承認は旧 DB でも通る）。
 
 SET lock_timeout = '5s';
 
@@ -74,6 +80,14 @@ BEGIN
     PERFORM pg_advisory_xact_lock(hashtext('signage_terminal:' || lower(v_term)));
     SELECT coalesce(b.signage_property_code, b.name) INTO v_used_by
       FROM biz.properties b WHERE lower(b.signage_terminal_id) = lower(v_term) LIMIT 1;
+    -- 業務システムの設備（モニター）にも端末番号がある。物件の端末列に無い端末がここだけにあるので必ず見る
+    -- （2026-10-24 本番: 端末つき 152 行・重複 0・すべて active。h0001A01〜A03 の3件は設備にしか無い）。
+    -- 使わなくなった設備（active = false）の端末も、同じ端末番号を別の物件に付け直さないよう「使われている」に数える
+    IF v_used_by IS NULL THEN
+      SELECT coalesce(p.signage_property_code, p.name, '（物件なし）') INTO v_used_by
+        FROM biz.equipment eq LEFT JOIN biz.properties p ON p.id = eq.property_id
+       WHERE lower(eq.terminal_id) = lower(v_term) LIMIT 1;
+    END IF;
     IF v_used_by IS NULL THEN
       SELECT s.property_code INTO v_used_by
         FROM signage.signage_master_properties s,
