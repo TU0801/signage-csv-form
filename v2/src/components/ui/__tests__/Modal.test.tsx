@@ -108,3 +108,25 @@ describe('Modal の dirty（保存していない変更）', () => {
     expect(screen.getByRole('textbox', { name: '二つ目', hidden: true })).toHaveFocus();
   });
 });
+
+describe('Modal の busy（処理中）', () => {
+  it('Escape・背景・× のどれでも閉じず、確認も出さない', () => {
+    const onClose = vi.fn();
+    render(
+      <Modal open dirty busy onClose={onClose} title="送信">
+        <p>本文</p>
+      </Modal>,
+    );
+    const dialog = screen.getByText('本文').closest('dialog')!;
+    const cancel = new Event('cancel', { cancelable: true });
+    fireEvent(dialog, cancel);
+    expect(cancel.defaultPrevented).toBe(true);
+    fireEvent.mouseDown(dialog);
+    fireEvent.click(dialog);
+    const close = screen.getByRole('button', { name: '閉じる', hidden: true });
+    expect(close).toBeDisabled();
+    fireEvent.click(close);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.queryByText('保存していない変更があります。破棄して閉じますか？')).toBeNull();
+  });
+});
