@@ -1,5 +1,6 @@
 import { normalizeTerminalId } from '@/lib/terminal';
 import { todayUtc } from '@/lib/utils';
+import { submittedDisplayPeriod } from './rowDetail';
 import type { BulkEntryInsert } from '@/lib/api/bulk-entry';
 import type { BulkEntryRow, BulkMasterData, BulkSettings, BulkVendorSelection } from '../types';
 
@@ -63,6 +64,8 @@ export function buildBulkEntries(
       const today = todayUtc();
       const link = inspectionLinkOf(row, links, currentVendor.id);
       const isCustom = row.posterType === 'custom';
+      // 詳細設定の畳んだ要約と同じ規則（B18）
+      const period = submittedDisplayPeriod(row);
 
       return {
         property_code: String(row.propertyCode),
@@ -78,10 +81,10 @@ export function buildBulkEntries(
         inspection_end: row.endDate || null,
         remarks: row.remarks || '',
         announcement: row.noticeText || inspection?.noticeText || '',
-        display_start_date: row.displayStartDate || today,
-        display_start_time: row.displayStartTime || null,
-        display_end_date: row.displayEndDate || row.endDate || null,
-        display_end_time: row.displayEndTime || null,
+        display_start_date: period.startDate || today,
+        display_start_time: period.startTime,
+        display_end_date: period.endDate,
+        display_end_time: period.endTime,
         display_duration: row.displayTime || Number(settings.display_time_default) || 6,
         // 追加の貼紙（B18）は画像の URL を入れる。テンプレートの行で掲示板表示が False（v1 の自動保存・テンプレート由来）は v1 と同じく custom
         poster_type: isCustom || row.showOnBoard === false ? 'custom' : 'template',

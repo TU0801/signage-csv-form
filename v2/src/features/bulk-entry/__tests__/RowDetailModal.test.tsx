@@ -3,6 +3,8 @@ import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/re
 import { ToastProvider } from '@/components/ui/Toast';
 import { useBulkStore, resetBulkSession } from '@/stores/bulkStore';
 import { RowDetailModal } from '../modals/RowDetailModal';
+import { buildBulkEntries } from '../utils/buildBulkEntries';
+import { todayUtc } from '@/lib/utils';
 import { createMemoryStorage } from './memoryStorage';
 
 const io = vi.hoisted(() => ({
@@ -71,6 +73,16 @@ describe('RowDetailModal（修正依頼1024 B18）', () => {
     // 畳んだまま保存しても表示期間は行の値（空）のまま。連絡先が既定のままなら行には持たない
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
     expect(rowOf(id)).toMatchObject({ displayStartDate: '', displayEndDate: '', emergencyContact: '', posterType: 'template' });
+  });
+
+  it('畳んだ表示期間の要約は申請で保存される値と同じ（表示開始日が空なら申請日＝今日）。タイトルは表で見える物件名を出す', () => {
+    const id = setup();
+    expect(screen.getByRole('dialog', { hidden: true })).toHaveTextContent('詳細設定（物件A 消防設備点検）');
+    expect(screen.getByText('申請日 〜 2026-11-03')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    const s = useBulkStore.getState();
+    const [entry] = buildBulkEntries([rowOf(id)], s.masterData, s.currentVendor, s.appSettings);
+    expect(entry).toMatchObject({ display_start_date: todayUtc(), display_end_date: '2026-11-03' });
   });
 
   it('表示期間を開くと点検期間が入り、書き換えた連絡先と画面図で選んだ位置を保存する', () => {

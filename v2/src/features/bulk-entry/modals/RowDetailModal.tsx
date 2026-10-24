@@ -11,7 +11,8 @@ import { templateFileUrl } from '@/lib/templateStorage';
 import { PosterPreview } from '@/features/single-entry/components/PosterPreview';
 import { resolveTemplateImageUrl } from '@/features/single-entry/lib/templateImages';
 import { formatPosterDate } from '@/features/single-entry/lib/entryLogic';
-import { POSITIONS, hasCustomDisplayPeriod, templateDisplayName } from '../utils/rowDetail';
+import { formatMonth } from '@/features/inspection-portal/lib/schedule';
+import { POSITIONS, hasCustomDisplayPeriod, submittedDisplayPeriod, templateDisplayName } from '../utils/rowDetail';
 import type { BulkEntryRow, BulkMasterData } from '../types';
 
 interface RowDetailModalProps {
@@ -34,14 +35,27 @@ const field = `${fieldBase} w-full`;
 export function RowDetailModal({ open, onClose, rowId }: RowDetailModalProps) {
   const rows = useBulkStore((s) => s.rows);
   const masterData = useBulkStore((s) => s.masterData);
-  const index = rows.findIndex((r) => r.id === rowId);
-  const row = index >= 0 ? rows[index] : undefined;
+  const row = rows.find((r) => r.id === rowId);
 
   return (
-    <Modal open={open} onClose={onClose} title={`詳細設定 ${row ? `(行 ${index + 1})` : ''}`} className="max-w-4xl">
+    <Modal open={open} onClose={onClose} title={row ? `詳細設定（${rowTitle(row, masterData)}）` : '詳細設定'} className="max-w-4xl">
       {open && row && <RowDetailForm key={row.id} row={row} masterData={masterData} onClose={onClose} />}
     </Modal>
   );
+}
+
+/**
+ * タイトルに出す行の名前（物件名・点検種別・対象月）。ストアの並びと表の No は予定行の並べ替えで一致しないので、
+ * 番号ではなく表で見える値で示す
+ */
+function rowTitle(row: BulkEntryRow, masterData: BulkMasterData): string {
+  const propertyName =
+    row.schedule?.propertyName ||
+    masterData.properties.find((p) => String(p.propertyCode) === String(row.propertyCode))?.propertyName ||
+    row.propertyCode ||
+    '物件未選択';
+  const month = row.schedule?.targetMonth ? formatMonth(row.schedule.targetMonth) : '';
+  return [propertyName, row.inspectionType, month].filter(Boolean).join(' ');
 }
 
 function RowDetailForm({ row, masterData, onClose }: { row: BulkEntryRow; masterData: BulkMasterData; onClose: () => void }) {
@@ -130,9 +144,13 @@ function RowDetailForm({ row, masterData, onClose }: { row: BulkEntryRow; master
     addToast('詳細設定を保存しました', 'success');
   };
 
-  const periodSummary = `${displayStartDate || '申請日'}${displayStartTime ? ` ${displayStartTime}` : ''} 〜 ${
-    displayEndDate || '点検終了日'
-  }${displayEndTime ? ` ${displayEndTime}` : ''}`;
+  // 畳んだときの要約は申請で保存される値で出す（一度も開かずに保存すると行の値のまま＝表示開始日が空なら申請日になる）
+  const shownPeriod = periodShown
+    ? submittedDisplayPeriod({ displayStartDate, displayStartTime, displayEndDate, displayEndTime, endDate: row.endDate })
+    : submittedDisplayPeriod(row);
+  const periodSummary = `${shownPeriod.startDate || '申請日'}${shownPeriod.startTime ? ` ${shownPeriod.startTime}` : ''} 〜 ${
+    shownPeriod.endDate || '点検終了日'
+  }${shownPeriod.endTime ? ` ${shownPeriod.endTime}` : ''}`;
 
   return (
     <div className="space-y-3">

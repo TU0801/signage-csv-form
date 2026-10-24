@@ -79,3 +79,18 @@ export function templateDisplayName(
   const hit = key ? images.find((i) => i.image_key.toLowerCase() === key) : undefined;
   return hit?.display_name || inspectionType;
 }
+
+/**
+ * 申請で保存される表示期間（buildBulkEntries と詳細設定の畳んだ要約の両方がこれを使う）。
+ * startDate が null なら申請日（申請した日の日付）、endDate は表示終了日 → 点検終了日 → null
+ */
+export function submittedDisplayPeriod(
+  row: Pick<BulkEntryRow, 'displayStartDate' | 'displayStartTime' | 'displayEndDate' | 'displayEndTime' | 'endDate'>,
+): { startDate: string | null; startTime: string | null; endDate: string | null; endTime: string | null } {
+  return {
+    startDate: row.displayStartDate || null,
+    startTime: row.displayStartTime || null,
+    endDate: row.displayEndDate || row.endDate || null,
+    endTime: row.displayEndTime || null,
+  };
+}
