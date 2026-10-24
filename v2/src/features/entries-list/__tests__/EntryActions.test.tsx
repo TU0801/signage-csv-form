@@ -39,7 +39,7 @@ describe('EntryActions (v1 admin-export.js exportCSV / downloadCustomImages)', (
     fireEvent.click(screen.getByRole('button', { name: 'CSV' }));
     expect(csv.generateAdminCsv).toHaveBeenCalledWith(loaded, undefined);
 
-    fireEvent.click(screen.getByRole('button', { name: '追加画像DL' }));
+    fireEvent.click(screen.getByRole('button', { name: '追加登録された画像ダウンロード' }));
     await waitFor(() => expect(zip.downloadCustomImages).toHaveBeenCalledWith(loaded));
   });
 });
