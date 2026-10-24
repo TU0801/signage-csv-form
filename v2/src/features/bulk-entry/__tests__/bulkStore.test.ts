@@ -4,6 +4,7 @@ import { AUTO_SAVE_TTL_MS, readAutoSave } from '../utils/bulkAutoSave';
 import { applySettings, DEFAULT_BULK_SETTINGS, flattenProperties } from '../utils/bulkMaster';
 import type { BulkMasterData } from '../types';
 import { createMemoryStorage } from './memoryStorage';
+import { hasUnsentInput, isApplyTarget } from '../utils/scheduleRows';
 
 const master: BulkMasterData = {
   properties: [
@@ -147,6 +148,21 @@ describe('bulkStore (v1 js/bulk-table.js / bulk-modals.js の行操作)', () => 
     // 申請済みになったら読み取り（入力していた値は申請の値に置き換わる）
     s().syncScheduleRows([{ meta: { ...meta, locked: true }, row: { propertyCode: 'z9999A01', startDate: '2026-11-20' } }]);
     expect(s().rows[0]).toMatchObject({ startDate: '2026-11-20', schedule: { locked: true } });
+  });
+
+  it('申請した予定の行の入力を空に戻すと、読み直しても申請の対象・未送信の入力にならない（点検月未登録の行）', () => {
+    const meta = { key: 'i1:unscheduled', inspectionId: 'i1', targetMonth: null, locked: false, propertyName: '物件Z', terminalIds: [] };
+    s().syncScheduleRows([{ meta, row: { propertyCode: 'z9999A01', inspectionType: '消防設備点検' } }]);
+    const id = s().rows[0]!.id;
+    s().changeStartDate(id, '2026-11-05');
+    s().changeMemo(id, 'メモ');
+    expect(hasUnsentInput(s().rows[0]!)).toBe(true);
+    s().clearScheduleInputs([id]);
+    s().syncScheduleRows([{ meta, row: { propertyCode: 'z9999A01', inspectionType: '消防設備点検' } }]);
+    const row = s().rows[0]!;
+    expect(row).toMatchObject({ id, startDate: '', endDate: '', memo: '', inspectionType: '消防設備点検' });
+    expect(isApplyTarget(row)).toBe(false);
+    expect(hasUnsentInput(row)).toBe(false);
   });
 
   it('bulk apply overwrites only the given fields on the given rows and fills an empty end date', () => {

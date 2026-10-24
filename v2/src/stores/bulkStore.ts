@@ -78,6 +78,11 @@ export interface BulkState {
    * 自動保存はしない（予定の行は保存しない）
    */
   syncScheduleRows: (inputs: { meta: BulkScheduleMeta; row: BulkRowInput }[]) => void;
+  /**
+   * 申請した予定の行の入力（日付・備考・メモ・詳細）を空に戻す。点検月未登録の行は申請後も未申請のまま残るので、
+   * 戻さないと同じ申請をもう一度出せてしまい、未送信の入力として離脱の確認も出続ける
+   */
+  clearScheduleInputs: (ids: number[]) => void;
 
   addRow: (data?: BulkRowInput) => number;
   addRowWithCopy: () => void;
@@ -259,6 +264,32 @@ export const useBulkStore = create<BulkState>((set, get) => {
         rows: nextRows,
         rowIdCounter: counter,
         selectedIds: new Set([...s.selectedIds].filter((id) => ids.has(id))),
+      }));
+    },
+
+    clearScheduleInputs: (ids) => {
+      const { appSettings } = get();
+      const idSet = new Set(ids);
+      set((s) => ({
+        rows: s.rows.map((r) =>
+          r.schedule && !r.schedule.locked && idSet.has(r.id)
+            ? validate({
+                ...r,
+                startDate: '',
+                endDate: '',
+                remarks: '',
+                memo: '',
+                displayTime: defaultDisplayTime(appSettings),
+                noticeText: '',
+                displayStartDate: '',
+                displayStartTime: '',
+                displayEndDate: '',
+                displayEndTime: '',
+                showOnBoard: true,
+                position: 2,
+              })
+            : r,
+        ),
       }));
     },
 

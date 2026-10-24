@@ -111,6 +111,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
   const addRowWithCopy = useBulkStore((s) => s.addRowWithCopy);
   const duplicateRows = useBulkStore((s) => s.duplicateRows);
   const removeRows = useBulkStore((s) => s.removeRows);
+  const clearScheduleInputs = useBulkStore((s) => s.clearScheduleInputs);
   const replaceRows = useBulkStore((s) => s.replaceRows);
   const applyToRows = useBulkStore((s) => s.applyToRows);
   const syncScheduleRows = useBulkStore((s) => s.syncScheduleRows);
@@ -208,11 +209,8 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
     (row: BulkEntryRow) => {
       if (row.schedule) {
         const item = itemsByKey.get(row.schedule.key);
-        // 既定の時期では、過去の月も片付いていない予定（申請中・報告書未提出・提出済・差戻し）は出す。
-        // 点検一覧の既定（過去は超過だけ）のままだと、超過の行を申請した直後に行が消え、報告書未提出も既定では見えないため
-        const pendingPast =
-          timing === 'default' && item?.timing === 'overdue' && itemStatus(item, completed, today) !== 'completed';
-        if (item && item.targetMonth && !pendingPast && !matchTiming(item, timing, today)) return false;
+        // 時期は点検一覧と同じ（既定は 超過＋今月＋今後3か月。過去の月は超過〔未申請〕だけ）。過去の月の報告書UP・完了連絡は「すべて」で出す
+        if (item && item.targetMonth && !matchTiming(item, timing, today)) return false;
         if (item && !item.targetMonth && timing === 'overdue') return false;
       }
       if (managementCompanyId && managementIndex) {
@@ -227,7 +225,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       }
       return true;
     },
-    [itemsByKey, timing, today, completed, managementCompanyId, managementIndex, managementOf, search, propertyNameOf],
+    [itemsByKey, timing, today, managementCompanyId, managementIndex, managementOf, search, propertyNameOf],
   );
 
   // 選択中の保守会社の点検行（手で足した行を点検行に結び付ける・点検月を出すため）
@@ -500,14 +498,16 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       cancelBulkAutoSave();
       clearAutoSave(userId);
       // 申請した手の行だけ消す（申請中に足した行・絞り込みで隠れていた行は残り、removeRows が残りの行で自動保存を書き直す）。
-      // 予定の行は読み直しで申請済みの行になる
+      // 予定の行は入力を空に戻す（読み直しで申請済みの行になる。点検月未登録の行は未申請のまま残るので二重に申請させない）
       const manualIds = targets.filter((r) => !r.schedule).map((r) => r.id);
+      const scheduleIds = targets.filter((r) => r.schedule).map((r) => r.id);
       addToast(
         hidden > 0
           ? `${targets.length}件のデータを申請しました\n絞り込みで隠れている${hidden}件は申請していません`
           : `${targets.length}件のデータを申請しました`,
         'success',
       );
+      clearScheduleInputs(scheduleIds);
       removeRows(manualIds);
       void portal.refetch();
     } catch (error) {
