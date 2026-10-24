@@ -20,6 +20,10 @@ const settings = vi.hoisted(() => ({ display_time_default: '10' as string | unde
 vi.mock('../../../../js/ui-utils.js', () => ({ showToast: vi.fn() }));
 vi.mock('../../../../js/admin-settings.js', () => ({ getAppSettings: () => settings }));
 
+// v2 は取りに行く URL をこのプロジェクトの poster-images に限る（v1 には無い、意図した違い。zipDownload.test で確かめる）。
+// ここでは対象とファイル名の一致だけを見るので、URL の判定は素通しにする
+vi.mock('@/lib/posterUrl', () => ({ safePosterUrl: (url: string | null | undefined) => url || null }));
+
 // v2 の ZIP は jszip / file-saver を動的 import する。ファイル名だけ記録する
 const zipLog = vi.hoisted(() => ({ files: [] as string[], saved: [] as string[] }));
 vi.mock('jszip', () => ({

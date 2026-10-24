@@ -1,5 +1,6 @@
 import type { DbEntry } from '@/types/database';
 import { APPROVED_STATUSES, customImageBaseName, filterApprovedEntries } from './csv';
+import { safePosterUrl } from './posterUrl';
 
 /**
  * 追加画像をZIPでダウンロード（既定は承認済みのみ。v1 admin-export.js downloadCustomImages と同じ対象・ファイル名）
@@ -16,7 +17,11 @@ export async function downloadCustomImages(
       : statuses === APPROVED_STATUSES
         ? filterApprovedEntries(entries)
         : entries.filter((e) => statuses.includes(e.status));
-  const customEntries = targets.filter((e) => e.poster_type === 'custom' && e.poster_image);
+  // このプロジェクトの poster-images の URL だけを取りに行く（画面の一覧・個別 DL と同じ safePosterUrl の判定）
+  const customEntries = targets.flatMap((e) => {
+    const url = e.poster_type === 'custom' ? safePosterUrl(e.poster_image) : null;
+    return url ? [{ entry: e, url }] : [];
+  });
 
   if (customEntries.length === 0) {
     return 0;
@@ -30,8 +35,8 @@ export async function downloadCustomImages(
   const zip = new JSZip();
 
   const results = await Promise.allSettled(
-    customEntries.map(async (entry) => {
-      const response = await fetch(entry.poster_image!);
+    customEntries.map(async ({ entry, url }) => {
+      const response = await fetch(url);
       const blob = await response.blob();
       const filename = `${customImageBaseName(entry)}.jpg`;
       return { filename, blob };
@@ -52,10 +57,11 @@ export async function downloadCustomImages(
 
 /** 追加画像を1件ダウンロードする（ファイル名は ZIP の中と同じ。承認待ちの「追加登録された画像」の個別 DL） */
 export async function downloadCustomImage(entry: DbEntry): Promise<void> {
-  if (!entry.poster_image) throw new Error('追加画像がありません');
+  const url = safePosterUrl(entry.poster_image);
+  if (!url) throw new Error(entry.poster_image ? '表示できない画像の URL です' : '追加画像がありません');
   const [{ saveAs }, response] = await Promise.all([
     import('file-saver'),
-    fetch(entry.poster_image),
+    fetch(url),
   ]);
   if (!response.ok) throw new Error(`画像を取得できませんでした（${response.status}）`);
   saveAs(await response.blob(), `${customImageBaseName(entry)}.jpg`);
