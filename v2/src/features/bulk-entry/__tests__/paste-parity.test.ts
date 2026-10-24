@@ -5,7 +5,7 @@ import { applySettings, DEFAULT_BULK_SETTINGS } from '../utils/bulkMaster';
 import type { BulkMasterData } from '../types';
 
 /**
- * Excel 貼り付け（6列固定・v1.29.2 の silent バグ修正後）が v1 と同じ行を作ることを確かめる。
+ * 旧6列（B列が端末ID。v1.29.2 の silent バグ修正後）の Excel 貼り付けが v1 と同じ行を作ることを確かめる（1024 で新5列にした後の互換）。
  * v1 の importFromPaste は画面の要素を読むので、必要な要素だけ jsdom に置いて動かし、
  * v1 の state.rows と v2 の store の行を比べる。
  */
