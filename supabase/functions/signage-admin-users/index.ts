@@ -99,7 +99,8 @@ Deno.serve(async (req) => {
       ? body.managementCompanyId
       : null;
     if (!email || !role) return json({ error: 'メールアドレスと権限を指定してください' }, 400);
-    if (passwordError) return passwordError;
+    // Microsoft でログインする人はパスワード無しで作る（GoTrue がランダムな値を入れるので、パスワードではログインできない）
+    if (password && passwordError) return passwordError;
     let finalManagementCompanyId = managementCompanyId;
     if (!callerIsAdmin) {
       // 管理会社: 作れるのは自社の管理会社ユーザーだけ（会社は自社に固定）。管理者・保守会社のアカウントは管理者が作る
@@ -124,7 +125,7 @@ Deno.serve(async (req) => {
 
     const { data: created, error: createError } = await admin.auth.admin.createUser({
       email,
-      password,
+      ...(password ? { password } : {}),
       email_confirm: true,
       user_metadata: { role },
     });

@@ -6,6 +6,7 @@ import { MAX_AD_SLOTS } from '@/lib/constants';
 import { isSafeLinkUrl } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
+import { MICROSOFT_LOGIN_FAILED_MESSAGE, oauthErrorMessage } from '@/lib/api/auth';
 import type { DbProfile } from '@/types/database';
 
 /** v1: login.html redirectByProfile（管理者は管理画面、それ以外は入力画面）。管理会社も点検登録フォーム（点検一覧を出す） */
@@ -14,12 +15,20 @@ export function homePathFor(profile: Pick<DbProfile, 'role'>): string {
   return '/';
 }
 
+/** 本番の Auth 設定（scripts/sso-azure.sql・フック・Azure プロバイダ・戻り先の許可）が済むまでボタンを出さない */
+function microsoftLoginEnabled(): boolean {
+  return import.meta.env.VITE_ENABLE_MICROSOFT_LOGIN === 'true';
+}
+
 export function LoginPage() {
+  const showMicrosoft = microsoftLoginEnabled();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  // Microsoft ログインで拒否されて戻ったときは URL にエラーが付いている（supabase-js は読み捨てる）
+  const [error, setError] = useState(() => oauthErrorMessage(window.location.search, window.location.hash) ?? '');
   const [loading, setLoading] = useState(false);
   const signIn = useAuthStore((s) => s.signIn);
+  const signInWithMicrosoft = useAuthStore((s) => s.signInWithMicrosoft);
   const notice = useAuthStore((s) => s.notice);
   const clearNotice = useAuthStore((s) => s.clearNotice);
   const rejectUnknownSession = useAuthStore((s) => s.rejectUnknownSession);
@@ -28,6 +37,30 @@ export function LoginPage() {
   const profile = useAuthStore((s) => s.profile);
   const navigate = useNavigate();
   const { slots } = useAdSlots({ activeOnly: true });
+
+  // エラーを読んだら URL から消す（再読み込みで同じ案内を出し続けない）
+  useEffect(() => {
+    if (oauthErrorMessage(window.location.search, window.location.hash)) {
+      window.history.replaceState(window.history.state, '', window.location.pathname);
+    }
+  }, []);
+
+  // ?code= が残ったまま未ログインなら交換に失敗している（別タブで押し直して code_verifier が入れ替わった等）。
+  // 成功・プロファイルで拒否のどちらでも supabase-js が code を消すので、残っているのは失敗のときだけ
+  useEffect(() => {
+    if (!initialized || user || !new URLSearchParams(window.location.search).has('code')) return;
+    setError(MICROSOFT_LOGIN_FAILED_MESSAGE);
+    window.history.replaceState(window.history.state, '', window.location.pathname);
+  }, [initialized, user]);
+
+  // Microsoft の画面から「戻る」でキャッシュから復元されると loading が true のまま残り、両方のボタンが押せなくなる
+  useEffect(() => {
+    const onShow = (e: PageTransitionEvent) => {
+      if (e.persisted) setLoading(false);
+    };
+    window.addEventListener('pageshow', onShow);
+    return () => window.removeEventListener('pageshow', onShow);
+  }, []);
 
   // 既にログイン済みでもプロファイルを確認できないセッションは、この端末だけ破棄する（v1: login.html checkAuth）
   useEffect(() => {
@@ -58,6 +91,19 @@ export function LoginPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'ログインに失敗しました');
     } finally {
+      setLoading(false);
+    }
+  };
+
+  // 成功すると Microsoft の画面へ移るので、ローディングは戻さない
+  const handleMicrosoft = async () => {
+    setError('');
+    clearNotice();
+    setLoading(true);
+    try {
+      await signInWithMicrosoft();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'ログインに失敗しました');
       setLoading(false);
     }
   };
@@ -103,9 +149,24 @@ export function LoginPage() {
             {message && (
               <p className="text-sm text-red-600 bg-red-50 rounded-md px-3 py-2">{message}</p>
             )}
-            <Button type="submit" className="w-full px-4! py-2!" disabled={loading}>
-              {loading ? 'ログイン中...' : 'ログイン'}
-            </Button>
+            {/* Microsoft 365 のアカウントでのログインは横に並べる（縦に足すと FHD でカードがセルからはみ出す）。
+                管理者が事前に登録したメールアドレスの人だけ入れる。入力欄のメールとパスワードは使わない */}
+            <div className={showMicrosoft ? 'grid grid-cols-2 gap-2' : ''}>
+              <Button type="submit" className="w-full px-4! py-2!" disabled={loading}>
+                {loading ? 'ログイン中...' : 'ログイン'}
+              </Button>
+              {showMicrosoft && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-full px-4! py-2!"
+                  disabled={loading}
+                  onClick={() => void handleMicrosoft()}
+                >
+                  Microsoft でログイン
+                </Button>
+              )}
+            </div>
           </form>
           {/* v1: login.html .login-footer */}
           <p className="mt-6 text-center text-xs text-slate-500">

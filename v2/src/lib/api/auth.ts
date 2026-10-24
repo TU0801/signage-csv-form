@@ -12,6 +12,28 @@ export const PROFILE_UNKNOWN_MESSAGE =
 export const LOGIN_FAILED_MESSAGE =
   'ログインに失敗しました。メールアドレスとパスワードを確認してください。';
 
+export const MICROSOFT_LOGIN_FAILED_MESSAGE =
+  'Microsoft でのログインに失敗しました。登録されているメールアドレスのアカウントか確認し、解決しない場合は管理者にお問い合わせください。';
+
+/** before user created フック（scripts/sso-azure.sql signage.hook_before_user_created）の断り文言と同じ */
+export const PRE_REGISTRATION_REQUIRED_MESSAGE =
+  'このメールアドレスは管理者による事前登録が必要です。管理者にお問い合わせください。';
+
+/**
+ * Microsoft ログインから戻った URL のエラー（クエリまたはハッシュの error / error_description）を案内文にする。
+ * 拒否は DB 側（未登録・受け入れないテナント）で起きる。URL の文言は誰でも付けられるので画面にそのまま出さず、
+ * フックの断り文言と一致したときだけその案内、それ以外は共通の案内にする。エラーが無ければ null
+ */
+export function oauthErrorMessage(search: string, hash: string): string | null {
+  const query = new URLSearchParams(search);
+  const fragment = new URLSearchParams(hash.replace(/^#/, ''));
+  const pick = (key: string) => query.get(key) ?? fragment.get(key);
+  if (!pick('error') && !pick('error_code') && !pick('error_description')) return null;
+  return pick('error_description') === PRE_REGISTRATION_REQUIRED_MESSAGE
+    ? PRE_REGISTRATION_REQUIRED_MESSAGE
+    : MICROSOFT_LOGIN_FAILED_MESSAGE;
+}
+
 /** active: 使える / inactive: 無効化 / no_profile: signage のプロファイルが無い / unknown: 通信エラー等で判定できない */
 export type AccountAccess = 'active' | 'inactive' | 'no_profile' | 'unknown';
 

@@ -95,7 +95,8 @@ export function useUsers() {
       const columns = companyColumns(params.role, params.vendor_id, params.management_company_id ?? null);
       const companyError = companyRequiredError(params.role, columns.vendor_id, columns.management_company_id);
       if (companyError) throw new Error(companyError);
-      if (params.password.length < MIN_PASSWORD_LENGTH) {
+      // 空欄は Microsoft でログインする人（パスワード無しで作る）
+      if (params.password && params.password.length < MIN_PASSWORD_LENGTH) {
         throw new Error(`パスワードは${MIN_PASSWORD_LENGTH}文字以上で入力してください`);
       }
       await createUser({
