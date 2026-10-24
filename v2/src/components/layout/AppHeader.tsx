@@ -21,7 +21,7 @@ export type LayoutWidth = 'standard' | 'full';
 
 /** width は本文（UserLayout の main）と同じ値にして、ロゴと本文の左端をそろえる */
 export function AppHeader({ width = 'standard' }: { width?: LayoutWidth }) {
-  const { profile, isAdmin, isManagement } = useAuth();
+  const { profile, isAdmin } = useAuth();
   const signOut = useAuthStore((s) => s.signOut);
   const location = useLocation();
   const { setTarget } = useContext(HeaderSlotContext);
@@ -77,8 +77,9 @@ export function AppHeader({ width = 'standard' }: { width?: LayoutWidth }) {
                   {item.label}
                 </Link>
               ))}
-              {/* 管理者メニュー（旧『管理』。B5）。管理会社にも自社の範囲で開く（C2） */}
-              {(isAdmin || isManagement) && (
+              {/* 管理者メニュー（旧『管理』。B5）。管理会社に出すのは AdminRoute が管理会社を通すようになってから（C2・担当 mgmt）。
+                  今は AdminRoute が管理者しか通さないので、管理会社にリンクを出すと「管理者権限が必要です」で戻される */}
+              {isAdmin && (
                 <Link
                   to="/admin"
                   className={cn(
