@@ -286,6 +286,22 @@ describe('BulkEntryPage (v1 js/bulk.js init / adminVendorSelect)', () => {
     await waitFor(() => expect(screen.queryByText(/入力にエラーがある行が1件あります/)).toBeNull());
   });
 
+  it('申請に失敗したエラーのトーストは、次に申請できたときに消える', async () => {
+    api.createBulkEntries.mockRejectedValueOnce({ message: '通信が切れました' }).mockResolvedValueOnce([]);
+    renderPage();
+    fireEvent.change(await screen.findByLabelText('保守会社を選択'), { target: { value: 'v2' } });
+    await waitFor(() => expect(useBulkStore.getState().masterData.properties).toHaveLength(3));
+    await waitFor(() => expect(useBulkStore.getState().sessionLoaded).toBe(true));
+    act(() => {
+      useBulkStore.getState().addRow({ propertyCode: 'z0003A01', inspectionType: '消防設備点検' });
+    });
+    fireEvent.click(screen.getByRole('button', { name: '↑ 申請する' }));
+    expect(await screen.findByText('申請に失敗しました: 通信が切れました')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '↑ 申請する' }));
+    await waitFor(() => expect(api.createBulkEntries).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByText('申請に失敗しました: 通信が切れました')).toBeNull());
+  });
+
   describe('点検予定の行（保守会社のアカウント。B13・B14）', () => {
     const vendorProfile: DbProfile = { ...adminProfile, id: 'user-1', role: 'user', vendor_id: 'v1' };
     beforeEach(() => {
