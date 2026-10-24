@@ -106,6 +106,36 @@ AS $function$
 $function$;
 
 -- ============================================================
+-- 2b. 申請モーダルの点検種別の候補（有効な点検種別だけ）
+-- ============================================================
+-- signage_master_inspection_types には有効/無効の列が無く、無効にした点検種別も残る。guard_property_request は
+-- 無効な点検種別を断るので、候補と既定（先頭）から外す。保守会社に有効な紐付けがあればその点検種別、
+-- 無ければ有効な点検種別すべて（linked=false）。並びは点検種別マスターの取得と同じ（sort → template_no → 名前）
+CREATE OR REPLACE FUNCTION signage.inspection_type_options_for_request(p_vendor_id uuid)
+ RETURNS TABLE(id uuid, name text, linked boolean)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'biz', 'signage', 'pg_temp'
+AS $function$
+  with linked as (
+    select t.id, t.label, t.sort, t.template_no
+    from biz.inspection_types t
+    where t.active
+      and exists (select 1 from signage.signage_vendor_inspections vi
+                  where vi.vendor_id = p_vendor_id and vi.inspection_id = t.id and vi.status = 'active')
+  ), opts as (
+    select l.id, l.label, l.sort, l.template_no, true as linked from linked l
+    union all
+    select t.id, t.label, t.sort, t.template_no, false
+    from biz.inspection_types t
+    where t.active and not exists (select 1 from linked)
+  )
+  select o.id, o.label, o.linked from opts o
+  where signage.is_active_member()
+  order by o.sort, o.template_no, o.label;
+$function$;
+
+-- ============================================================
 -- 3. 承認・却下（管理者だけ）
 -- ============================================================
 -- 承認: 物件コードを決めて biz.properties を作る（トリガー biz.sync_property_to_signage が signage の物件を作る）→
@@ -210,9 +240,11 @@ $function$;
 -- ============================================================
 REVOKE ALL ON FUNCTION signage.guard_property_request() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION signage.management_companies_for_request() FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION signage.inspection_type_options_for_request(uuid) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION signage.approve_property_request(uuid, text) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION signage.reject_property_request(uuid, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION signage.management_companies_for_request() TO authenticated;
+GRANT EXECUTE ON FUNCTION signage.inspection_type_options_for_request(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION signage.approve_property_request(uuid, text) TO authenticated;
 GRANT EXECUTE ON FUNCTION signage.reject_property_request(uuid, text) TO authenticated;
 
@@ -221,6 +253,6 @@ GRANT EXECUTE ON FUNCTION signage.reject_property_request(uuid, text) TO authent
 -- ============================================================
 -- 承認済みの申請で作った物件（created_property_code）は業務システムの物件なので、戻しても消えない（消すなら業務システムで）。
 -- DROP FUNCTION signage.reject_property_request(uuid, text), signage.approve_property_request(uuid, text),
---   signage.management_companies_for_request();
+--   signage.management_companies_for_request(), signage.inspection_type_options_for_request(uuid);
 -- DROP TABLE signage.signage_property_requests;   -- トリガー・ポリシーも一緒に消える
 -- DROP FUNCTION signage.guard_property_request();
