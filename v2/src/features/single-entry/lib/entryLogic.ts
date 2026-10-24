@@ -369,6 +369,7 @@ export function buildLocalEntry(values: SingleEntryValues, ctx: EntryContext): B
       posterType: values.posterType,
       customImage: isCustom ? ctx.customImage : null,
       linkVendorId: ctx.linkVendorId ?? null,
+      ...(isCustom ? { linkInspectionType: inspection?.inspection_name ?? '' } : {}),
     },
   };
 }
@@ -401,7 +402,9 @@ export function valuesFromEntry(
   types: DbInspectionType[],
   linkedIds: ReadonlySet<string>,
 ): SingleEntryValues {
-  const t = types.find((x) => x.inspection_name === e.inspectionType);
+  // 追加の貼紙は「追加画像」で記録するので、フォームで選んでいた点検工事案内（点検行への結び付けに使う）を戻す
+  const typeName = e.posterType === PosterType.CUSTOM ? (e.linkInspectionType ?? e.inspectionType) : e.inspectionType;
+  const t = typeName ? types.find((x) => x.inspection_name === typeName) : undefined;
   const inspectionTypeId = t?.id ?? '';
   const visible = filterInspectionTypes(types, values.category, linkedIds).some((x) => x.id === inspectionTypeId);
   return {
@@ -498,13 +501,21 @@ export function toInsertRow(
  * 保守会社は追加した時点のもの（古い作成データは fallbackVendorId＝申請時の保守会社）。管理者は選んだ保守会社の点検行だけを見る
  */
 export function entryInspectionLink(
-  e: Pick<LocalEntry, 'propertyCode' | 'inspectionType' | 'startDate' | 'linkVendorId'>,
+  e: Pick<LocalEntry, 'propertyCode' | 'inspectionType' | 'startDate' | 'linkVendorId' | 'posterType' | 'linkInspectionType'>,
   inspections: PortalInspectionRow[],
   isAdmin: boolean,
   fallbackVendorId: string | null,
 ): InspectionLink | null {
   const vendorId = e.linkVendorId === undefined ? fallbackVendorId : e.linkVendorId;
-  return matchInspectionLink(e, inspectionsOfVendor(inspections, isAdmin, vendorId), vendorId);
+  // 追加の貼紙は inspection_type が「追加画像」に固定されるので、フォームで選んでいた点検工事案内で照合する。選んでいなければ結び付けない
+  // （linkInspectionType の無い古い作成データは今までどおり inspectionType）
+  const inspectionType = e.posterType === PosterType.CUSTOM ? (e.linkInspectionType ?? e.inspectionType) : e.inspectionType;
+  if (!inspectionType) return null;
+  return matchInspectionLink(
+    { propertyCode: e.propertyCode, inspectionType, startDate: e.startDate },
+    inspectionsOfVendor(inspections, isAdmin, vendorId),
+    vendorId,
+  );
 }
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];

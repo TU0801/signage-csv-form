@@ -56,13 +56,16 @@ vi.mock('@/hooks/useMasterData', () => ({
 }));
 vi.mock('@/lib/api/relationships', () => ({ fetchActivePropertyCodes: vi.fn() }));
 // 申請を結び付ける点検行（portal_inspections。保守会社のアカウントは DB が担当の点検に絞って返す）。点検月の無い点検行はどの月の申請も結び付く
+const portalApi = vi.hoisted(() => ({ fail: false }));
 vi.mock('@/lib/api/portal', async () => {
   const { makeInspection } = await import('@/features/inspection-portal/__tests__/fixtures');
   return {
     fetchPortalInspections: () =>
-      Promise.resolve([
-        makeInspection({ inspection_id: 'i-clean', property_code: 'z0015A01', inspection_type_label: '排水管清掃', vendor_id: 'v-mine', inspection_months: [] }),
-      ]),
+      portalApi.fail
+        ? Promise.reject(new Error('portal failed'))
+        : Promise.resolve([
+            makeInspection({ inspection_id: 'i-clean', property_code: 'z0015A01', inspection_type_label: '排水管清掃', vendor_id: 'v-mine', inspection_months: [] }),
+          ]),
   };
 });
 vi.mock('@/lib/api/single-entry', async (importOriginal) => {
@@ -93,6 +96,7 @@ beforeEach(() => {
   HTMLDialogElement.prototype.showModal ??= function () {};
   HTMLDialogElement.prototype.close ??= function () {};
   isAdmin = false;
+  portalApi.fail = false;
   insertEntries.mockReset();
   insertEntries.mockResolvedValue([]);
 });
@@ -272,5 +276,48 @@ describe('1件入力画面（使われない貼紙画像の片付け。修正依
       expect(storageApi.discardOwnPosterImages).toHaveBeenCalledWith(['https://storage/poster-images/u1/1_ab.png'], 'u1'),
     );
     expect(storageApi.uploadPosterImage).toHaveBeenCalledWith(png, 'u1');
+  });
+});
+
+describe('1件入力画面（点検予定への結び付け。修正依頼1024 後続）', () => {
+  /** 追加の貼紙で z0015A01 の作成データを1件作り、申請する */
+  async function submitCustomEntry() {
+    const png = new File(['png'], '貼紙.png', { type: 'image/png' });
+    pdfToPng.preparePosterImage.mockResolvedValue({ file: png });
+    storageApi.uploadPosterImage.mockReset().mockResolvedValue('https://storage/poster-images/u1/1_ab.png');
+    render(
+      <ToastProvider>
+        <SingleEntryPage />
+      </ToastProvider>,
+    );
+    await waitFor(() => expect(screen.getByRole('combobox', { name: '点検工事案内 *' })).toHaveValue('排水管清掃'));
+    pick('物件コード *', 'z0015A01');
+    fireEvent.click(screen.getByRole('radio', { name: '追加' }));
+    fireEvent.change(screen.getByLabelText('貼紙画像'), { target: { files: [png] } });
+    expect(await screen.findByAltText('プレビュー')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'データを追加' }));
+    await screen.findByRole('table');
+    fireEvent.click(screen.getByRole('button', { name: '申請する' }));
+    await waitFor(() => expect(insertEntries).toHaveBeenCalledTimes(1));
+    return (insertEntries.mock.calls[0]![0] as Record<string, unknown>[])[0]!;
+  }
+
+  it('追加の貼紙は「追加画像」で記録し、フォームで選んでいた点検工事案内で点検行に結び付ける', async () => {
+    const row = await submitCustomEntry();
+    expect(row).toMatchObject({
+      inspection_type: '追加画像',
+      poster_type: 'custom',
+      property_inspection_id: 'i-clean',
+      vendor_id: 'v-mine',
+      target_month: `${String(row.inspection_start).slice(0, 7)}-01`,
+    });
+  });
+
+  it('点検行が読めなければ結び付けずに申請し、成功の知らせにその旨を足す', async () => {
+    portalApi.fail = true;
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const row = await submitCustomEntry();
+    expect(row).not.toHaveProperty('property_inspection_id');
+    expect(await screen.findByText('1件を申請しました（点検予定には結び付けていません）')).toBeInTheDocument();
   });
 });

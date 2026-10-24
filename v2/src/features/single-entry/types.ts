@@ -64,4 +64,9 @@ export interface LocalEntry {
    * vendorName（v1 準拠で一般ユーザーは社名順の先頭の会社）とは別。古い作成データには無い（申請時の保守会社で補う）
    */
   linkVendorId?: string | null;
+  /**
+   * 点検行に結び付けるときの点検種別（追加の貼紙だけ。inspectionType は「追加画像」に固定されるので、フォームが内部に持つ
+   * 点検工事案内の名前を残す。選ばれていなければ ''）。テンプレートの貼紙は inspectionType で照合する。古い作成データには無い
+   */
+  linkInspectionType?: string;
 }

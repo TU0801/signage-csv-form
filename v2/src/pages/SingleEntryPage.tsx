@@ -294,10 +294,12 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
       }
       // 保守会社の点検行に一致する申請は点検に結び付ける（点検登録フォームに申請中として出て、報告書UP が通る）。
       // 点検行が読めなければ結び付けずに申請する（今までどおり）
-      const inspections = await fetchPortalInspections().catch((err: unknown) => {
+      const fetched = await fetchPortalInspections().catch((err: unknown) => {
         console.error('点検行の取得に失敗しました（点検に結び付けずに申請します）:', err);
-        return [];
+        return null;
       });
+      const linkSkipped = fetched === null;
+      const inspections = fetched ?? [];
       const today = todayUtc();
       await insertEntries(
         sending.map((e, i) =>
@@ -312,7 +314,7 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
         ),
       );
       uploaded = [];
-      addToast(`${sending.length}件を申請しました`, 'success');
+      addToast(`${sending.length}件を申請しました${linkSkipped ? '（点検予定には結び付けていません）' : ''}`, 'success');
       setLocalEntries((prev) => prev.filter((e) => !sentIds.has(e._id)));
       setEditingId((id) => (id && sentIds.has(id) ? null : id));
       submitted.refetch();
