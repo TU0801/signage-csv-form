@@ -15,7 +15,7 @@ export type BulkInspectionLink = InspectionLinkRow;
 
 /**
  * 申請の点検行・保守会社・対象月（修正依頼1024 B6〜B14）。点検予定の行はその点検行と対象月（点検月の無い点検は点検開始日の月）。
- * 手で足した行は、1件入力と同じ照合（matchInspectionLink: 物件コード＋点検種別、対象月は点検開始日の月）。一致しなければ紐付けない
+ * 手で足した行は、1件入力と同じ照合（matchInspectionLink: 物件コード＋点検種別＋点検開始日の月が予定にあること、対象月はその月）。一致しなければ紐付けない
  */
 export function inspectionLinkOf(
   row: Pick<BulkEntryRow, 'schedule' | 'propertyCode' | 'inspectionType' | 'startDate'>,

@@ -53,13 +53,13 @@ vi.mock('@/hooks/useMasterData', () => ({
   }),
 }));
 vi.mock('@/lib/api/relationships', () => ({ fetchActivePropertyCodes: vi.fn() }));
-// 申請を結び付ける点検行（portal_inspections。保守会社のアカウントは DB が担当の点検に絞って返す）
+// 申請を結び付ける点検行（portal_inspections。保守会社のアカウントは DB が担当の点検に絞って返す）。点検月の無い点検行はどの月の申請も結び付く
 vi.mock('@/lib/api/portal', async () => {
   const { makeInspection } = await import('@/features/inspection-portal/__tests__/fixtures');
   return {
     fetchPortalInspections: () =>
       Promise.resolve([
-        makeInspection({ inspection_id: 'i-clean', property_code: 'z0015A01', inspection_type_label: '排水管清掃', vendor_id: 'v-mine' }),
+        makeInspection({ inspection_id: 'i-clean', property_code: 'z0015A01', inspection_type_label: '排水管清掃', vendor_id: 'v-mine', inspection_months: [] }),
       ]),
   };
 });

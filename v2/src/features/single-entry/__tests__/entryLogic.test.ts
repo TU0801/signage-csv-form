@@ -230,7 +230,7 @@ describe('申請する行（v1 submitEntries）', () => {
 
   it('保守会社の点検行に物件コード（-00 の有無は同じ物件）＋点検種別が一致すれば、点検行・保守会社・点検開始日の月を入れる', () => {
     const inspections = [
-      makeInspection({ inspection_id: 'i-clean', property_code: '120273', inspection_type_label: '排水管清掃', vendor_id: 'v-other', unit_vendor_ids: ['v-a'] }),
+      makeInspection({ inspection_id: 'i-clean', property_code: '120273', inspection_type_label: '排水管清掃', vendor_id: 'v-other', unit_vendor_ids: ['v-a'], inspection_months: [4, 10] }),
     ];
     // 保守会社のアカウント: DB が絞った点検行をそのまま見る。古い作成データ（linkVendorId 無し）は申請時の自社で補う
     const link = entryInspectionLink(localEntry(), inspections, false, 'v-mine');
