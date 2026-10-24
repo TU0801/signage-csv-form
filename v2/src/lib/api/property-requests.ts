@@ -1,5 +1,4 @@
 import { supabase, TABLES, RPC } from '@/lib/supabase';
-import { VendorInspectionStatus } from '@/lib/constants';
 import type { DbPropertyRequest } from '@/types/database';
 import type { ManagementCompanyRow } from '@/types/portal';
 
@@ -109,32 +108,29 @@ export interface InspectionTypeOption {
   name: string;
 }
 
+export interface InspectionTypeOptions {
+  options: InspectionTypeOption[];
+  /** true: 保守会社に紐付いた点検種別。false: 紐付けが無いので有効な点検種別すべて */
+  linked: boolean;
+}
+
 /**
- * 保守会社に紐付いた（active の）点検種別。点検種別マスターの並び順（sort_order → 名前）。
- * 先頭が申請モーダルの既定（一括入力の B9(b) と同じ規則）
+ * 申請モーダルの点検種別の候補。DB（inspection_type_options_for_request）が有効な点検種別だけを
+ * 点検種別マスターの並び順（sort → template_no）で返す。無効な点検種別は申請時に DB が断るので候補にも出さない。
+ * 保守会社に有効な紐付けがあればその点検種別（先頭が既定＝一括入力の B9(b) と同じ規則）、無ければ全点検種別
  */
-export async function fetchVendorInspectionTypeOptions(
+export async function fetchInspectionTypeOptionsForRequest(
   vendorId: string,
-): Promise<InspectionTypeOption[]> {
-  const { data, error } = await supabase
-    .from(TABLES.vendorInspections)
-    .select('inspection_id, signage_master_inspection_types(inspection_name, sort_order)')
-    .eq('vendor_id', vendorId)
-    .eq('status', VendorInspectionStatus.ACTIVE);
+): Promise<InspectionTypeOptions> {
+  const { data, error } = await supabase.rpc(RPC.inspectionTypeOptionsForRequest, {
+    p_vendor_id: vendorId,
+  });
   if (error) throw error;
-  const rows = (data ?? []) as unknown as {
-    inspection_id: string;
-    signage_master_inspection_types: { inspection_name: string; sort_order: number | null } | null;
-  }[];
-  return rows
-    .filter((r) => r.signage_master_inspection_types)
-    .map((r) => ({
-      id: r.inspection_id,
-      name: r.signage_master_inspection_types!.inspection_name,
-      sort: r.signage_master_inspection_types!.sort_order ?? 0,
-    }))
-    .sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name, 'ja'))
-    .map(({ id, name }) => ({ id, name }));
+  const rows = (data ?? []) as { id: string; name: string; linked: boolean }[];
+  return {
+    options: rows.map(({ id, name }) => ({ id, name })),
+    linked: rows[0]?.linked ?? false,
+  };
 }
 
 /** 申請の状態の表示名 */

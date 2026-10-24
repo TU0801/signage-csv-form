@@ -280,6 +280,12 @@ export function ApproveDialog({ target, onClose, onConfirm }: DialogProps) {
               : '点検種別の指定が無いので、点検は登録しません（マスター管理で追加できます）。'}
             物件コードは後から変えられません。
           </p>
+          <p
+            className="text-xs font-medium text-amber-700"
+            data-testid="propertyRequestTerminalNote"
+          >
+            できる物件には端末がありません。保守会社が掲示を申請できるのは、業務システムでこの物件に端末を登録した後です。
+          </p>
         </div>
       )}
     </Modal>

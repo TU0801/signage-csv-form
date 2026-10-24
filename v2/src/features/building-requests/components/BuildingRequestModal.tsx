@@ -6,12 +6,12 @@ import { Select } from '@/components/ui/Select';
 import { useToast } from '@/components/ui/Toast';
 import { MonthCheckboxes } from '@/features/master/components/property/MonthCheckboxes';
 import { useAuthStore } from '@/stores/authStore';
-import { fetchMasterInspectionTypes, fetchMasterVendors } from '@/lib/api/masterData';
+import { fetchMasterVendors } from '@/lib/api/masterData';
 import {
   createPropertyRequest,
   fetchManagementCompaniesForRequest,
   fetchMyPropertyRequests,
-  fetchVendorInspectionTypeOptions,
+  fetchInspectionTypeOptionsForRequest,
   PROPERTY_REQUEST_STATUS_LABEL,
   type InspectionTypeOption,
 } from '@/lib/api/property-requests';
@@ -48,6 +48,10 @@ export function validatePropertyRequest(form: {
   }
   return errors;
 }
+
+/** 承認でできる物件には端末が無い（業務システムで端末を登録するまで掲示を申請できない） */
+export const TERMINAL_NOTE =
+  '承認後、業務システムで端末が登録されるまでは掲示の申請はできません（端末未設置になります）。';
 
 // 管理会社フィルターの「未設定」（single-entry の MANAGEMENT_COMPANY_NONE）などの id でない値は既定にしない
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -145,12 +149,9 @@ export function BuildingRequestModal({
         cancelled = true;
       };
     }
-    fetchVendorInspectionTypeOptions(vendor)
-      .then(async (linked) => {
-        if (linked.length > 0) return { options: linked, all: false };
-        const all = await fetchMasterInspectionTypes();
-        return { options: all.map((t) => ({ id: t.id, name: t.inspection_name })), all: true };
-      })
+    // 候補は有効な点検種別だけ（無効な点検種別は申請時に DB が断る）
+    fetchInspectionTypeOptionsForRequest(vendor)
+      .then(({ options, linked }) => ({ options, all: !linked }))
       .then(
         ({ options, all }) => {
           if (cancelled) return;
@@ -255,7 +256,12 @@ export function BuildingRequestModal({
           <p className="text-sm font-medium text-green-700">
             「{submitted.property_name}」の追加を申請しました。
           </p>
-          <p className="text-sm text-gray-700">承認されると点検登録フォームに行が出ます。</p>
+          <p className="text-sm text-gray-700">
+            {submitted.inspection_type_id
+              ? '承認されると点検登録フォームに行が出ます。'
+              : '承認後は物件として選べます（点検予定の行は点検種別の登録後に出ます）。'}
+          </p>
+          <p className="text-xs text-gray-500">{TERMINAL_NOTE}</p>
           <p className="text-xs text-gray-500">
             管理者が物件コードを決めて承認します。結果はこの画面の「これまでの申請」で確認できます。
           </p>
@@ -394,6 +400,14 @@ export function BuildingRequestModal({
               ))}
             </tbody>
           </table>
+          {history.some((h) => h.status === 'approved') && (
+            <p
+              className="mt-1 text-xs text-gray-500"
+              data-testid="buildingRequestHistoryTerminalNote"
+            >
+              {TERMINAL_NOTE}
+            </p>
+          )}
         </div>
       )}
     </Modal>

@@ -56,6 +56,7 @@ export const RPC = {
   managementCompaniesMaster: 'management_companies_master',
   /** 新規建物の申請（2026-10-24）。管理会社の候補は管理者以外にも返す。承認・却下は管理者だけ */
   managementCompaniesForRequest: 'management_companies_for_request',
+  inspectionTypeOptionsForRequest: 'inspection_type_options_for_request',
   approvePropertyRequest: 'approve_property_request',
   rejectPropertyRequest: 'reject_property_request',
 } as const;
