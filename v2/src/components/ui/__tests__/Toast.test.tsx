@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { useRef } from 'react';
 import { render, screen, act, fireEvent } from '@testing-library/react';
 import { ToastProvider, useToast } from '../Toast';
 import { pushTopLayerHost, removeTopLayerHost } from '../topLayerHost';
@@ -55,6 +56,36 @@ describe('ToastProvider', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
     expect(screen.queryByText(/保存できません/)).toBeNull();
+  });
+
+  it('addToast が返す id で、そのトーストだけを消せる（エラーを直した後に残さない）', () => {
+    function Pair() {
+      const { addToast, dismissToast } = useToast();
+      const ids = useRef('');
+      return (
+        <>
+          <button
+            onClick={() => {
+              ids.current = addToast('3行目: 点検終了日は開始日以降', 'error');
+              addToast('別のエラー', 'error');
+            }}
+          >
+            出す
+          </button>
+          <button onClick={() => dismissToast(ids.current)}>消す</button>
+        </>
+      );
+    }
+    render(
+      <ToastProvider>
+        <Pair />
+      </ToastProvider>,
+    );
+    act(() => screen.getByText('出す').click());
+    expect(screen.getByText('3行目: 点検終了日は開始日以降')).toBeTruthy();
+    act(() => screen.getByText('消す').click());
+    expect(screen.queryByText('3行目: 点検終了日は開始日以降')).toBeNull();
+    expect(screen.getByText('別のエラー')).toBeTruthy();
   });
 
   it('モーダルが無いときは下の中央に出す（一括入力のツールバー右端のテンプレート・時期の操作を覆わない。修正依頼1024 F4）', () => {

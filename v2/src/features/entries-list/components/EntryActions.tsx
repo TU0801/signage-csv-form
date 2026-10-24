@@ -90,7 +90,7 @@ export function EntryActions({
     }
   }, [hasSelection, selectedEntries, propertyNames, addToast]);
 
-  // v1: js/admin-export.js downloadCustomImages（承認済みの追加画像すべて。ZIP 内は customImageBaseName + .jpg）
+  // v1: js/admin-export.js downloadCustomImages（承認済みの追加画像すべて。ZIP 内は customImageBaseName + 画像に合わせた拡張子 imageExtension）
   const handleDownloadImages = useCallback(async () => {
     const count = filterApprovedEntries(entries).filter(
       (e) => e.poster_type === 'custom' && e.poster_image,

@@ -247,12 +247,59 @@ describe('BulkEntryPage (v1 js/bulk.js init / adminVendorSelect)', () => {
       expect(document.activeElement?.closest('tr')?.getAttribute('data-row-id')).toBe(String(errorRowId)),
     );
 
-    // エラーの行を消すと申請できる
+    // エラーの行を消すと申請できる。エラーのトーストも消える（修正依頼1024 本番確認: 直した後も残っていた）
     act(() => useBulkStore.getState().removeRows([errorRowId]));
+    await waitFor(() => expect(screen.queryByText(/入力にエラーがある行が1件あります/)).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: '↑ 申請する' }));
     await waitFor(() => expect(api.createBulkEntries).toHaveBeenCalledTimes(1));
     expect(api.createBulkEntries.mock.calls[0]![0]).toHaveLength(1);
     await waitFor(() => expect(useBulkStore.getState().rows).toHaveLength(0));
+  });
+
+  it('エラーのトーストは、その行を直したとき・画面を離れた（1件入力へ切り替えた）ときに消える', async () => {
+    const view = renderPage();
+    fireEvent.change(await screen.findByLabelText('保守会社を選択'), { target: { value: 'v2' } });
+    await waitFor(() => expect(useBulkStore.getState().masterData.properties).toHaveLength(3));
+    await waitFor(() => expect(useBulkStore.getState().sessionLoaded).toBe(true));
+    act(() => {
+      useBulkStore.getState().addRow({ propertyCode: 'z0003A01', inspectionType: '消防設備点検' });
+      useBulkStore.getState().addRow({ propertyCode: 'z0004A01', inspectionType: '消防設備点検' });
+    });
+    fireEvent.click(screen.getByRole('button', { name: '↑ 申請する' }));
+    expect(await screen.findByText(/入力にエラーがある行が1件あります/)).toBeInTheDocument();
+    // 端末のある物件に直すと消える
+    const errorRowId = useBulkStore.getState().rows[1]!.id;
+    act(() => useBulkStore.getState().changeProperty(errorRowId, 'z0003A01'));
+    await waitFor(() => expect(screen.queryByText(/入力にエラーがある行が1件あります/)).toBeNull());
+
+    // もう一度エラーにして出し、一括入力の画面を離れると消える（トーストは画面の外の ToastProvider に残るため）
+    act(() => useBulkStore.getState().changeProperty(errorRowId, 'z0004A01'));
+    fireEvent.click(screen.getByRole('button', { name: '↑ 申請する' }));
+    expect(await screen.findByText(/入力にエラーがある行が1件あります/)).toBeInTheDocument();
+    view.rerender(
+      <ToastProvider>
+        <WithHeaderSlot>
+          <p>1件入力</p>
+        </WithHeaderSlot>
+      </ToastProvider>,
+    );
+    await waitFor(() => expect(screen.queryByText(/入力にエラーがある行が1件あります/)).toBeNull());
+  });
+
+  it('申請に失敗したエラーのトーストは、次に申請できたときに消える', async () => {
+    api.createBulkEntries.mockRejectedValueOnce({ message: '通信が切れました' }).mockResolvedValueOnce([]);
+    renderPage();
+    fireEvent.change(await screen.findByLabelText('保守会社を選択'), { target: { value: 'v2' } });
+    await waitFor(() => expect(useBulkStore.getState().masterData.properties).toHaveLength(3));
+    await waitFor(() => expect(useBulkStore.getState().sessionLoaded).toBe(true));
+    act(() => {
+      useBulkStore.getState().addRow({ propertyCode: 'z0003A01', inspectionType: '消防設備点検' });
+    });
+    fireEvent.click(screen.getByRole('button', { name: '↑ 申請する' }));
+    expect(await screen.findByText('申請に失敗しました: 通信が切れました')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '↑ 申請する' }));
+    await waitFor(() => expect(api.createBulkEntries).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByText('申請に失敗しました: 通信が切れました')).toBeNull());
   });
 
   describe('点検予定の行（保守会社のアカウント。B13・B14）', () => {

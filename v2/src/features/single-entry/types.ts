@@ -61,7 +61,7 @@ export interface LocalEntry {
   customImage: CustomImage | null;
   /**
    * 点検行に結び付けるときの保守会社（追加した時点の、保守会社のアカウントは自社・管理者は選んだ会社。未選択は null）。
-   * vendorName（v1 準拠で一般ユーザーは社名順の先頭の会社）とは別。古い作成データには無い（申請時の保守会社で補う）
+   * 古い作成データには無い（申請時の保守会社で補う）
    */
   linkVendorId?: string | null;
   /**

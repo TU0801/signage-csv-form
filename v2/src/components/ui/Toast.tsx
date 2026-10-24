@@ -5,7 +5,10 @@ import type { Toast as ToastType } from '@/types/app';
 import { useTopLayerHost } from './topLayerHost';
 
 interface ToastContextValue {
-  addToast: (message: string, type?: ToastType['type']) => void;
+  /** 出したトーストの id を返す（dismissToast で消すときに使う） */
+  addToast: (message: string, type?: ToastType['type']) => string;
+  /** id のトーストを消す（もう消えていれば何もしない）。直した・申請できた後にエラーを残さないため */
+  dismissToast: (id: string) => void;
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -31,7 +34,7 @@ const typeStyles = {
 
 /**
  * トースト通知。addToast(message, type) で出す。message の '\n' は改行として表示する。
- * success / info は 4 秒で消え、error / warning は × を押すまで残る（最新 3 件まで。超えた古いものは消える）。
+ * success / info は 4 秒で消え、error / warning は × を押すか dismissToast(id) で消すまで残る（最新 3 件まで。超えた古いものは消える）。
  * モーダルが開いているときは一番手前の dialog の中に portal する。外に出すと inert になり、押すと背景クリックでモーダルが閉じる。
  * dialog の子孫なので dialog と一緒に top layer に乗り、::backdrop の上に出る（popover は使わない）。
  * dialog が外れたら topLayerHost の通知で次の dialog か body へ移る。DOM を直接操作しないので、
@@ -49,6 +52,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         setToasts((prev) => prev.filter((t) => t.id !== id));
       }, AUTO_DISMISS_MS);
     }
+    return id;
   }, []);
 
   const removeToast = useCallback((id: string) => {
@@ -90,7 +94,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <ToastContext.Provider value={{ addToast }}>
+    <ToastContext.Provider value={{ addToast, dismissToast: removeToast }}>
       {children}
       {createPortal(container, host ?? document.body)}
     </ToastContext.Provider>
