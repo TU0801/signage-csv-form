@@ -149,7 +149,9 @@ describe('BuildingRequestModal（管理者・点検種別を指定しない）',
     );
     // 全点検種別から選べるが、既定は「指定しない」
     await waitFor(() =>
-      expect(screen.getByText(/この保守会社には点検種別の紐付けが無いので/)).toBeInTheDocument(),
+      expect(
+        screen.getByText(/この保守会社には有効な点検種別の紐付けが無いので/),
+      ).toBeInTheDocument(),
     );
     expect(
       (document.getElementById('buildingRequestInspectionType') as HTMLSelectElement).value,
