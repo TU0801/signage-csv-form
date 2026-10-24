@@ -5,14 +5,14 @@ import { LoginPage } from '../LoginPage';
 import { useAuthStore } from '@/stores/authStore';
 import { MICROSOFT_LOGIN_FAILED_MESSAGE, PRE_REGISTRATION_REQUIRED_MESSAGE } from '@/lib/api/auth';
 
-vi.mock('@/lib/supabase', () => ({ supabase: {}, TABLES: {} }));
+vi.mock('@/lib/supabase', () => ({ supabase: {}, TABLES: {}, SUPABASE_URL: 'https://example.supabase.co' }));
 vi.mock('@/lib/storage', () => ({ uploadAdImage: vi.fn() }));
 vi.mock('@/features/ad-slots/hooks/useAdSlots', () => ({
   useAdSlots: () => ({
     slots: [
       {
         slot_index: 1,
-        image_url: 'https://example.com/ad1.png',
+        image_url: 'https://example.supabase.co/storage/v1/object/public/poster-images/ads/slot_1.png',
         caption: '広告の説明文',
         link_url: 'https://example.com',
         is_active: true,
@@ -36,7 +36,7 @@ describe('ログイン画面（v1 login.html）', () => {
 
     const link = screen.getAllByRole('link')[0]!;
     expect(link).toHaveAttribute('href', 'https://example.com');
-    expect(link.querySelector('img')).toHaveAttribute('src', 'https://example.com/ad1.png');
+    expect(link.querySelector('img')).toHaveAttribute('src', 'https://example.supabase.co/storage/v1/object/public/poster-images/ads/slot_1.png');
     expect(screen.queryByText('広告の説明文')).not.toBeInTheDocument();
     expect(screen.getAllByText('広告スペース')).toHaveLength(2);
   });

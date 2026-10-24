@@ -11,7 +11,7 @@ const io = vi.hoisted(() => ({
   preparePosterImage: vi.fn(),
   uploadPosterImage: vi.fn(),
 }));
-vi.mock('@/lib/supabase', () => ({ supabase: {}, TABLES: {}, RPC: {} }));
+vi.mock('@/lib/supabase', () => ({ supabase: {}, TABLES: {}, RPC: {}, SUPABASE_URL: 'https://example.supabase.co' }));
 vi.mock('@/lib/pdfToPng', () => ({ preparePosterImage: io.preparePosterImage }));
 vi.mock('@/lib/storage', () => ({ uploadPosterImage: io.uploadPosterImage }));
 vi.mock('@/lib/templateStorage', () => ({ templateFileUrl: (f: string) => `https://storage/templates/${f}` }));
@@ -105,7 +105,7 @@ describe('RowDetailModal（修正依頼1024 B18）', () => {
     const id = setup();
     const png = new File(['x'], 'poster.png', { type: 'image/png' });
     io.preparePosterImage.mockResolvedValue({ file: png, notice: 'PDF は3ページあります。1ページ目を使用します' });
-    io.uploadPosterImage.mockResolvedValue('https://storage/poster-images/user-1/1_ab.png');
+    io.uploadPosterImage.mockResolvedValue('https://example.supabase.co/storage/v1/object/public/poster-images/user-1/1_ab.png');
 
     fireEvent.click(screen.getByRole('radio', { name: '追加' }));
     // 画像を選ぶ前は保存できない
@@ -118,12 +118,12 @@ describe('RowDetailModal（修正依頼1024 B18）', () => {
     await waitFor(() => expect(io.uploadPosterImage).toHaveBeenCalledWith(png, 'user-1'));
     expect(io.preparePosterImage).toHaveBeenCalledWith(pdf);
     expect(await screen.findByText(/1ページ目を使用します/)).toBeInTheDocument();
-    expect(screen.getByAltText('追加の貼紙')).toHaveAttribute('src', 'https://storage/poster-images/user-1/1_ab.png');
+    expect(screen.getByAltText('追加の貼紙')).toHaveAttribute('src', 'https://example.supabase.co/storage/v1/object/public/poster-images/user-1/1_ab.png');
 
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
     expect(rowOf(id)).toMatchObject({
       posterType: 'custom',
-      posterImage: 'https://storage/poster-images/user-1/1_ab.png',
+      posterImage: 'https://example.supabase.co/storage/v1/object/public/poster-images/user-1/1_ab.png',
       isValid: true,
     });
   });

@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { EntryDetailModal } from '../components/EntryDetailModal';
+
+vi.mock('@/lib/supabase', () => ({ supabase: {}, SUPABASE_URL: 'https://example.supabase.co' }));
 import type { DbEntry } from '@/types/database';
 
 const entry = {
@@ -43,5 +45,20 @@ describe('承認画面の詳細（管理者）', () => {
     render(<EntryDetailModal entry={entry} onClose={() => {}} propertyNames={new Map()} emailOf={() => ''} displayDefault={6} />);
     expect(screen.getByText('メモ（CSV外）')).toBeInTheDocument();
     expect(screen.getByText('点検月を11月に変更')).toBeInTheDocument();
+  });
+
+  it('追加の貼紙の画像は、このプロジェクトの poster-images の URL だけを出す（javascript: などは出さない）', () => {
+    HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
+      this.open = true;
+    };
+    const ok = 'https://example.supabase.co/storage/v1/object/public/poster-images/u1/a.png';
+    const props = { onClose: () => {}, propertyNames: new Map<string, string>(), emailOf: () => '', displayDefault: 6 };
+    const { unmount } = render(<EntryDetailModal entry={{ ...entry, poster_type: 'custom', poster_image: ok }} {...props} />);
+    expect(screen.getByAltText('貼紙画像')).toHaveAttribute('src', ok);
+    unmount();
+
+    render(<EntryDetailModal entry={{ ...entry, poster_type: 'custom', poster_image: 'javascript:alert(1)' }} {...props} />);
+    expect(screen.queryByAltText('貼紙画像')).not.toBeInTheDocument();
+    expect(screen.getByText('表示できない画像の URL です')).toBeInTheDocument();
   });
 });

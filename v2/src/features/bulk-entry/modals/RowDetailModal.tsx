@@ -7,6 +7,7 @@ import { cn, todayUtc } from '@/lib/utils';
 import { POSTER_PNG_SIZE } from '@/lib/constants';
 import { preparePosterImage } from '@/lib/pdfToPng';
 import { uploadPosterImage } from '@/lib/storage';
+import { safePosterUrl } from '@/lib/posterUrl';
 import { templateFileUrl } from '@/lib/templateStorage';
 import { PosterPreview } from '@/features/single-entry/components/PosterPreview';
 import { resolveTemplateImageUrl } from '@/features/single-entry/lib/templateImages';
@@ -282,7 +283,7 @@ function RowDetailForm({ row, masterData, onClose }: { row: BulkEntryRow; master
           {isCustom ? (
             posterImage ? (
               <img
-                src={posterImage}
+                src={safePosterUrl(posterImage) ?? undefined}
                 alt="追加の貼紙"
                 className="mx-auto max-h-72 w-auto max-w-full rounded border border-gray-200 object-contain"
               />

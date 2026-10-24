@@ -4,6 +4,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useAdSlots } from '@/features/ad-slots/hooks/useAdSlots';
 import { MAX_AD_SLOTS } from '@/lib/constants';
 import { isSafeLinkUrl } from '@/lib/utils';
+import { safePosterUrl } from '@/lib/posterUrl';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { MICROSOFT_LOGIN_FAILED_MESSAGE, oauthErrorMessage } from '@/lib/api/auth';
@@ -204,7 +205,9 @@ function LoginField({ label, id, ...props }: InputHTMLAttributes<HTMLInputElemen
 const AD_CELL = 'min-h-0 overflow-hidden rounded-xl bg-slate-50 aspect-video lg:aspect-auto';
 
 function AdSlotCell({ slot }: { slot?: { image_url: string | null; link_url: string | null } }) {
-  if (!slot || !slot.image_url) {
+  // 広告画像は poster-images/ads/ に置く。それ以外の URL は出さない（空きの枠と同じ表示）
+  const imageUrl = safePosterUrl(slot?.image_url);
+  if (!slot || !imageUrl) {
     return (
       <div className={`${AD_CELL} flex items-center justify-center`}>
         <span className="text-sm text-slate-400">広告スペース</span>
@@ -212,7 +215,7 @@ function AdSlotCell({ slot }: { slot?: { image_url: string | null; link_url: str
     );
   }
 
-  const image = <img src={slot.image_url} alt="" className="h-full w-full object-contain" />;
+  const image = <img src={imageUrl} alt="" className="h-full w-full object-contain" />;
 
   // javascript: などはリンクにしない（画像だけ出す）
   if (slot.link_url && isSafeLinkUrl(slot.link_url)) {

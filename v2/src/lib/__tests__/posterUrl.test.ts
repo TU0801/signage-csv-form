@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/supabase', () => ({ SUPABASE_URL: 'https://example.supabase.co', supabase: {} }));
 
-const { safePosterUrl } = await import('../components/EntryDetailModal');
+const { safePosterUrl } = await import('../posterUrl');
 
 describe('safePosterUrl', () => {
   it('このプロジェクトの poster-images の公開 URL だけを通す', () => {
