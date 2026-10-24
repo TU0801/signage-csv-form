@@ -350,7 +350,8 @@ export function EntriesTable() {
                               title="承認を取り消し、理由を付けて保守会社へ戻します（未取込の申請だけ）"
                               onClick={() => setSendBackTarget(entry)}
                             >
-                              承認を取り消して差戻し
+                              {/* 操作の列は右端に固定なので短くする（承認の取り消しであることは title と確認ダイアログで示す） */}
+                              差戻し
                             </Button>
                           )}
                         </div>
@@ -384,7 +385,7 @@ export function EntriesTable() {
         open={sendBackTarget !== null}
         subject={
           sendBackTarget
-            ? `${sendBackTarget.property_code} ${lookups.propertyNames.get(sendBackTarget.property_code) || ''} / ` +
+            ? `承認を取り消して差し戻します（未申請に戻ります）: ${sendBackTarget.property_code} ${lookups.propertyNames.get(sendBackTarget.property_code) || ''} / ` +
               `${sendBackTarget.inspection_type || '-'} / 点検日 ${formatJaDate(sendBackTarget.inspection_start)}〜${formatJaDate(sendBackTarget.inspection_end)}`
             : ''
         }

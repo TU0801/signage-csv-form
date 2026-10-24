@@ -66,14 +66,14 @@ describe('EntriesTable（管理会社: 修正依頼1024 C2）', () => {
 });
 
 describe('EntriesTable（承認の取り消し: 修正依頼1024 F1）', () => {
-  it('管理者には未取込の行に「承認を取り消して差戻し」を出し、管理会社には出さない', () => {
+  it('管理者には未取込の行に承認を取り消す「差戻し」を出し、管理会社には出さない', () => {
     auth.state.profile = { role: 'admin' };
     const { unmount } = render(<EntriesTable />);
-    expect(screen.getByRole('button', { name: '承認を取り消して差戻し' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '差戻し' })).toHaveAttribute('title', expect.stringContaining('承認を取り消し'));
     unmount();
     auth.state.profile = { role: 'management' };
     render(<EntriesTable />);
-    expect(screen.queryByRole('button', { name: '承認を取り消して差戻し' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '差戻し' })).not.toBeInTheDocument();
     auth.state.profile = null;
   });
 });
