@@ -22,6 +22,7 @@ import {
   buildTargets,
   effectivePerformedOn,
   effectiveTargetMonth,
+  identicalLiveReport,
   pageLabel,
   reportToReplace,
   toggleBreak,
@@ -61,8 +62,8 @@ const colorOf = (no: number) => SEGMENT_COLORS[(no - 1) % SEGMENT_COLORS.length]
 type SegmentResult =
   | { state: 'running' }
   | { state: 'ok'; fileName: string }
-  /** 切り出した区間が、置き換える提出済みの版と同じ内容（SHA-256 が同じ）なので送らなかった */
-  | { state: 'skipped' }
+  /** 切り出した区間が、同じ点検の提出済みの版と同じ内容（SHA-256 が同じ）なので送らなかった。otherMonth はその版が別の対象月のとき */
+  | { state: 'skipped'; otherMonth: string | null }
   | { state: 'error'; message: string };
 
 const isFinished = (r: SegmentResult | undefined) => r?.state === 'ok' || r?.state === 'skipped';
@@ -218,11 +219,13 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
         });
         const invalid = validateReportFile(file);
         if (invalid) throw new Error(`${invalid}（${formatBytes(file.size)}）`);
-        // 置き換える版と同じ内容なら送らない（同じ PDF を出し直しても版が増え、受領・差戻しがやり直しになるだけ）
-        const replaced = reportToReplace(latest, target, performedOn, accountVendor);
-        if (replaced?.content_hash && replaced.content_hash === (await sha256Hex(file))) {
+        // 同じ点検に同じ内容の版が提出中・受領済みなら送らない（同じ PDF を出し直しても版が増え、受領がやり直しになるだけ）
+        const month = effectiveTargetMonth(target, performedOn);
+        const same = identicalLiveReport(latest, target.inspection.inspection_id, month, await sha256Hex(file));
+        if (same) {
           skipped += 1;
-          setResults((prev) => ({ ...prev, [seg.start]: { state: 'skipped' } }));
+          const otherMonth = same.target_month !== month ? same.target_month : null;
+          setResults((prev) => ({ ...prev, [seg.start]: { state: 'skipped', otherMonth } }));
           continue;
         }
         const report = await registerInspectionReport({
@@ -628,7 +631,11 @@ function SegmentRow({
           </span>
         )}
         {result?.state === 'ok' && <span className="break-all text-green-700">提出しました（{result.fileName}）</span>}
-        {result?.state === 'skipped' && <span className="text-gray-700">同じ内容の報告書が提出済みです（送っていません）</span>}
+        {result?.state === 'skipped' && (
+          <span className="text-gray-700">
+            同じ内容の報告書が提出済みです（{result.otherMonth ? `${formatMonth(result.otherMonth)}分・` : ''}送っていません）
+          </span>
+        )}
         {result?.state === 'error' && <span className="break-all text-red-600">失敗: {result.message}</span>}
       </td>
     </tr>

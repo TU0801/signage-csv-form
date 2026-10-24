@@ -11,6 +11,7 @@ import { fetchInspectionReports, registerInspectionReport, sha256Hex } from '@/l
 import { entryErrorReason } from '@/lib/api/admin-entries';
 import { formatMonth, monthOf, todayJst } from '@/features/inspection-portal/lib/schedule';
 import { buildReportFileName } from '../lib/fileName';
+import { identicalReports } from '../lib/bulkSegments';
 import { checkUpload } from '../lib/upload';
 import { formatBytes } from '../lib/documents';
 
@@ -115,9 +116,7 @@ export function ReportUploadModal({
     try {
       // 同じファイルを同じ点検へ二重に出していないか（削除済みは数えない）
       const [hash, existing] = await Promise.all([sha256Hex(file), fetchInspectionReports()]);
-      const dup = existing.find(
-        (r) => r.property_inspection_id === inspection.inspection_id && r.content_hash === hash && r.status !== 'deleted',
-      );
+      const dup = identicalReports(existing, inspection.inspection_id, hash)[0];
       if (dup) {
         setDuplicateOf(dup);
         setSubmitting(false);

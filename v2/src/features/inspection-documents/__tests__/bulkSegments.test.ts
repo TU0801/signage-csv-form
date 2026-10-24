@@ -5,6 +5,7 @@ import {
   UNSCHEDULED_GROUP,
   buildSegments,
   buildTargets,
+  identicalLiveReport,
   reportToReplace,
   toggleBreak,
   validateSegments,
@@ -109,5 +110,24 @@ describe('reportToReplace', () => {
     expect(reportToReplace(reports, target, '2026-11-10', 'v3')).toBeNull();
     // 同じ点検でも別の月の版は置き換えない
     expect(reportToReplace(reports, { ...target, targetMonth: '2026-12-01' }, '2026-12-10', 'v1')).toBeNull();
+  });
+});
+
+describe('identicalLiveReport', () => {
+  it('同じ点検の提出中・受領済みの同じ内容の版だけを数え、同じ対象月の版を優先する', () => {
+    const base = { property_inspection_id: 'i1', content_hash: 'h' };
+    const reports = [
+      makeReport({ ...base, id: 'returned', status: 'returned', target_month: '2026-11-01' }),
+      makeReport({ ...base, id: 'deleted', status: 'deleted', target_month: '2026-11-01' }),
+      makeReport({ ...base, id: 'superseded', status: 'superseded', target_month: '2026-11-01' }),
+      makeReport({ ...base, id: 'other-inspection', property_inspection_id: 'i2', status: 'submitted', target_month: '2026-11-01' }),
+      makeReport({ ...base, id: 'other-hash', content_hash: 'x', status: 'submitted', target_month: '2026-11-01' }),
+      makeReport({ ...base, id: 'may', status: 'accepted', target_month: '2026-05-01', created_at: '2026-06-01T00:00:00Z' }),
+    ];
+    // 同じ月は差戻し・削除・置き換え済みしか無いので、別の月の受領済みの版
+    expect(identicalLiveReport(reports, 'i1', '2026-11-01', 'h')?.id).toBe('may');
+    const same = makeReport({ ...base, id: 'nov', status: 'submitted', target_month: '2026-11-01', created_at: '2026-01-01T00:00:00Z' });
+    expect(identicalLiveReport([...reports, same], 'i1', '2026-11-01', 'h')?.id).toBe('nov');
+    expect(identicalLiveReport(reports.slice(0, 5), 'i1', '2026-11-01', 'h')).toBeNull();
   });
 });
