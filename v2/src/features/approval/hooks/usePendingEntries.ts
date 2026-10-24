@@ -52,7 +52,7 @@ export function usePendingEntries() {
     [fetchPendingEntries, isManagement],
   );
 
-  // 差戻し（管理会社。理由を付けて未申請に戻す。点検一覧の差戻しと同じ RPC）
+  // 差戻し（管理者・管理会社。理由を付けて未申請に戻す。点検一覧の差戻しと同じ RPC）
   const sendBackEntry = useCallback(
     async (id: string, reason: string) => {
       await reviewEntry(id, 'send_back', reason);

@@ -221,14 +221,14 @@ export function PendingEntriesList() {
               <h2 className="text-sm font-semibold text-gray-900">
                 データ承認待ち ({entries.length}件)
               </h2>
-              {/* 管理会社の「差戻し」（点検一覧）と同じ申請を扱うので、結果の違いを言葉で示す（挙動は v1 どおり） */}
+              {/* 「却下」（削除）と「差戻し」（削除せず保守会社へ戻す）の結果の違いを言葉で示す（却下の挙動は v1 どおり） */}
               {isManagement ? (
                 <p className="text-xs text-gray-500">
                   自社が管理する物件の申請だけを表示します。「差戻し」は申請を削除せず、理由を付けて保守会社へ戻します。
                 </p>
               ) : (
                 <p className="text-xs text-gray-500">
-                  「却下」は申請データを削除します。削除せず理由を付けて保守会社へ戻す「差戻し」は点検一覧から行います。
+                  「却下」は申請データを削除します。「差戻し」は申請を削除せず、理由を付けて保守会社へ戻します。
                 </p>
               )}
             </div>
@@ -317,7 +317,7 @@ export function PendingEntriesList() {
                       onReject={isManagement ? undefined : (id) => setConfirm({ kind: 'reject', id })}
                       onViewDetail={setDetailEntry}
                       onEdit={isManagement ? undefined : setEditEntry}
-                      onSendBack={isManagement ? setSendBackTarget : undefined}
+                      onSendBack={setSendBackTarget}
                     />
                   ))}
                 </tbody>
@@ -354,14 +354,10 @@ export function PendingEntriesList() {
                 setEditEntry(e);
               }
         }
-        onSendBack={
-          isManagement
-            ? (e) => {
-                setDetailEntry(null);
-                setSendBackTarget(e);
-              }
-            : undefined
-        }
+        onSendBack={(e) => {
+          setDetailEntry(null);
+          setSendBackTarget(e);
+        }}
       />
 
       <SendBackDialog

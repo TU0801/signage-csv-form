@@ -7,6 +7,8 @@ import { useToast } from '@/components/ui/Toast';
 import { useAuthStore } from '@/stores/authStore';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EntryDetailModal } from '@/features/approval/components/EntryDetailModal';
+import { SendBackDialog } from '@/features/inspection-portal/components/SendBackDialog';
+import { reviewEntry } from '@/lib/api/portal';
 import {
   deleteEntry,
   entryErrorReason,
@@ -70,6 +72,10 @@ export function EntriesTable() {
   const [detailEntry, setDetailEntry] = useState<DbEntry | null>(null);
   const [editEntry, setEditEntry] = useState<DbEntry | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [sendBackTarget, setSendBackTarget] = useState<DbEntry | null>(null);
+  // 承認の取り消し（差戻し）は未取込（ready）の申請だけ（取込済みはサイネージ側へ渡っているので DB も受け付けない）。
+  // 管理会社は点検登録フォームの点検一覧から行うので、ここでは管理者だけに出す
+  const canSendBack = (entry: DbEntry) => !isManagement && entry.status === 'ready';
 
   const activeConditions = useMemo(
     () => describeEntryFilters(filters, lookups.propertyNames),
@@ -121,6 +127,22 @@ export function EntriesTable() {
       } catch (err) {
         console.error('Failed to delete entry:', err);
         addToast(`削除に失敗しました: ${entryErrorReason(err)}`, 'error');
+      }
+    },
+    [addToast, reload],
+  );
+
+  // 承認を取り消して差戻し（理由を付けて未申請に戻す。点検一覧の差戻しと同じ RPC）
+  const handleSendBack = useCallback(
+    async (entry: DbEntry, reason: string) => {
+      try {
+        await reviewEntry(entry.id, 'send_back', reason);
+        addToast('承認を取り消して差し戻しました', 'success');
+        await reload();
+      } catch (err) {
+        console.error('Failed to send back entry:', err);
+        addToast(`差戻しに失敗しました: ${entryErrorReason(err)}`, 'error');
+        throw err;
       }
     },
     [addToast, reload],
@@ -320,6 +342,17 @@ export function EntriesTable() {
                               </Button>
                             </>
                           )}
+                          {canSendBack(entry) && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-600 hover:text-red-700"
+                              title="承認を取り消し、理由を付けて保守会社へ戻します（未取込の申請だけ）"
+                              onClick={() => setSendBackTarget(entry)}
+                            >
+                              承認を取り消して差戻し
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -337,6 +370,26 @@ export function EntriesTable() {
         propertyNames={lookups.propertyNames}
         emailOf={lookups.emailOf}
         displayDefault={lookups.displayDefault}
+        onSendBack={
+          detailEntry && canSendBack(detailEntry)
+            ? (e) => {
+                setDetailEntry(null);
+                setSendBackTarget(e);
+              }
+            : undefined
+        }
+      />
+
+      <SendBackDialog
+        open={sendBackTarget !== null}
+        subject={
+          sendBackTarget
+            ? `${sendBackTarget.property_code} ${lookups.propertyNames.get(sendBackTarget.property_code) || ''} / ` +
+              `${sendBackTarget.inspection_type || '-'} / 点検日 ${formatJaDate(sendBackTarget.inspection_start)}〜${formatJaDate(sendBackTarget.inspection_end)}`
+            : ''
+        }
+        onClose={() => setSendBackTarget(null)}
+        onConfirm={(reason) => (sendBackTarget ? handleSendBack(sendBackTarget, reason) : Promise.resolve())}
       />
 
       <EntryEditModal
