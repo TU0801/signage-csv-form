@@ -41,5 +41,7 @@ describe('ユーザー編集で保守会社→管理会社へ付け替える', (
     expect(document.getElementById('editUserVendor')).toBeNull();
     expect(document.getElementById('editUserManagementCompany')).not.toBeNull();
     expect(screen.getByRole('note', { hidden: true })).toHaveTextContent('申請の作成');
+    // 付け替え後に使える画面（管理会社メニューを開いた今の機能。F13）
+    expect(screen.getByRole('note', { hidden: true })).toHaveTextContent('管理会社メニュー');
   });
 });

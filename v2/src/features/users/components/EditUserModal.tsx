@@ -181,7 +181,7 @@ export function EditUserModal({
         {switchingToManagement && (
           <p role="note" className="rounded border border-yellow-200 bg-yellow-50 px-2 py-1.5 text-xs text-yellow-800">
             管理会社へ付け替えると、保守会社の設定は外れ、申請の作成（1件入力・一括入力）ができなくなります。
-            ログイン後は自社物件の点検一覧（承認・報告書の確認）だけになります。
+            ログイン後は、点検登録フォームでの承認・報告書の確認と、管理会社メニュー（自社物件の承認・紐付け・マスター・ユーザー）を使えます。
           </p>
         )}
         <div className="flex justify-end gap-3 pt-2">
