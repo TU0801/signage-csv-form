@@ -7,7 +7,7 @@ import { useToast } from '@/components/ui/Toast';
 import { useAuth } from '@/hooks/useAuth';
 import { downloadCsv, copyCsvToClipboard } from '@/lib/csv';
 import { createBulkEntries } from '@/lib/api/bulk-entry';
-import { markCompleted, unmarkCompleted } from '@/lib/api/inspection-form';
+import { fetchEntryMemos, markCompleted, unmarkCompleted } from '@/lib/api/inspection-form';
 import { entryErrorReason } from '@/lib/api/admin-entries';
 import { cn, normalizeSearch } from '@/lib/utils';
 import { useBulkStore, cancelBulkAutoSave, type BulkRowsPatch } from '@/stores/bulkStore';
@@ -26,7 +26,7 @@ import { parseExcelPaste } from '@/features/bulk-entry/utils/parseExcelPaste';
 import { bulkCsvFilename, generateBulkCsv } from '@/features/bulk-entry/utils/bulkCsv';
 import { buildBulkEntries } from '@/features/bulk-entry/utils/buildBulkEntries';
 import { errorLabel, firstError } from '@/features/bulk-entry/utils/columns';
-import { formatInspectedOn, isApplyTarget, scheduleRowInput } from '@/features/bulk-entry/utils/scheduleRows';
+import { formatInspectedOn, isApplyTarget, scheduleRowEntry, scheduleRowInput } from '@/features/bulk-entry/utils/scheduleRows';
 import { clearAutoSave } from '@/features/bulk-entry/utils/bulkAutoSave';
 import { getStoredTemplates, getVisibleTemplates, templateRows } from '@/features/bulk-entry/utils/bulkTemplates';
 import type { BulkEntryRow } from '@/features/bulk-entry/types';
@@ -165,11 +165,31 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
     [portal.inspectionDates],
   );
 
+  // 申請済みの予定の行に出すメモ（B12。portal_entries はメモを返さないので、読み取りの行の申請だけ別に読む）
+  const lockedEntryIds = useMemo(
+    () => [...new Set(scheduleItems.map((i) => scheduleRowEntry(i)?.id).filter((id): id is string => !!id))].sort().join(','),
+    [scheduleItems],
+  );
+  const [entryMemos, setEntryMemos] = useState<ReadonlyMap<string, string>>(() => new Map());
+  useEffect(() => {
+    if (!lockedEntryIds) return;
+    let cancelled = false;
+    fetchEntryMemos(lockedEntryIds.split(','))
+      .then((memos) => {
+        if (!cancelled) setEntryMemos(memos);
+      })
+      // メモが読めなくても表は出す（メモの欄が「－」になるだけ）
+      .catch((err) => console.error('Failed to load entry memos:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [lockedEntryIds]);
+
   // 予定を表の行にする（読み込み・保守会社の切り替え・申請のあとに入れ直す）。点検種別の既定（B9）にも点検行を渡す
   useEffect(() => {
     if (!ready || !portal.loaded) return;
-    syncScheduleRows(scheduleItems.map(scheduleRowInput));
-  }, [ready, portal.loaded, scheduleItems, syncScheduleRows]);
+    syncScheduleRows(scheduleItems.map((item) => scheduleRowInput(item, entryMemos)));
+  }, [ready, portal.loaded, scheduleItems, entryMemos, syncScheduleRows]);
   useEffect(() => {
     setInspectionDefaults({
       vendorInspections: vendorInspections.map((i) => ({ propertyCode: i.property_code, label: i.inspection_type_label ?? '' })),

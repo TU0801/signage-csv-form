@@ -37,6 +37,18 @@ describe('点検登録フォームの点検行との結び付け', () => {
     expect(may.row.startDate).toBe('');
   });
 
+  it('申請済みの予定の行には申請のメモを出し、未申請の行には出さない（B12・F12）', () => {
+    const items = buildSchedule(
+      [makeInspection()],
+      [makeEntry({ id: 'e-nov', status: 'draft', target_month: '2026-11-01' })],
+      [],
+      { today: '2026-10-21', monthsAhead: 12 },
+    );
+    const memos = new Map([['e-nov', '点検月を11月に変更']]);
+    expect(scheduleRowInput(items.find((i) => i.targetMonth === '2026-11-01')!, memos).row.memo).toBe('点検月を11月に変更');
+    expect(scheduleRowInput(items.find((i) => i.targetMonth === '2026-05-01')!, memos).row.memo).toBe('');
+  });
+
   it('最初のエラーの行と、そのエラーを直す欄（端末は物件の欄）を返す', () => {
     const rows = [
       { id: 3, errors: [] },

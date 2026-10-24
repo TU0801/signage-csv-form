@@ -501,7 +501,14 @@ export function BulkTable({
                 </td>
                 <td className="cell">
                   {locked ? (
-                    <span className={cn(cellText, 'text-gray-400')}>－</span>
+                    // 申請に保存したメモを読み取りで出す（B12。読めるのは自分の申請と管理者）
+                    row.memo ? (
+                      <span className={cn(cellText, 'max-w-[14rem] truncate')} title={row.memo}>
+                        {row.memo}
+                      </span>
+                    ) : (
+                      <span className={cn(cellText, 'text-gray-400')}>－</span>
+                    )
                   ) : (
                     <input
                       type="text"

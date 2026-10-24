@@ -33,6 +33,7 @@ const portalApi = vi.hoisted(() => ({
 vi.mock('@/lib/api/portal', () => portalApi);
 const formApi = vi.hoisted(() => ({
   fetchCompletions: vi.fn(),
+  fetchEntryMemos: vi.fn(async () => new Map<string, string>()),
   fetchInspectionDates: vi.fn(),
   fetchScopedManagementCompanies: vi.fn(),
   markCompleted: vi.fn(),

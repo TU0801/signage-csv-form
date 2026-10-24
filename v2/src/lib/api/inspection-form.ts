@@ -1,4 +1,4 @@
-import { supabase, RPC } from '@/lib/supabase';
+import { supabase, RPC, TABLES } from '@/lib/supabase';
 import { rpcAllRows } from '@/lib/api/masterData';
 import type { DbInspectionCompletion, RpcInspectionDateRow } from '@/types/database';
 import type { RpcPropertyManagementCompanyRow } from '@/types/rpc';
@@ -46,4 +46,27 @@ export async function fetchInspectionDates(): Promise<RpcInspectionDateRow[]> {
   const { data, error } = await supabase.rpc(RPC.portalInspectionDates);
   if (error) throw error;
   return (data ?? []) as RpcInspectionDateRow[];
+}
+
+/** 一度に問い合わせる申請 id の数（URL の長さを抑える） */
+const MEMO_CHUNK = 100;
+
+/**
+ * 申請のメモ（B12。portal_entries は返さない）。読めるのは RLS が許す申請だけ（管理者は全件、保守会社は自分の申請）。
+ * 空のメモは返さない
+ */
+export async function fetchEntryMemos(ids: string[]): Promise<Map<string, string>> {
+  const memos = new Map<string, string>();
+  for (let i = 0; i < ids.length; i += MEMO_CHUNK) {
+    const { data, error } = await supabase
+      .from(TABLES.entries)
+      .select('id, memo')
+      .in('id', ids.slice(i, i + MEMO_CHUNK))
+      .not('memo', 'is', null);
+    if (error) throw error;
+    for (const r of (data ?? []) as { id: string; memo: string | null }[]) {
+      if (r.memo) memos.set(r.id, r.memo);
+    }
+  }
+  return memos;
 }

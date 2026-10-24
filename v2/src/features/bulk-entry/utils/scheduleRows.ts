@@ -1,5 +1,6 @@
 import { appliedEntry } from '@/features/inspection-portal/lib/actions';
 import { focusEntry, type ScheduleItem } from '@/features/inspection-portal/lib/schedule';
+import type { PortalEntryRow } from '@/types/portal';
 import type { BulkEntryRow, BulkNotice, BulkRowInput, BulkScheduleMeta } from '../types';
 
 /*
@@ -7,13 +8,24 @@ import type { BulkEntryRow, BulkNotice, BulkRowInput, BulkScheduleMeta } from '.
  * 予定（点検行 × 対象月）は点検一覧と同じく buildSchedule / buildUnscheduledItems で作り、表の行にする。
  */
 
-/** 予定の行を表の行の材料にする。申請済み・差戻し中の予定は読み取り（申請の日付・備考を出す）、未申請は点検開始日を空にする */
-export function scheduleRowInput(item: ScheduleItem): { meta: BulkScheduleMeta; row: BulkRowInput } {
-  const { inspection } = item;
-  const unscheduled = !item.targetMonth;
+/** 読み取りの予定の行に出す申請（申請済み・差戻し中の予定）。未申請・点検月の無い点検は null */
+export function scheduleRowEntry(item: ScheduleItem): PortalEntryRow | null {
   // 点検月の無い点検は月をまたいでまとめた行なので、いつでも別の月の申請を足せる（読み取りにしない）
-  const locked = !unscheduled && item.application !== 'not_applied';
-  const entry = locked ? (appliedEntry(item) ?? focusEntry(item.entries)) : null;
+  const locked = !!item.targetMonth && item.application !== 'not_applied';
+  return locked ? (appliedEntry(item) ?? focusEntry(item.entries)) : null;
+}
+
+/**
+ * 予定の行を表の行の材料にする。申請済み・差戻し中の予定は読み取り（申請の日付・備考・メモを出す）、未申請は点検開始日を空にする。
+ * memos は申請 id → メモ（portal_entries はメモを返さないので別に読む。fetchEntryMemos）
+ */
+export function scheduleRowInput(
+  item: ScheduleItem,
+  memos?: ReadonlyMap<string, string>,
+): { meta: BulkScheduleMeta; row: BulkRowInput } {
+  const { inspection } = item;
+  const locked = !!item.targetMonth && item.application !== 'not_applied';
+  const entry = scheduleRowEntry(item);
   return {
     meta: {
       key: item.key,
@@ -30,6 +42,7 @@ export function scheduleRowInput(item: ScheduleItem): { meta: BulkScheduleMeta; 
       startDate: entry?.inspection_start ?? '',
       endDate: entry?.inspection_end ?? '',
       remarks: entry?.remarks ?? '',
+      memo: entry ? (memos?.get(entry.id) ?? '') : '',
     },
   };
 }
