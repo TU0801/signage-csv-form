@@ -3,8 +3,21 @@ import { APPROVED_STATUSES, customImageBaseName, filterApprovedEntries } from '.
 import { safePosterUrl } from './posterUrl';
 
 /**
+ * 追加画像のファイル名の拡張子（png / jpg）。URL の拡張子に合わせ、URL に無ければ中身の先頭バイトで見分ける。
+ * どちらでも分からなければ jpg（今までと同じ）。.jpg 固定だと PNG の貼紙が .jpg の名前になっていた（修正依頼1024 本番確認 ④）
+ */
+export async function imageExtension(url: string, blob: Blob): Promise<'png' | 'jpg'> {
+  const path = url.split(/[?#]/)[0] ?? '';
+  const fromUrl = /\.(png|jpe?g)$/i.exec(path.slice(path.lastIndexOf('/') + 1))?.[1]?.toLowerCase();
+  if (fromUrl) return fromUrl === 'png' ? 'png' : 'jpg';
+  const head = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
+  const isPng = head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e && head[3] === 0x47;
+  return isPng ? 'png' : 'jpg';
+}
+
+/**
  * 追加画像をZIPでダウンロード（既定は承認済みのみ。v1 admin-export.js downloadCustomImages と同じ対象・ファイル名）
- * ZIP内ファイル名の拡張子を除いた部分は CSV の点検案内TPLNo と一致する（拡張子は .jpg 固定）
+ * ZIP内ファイル名の拡張子を除いた部分は CSV の点検案内TPLNo と一致する（拡張子は imageExtension で中身に合わせる）
  * statuses: 対象にする申請の状態。'all' なら状態を問わない（承認待ちの「追加登録された画像」タブ）
  */
 export async function downloadCustomImages(
@@ -38,7 +51,7 @@ export async function downloadCustomImages(
     customEntries.map(async ({ entry, url }) => {
       const response = await fetch(url);
       const blob = await response.blob();
-      const filename = `${customImageBaseName(entry)}.jpg`;
+      const filename = `${customImageBaseName(entry)}.${await imageExtension(url, blob)}`;
       return { filename, blob };
     }),
   );
@@ -64,5 +77,6 @@ export async function downloadCustomImage(entry: DbEntry): Promise<void> {
     fetch(url),
   ]);
   if (!response.ok) throw new Error(`画像を取得できませんでした（${response.status}）`);
-  saveAs(await response.blob(), `${customImageBaseName(entry)}.jpg`);
+  const blob = await response.blob();
+  saveAs(blob, `${customImageBaseName(entry)}.${await imageExtension(url, blob)}`);
 }
