@@ -34,6 +34,8 @@ export const TABLES = {
   errorLogs: 'signage_error_logs',
   /** 点検報告書（点検ポータル）。書き込みは RPC だけ */
   inspectionReports: 'signage_inspection_reports',
+  /** 新規建物の申請（2026-10-24）。承認・却下は RPC だけ */
+  propertyRequests: 'signage_property_requests',
 } as const;
 
 /** signage スキーマの RPC（biz への窓口） */
@@ -56,6 +58,36 @@ export const RPC = {
   portalUpdateReport: 'portal_update_report',
   portalReviewReport: 'portal_review_report',
   managementCompaniesMaster: 'management_companies_master',
+  /** 新規建物の申請（2026-10-24）。管理会社の候補は管理者以外にも返す。承認・却下は管理者だけ */
+  managementCompaniesForRequest: 'management_companies_for_request',
+  inspectionTypeOptionsForRequest: 'inspection_type_options_for_request',
+  approvePropertyRequest: 'approve_property_request',
+  rejectPropertyRequest: 'reject_property_request',
+  /**
+   * 管理会社メニュー（修正依頼1024 C2・C3）。管理会社のアカウントで、自社が管理する物件だけを読み書きする。
+   * 戻り値の形は管理者用の同名（mgmt_ を外したもの）と同じ。scripts/fix-1024-mgmt.sql
+   */
+  mgmtInspectionsAll: 'mgmt_inspections_all',
+  mgmtInspectionsForProperty: 'mgmt_inspections_for_property',
+  mgmtUpsertPropertyInspection: 'mgmt_upsert_property_inspection',
+  mgmtDeletePropertyInspection: 'mgmt_delete_property_inspection',
+  mgmtUnitInspectionsAll: 'mgmt_unit_inspections_all',
+  mgmtUnitInspectionTypeOptions: 'mgmt_unit_inspection_type_options',
+  mgmtUpsertUnitInspection: 'mgmt_upsert_unit_inspection',
+  mgmtDeleteUnitInspection: 'mgmt_delete_unit_inspection',
+  mgmtReviewBuildingRequest: 'mgmt_review_building_request',
+  mgmtAddBuildingVendor: 'mgmt_add_building_vendor',
+  mgmtRemoveBuildingVendor: 'mgmt_remove_building_vendor',
+  mgmtOwnCompany: 'mgmt_own_company',
+  /** 点検登録フォーム（2026-10-24）。scripts/fix-1024-core.sql */
+  managementCompaniesScoped: 'management_companies_scoped',
+  portalCompletions: 'portal_completions',
+  portalMarkCompleted: 'portal_mark_completed',
+  portalUnmarkCompleted: 'portal_unmark_completed',
+  portalInspectionDates: 'portal_inspection_dates',
+  /** マスター管理の物件の検査月（管理者・管理会社は自社物件）。書き込みは upsert の戻り値の点検行 id で */
+  propertyInspectionDates: 'property_inspection_dates',
+  setPropertyInspectionInspectedOn: 'set_property_inspection_inspected_on',
 } as const;
 
 /** Storage のバケット */

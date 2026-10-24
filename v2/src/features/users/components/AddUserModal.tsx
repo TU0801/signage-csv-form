@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
-import { MIN_PASSWORD_LENGTH, ROLE_OPTIONS, companyRequiredError } from '../constants';
+import { MANAGEMENT_ROLE_OPTIONS, MIN_PASSWORD_LENGTH, ROLE_OPTIONS, companyRequiredError } from '../constants';
 import { CompanyField } from './CompanyField';
 import type { DbProfile, DbVendor } from '@/types/database';
 import type { ManagementCompanyRow } from '@/types/portal';
@@ -21,28 +21,41 @@ interface AddUserModalProps {
     vendor_id: string | null;
     management_company_id: string | null;
   }) => Promise<void>;
+  /** 管理会社のアカウントが操作する（作れるのは自社の管理会社ユーザーだけ。修正依頼1024 C3） */
+  managementCaller?: boolean;
 }
 
 type FieldErrors = Partial<Record<'email' | 'password' | 'company', string>>;
 
 // v1: js/admin-users.js openUserModal / handleUserFormSubmit（admin.html #userModal）
-export function AddUserModal({ open, onClose, vendors, managementCompanies, onAdd }: AddUserModalProps) {
+export function AddUserModal({
+  open,
+  onClose,
+  vendors,
+  managementCompanies,
+  onAdd,
+  managementCaller = false,
+}: AddUserModalProps) {
   const { addToast } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<DbProfile['role']>('user');
+  // 既定の権限: 管理者は保守会社（v1 どおり）、管理会社は管理会社（それしか作れない）
+  const initialRole: DbProfile['role'] = managementCaller ? 'management' : 'user';
+  const [role, setRole] = useState<DbProfile['role']>(initialRole);
   const [vendorId, setVendorId] = useState('');
-  const [managementCompanyId, setManagementCompanyId] = useState('');
+  const [managementCompanyIdInput, setManagementCompanyId] = useState('');
+  // 管理会社のアカウントは自社に固定（選ばせない）
+  const managementCompanyId = managementCaller ? (managementCompanies[0]?.id ?? '') : managementCompanyIdInput;
   const [errors, setErrors] = useState<FieldErrors>({});
   const [submitting, setSubmitting] = useState(false);
 
   // 何か入れていたら、Escape・背景クリック・× では破棄の確認を出す
-  const dirty = !!(email || password || vendorId || managementCompanyId || role !== 'user');
+  const dirty = !!(email || password || vendorId || managementCompanyIdInput || role !== initialRole);
 
   const resetForm = () => {
     setEmail('');
     setPassword('');
-    setRole('user');
+    setRole(initialRole);
     setVendorId('');
     setManagementCompanyId('');
     setErrors({});
@@ -137,7 +150,7 @@ export function AddUserModal({ open, onClose, vendors, managementCompanies, onAd
         <Select
           label="権限 *"
           id="newUserRole"
-          options={ROLE_OPTIONS}
+          options={managementCaller ? MANAGEMENT_ROLE_OPTIONS : ROLE_OPTIONS}
           value={role}
           onChange={(e) => {
             setRole(e.target.value as DbProfile['role']);
@@ -160,6 +173,7 @@ export function AddUserModal({ open, onClose, vendors, managementCompanies, onAd
             setErrors((prev) => ({ ...prev, company: undefined }));
           }}
           error={errors.company}
+          managementCaller={managementCaller}
         />
         <div className="flex justify-end gap-3 pt-2">
           <Button type="button" variant="secondary" onClick={handleClose}>

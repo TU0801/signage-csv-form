@@ -4,6 +4,7 @@ import { BuildingIcon, WrenchIcon } from '@/components/ui/icons';
 import { Select } from '@/components/ui/Select';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
+import { useAuthStore } from '@/stores/authStore';
 import { fetchMasterVendors } from '@/lib/api/masterData';
 import type { DbVendor } from '@/types/database';
 import { useRelationships, type RelationshipTab } from '../hooks/useRelationships';
@@ -16,6 +17,8 @@ type SubTab = RelationshipTab;
 // v1: js/admin-relationships.js initRelationshipsTab / loadRelationships
 export function RelationshipsContent() {
   const { addToast } = useToast();
+  // 管理会社: 物件の紐付けは自社物件だけ（RLS と RPC が絞る）、点検種別は閲覧のみ
+  const isManagement = useAuthStore((s) => s.profile?.role === 'management');
   const [vendors, setVendors] = useState<DbVendor[]>([]);
   const [vendorsStatus, setVendorsStatus] = useState<'loading' | 'loaded' | 'failed'>('loading');
   // 保守会社とサブタブは ?vendor=&tab= に持つ（再読込やブラウザの「戻る」で選び直さなくて済むように）
@@ -105,6 +108,11 @@ export function RelationshipsContent() {
   return (
     <div className="space-y-3">
       <h1 className="text-base font-bold text-gray-900">紐付け管理</h1>
+      {isManagement && (
+        <p className="text-xs text-gray-500">
+          自社が管理する物件の、保守会社の紐付けだけを表示・追加・解除できます
+        </p>
+      )}
 
       <div className="max-w-sm">
         <Select
@@ -176,6 +184,7 @@ export function RelationshipsContent() {
               onAdd={addVendorInspections}
               onRemove={removeVendorInspection}
               onRemoveMany={removeVendorInspections}
+              readOnly={isManagement}
             />
           )}
         </>

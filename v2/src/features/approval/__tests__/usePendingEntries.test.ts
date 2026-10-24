@@ -16,11 +16,19 @@ const api = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/api/admin-entries', () => api);
+const portal = vi.hoisted(() => ({ reviewEntry: vi.fn() }));
+vi.mock('@/lib/api/portal', () => portal);
+// 権限は profile.role だけを見る（管理会社のときは portal_review_entry で承認・差戻し）
+const auth = vi.hoisted(() => ({ state: { profile: null as { role: string } | null } }));
+vi.mock('@/stores/authStore', () => ({
+  useAuthStore: (sel: (s: typeof auth.state) => unknown) => sel(auth.state),
+}));
 
 const draft = (id: string) => ({ id, status: 'draft' }) as DbEntry;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  auth.state.profile = null;
 });
 
 describe('usePendingEntries (v1 admin-pending.js)', () => {
@@ -82,5 +90,27 @@ describe('usePendingEntries (v1 admin-pending.js)', () => {
     expect(api.rejectEntry).toHaveBeenCalledWith('2');
     expect(api.fetchPendingEntries).toHaveBeenCalledTimes(1);
     expect(outcome).toEqual({ succeeded: 1, failed: 1, firstError: new Error('denied') });
+  });
+});
+
+describe('usePendingEntries（管理会社: 修正依頼1024 C2）', () => {
+  it('管理会社の承認・一括承認・差戻しは portal_review_entry（reviewEntry）で行い、表を直接は更新しない', async () => {
+    auth.state.profile = { role: 'management' };
+    api.fetchPendingEntries.mockResolvedValue([]);
+    portal.reviewEntry.mockResolvedValue({ id: '1', status: 'ready' });
+    const { result } = renderHook(() => usePendingEntries());
+
+    await act(() => result.current.approveEntry('1'));
+    await act(() => result.current.approveBulk(['2', '3']));
+    await act(() => result.current.sendBackEntry('4', '日付が違います'));
+
+    expect(portal.reviewEntry.mock.calls).toEqual([
+      ['1', 'approve'],
+      ['2', 'approve'],
+      ['3', 'approve'],
+      ['4', 'send_back', '日付が違います'],
+    ]);
+    expect(api.approveEntry).not.toHaveBeenCalled();
+    expect(api.approveEntries).not.toHaveBeenCalled();
   });
 });

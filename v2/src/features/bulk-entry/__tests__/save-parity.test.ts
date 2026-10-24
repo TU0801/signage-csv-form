@@ -53,6 +53,7 @@ function row(over: Partial<BulkEntryRow>): BulkEntryRow {
     startDate: '2026-11-02',
     endDate: '2026-11-03',
     remarks: '',
+    memo: '',
     displayTime: 10,
     noticeText: '',
     displayStartDate: '',
@@ -60,6 +61,9 @@ function row(over: Partial<BulkEntryRow>): BulkEntryRow {
     displayEndDate: '',
     displayEndTime: '',
     showOnBoard: true,
+    emergencyContact: '',
+    posterType: 'template',
+    posterImage: '',
     position: 2,
     isValid: true,
     errors: [],
@@ -117,7 +121,9 @@ describe('bulk submit / auto-save parity with v1 js/bulk-data.js', () => {
       { id: 'v1', name: '株式会社テスト保守' },
       applySettings(DEFAULT_BULK_SETTINGS, settingsRows),
     );
-    expect(actual).toEqual(expected);
+    // memo は v2 だけの列（修正依頼1024 B12。CSV には出さない）なので比べる前に外す
+    expect(actual.map(({ memo: _m, ...e }) => (void _m, e))).toEqual(expected);
+    expect(actual.every((e) => e.memo === null)).toBe(true);
     expect(actual).toHaveLength(2);
     expect(actual[1]).toMatchObject({
       poster_type: 'custom',
@@ -128,6 +134,23 @@ describe('bulk submit / auto-save parity with v1 js/bulk-data.js', () => {
       status: 'draft',
     });
     expect(actual[0]!.display_start_date).toBe('2026-10-14');
+  });
+
+  it('詳細設定の連絡先と追加の貼紙を申請に入れる（B18）', () => {
+    const [custom] = buildBulkEntries(
+      [row({ id: 9, posterType: 'custom', posterImage: 'https://x/u1/a.png', emergencyContact: '03-1111-2222' })],
+      master,
+      { id: 'v1', name: '株式会社テスト保守' },
+      DEFAULT_BULK_SETTINGS,
+    );
+    expect(custom).toMatchObject({
+      poster_type: 'custom',
+      poster_image: 'https://x/u1/a.png',
+      emergency_contact: '03-1111-2222',
+      inspection_type: 'エレベーター定期点検',
+    });
+    const [template] = buildBulkEntries([row({ id: 10 })], master, { id: 'v1', name: '株式会社テスト保守' }, DEFAULT_BULK_SETTINGS);
+    expect(template).toMatchObject({ poster_type: 'template', poster_image: null, emergency_contact: '092-000-0000' });
   });
 
   it('inserts all entries in one call with the user id', async () => {
@@ -149,6 +172,14 @@ describe('bulk submit / auto-save parity with v1 js/bulk-data.js', () => {
 
     writeAutoSave('user-1', rows, 3);
     expect(autoSaveKey('user-1')).toBe('bulk_autosave_user-1');
-    expect(localStorage.getItem('bulk_autosave_user-1')).toBe(expected);
+    // memo（B12）・連絡先・貼紙（B18）は v2 だけの項目（v1 の自動保存には無い）なので外して比べる
+    const saved = JSON.parse(localStorage.getItem('bulk_autosave_user-1')!) as { rows: Record<string, unknown>[] };
+    saved.rows.forEach((r) => {
+      for (const k of ['memo', 'emergencyContact', 'posterType', 'posterImage']) {
+        expect(r).toHaveProperty(k);
+        delete r[k];
+      }
+    });
+    expect(JSON.stringify(saved)).toBe(expected);
   });
 });

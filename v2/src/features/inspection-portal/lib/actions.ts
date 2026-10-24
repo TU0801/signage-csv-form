@@ -37,6 +37,17 @@ export function appliedEntry(item: Pick<ScheduleItem, 'entries'>): PortalEntryRo
   return item.entries.find((e) => e.status === 'draft' || e.status === 'ready' || e.status === 'exported') ?? null;
 }
 
+/**
+ * 報告書の登録（portal_register_report の p_entry_id）に渡す申請 id。
+ * DB は申請の property_inspection_id が点検行と一致しないと例外にするので、旧来の申請・1件入力の申請
+ * （物件・点検種別・開始月の一致で予定に結び付けたもの。property_inspection_id が無い）は渡さない（null）。
+ * p_entry_id は報告書行の参照に入るだけで、ステータスの判定には使わない
+ */
+export function reportEntryId(item: Pick<ScheduleItem, 'entries' | 'inspection'>): string | null {
+  const entry = appliedEntry(item);
+  return entry && entry.property_inspection_id === item.inspection.inspection_id ? entry.id : null;
+}
+
 export function rowActions(item: Pick<ScheduleItem, 'application' | 'entries'>, role: PortalRole): RowActions {
   // 状態を決めた申請（focusEntry）だけを操作の対象にする。別の申請（過去の月の承認済みなど）を差し戻さないように
   const focus = focusEntry(item.entries);

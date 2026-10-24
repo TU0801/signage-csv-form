@@ -15,6 +15,7 @@ import {
   duplicateValues,
   filterInspectionTypes,
   formatPosterDate,
+  initialValues,
   remarksUsage,
   submittedStatusLabel,
   toInsertRow,
@@ -120,12 +121,28 @@ describe('案内文・備考の文字数と行数の表示', () => {
 });
 
 describe('点検日の連動（v1 init の change）', () => {
+  it('初期値は点検開始日・終了日・表示開始日・表示終了日がすべて今日（B10。終了日を空にしない）', () => {
+    expect(initialValues(SETTINGS, '2026-10-24')).toMatchObject({
+      startDate: '2026-10-24',
+      endDate: '2026-10-24',
+      displayStartDate: '2026-10-24',
+      displayEndDate: '2026-10-24',
+    });
+  });
+
   it('開始日は表示開始日に追従し、終了日が空なら終了日・表示終了日も埋める。終了日は表示終了日に追従', () => {
     const v = applyStartDateChange(values({ endDate: '' }), '2026-10-20');
     expect(v).toMatchObject({ startDate: '2026-10-20', displayStartDate: '2026-10-20', endDate: '2026-10-20', displayEndDate: '2026-10-20' });
     const w = applyStartDateChange(values({ endDate: '2026-10-25', displayEndDate: '2026-10-25' }), '2026-10-20');
     expect(w).toMatchObject({ endDate: '2026-10-25', displayEndDate: '2026-10-25' });
     expect(applyEndDateChange(w, '2026-10-26').displayEndDate).toBe('2026-10-26');
+  });
+
+  it('終了日が旧開始日と同じ・新開始日より前なら新開始日に合わせる（B10）', () => {
+    const same = applyStartDateChange(values({ startDate: '2026-10-20', endDate: '2026-10-20' }), '2026-10-22');
+    expect(same).toMatchObject({ endDate: '2026-10-22', displayEndDate: '2026-10-22' });
+    const before = applyStartDateChange(values({ startDate: '2026-10-20', endDate: '2026-10-21' }), '2026-10-25');
+    expect(before).toMatchObject({ endDate: '2026-10-25', displayEndDate: '2026-10-25' });
   });
 });
 
@@ -194,6 +211,7 @@ describe('申請する行（v1 submitEntries）', () => {
       inspection_start: '2026-10-20',
       inspection_end: '2026-10-21',
       remarks: '',
+      memo: null,
       announcement: '',
       display_start_date: '2026-10-15',
       display_start_time: null,

@@ -17,6 +17,11 @@ export interface PropertyInspection {
   remarks2: string;
   /** 保守会社用の設備コード（業務システム側で入力）。未指定なら保存時に今の値を引き継ぐ */
   maintainer_equipment_code?: string | null;
+  /**
+   * 検査月（直近に実施した年月。biz.property_inspections.inspected_on、月初の日付 YYYY-MM-01）。null は未登録。
+   * **undefined は「読めていない」**（RPC property_inspection_dates が失敗した・読み込む画面でない）で、保存時に送らない（消さない）
+   */
+  inspected_on?: string | null;
 }
 
 /** 台ごとの保守の1行（v1 overlayUnitInspections の unit.inspections の1要素） */

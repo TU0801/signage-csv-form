@@ -49,6 +49,8 @@ export interface DbEntry {
   review_comment?: string | null;
   reviewed_by?: string | null;
   reviewed_at?: string | null;
+  /** 申請者のメモ（CSV に出さない。点検月の変更などの覚え書き）。scripts/fix-1024-core.sql */
+  memo?: string | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -162,6 +164,30 @@ export interface DbBuildingVendor {
   updated_at: string | null;
 }
 
+/**
+ * signage_property_requests テーブル（新規建物の申請。2026-10-24 scripts/fix-1024-approval.sql）。
+ * 申請者が書けるのは中身の列だけ（INSERT）。承認・却下は RPC approve_property_request / reject_property_request。
+ * 読めるのは管理者と申請した本人。inspection_type_id は biz.inspection_types の id（signage の点検種別と同じ値）
+ */
+export interface DbPropertyRequest {
+  id: string;
+  vendor_id: string;
+  management_company_id: string;
+  property_name: string;
+  address: string | null;
+  inspection_type_id: string | null;
+  inspection_months: number[];
+  status: 'pending' | 'approved' | 'rejected';
+  requested_by: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  reject_reason: string | null;
+  /** 承認時に管理者が入れた物件コード（signage_master_properties.property_code になる） */
+  created_property_code: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 /** signage_vendor_inspections テーブル */
 export interface DbVendorInspection {
   id: string;
@@ -207,4 +233,28 @@ export interface DbAuditLog {
   old_data: unknown;
   new_data: unknown;
   created_at: string | null;
+}
+
+/** signage_inspection_completions テーブル / RPC portal_completions の1行（完了連絡。書き込みは RPC だけ）。scripts/fix-1024-core.sql */
+export interface DbInspectionCompletion {
+  id: string;
+  property_inspection_id: string;
+  /** 対象月（月初の日付） */
+  target_month: string;
+  vendor_id: string | null;
+  completed_at: string;
+  completed_by: string | null;
+}
+
+/** RPC property_inspection_dates の1行（物件×点検種別の検査月。値のある点検だけ。管理者は全件・管理会社は自社物件） */
+export interface RpcPropertyInspectionDateRow {
+  property_code: string;
+  inspection_type_id: string;
+  inspected_on: string;
+}
+
+/** RPC portal_inspection_dates の1行（検査月＝biz.property_inspections.inspected_on。値のある点検だけ返る） */
+export interface RpcInspectionDateRow {
+  inspection_id: string;
+  inspected_on: string;
 }

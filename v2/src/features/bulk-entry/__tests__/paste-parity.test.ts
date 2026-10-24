@@ -5,7 +5,7 @@ import { applySettings, DEFAULT_BULK_SETTINGS } from '../utils/bulkMaster';
 import type { BulkMasterData } from '../types';
 
 /**
- * Excel 貼り付け（6列固定・v1.29.2 の silent バグ修正後）が v1 と同じ行を作ることを確かめる。
+ * 旧6列（B列が端末ID。v1.29.2 の silent バグ修正後）の Excel 貼り付けが v1 と同じ行を作ることを確かめる（1024 で新5列にした後の互換）。
  * v1 の importFromPaste は画面の要素を読むので、必要な要素だけ jsdom に置いて動かし、
  * v1 の state.rows と v2 の store の行を比べる。
  */
@@ -93,10 +93,13 @@ describe('Excel paste parity with v1 js/bulk-modals.js importFromPaste', () => {
     const result = parseExcelPaste(PASTE, master.properties);
     result.rows.forEach((r) => useBulkStore.getState().addRow(r));
     // pastedPropertyName は v2 だけが画面用に持つ（v1 には無い）ので比べる前に外す
-    const v2Rows = useBulkStore.getState().rows.map(({ pastedPropertyName: _p, ...r }) => {
-      void _p;
-      return comparable({ ...r });
-    });
+    // memo（修正依頼1024 B12）・連絡先・貼紙（B18）も v2 だけの項目
+    const v2Rows = useBulkStore
+      .getState()
+      .rows.map(({ pastedPropertyName: _p, memo: _m, emergencyContact: _c, posterType: _t, posterImage: _i, ...r }) => {
+        void [_p, _m, _c, _t, _i];
+        return comparable({ ...r });
+      });
 
     expect(v2Rows).toEqual(v1Rows);
     expect(v2Rows).toHaveLength(5);

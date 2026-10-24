@@ -1,4 +1,4 @@
-import { supabase, TABLES } from '@/lib/supabase';
+import { supabase, TABLES, RPC } from '@/lib/supabase';
 import { BuildingVendorStatus } from '@/lib/constants';
 import type { DbBuildingVendor, DbProfile, DbProperty } from '@/types/database';
 
@@ -82,6 +82,16 @@ export async function addBuildingVendor(params: {
   const finalVendorId = params.vendorId || profile.vendor_id;
   if (!finalVendorId) throw new Error('ベンダーIDが設定されていません');
 
+  // 管理会社は自社物件にだけ紐付けられる。表へは直接書けないので RPC（解除済み・申請中の行も active に戻す）
+  if (profile.role === 'management') {
+    const { data, error } = await supabase.rpc(RPC.mgmtAddBuildingVendor, {
+      p_property_code: propertyCode,
+      p_vendor_id: finalVendorId,
+    });
+    if (error) throw error;
+    return data as DbBuildingVendor;
+  }
+
   const { data: existing } = await supabase
     .from(TABLES.buildingVendors)
     .select('id, status')
@@ -142,7 +152,16 @@ export async function addBuildingVendor(params: {
 
 /** 紐付けの解除はソフトデリート（status='deleted'）。物理削除すると v1 と履歴の扱いがずれる */
 // v1: js/supabase/relationships.js removeBuildingVendor
-export async function removeBuildingVendor(buildingVendorId: string): Promise<DbBuildingVendor> {
+export async function removeBuildingVendor(
+  buildingVendorId: string,
+  /** 管理会社は自社物件の紐付けだけを解除できる RPC を使う */
+  role?: DbProfile['role'] | null,
+): Promise<DbBuildingVendor> {
+  if (role === 'management') {
+    const { data, error } = await supabase.rpc(RPC.mgmtRemoveBuildingVendor, { p_id: buildingVendorId });
+    if (error) throw error;
+    return data as DbBuildingVendor;
+  }
   const { data, error } = await supabase
     .from(TABLES.buildingVendors)
     .update({ status: BuildingVendorStatus.DELETED })
@@ -161,7 +180,7 @@ export async function removeBuildingVendor(buildingVendorId: string): Promise<Db
 export async function syncBuildingVendorsFromEquipment(
   propertyCode: string,
   equipment: ReadonlyArray<{ vendor_id?: string | null } | null | undefined> | null | undefined,
-  profile: Pick<DbProfile, 'id'> | null,
+  profile: (Pick<DbProfile, 'id'> & Partial<Pick<DbProfile, 'role'>>) | null,
 ): Promise<{ added: number }> {
   const list = Array.isArray(equipment) ? equipment : [];
   const vendorIds = [...new Set(list.map((e) => e?.vendor_id).filter((v): v is string => !!v))];
@@ -176,6 +195,18 @@ export async function syncBuildingVendorsFromEquipment(
   const have = new Set(((existing ?? []) as { vendor_id: string }[]).map((r) => String(r.vendor_id)));
   const toAdd = vendorIds.filter((id) => !have.has(String(id)));
   if (toAdd.length === 0) return { added: 0 };
+
+  // 管理会社は表へ直接書けない（RLS）。自社物件だけを受け付ける RPC で1件ずつ足す
+  if (profile?.role === 'management') {
+    for (const vendorId of toAdd) {
+      const { error } = await supabase.rpc(RPC.mgmtAddBuildingVendor, {
+        p_property_code: String(propertyCode),
+        p_vendor_id: vendorId,
+      });
+      if (error) throw error;
+    }
+    return { added: toAdd.length };
+  }
 
   const rows = toAdd.map((vendor_id) => ({
     property_code: String(propertyCode),

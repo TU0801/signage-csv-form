@@ -9,6 +9,10 @@ const api = vi.hoisted(() => ({
   updateEntriesStatusBulk: vi.fn(),
 }));
 vi.mock('@/lib/api/admin-entries', () => api);
+const auth = vi.hoisted(() => ({ state: { profile: null as { role: string } | null } }));
+vi.mock('@/stores/authStore', () => ({
+  useAuthStore: (sel: (s: typeof auth.state) => unknown) => sel(auth.state),
+}));
 vi.mock('../hooks/useEntriesTable', () => ({
   useEntriesTable: () => ({ entries: [makeEntry({ id: 'a' })], loading: false, error: null, refetch }),
 }));
@@ -34,6 +38,8 @@ vi.mock('../components/EntryActions', () => ({
   ),
 }));
 vi.mock('@/features/approval/components/EntryDetailModal', () => ({ EntryDetailModal: () => null }));
+vi.mock('@/features/inspection-portal/components/SendBackDialog', () => ({ SendBackDialog: () => null }));
+vi.mock('@/lib/api/portal', () => ({ reviewEntry: vi.fn() }));
 vi.mock('../components/EntryEditModal', () => ({ EntryEditModal: () => null }));
 
 import { EntriesTable } from '../components/EntriesTable';
@@ -45,5 +51,29 @@ describe('EntriesTable bulk delete (v1 admin-entries.js bulkDeleteEntries)', () 
     fireEvent.click(screen.getByRole('button', { name: '一括削除' }));
     await waitFor(() => expect(refetch).toHaveBeenCalledTimes(1));
     expect(api.deleteEntry).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('EntriesTable（管理会社: 修正依頼1024 C2）', () => {
+  it('管理会社には行の「編集」「削除」を出さない（閲覧と出力だけ）', () => {
+    auth.state.profile = { role: 'management' };
+    render(<EntriesTable />);
+    expect(screen.getByRole('button', { name: '詳細' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '編集' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '削除' })).not.toBeInTheDocument();
+    auth.state.profile = null;
+  });
+});
+
+describe('EntriesTable（承認の取り消し: 修正依頼1024 F1）', () => {
+  it('管理者には未取込の行に承認を取り消す「差戻し」を出し、管理会社には出さない', () => {
+    auth.state.profile = { role: 'admin' };
+    const { unmount } = render(<EntriesTable />);
+    expect(screen.getByRole('button', { name: '差戻し' })).toHaveAttribute('title', expect.stringContaining('承認を取り消し'));
+    unmount();
+    auth.state.profile = { role: 'management' };
+    render(<EntriesTable />);
+    expect(screen.queryByRole('button', { name: '差戻し' })).not.toBeInTheDocument();
+    auth.state.profile = null;
   });
 });

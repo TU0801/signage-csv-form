@@ -8,6 +8,7 @@ import {
   fetchPendingBuildingRequests,
   fetchProfileEmails,
   rejectBuildingRequest,
+  reviewBuildingRequestAsManagement,
 } from '@/features/relationships/api';
 
 export interface BuildingRequestRow extends DbBuildingVendor {
@@ -74,7 +75,9 @@ export function useBuildingRequests() {
   const approveRequest = useCallback(
     async (id: string) => {
       if (!profile?.id) throw new Error('ログインが必要です');
-      await approveBuildingRequest(id, profile.id);
+      // 管理会社は自社物件のリクエストだけを RPC で承認する
+      if (profile.role === 'management') await reviewBuildingRequestAsManagement(id, 'approve');
+      else await approveBuildingRequest(id, profile.id);
       await fetchPendingRequests();
     },
     [profile, fetchPendingRequests],
@@ -84,10 +87,11 @@ export function useBuildingRequests() {
   // v1: js/admin-relationships.js handleRejectBuildingRequest
   const rejectRequest = useCallback(
     async (id: string) => {
-      await rejectBuildingRequest(id);
+      if (profile?.role === 'management') await reviewBuildingRequestAsManagement(id, 'reject');
+      else await rejectBuildingRequest(id);
       await fetchPendingRequests();
     },
-    [fetchPendingRequests],
+    [profile, fetchPendingRequests],
   );
 
   return {

@@ -43,6 +43,7 @@ function inspectionKey(rows: PropertyInspection[]): string {
       [...(r.inspection_months ?? [])].map(Number).sort((a, b) => a - b),
       r.remarks ?? '',
       r.remarks2 ?? '',
+      r.inspected_on ? String(r.inspected_on).slice(0, 7) : '',
     ]),
   );
 }
@@ -128,7 +129,8 @@ export interface SavePropertyParams {
   originalUnits: PropertyUnit[];
   /** 編集後の台 */
   units: PropertyUnit[];
-  profile: Pick<DbProfile, 'id'> | null;
+  /** role が management のときは自社物件だけを扱う管理会社用の RPC で送る */
+  profile: (Pick<DbProfile, 'id'> & Partial<Pick<DbProfile, 'role'>>) | null;
 }
 
 export interface SavePropertyResult {
@@ -147,7 +149,7 @@ export interface SavePropertyResult {
 export async function savePropertyForm(p: SavePropertyParams): Promise<SavePropertyResult> {
   const errors: string[] = [];
   try {
-    await saveInspectionsToBiz(p.propertyCode, p.inspections, p.managedTypeIds);
+    await saveInspectionsToBiz(p.propertyCode, p.inspections, p.managedTypeIds, p.profile?.role);
   } catch (e) {
     console.error('Failed to save inspections to biz:', e);
     errors.push(`点検情報の保存に失敗しました: ${errorText(e)}`);
@@ -155,7 +157,7 @@ export async function savePropertyForm(p: SavePropertyParams): Promise<SavePrope
 
   // 台ごとの保守は、開いたときとの差分だけを送る（変えていなければ何も送らない）
   try {
-    const result = await saveUnitInspectionsToBiz(diffUnitInspections(p.originalUnits, p.units));
+    const result = await saveUnitInspectionsToBiz(diffUnitInspections(p.originalUnits, p.units), p.profile?.role);
     if (result.errors.length > 0) {
       console.error('Failed to save unit inspections to biz:', result.errors);
       errors.push(

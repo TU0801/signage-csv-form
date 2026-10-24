@@ -40,6 +40,7 @@ export function UsersContent() {
     vendors,
     managementCompanies,
     currentUserId,
+    isManagement,
     loading,
     error,
     addUser,
@@ -90,6 +91,13 @@ export function UsersContent() {
         </Button>
       </div>
 
+      {isManagement && (
+        <p className="text-xs text-gray-500">
+          自社の管理会社ユーザーを表示します。追加・編集・無効化できるのも自社の管理会社ユーザーだけです
+          （保守会社のユーザーは複数の管理会社にまたがるため、作成・管理は管理者が行います）。
+        </p>
+      )}
+
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <div className="overflow-x-auto">
@@ -114,6 +122,8 @@ export function UsersContent() {
             ) : (
               users.map((user) => {
                 const isSelf = currentUserId === user.id;
+                // 管理会社は自社の管理会社ユーザーだけを編集・無効化できる（一覧も RLS で自社の管理会社ユーザーだけ。念のため画面でも絞る）
+                const readOnly = isManagement && user.role !== 'management';
                 const status = user.status || 'active';
                 const company = companyLabel(user, vendors, managementCompanies);
                 return (
@@ -141,27 +151,33 @@ export function UsersContent() {
                     <td className="cell sticky right-0 bg-white shadow-[inset_1px_0_0_var(--color-gray-200)] group-hover:bg-gray-50">
                       {/* 削除は無い（v1 にも無く、profiles に DELETE ポリシーも無い。使わせないときは無効化する） */}
                       {/* flex は td ではなく中の div に付ける（td に付けると表のセルとして並ばなくなる） */}
-                      <div className="-my-0.5 flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={isSelf}
-                          title={isSelf ? '自分は編集できません' : undefined}
-                          onClick={() => setEditTarget(user)}
-                        >
-                          編集
-                        </Button>
-                        {!isSelf && status === 'active' && (
-                          <Button variant="danger" size="sm" onClick={() => setDeactivateTarget(user)}>
-                            無効化
+                      {readOnly ? (
+                        <span className="text-xs text-gray-400" title="保守会社のユーザーは管理者が編集します">
+                          閲覧のみ
+                        </span>
+                      ) : (
+                        <div className="-my-0.5 flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={isSelf}
+                            title={isSelf ? '自分は編集できません' : undefined}
+                            onClick={() => setEditTarget(user)}
+                          >
+                            編集
                           </Button>
-                        )}
-                        {!isSelf && status === 'inactive' && (
-                          <Button variant="success" size="sm" onClick={() => handleActivate(user)}>
-                            有効化
-                          </Button>
-                        )}
-                      </div>
+                          {!isSelf && status === 'active' && (
+                            <Button variant="danger" size="sm" onClick={() => setDeactivateTarget(user)}>
+                              無効化
+                            </Button>
+                          )}
+                          {!isSelf && status === 'inactive' && (
+                            <Button variant="success" size="sm" onClick={() => handleActivate(user)}>
+                              有効化
+                            </Button>
+                          )}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 );
@@ -177,6 +193,7 @@ export function UsersContent() {
         vendors={vendors}
         managementCompanies={managementCompanies}
         onAdd={addUser}
+        managementCaller={isManagement}
       />
 
       <EditUserModal
@@ -186,6 +203,7 @@ export function UsersContent() {
         vendors={vendors}
         managementCompanies={managementCompanies}
         onUpdate={editUser}
+        passwordOnly={isManagement}
       />
 
       <ConfirmDialog

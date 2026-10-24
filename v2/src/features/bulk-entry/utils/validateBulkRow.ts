@@ -20,7 +20,8 @@ export function validateBulkRow(
     | 'displayTime'
     | 'remarks'
     | 'noticeText'
-  >,
+  > &
+    Partial<Pick<BulkEntryRow, 'posterType' | 'posterImage'>>,
   properties: BulkProperty[],
   settings: BulkSettings,
   notices: BulkNotice[] = [],
@@ -66,6 +67,9 @@ export function validateBulkRow(
       errors.push(`案内文(${noticeTextMaxChars}文字以下)`);
     }
   }
+
+  // 追加の貼紙は画像が要る（詳細設定で選ぶ。B18）
+  if (row.posterType === 'custom' && !row.posterImage) errors.push('貼紙画像');
 
   return errors;
 }

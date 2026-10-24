@@ -15,10 +15,12 @@ function shortDate(d: string): string {
   return m ? `${Number(m[1])}/${Number(m[2])}` : d;
 }
 
-/** 詳細設定（案内文・表示期間・表示時間・位置）のどれかを既定から変えたか */
+/** 詳細設定（案内文・連絡先・貼紙・表示期間・表示時間・位置）のどれかを既定から変えたか */
 export function hasRowDetail(row: BulkEntryRow, defaultDisplayTime: number): boolean {
   return !!(
     row.noticeText ||
+    row.emergencyContact ||
+    row.posterType === 'custom' ||
     row.displayStartDate ||
     row.displayStartTime ||
     row.displayEndDate ||
@@ -45,6 +47,59 @@ export function rowDetailSummary(row: BulkEntryRow): string {
     ? '不正値'
     : (POSITIONS.find((p) => p.value === String(row.position))?.label ?? String(row.position));
   const parts = [`表示期間: ${start}〜${end}`, `位置: ${position}`, `表示時間: ${row.displayTime}秒`];
+  if (row.posterType === 'custom') parts.push(row.posterImage ? '貼紙: 追加' : '貼紙: 追加（画像未選択）');
   if (row.noticeText) parts.push('案内文あり');
+  if (row.emergencyContact) parts.push(`連絡先: ${row.emergencyContact}`);
   return parts.join('・');
+}
+
+/**
+ * 表示期間が既定と違うか（詳細設定で表示期間を最初から開いておくかの判定）。
+ * 既定は「空」か「点検期間と同じ日付・時刻なし」（旧モーダルが開くたびに点検期間を入れていたため、その値も既定とみなす）
+ */
+export function hasCustomDisplayPeriod(
+  row: Pick<BulkEntryRow, 'displayStartDate' | 'displayStartTime' | 'displayEndDate' | 'displayEndTime' | 'startDate' | 'endDate'>,
+): boolean {
+  if (row.displayStartTime || row.displayEndTime) return true;
+  if (row.displayStartDate && row.displayStartDate !== row.startDate) return true;
+  if (row.displayEndDate && row.displayEndDate !== row.endDate) return true;
+  return false;
+}
+
+/**
+ * テンプレート名（template_images.display_name。image_key は大小文字を無視して突き合わせる＝実 DB で 10 件が大小文字違い）。
+ * 見つからなければ点検種別名
+ */
+export function templateDisplayName(
+  templateNo: string,
+  inspectionType: string,
+  images: { image_key: string; display_name: string }[],
+): string {
+  const key = templateNo.toLowerCase();
+  const hit = key ? images.find((i) => i.image_key.toLowerCase() === key) : undefined;
+  return hit?.display_name || inspectionType;
+}
+
+/**
+ * 申請で保存される表示期間（buildBulkEntries と詳細設定の畳んだ要約の両方がこれを使う）。
+ * startDate が null なら申請日（申請した日の日付）、endDate は表示終了日 → 点検終了日 → null。
+ * today を渡すと、表示開始日が空で表示終了日が today より前（点検月を過ぎた予定を後から申請した）のとき、
+ * 申請日を開始日にすると期間が逆になるので、点検開始日（表示終了日より後なら表示終了日）を開始日にする
+ */
+export function submittedDisplayPeriod(
+  row: Pick<BulkEntryRow, 'displayStartDate' | 'displayStartTime' | 'displayEndDate' | 'displayEndTime' | 'endDate'> &
+    Partial<Pick<BulkEntryRow, 'startDate'>>,
+  today?: string,
+): { startDate: string | null; startTime: string | null; endDate: string | null; endTime: string | null } {
+  const endDate = row.displayEndDate || row.endDate || null;
+  let startDate = row.displayStartDate || null;
+  if (!startDate && today && endDate && endDate < today) {
+    startDate = row.startDate && row.startDate <= endDate ? row.startDate : endDate;
+  }
+  return {
+    startDate,
+    startTime: row.displayStartTime || null,
+    endDate,
+    endTime: row.displayEndTime || null,
+  };
 }

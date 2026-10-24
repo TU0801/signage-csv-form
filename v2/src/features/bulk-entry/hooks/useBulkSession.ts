@@ -5,6 +5,8 @@ import { useToast } from '@/components/ui/Toast';
 import { fetchAllMasterData } from '@/lib/api/masterData';
 import { getAssignedBuildings } from '@/lib/api/relationships';
 import { fetchBulkSettings } from '@/lib/api/bulk-entry';
+import { fetchLinkedInspectionIds } from '@/lib/api/single-entry';
+import { hasUnsentInput } from '../utils/scheduleRows';
 import { applySettings, DEFAULT_BULK_SETTINGS, flattenProperties, toBulkMasterData } from '../utils/bulkMaster';
 import { clearAutoSave, readAutoSave } from '../utils/bulkAutoSave';
 import type { BulkVendor } from '../types';
@@ -50,10 +52,13 @@ export function useBulkSession(confirm: (message: string) => Promise<boolean>) {
         const master = toBulkMasterData(data);
         store.setMasterData(master);
         store.setAppSettings(applySettings(DEFAULT_BULK_SETTINGS, settings));
-        // 一般ユーザーはプロファイルの保守会社に固定
+        // 一般ユーザーはプロファイルの保守会社に固定。点検種別の既定（B9）に使う紐付けも読む（失敗しても空で続ける）
         if (profile.role !== 'admin' && profile.vendor_id) {
           const vendor = master.vendors.find((v) => v.id === profile.vendor_id);
           store.setCurrentVendor({ id: profile.vendor_id, name: vendor?.vendorName || null });
+          void fetchLinkedInspectionIds(profile.vendor_id).then((ids) => {
+            if (!cancelled) useBulkStore.getState().setInspectionDefaults({ linkedIds: [...ids] });
+          });
         }
       } catch (error) {
         if (cancelled) return;
@@ -98,7 +103,8 @@ export function useBulkSession(confirm: (message: string) => Promise<boolean>) {
     const handler = (e: BeforeUnloadEvent) => {
       if (useAuthStore.getState().sessionChanged) return;
       flushBulkAutoSave();
-      if (useBulkStore.getState().rows.length > 0) {
+      // 点検予定の行は入力したものだけ数える（予定は開くたびに DB から出る）
+      if (useBulkStore.getState().rows.some(hasUnsentInput)) {
         e.preventDefault();
         e.returnValue = '';
       }
@@ -116,7 +122,7 @@ export function useBulkSession(confirm: (message: string) => Promise<boolean>) {
   const changeVendor = useCallback(
     async (vendorId: string) => {
       const store = useBulkStore.getState();
-      const rowCount = store.rows.length;
+      const rowCount = store.rows.filter(hasUnsentInput).length;
       if (
         vendorId &&
         rowCount > 0 &&
@@ -129,13 +135,21 @@ export function useBulkSession(confirm: (message: string) => Promise<boolean>) {
           const fresh = await fetchAllMasterData(profile);
           store.setMasterData(toBulkMasterData(fresh));
           store.setCurrentVendor({ id: null, name: null });
+          store.setInspectionDefaults({ linkedIds: [] });
+          // 保守会社を外したら予定の行も外す（予定は選んだ保守会社のもの）
+          store.syncScheduleRows([]);
           return;
         }
         const selected = vendors.find((v) => v.id === vendorId);
         store.setCurrentVendor({ id: vendorId, name: selected?.vendorName || null });
-        const buildings = await getAssignedBuildings({ role: 'user', vendor_id: vendorId });
+        const [buildings, linked] = await Promise.all([
+          getAssignedBuildings({ role: 'user', vendor_id: vendorId }),
+          fetchLinkedInspectionIds(vendorId),
+        ]);
         store.setMasterData({ ...useBulkStore.getState().masterData, properties: flattenProperties(buildings, true) });
-        store.clearRows();
+        store.setInspectionDefaults({ linkedIds: [...linked] });
+        // 手で足した行は消す。予定の行は画面が選んだ保守会社の予定で入れ直す
+        useBulkStore.setState((st) => ({ rows: st.rows.filter((r) => r.schedule), selectedIds: new Set<number>() }));
       } catch (error) {
         console.error('Failed to load vendor data:', error);
         addToast('保守会社データの取得に失敗しました', 'error');

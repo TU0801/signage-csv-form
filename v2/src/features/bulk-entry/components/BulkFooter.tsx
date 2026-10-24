@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/Button';
 import { useBulkStore } from '@/stores/bulkStore';
+import { isApplyTarget } from '../utils/scheduleRows';
 
 interface BulkFooterProps {
   saving: boolean;
@@ -10,10 +11,11 @@ interface BulkFooterProps {
   saveBlockedReason?: string;
 }
 
-/** 申請・CSV ダウンロード／コピー（有効な行が無いと押せない）。v1: bulk.html .bulk-footer / js/bulk-data.js updateButtons */
+/** 申請・CSV ダウンロード／コピー（申請の対象の行が無いと押せない）。v1: bulk.html .bulk-footer / js/bulk-data.js updateButtons */
 export function BulkFooter({ saving, onSave, onDownloadCsv, onCopyCsv, saveBlockedReason }: BulkFooterProps) {
-  const validCount = useBulkStore((s) => s.rows.filter((r) => r.isValid).length);
-  const disabled = validCount === 0;
+  // 申請の対象（手で足した行と、点検開始日を入れた未申請の予定の行）が無いと押せない。エラーの行は押したときに知らせる（B7）
+  const targetCount = useBulkStore((s) => s.rows.filter(isApplyTarget).length);
+  const disabled = targetCount === 0;
 
   return (
     <div className="flex items-center justify-between rounded-b-lg border-t border-gray-200 bg-gray-50 px-3 py-2">

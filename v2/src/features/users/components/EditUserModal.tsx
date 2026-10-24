@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
-import { MIN_PASSWORD_LENGTH, ROLE_OPTIONS, companyRequiredError } from '../constants';
+import { MIN_PASSWORD_LENGTH, ROLE_OPTIONS, companyRequiredError, roleLabel } from '../constants';
 import { CompanyField } from './CompanyField';
 import type { DbProfile, DbVendor } from '@/types/database';
 import type { ManagementCompanyRow } from '@/types/portal';
@@ -25,6 +25,8 @@ interface EditUserModalProps {
       password?: string;
     },
   ) => Promise<boolean>;
+  /** 管理会社のアカウントが操作する: パスワードだけを変える（権限・会社は文字で出す。修正依頼1024 C3） */
+  passwordOnly?: boolean;
 }
 
 type FieldErrors = Partial<Record<'password' | 'company', string>>;
@@ -37,6 +39,7 @@ export function EditUserModal({
   vendors,
   managementCompanies,
   onUpdate,
+  passwordOnly = false,
 }: EditUserModalProps) {
   const { addToast } = useToast();
   const [role, setRole] = useState<DbProfile['role']>('user');
@@ -134,38 +137,51 @@ export function EditUserModal({
           autoComplete="new-password"
           error={errors.password}
         />
-        {/* 権限で保守会社・管理会社のどちらが要るかが決まるので、権限を先に選ぶ */}
-        <Select
-          label="権限 *"
-          id="editUserRole"
-          options={ROLE_OPTIONS}
-          value={role}
-          onChange={(e) => {
-            setRole(e.target.value as DbProfile['role']);
-            setErrors((prev) => ({ ...prev, company: undefined }));
-          }}
-        />
-        <CompanyField
-          idPrefix="editUser"
-          role={role}
-          vendors={vendors}
-          managementCompanies={managementCompanies}
-          vendorId={vendorId}
-          managementCompanyId={managementCompanyId}
-          onVendorChange={(v) => {
-            setVendorId(v);
-            setErrors((prev) => ({ ...prev, company: undefined }));
-          }}
-          onManagementCompanyChange={(v) => {
-            setManagementCompanyId(v);
-            setErrors((prev) => ({ ...prev, company: undefined }));
-          }}
-          error={errors.company}
-        />
+        {passwordOnly ? (
+          <div className="space-y-0.5">
+            <p className="text-xs font-medium text-gray-600">権限・会社</p>
+            <p className="text-sm text-gray-900">
+              {roleLabel(role)}
+              {role === 'management' && managementCompanies[0] ? `（${managementCompanies[0].name}）` : ''}
+            </p>
+            <p className="text-xs text-gray-500">権限・会社の変更は管理者が行います</p>
+          </div>
+        ) : (
+          <>
+            {/* 権限で保守会社・管理会社のどちらが要るかが決まるので、権限を先に選ぶ */}
+            <Select
+              label="権限 *"
+              id="editUserRole"
+              options={ROLE_OPTIONS}
+              value={role}
+              onChange={(e) => {
+                setRole(e.target.value as DbProfile['role']);
+                setErrors((prev) => ({ ...prev, company: undefined }));
+              }}
+            />
+            <CompanyField
+              idPrefix="editUser"
+              role={role}
+              vendors={vendors}
+              managementCompanies={managementCompanies}
+              vendorId={vendorId}
+              managementCompanyId={managementCompanyId}
+              onVendorChange={(v) => {
+                setVendorId(v);
+                setErrors((prev) => ({ ...prev, company: undefined }));
+              }}
+              onManagementCompanyChange={(v) => {
+                setManagementCompanyId(v);
+                setErrors((prev) => ({ ...prev, company: undefined }));
+              }}
+              error={errors.company}
+            />
+          </>
+        )}
         {switchingToManagement && (
           <p role="note" className="rounded border border-yellow-200 bg-yellow-50 px-2 py-1.5 text-xs text-yellow-800">
             管理会社へ付け替えると、保守会社の設定は外れ、申請の作成（1件入力・一括入力）ができなくなります。
-            ログイン後は自社物件の点検一覧（承認・報告書の確認）だけになります。
+            ログイン後は、点検登録フォームでの承認・報告書の確認と、管理会社メニュー（自社物件の承認・紐付け・マスター・ユーザー）を使えます。
           </p>
         )}
         <div className="flex justify-end gap-3 pt-2">

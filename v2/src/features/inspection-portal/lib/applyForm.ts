@@ -148,6 +148,8 @@ export function buildApplyRow(v: ApplyValues, ctx: ApplyContext, userId: string,
     startDate: v.startDate,
     endDate,
     remarks: v.remarks,
+    // 申請のモーダルにメモ欄は無い（メモは点検登録フォームから）
+    memo: '',
     displayStartDate: v.displayStartDate || v.startDate,
     displayStartTime: '',
     displayEndDate: v.displayEndDate || endDate,
@@ -185,5 +187,7 @@ export type ResubmitPatch = Omit<EntryInsertRow, 'user_id'>;
 export function toResubmitPatch(row: EntryInsertRow): ResubmitPatch {
   const patch: Partial<EntryInsertRow> = { ...row };
   delete patch.user_id;
+  // 再申請のモーダルにはメモ欄が無いので、点検登録フォームで書いたメモを消さない
+  delete patch.memo;
   return patch as ResubmitPatch;
 }

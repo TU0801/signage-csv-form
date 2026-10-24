@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useState, type ReactNode } from 'react';
-import { render, screen, fireEvent, waitFor, act, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, cleanup, within } from '@testing-library/react';
 import { ToastProvider } from '@/components/ui/Toast';
 import { HeaderSlotContext } from '@/components/layout/HeaderSlot';
 import { useAuthStore } from '@/stores/authStore';
@@ -9,6 +9,7 @@ import { BulkEntryPage } from '@/pages/BulkEntryPage';
 import type { MasterData } from '@/types/app';
 import type { DbProfile, DbProperty } from '@/types/database';
 import { createMemoryStorage } from './memoryStorage';
+import { makeEntry, makeInspection } from '@/features/inspection-portal/__tests__/fixtures';
 
 const api = vi.hoisted(() => ({
   fetchAllMasterData: vi.fn(),
@@ -23,6 +24,22 @@ vi.mock('@/lib/api/bulk-entry', () => ({
   createBulkEntries: api.createBulkEntries,
 }));
 vi.mock('@/lib/supabase', () => ({ supabase: { auth: {} }, TABLES: {}, RPC: {} }));
+// 点検の予定（portal_*）・完了連絡・管理会社の候補（修正依頼1024）
+const portalApi = vi.hoisted(() => ({
+  fetchPortalInspections: vi.fn(),
+  fetchPortalEntries: vi.fn(),
+  fetchInspectionReports: vi.fn(),
+}));
+vi.mock('@/lib/api/portal', () => portalApi);
+const formApi = vi.hoisted(() => ({
+  fetchCompletions: vi.fn(),
+  fetchEntryMemos: vi.fn(async () => new Map<string, string>()),
+  fetchInspectionDates: vi.fn(),
+  fetchScopedManagementCompanies: vi.fn(),
+  markCompleted: vi.fn(),
+  unmarkCompleted: vi.fn(),
+}));
+vi.mock('@/lib/api/inspection-form', () => formApi);
 
 // 実DBの列に合わせたマスター（signage_master_properties / signage_master_vendors / signage_master_inspection_types）
 const masterData: MasterData = {
@@ -106,6 +123,12 @@ describe('BulkEntryPage (v1 js/bulk.js init / adminVendorSelect)', () => {
     api.fetchBulkSettings.mockResolvedValue([{ setting_key: 'display_time_default', setting_value: '10' }]);
     api.getAssignedBuildings.mockResolvedValue(vendorBuildings);
     useAuthStore.setState({ user: { id: 'admin-1' } as never, profile: adminProfile });
+    portalApi.fetchPortalInspections.mockResolvedValue([]);
+    portalApi.fetchPortalEntries.mockResolvedValue([]);
+    portalApi.fetchInspectionReports.mockResolvedValue([]);
+    formApi.fetchCompletions.mockResolvedValue([]);
+    formApi.fetchInspectionDates.mockResolvedValue([]);
+    formApi.fetchScopedManagementCompanies.mockResolvedValue([]);
   });
   afterEach(() => {
     cleanup();
@@ -193,7 +216,7 @@ describe('BulkEntryPage (v1 js/bulk.js init / adminVendorSelect)', () => {
     expect(screen.getByRole('button', { name: 'CSVダウンロード' })).toBeEnabled();
   });
 
-  it('submitting with error rows asks first, sends only valid rows and keeps the error rows', async () => {
+  it('エラーの行があれば申請を止め、件数と最初のエラーを知らせてそのセルへ移る（B7）', async () => {
     api.createBulkEntries.mockResolvedValue([]);
     renderPage();
     fireEvent.change(await screen.findByLabelText('保守会社を選択'), { target: { value: 'v2' } });
@@ -201,18 +224,144 @@ describe('BulkEntryPage (v1 js/bulk.js init / adminVendorSelect)', () => {
     await waitFor(() => expect(useBulkStore.getState().sessionLoaded).toBe(true));
     act(() => {
       useBulkStore.getState().addRow({ propertyCode: 'z0003A01', inspectionType: '消防設備点検' });
-      // 端末の無い物件は端末エラーのまま（申請できるかは未決）
+      // 端末の無い物件は端末エラー。端末の列は無いので物件の下に出す（B8）
       useBulkStore.getState().addRow({ propertyCode: 'z0004A01', inspectionType: '消防設備点検' });
     });
     expect(screen.getByText('端末未設置')).toBeInTheDocument();
+    // 表示フィルター・状態の列は無い（B7）
+    expect(screen.queryByRole('columnheader', { name: '状態' })).toBeNull();
+    expect(screen.queryByRole('columnheader', { name: '端末' })).toBeNull();
+    // 列の並びは注記の配置どおり（ステータス・報告書UP・完了連絡 → No（対象月）→ 点検月・検査月 → 物件。F15）
+    const heads = screen.getAllByRole('columnheader').map((h) => h.textContent ?? '');
+    const at = (label: string) => heads.findIndex((h) => h.startsWith(label));
+    expect([at('ステータス'), at('報告書UP'), at('No'), at('点検月'), at('検査月'), at('物件')]).toEqual(
+      [1, 2, 3, 4, 5, 6],
+    );
 
     fireEvent.click(screen.getByRole('button', { name: '↑ 申請する' }));
-    expect(await screen.findByText(/エラーの1件は申請せず、表に残します/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    expect(await screen.findByText(/入力にエラーがある行が1件あります/)).toBeInTheDocument();
+    expect(screen.getByText(/2行目: 端末未設置の物件です/)).toBeInTheDocument();
+    expect(api.createBulkEntries).not.toHaveBeenCalled();
+    const errorRowId = useBulkStore.getState().rows[1]!.id;
+    await waitFor(() =>
+      expect(document.activeElement?.closest('tr')?.getAttribute('data-row-id')).toBe(String(errorRowId)),
+    );
 
-    await waitFor(() => expect(useBulkStore.getState().rows).toHaveLength(1));
+    // エラーの行を消すと申請できる
+    act(() => useBulkStore.getState().removeRows([errorRowId]));
+    fireEvent.click(screen.getByRole('button', { name: '↑ 申請する' }));
+    await waitFor(() => expect(api.createBulkEntries).toHaveBeenCalledTimes(1));
     expect(api.createBulkEntries.mock.calls[0]![0]).toHaveLength(1);
-    expect(useBulkStore.getState().rows[0]!.propertyCode).toBe('z0004A01');
+    await waitFor(() => expect(useBulkStore.getState().rows).toHaveLength(0));
+  });
+
+  describe('点検予定の行（保守会社のアカウント。B13・B14）', () => {
+    const vendorProfile: DbProfile = { ...adminProfile, id: 'user-1', role: 'user', vendor_id: 'v1' };
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      // 日本時間 2026-10-21
+      vi.setSystemTime(new Date('2026-10-21T03:00:00Z'));
+      useAuthStore.setState({ user: { id: 'user-1' } as never, profile: vendorProfile });
+      // 点検月 5・11（4月登録）→ 5月は超過、11月はこれから
+      portalApi.fetchPortalInspections.mockResolvedValue([
+        makeInspection({ property_code: 'z0001A01', property_name: '物件A', inspection_type_label: '消防設備点検', vendor_id: 'v1' }),
+      ]);
+      formApi.fetchInspectionDates.mockResolvedValue([{ inspection_id: 'i1', inspected_on: '2026-04-01' }]);
+    });
+    afterEach(() => vi.useRealTimers());
+
+    const rowOf = (month: string) =>
+      screen.getAllByTestId('target-month').find((el) => el.textContent === month)!.closest('tr')!;
+
+    it('予定を対象月・ステータス・点検月・検査月つきで出し、点検開始日を入れた行だけを点検行に結び付けて申請する', async () => {
+      api.createBulkEntries.mockResolvedValue([]);
+      renderPage();
+      await waitFor(() => expect(screen.getAllByTestId('target-month')).toHaveLength(2));
+      const may = rowOf('2026年5月');
+      const nov = rowOf('2026年11月');
+      expect(within(may).getByText('点検月超過')).toBeInTheDocument();
+      expect(within(nov).getByText('未申請')).toBeInTheDocument();
+      expect(within(nov).getByText('5,11')).toBeInTheDocument();
+      expect(within(nov).getByText('2026年4月')).toBeInTheDocument();
+      // 保守会社のアカウントには保守会社の列を出さない
+      expect(screen.queryByRole('columnheader', { name: '保守会社' })).toBeNull();
+
+      // 開始日を入れると終了日も同じ日になる（B10）
+      fireEvent.change(within(nov).getByLabelText('点検開始日'), { target: { value: '2026-11-10' } });
+      expect(within(nov).getByLabelText('点検終了日')).toHaveValue('2026-11-10');
+      fireEvent.change(within(nov).getByLabelText('メモ'), { target: { value: '点検月を11月に変更' } });
+      fireEvent.click(screen.getByRole('button', { name: '↑ 申請する' }));
+      await waitFor(() => expect(api.createBulkEntries).toHaveBeenCalledTimes(1));
+      // 5月（開始日なし）は黙って飛ばす
+      const sent = api.createBulkEntries.mock.calls[0]![0] as Record<string, unknown>[];
+      expect(sent).toHaveLength(1);
+      expect(sent[0]).toMatchObject({
+        property_code: 'z0001A01',
+        inspection_type: '消防設備点検',
+        inspection_start: '2026-11-10',
+        inspection_end: '2026-11-10',
+        property_inspection_id: 'i1',
+        vendor_id: 'v1',
+        target_month: '2026-11-01',
+        memo: '点検月を11月に変更',
+        vendor_name: 'A社',
+      });
+    });
+
+    it('時期の既定は点検一覧と同じ（申請済みの過去の月は出さず、「すべて」で出す。B13）', async () => {
+      portalApi.fetchPortalEntries.mockResolvedValue([
+        makeEntry({ property_code: 'z0001A01', inspection_type: '消防設備点検', target_month: '2026-05-01', inspection_start: '2026-05-10', status: 'ready' }),
+      ]);
+      renderPage();
+      await waitFor(() => expect(screen.getAllByTestId('target-month').map((el) => el.textContent)).toEqual(['2026年11月']));
+      fireEvent.change(screen.getByRole('combobox', { name: '時期' }), { target: { value: 'all' } });
+      await waitFor(() => expect(screen.getAllByTestId('target-month').map((el) => el.textContent)).toContain('2026年5月'));
+    });
+
+    it('点検月未登録の行は申請すると入力が空に戻り、もう一度押しても二重に申請しない', async () => {
+      portalApi.fetchPortalInspections.mockResolvedValue([
+        makeInspection({
+          property_code: 'z0001A01',
+          property_name: '物件A',
+          inspection_type_label: '消防設備点検',
+          vendor_id: 'v1',
+          inspection_months: [],
+        }),
+      ]);
+      api.createBulkEntries.mockResolvedValue([]);
+      renderPage();
+      await waitFor(() => expect(screen.getAllByTestId('target-month')).toHaveLength(1));
+      const row = () => rowOf('点検月未登録');
+      fireEvent.change(within(row()).getByLabelText('点検開始日'), { target: { value: '2026-11-05' } });
+      fireEvent.change(within(row()).getByLabelText('メモ'), { target: { value: 'メモ' } });
+      // 読み直すと申請が予定に付く（点検月が無いので行は未申請のまま残る）
+      portalApi.fetchPortalEntries.mockResolvedValue([
+        makeEntry({ property_code: 'z0001A01', inspection_type: '消防設備点検', target_month: '2026-11-01', inspection_start: '2026-11-05' }),
+      ]);
+      fireEvent.click(screen.getByRole('button', { name: '↑ 申請する' }));
+      await waitFor(() => expect(api.createBulkEntries).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(portalApi.fetchPortalEntries.mock.calls.length).toBeGreaterThanOrEqual(2));
+      await waitFor(() => expect(within(row()).getByLabelText('点検開始日')).toHaveValue(''));
+      expect(within(row()).getByLabelText('メモ')).toHaveValue('');
+      // 申請の対象が無くなるので申請ボタンは押せない
+      expect(screen.getByRole('button', { name: '↑ 申請する' })).toBeDisabled();
+      expect(api.createBulkEntries).toHaveBeenCalledTimes(1);
+    });
+
+    it('完了連絡は確認のうえ記録し、記録があれば点検完了と出す', async () => {
+      formApi.markCompleted.mockResolvedValue({});
+      renderPage();
+      await waitFor(() => expect(screen.getAllByTestId('target-month')).toHaveLength(2));
+      fireEvent.click(within(rowOf('2026年5月')).getByRole('button', { name: '完了連絡' }));
+      expect(await screen.findByText(/点検の完了を連絡しますか？/)).toBeInTheDocument();
+      formApi.fetchCompletions.mockResolvedValue([
+        { id: 'c1', property_inspection_id: 'i1', target_month: '2026-05-01', vendor_id: 'v1', completed_at: '', completed_by: null },
+      ]);
+      fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+      await waitFor(() => expect(formApi.markCompleted).toHaveBeenCalledWith('i1', '2026-05-01'));
+      await waitFor(() => expect(within(rowOf('2026年5月')).getByText('点検完了')).toBeInTheDocument());
+      expect(within(rowOf('2026年5月')).getByRole('button', { name: '完了取消' })).toBeInTheDocument();
+    });
   });
 
   it('leaving the page within the app keeps rows and the admin vendor; logging out drops them', async () => {

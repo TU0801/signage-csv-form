@@ -7,6 +7,7 @@ import type {
   DbInspectionType,
   DbCategory,
   DbTemplateImage,
+  RpcPropertyInspectionDateRow,
 } from '@/types/database';
 import type {
   MasterData,
@@ -17,6 +18,7 @@ import type {
 } from '@/types/app';
 import type { RpcInspectionRow, RpcPropertyManagementCompanyRow, RpcUnitInspectionRow } from '@/types/rpc';
 import { getAssignedBuildings } from './relationships';
+import { inspectionRpc } from './scopedRpc';
 
 // v1: js/supabase/master-data.js getMasterProperties
 export async function fetchMasterProperties(): Promise<DbProperty[]> {
@@ -112,14 +114,32 @@ export function fetchPropertyManagementCompanies(): Promise<RpcPropertyManagemen
   return rpcAllRows<RpcPropertyManagementCompanyRow>(RPC.propertyManagementCompanies);
 }
 
+/** 検査月の引き当てのキー（物件コード × 点検種別。biz の一意制約と同じ組） */
+export function inspectionDateKey(propertyCode: string, inspectionTypeId: string): string {
+  return `${propertyCode}|${inspectionTypeId}`;
+}
+
+/**
+ * 物件×点検種別の検査月（マスター管理の物件の編集で使う。値のある点検だけ）。管理者は全件・管理会社は自社物件、ほかは0件。
+ * inspections_all は検査月を返さない（戻り値の型を変えられない）ので別の RPC で読む。失敗はそのまま投げる
+ */
+export async function fetchPropertyInspectionDates(): Promise<Map<string, string>> {
+  const rows = await rpcAllRows<RpcPropertyInspectionDateRow>(RPC.propertyInspectionDates);
+  return new Map(rows.map((r) => [inspectionDateKey(r.property_code, r.inspection_type_id), r.inspected_on]));
+}
+
 /**
  * 点検情報を業務システム（biz）側から取り直して被せる。正本は biz.property_inspections。
  * RPC が返さなかった物件は「点検なし」。**RPC が失敗したら移行前の jsonb のまま残す。**
  */
 // v1: js/supabase/master-data.js overlayInspections
-export async function overlayInspections(properties: MasterProperty[]): Promise<MasterProperty[]> {
+export async function overlayInspections(
+  properties: MasterProperty[],
+  /** 管理会社は自社物件だけを返す mgmt_inspections_all を使う */
+  role?: DbProfile['role'] | null,
+): Promise<MasterProperty[]> {
   try {
-    const { data, error } = await supabase.rpc(RPC.inspectionsAll);
+    const { data, error } = await supabase.rpc(inspectionRpc(role).inspectionsAll);
     if (error) throw error;
     const byCode = new Map<string, PropertyInspection[]>();
     ((data ?? []) as RpcInspectionRow[]).forEach((r) => {
@@ -164,14 +184,18 @@ export async function rpcAllRows<T>(fn: string): Promise<T[]> {
  * RPC が無い・失敗したときは「台の保守なし」で続行する。
  */
 // v1: js/supabase/master-data.js overlayUnitInspections
-export async function fetchUnitInspections(): Promise<{
+export async function fetchUnitInspections(
+  /** 管理会社は自社物件の台だけを返す mgmt_* を使う */
+  role?: DbProfile['role'] | null,
+): Promise<{
   unitsByProperty: Map<string, PropertyUnit[]>;
   typeOptions: UnitInspectionTypeOption[];
 }> {
   try {
+    const rpcNames = inspectionRpc(role);
     const [rows, typeOptions] = await Promise.all([
-      rpcAllRows<RpcUnitInspectionRow>(RPC.unitInspectionsAll),
-      rpcAllRows<UnitInspectionTypeOption>(RPC.unitInspectionTypeOptions),
+      rpcAllRows<RpcUnitInspectionRow>(rpcNames.unitInspectionsAll),
+      rpcAllRows<UnitInspectionTypeOption>(rpcNames.unitInspectionTypeOptions),
     ]);
     const unitsByProperty = new Map<string, PropertyUnit[]>();
     const unitsById = new Map<string, PropertyUnit>();
@@ -215,6 +239,7 @@ export async function fetchUnitInspections(): Promise<{
 
 /**
  * マスターデータ一括取得。一般ユーザーは担当物件（signage_building_vendors の active）だけ。
+ * 管理会社は自社が管理する物件だけ（RLS の mgmt_select_properties が絞る。点検情報は mgmt_inspections_all）。
  * 台ごとの保守はここでは読まない（必要な画面が fetchUnitInspections を呼ぶ）。
  */
 // v1: js/supabase/master-data.js getAllMasterData
@@ -222,7 +247,9 @@ export async function fetchAllMasterData(
   profile: Pick<DbProfile, 'role' | 'vendor_id'> | null,
 ): Promise<MasterData> {
   const propertiesRaw =
-    profile?.role === 'admin' ? await fetchMasterProperties() : await getAssignedBuildings(profile);
+    profile?.role === 'admin' || profile?.role === 'management'
+      ? await fetchMasterProperties()
+      : await getAssignedBuildings(profile);
 
   const [vendors, inspectionTypes, categories, templateImages] = await Promise.all([
     fetchMasterVendors(),
@@ -231,6 +258,6 @@ export async function fetchAllMasterData(
     fetchTemplateImages().catch(() => [] as DbTemplateImage[]),
   ]);
 
-  const properties = await overlayInspections(toMasterProperties(propertiesRaw));
+  const properties = await overlayInspections(toMasterProperties(propertiesRaw), profile?.role);
   return { properties, vendors, inspectionTypes, categories, templateImages };
 }

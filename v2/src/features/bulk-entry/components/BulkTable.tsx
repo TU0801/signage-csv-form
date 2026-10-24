@@ -1,39 +1,53 @@
-import { useCallback, useMemo, useState, type KeyboardEvent } from 'react';
+import { useCallback, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useBulkStore } from '@/stores/bulkStore';
 import { useToast } from '@/components/ui/Toast';
-import { Badge } from '@/components/ui/Badge';
 import { cn } from '@/lib/utils';
+import { StatusBadge } from '@/features/inspection-portal/components/StatusBadge';
+import { formatDate, formatMonth } from '@/features/inspection-portal/lib/schedule';
+import type { InspectionStatus } from '@/features/inspection-portal/lib/status';
 import { useBulkDragDrop } from '../hooks/useBulkDragDrop';
 import { defaultDisplayTime, terminalIdsFor, uniqueProperties } from '../utils/bulkMaster';
+import { COL, LAST_INPUT_COL } from '../utils/columns';
 import { hasRowDetail, rowDetailSummary } from '../utils/rowDetail';
-import { matchesBulkFilter } from '../utils/rowFilter';
 import { ContextMenu } from './ContextMenu';
 import { SearchableSelect } from './SearchableSelect';
 import type { BulkEntryRow } from '../types';
 
+/** 行ごとに画面側（点検の予定・管理会社の索引）から引く表示用の情報 */
+export interface BulkRowInfo {
+  /** 点検予定の行のステータス（手で足した行は undefined） */
+  status?: InspectionStatus;
+  /** 差戻しの理由（申請・報告書） */
+  reason?: string | null;
+  managementName: string;
+  vendorName: string;
+  /** 点検月（例 4,7,10,1）。点検行が無ければ '' */
+  months: string;
+  /** 検査月（例 2026年4月）。無ければ '-' */
+  inspectedOn: string;
+  /** 報告書UP・完了連絡などの操作（点検予定の行で、保守会社・管理者のとき） */
+  actions?: ReactNode;
+}
+
 interface BulkTableProps {
   onOpenRowDetail: (rowId: number) => void;
   confirm: (message: string) => Promise<boolean>;
+  /** 表示する行か（時期・物件の検索・管理会社の絞り込み） */
+  isVisible: (row: BulkEntryRow) => boolean;
+  /** 物件の候補に出すか（管理会社の絞り込み） */
+  propertyAllowed: (propertyCode: string) => boolean;
+  infoOf: (row: BulkEntryRow) => BulkRowInfo;
+  /** 管理会社の列（保守会社・管理者） */
+  showManagement: boolean;
+  /** 保守会社の列（管理者だけ） */
+  showVendor: boolean;
 }
-
-/**
- * セル内の入力欄の列番号（Enter で次の列へ、Alt+↑↓ で同じ列の前後の行へ）。
- * 端末は選ぶ必要があるときだけ入力欄になるので、無い行では飛ばして次の列へ移る
- */
-const COL = { property: 0, terminal: 1, inspection: 2, startDate: 3, endDate: 4, remarks: 5 } as const;
-const LAST_COL = COL.remarks;
 
 const cellInputBase = 'block h-7 w-full rounded border px-2 py-0 text-sm focus:border-blue-500 focus:outline-none';
 const cellInput = (invalid = false) => cn(cellInputBase, invalid ? 'border-red-400' : 'border-gray-300');
-/** 端末の選択欄（列が狭いので文字を小さく・余白を詰めて8桁のIDが読めるようにする） */
-const terminalSelect = (invalid = false) =>
-  cn(
-    'block h-7 w-full rounded border px-1 py-0 text-xs focus:border-blue-500 focus:outline-none',
-    invalid ? 'border-red-400' : 'border-gray-300',
-  );
 
-/** 端末を選ばずに読み取りで出すときの見た目（入力欄と同じ高さ） */
-const cellText = 'block h-7 truncate px-1 text-xs leading-7';
+/** 読み取りの値（入力欄と同じ高さ） */
+const cellText = 'block min-h-7 px-1 text-xs leading-7';
 
 /** 見出しセル（余白と文字の大きさは cell-head。p* は付けない） */
 const th = 'cell-head text-left font-medium text-gray-600';
@@ -43,6 +57,8 @@ const stickyEdge = 'shadow-[inset_1px_0_0_#e5e7eb]';
 
 /** 備考の title。全文に入力の目安を添える（目安の文言は従来の title のまま残す） */
 const REMARKS_HINT = '1行25文字×5行まで';
+/** 備考の入力例（B11。1行の入力欄なので2つの例を「/」で並べる） */
+export const REMARKS_PLACEHOLDER = '例: 10:00～12:00 / No2号機11:00～12:00';
 
 function focusCell(tr: Element | null | undefined, col: number) {
   const el = tr?.querySelector<HTMLElement>(`[data-col="${col}"]`);
@@ -50,9 +66,9 @@ function focusCell(tr: Element | null | undefined, col: number) {
   return !!el;
 }
 
-/** col より右で最初にある入力欄へ（端末の入力欄が無い行は点検種別へ） */
+/** col より右で最初にある入力欄へ（点検予定の行は物件・点検種別に入力欄が無い） */
 function focusAfter(tr: Element | null | undefined, col: number) {
-  for (let c = col + 1; c <= LAST_COL; c++) {
+  for (let c = col + 1; c <= LAST_INPUT_COL; c++) {
     if (focusCell(tr, c)) return true;
   }
   return false;
@@ -74,13 +90,22 @@ function remarksLongestLine(remarks: string) {
 }
 
 /**
- * 一括入力の表。行ごとに物件（検索付き）・端末・点検種別（検索付き）・点検日・備考を直接編集する。
+ * 点検登録フォーム（一括入力）の表。上に選択中の保守会社の点検予定（点検行 × 対象月）、その下に手で足した行。
+ * 予定の行は物件・点検種別が決まっていて、点検開始日を入れると申請の対象になる。申請済みの予定は読み取りで出す。
+ * 手で足した行は物件（検索付き）・点検種別（検索付き）・点検日・備考・メモを直接編集する。
  * v1: js/bulk-table.js renderRow / setupRowEventListeners / handleCellKeyDown
  */
-export function BulkTable({ onOpenRowDetail, confirm }: BulkTableProps) {
+export function BulkTable({
+  onOpenRowDetail,
+  confirm,
+  isVisible,
+  propertyAllowed,
+  infoOf,
+  showManagement,
+  showVendor,
+}: BulkTableProps) {
   const { addToast } = useToast();
   const rows = useBulkStore((s) => s.rows);
-  const filter = useBulkStore((s) => s.filter);
   const masterData = useBulkStore((s) => s.masterData);
   const appSettings = useBulkStore((s) => s.appSettings);
   const selectedIds = useBulkStore((s) => s.selectedIds);
@@ -91,6 +116,7 @@ export function BulkTable({ onOpenRowDetail, confirm }: BulkTableProps) {
   const changeProperty = useBulkStore((s) => s.changeProperty);
   const changeStartDate = useBulkStore((s) => s.changeStartDate);
   const changeRemarks = useBulkStore((s) => s.changeRemarks);
+  const changeMemo = useBulkStore((s) => s.changeMemo);
   const addRowWithCopy = useBulkStore((s) => s.addRowWithCopy);
   const duplicateRowFromMenu = useBulkStore((s) => s.duplicateRowFromMenu);
   const pasteCopiedRow = useBulkStore((s) => s.pasteCopiedRow);
@@ -104,11 +130,13 @@ export function BulkTable({ onOpenRowDetail, confirm }: BulkTableProps) {
   // 端末の無い物件（管理者が保守会社を選んだときに候補へ入る）は「(端末なし)」と付けて、選ぶ前に分かるようにする
   const propertyOptions = useMemo(() => {
     const withTerminal = new Set(masterData.properties.filter((p) => p.terminalId).map((p) => String(p.propertyCode)));
-    return uniqueProperties(masterData.properties).map((p) => ({
-      value: p.propertyCode,
-      label: `${p.propertyCode} ${p.propertyName}${withTerminal.has(String(p.propertyCode)) ? '' : ' (端末なし)'}`,
-    }));
-  }, [masterData.properties]);
+    return uniqueProperties(masterData.properties)
+      .filter((p) => propertyAllowed(String(p.propertyCode)))
+      .map((p) => ({
+        value: p.propertyCode,
+        label: `${p.propertyCode} ${p.propertyName}${withTerminal.has(String(p.propertyCode)) ? '' : ' (端末なし)'}`,
+      }));
+  }, [masterData.properties, propertyAllowed]);
   const propertyCodes = useMemo(
     () => new Set(masterData.properties.map((p) => String(p.propertyCode))),
     [masterData.properties],
@@ -121,9 +149,10 @@ export function BulkTable({ onOpenRowDetail, confirm }: BulkTableProps) {
   const remarksLimit = Number(appSettings.remarks_chars_per_line || 25);
   const displayTimeDefault = defaultDisplayTime(appSettings);
 
-  const allSelected = rows.length > 0 && rows.every((r) => selectedIds.has(r.id));
-
-  const isVisible = (row: BulkEntryRow) => matchesBulkFilter(row, filter);
+  const visibleRows = rows.filter(isVisible);
+  const allSelected = visibleRows.length > 0 && visibleRows.every((r) => selectedIds.has(r.id));
+  // No は表示中の行の通し番号（時期などで隠れた予定の行は数えない。申請時のエラーの「N行目」も同じ番号）
+  const visibleNo = new Map(visibleRows.map((r, i) => [r.id, i + 1]));
 
   // v1: js/bulk-table.js handleCellKeyDown
   const handleCellKeyDown = useCallback(
@@ -131,11 +160,8 @@ export function BulkTable({ onOpenRowDetail, confirm }: BulkTableProps) {
       const tr = e.currentTarget.closest('tr');
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        if (col < LAST_COL) {
-          focusAfter(tr, col);
-        } else if (rowIndex === rows.length - 1) {
-          addRowWithCopy();
-        }
+        if (col < LAST_INPUT_COL && focusAfter(tr, col)) return;
+        if (rowIndex === rows.length - 1) addRowWithCopy();
         return;
       }
       if (e.key === 'ArrowDown' && e.altKey) {
@@ -151,7 +177,7 @@ export function BulkTable({ onOpenRowDetail, confirm }: BulkTableProps) {
     [rows.length, addRowWithCopy],
   );
 
-  // v1: js/bulk-modals.js handleContextMenuAction
+  // v1: js/bulk-modals.js handleContextMenuAction（点検予定の行には出さない）
   const contextItems = (rowId: number) => {
     const rowIndex = rows.findIndex((r) => r.id === rowId);
     return [
@@ -212,7 +238,7 @@ export function BulkTable({ onOpenRowDetail, confirm }: BulkTableProps) {
       <table className="w-full border-collapse text-sm">
         <thead className="sticky top-0 z-10 bg-gray-50">
           <tr className="border-b">
-            <th className="cell-head w-10 min-w-[2.5rem]">
+            <th className="cell-head w-8 min-w-[2rem]">
               <input
                 type="checkbox"
                 title="すべて選択"
@@ -221,53 +247,67 @@ export function BulkTable({ onOpenRowDetail, confirm }: BulkTableProps) {
                 className="h-4 w-4 rounded border-gray-300"
               />
             </th>
-            <th className={cn(th, 'w-10 min-w-[2.5rem]')}>No</th>
-            <th className={cn(th, 'min-w-[22rem]')}>
+            {/* 並びは注記の配置どおり: ステータス・報告書UP・完了連絡 → No（対象月）→ 点検月・検査月 → 物件（F15） */}
+            <th className={cn(th, 'min-w-[7rem]')}>ステータス</th>
+            <th className={cn(th, 'min-w-[8.5rem]')}>報告書UP・完了連絡</th>
+            <th className={cn(th, 'w-20 min-w-[5rem]')}>
+              No<div className="text-[10px] font-normal text-gray-400">対象月</div>
+            </th>
+            <th className={cn(th, 'min-w-[5rem]')}>点検月</th>
+            <th className={cn(th, 'min-w-[5.5rem]')}>検査月</th>
+            <th className={cn(th, 'min-w-[15rem]')}>
               物件<span className="text-red-500">*</span>
             </th>
-            {/* 端末は物件から自動で決まる（1物件1台）ので細く、読み取りで出す */}
-            <th className={cn(th, 'w-24 min-w-[6rem]')}>端末</th>
-            <th className={cn(th, 'min-w-[16rem]')}>
+            {showManagement && <th className={cn(th, 'w-32 min-w-[7rem]')}>管理会社</th>}
+            {showVendor && <th className={cn(th, 'w-32 min-w-[7rem]')}>保守会社</th>}
+            <th className={cn(th, 'min-w-[12rem]')}>
               点検種別<span className="text-red-500">*</span>
             </th>
-            <th className={cn(th, 'w-40 min-w-[10rem]')}>点検開始日</th>
-            <th className={cn(th, 'w-40 min-w-[10rem]')}>点検終了日</th>
-            <th className={cn(th, 'min-w-[20rem]')}>備考</th>
-            {/* 幅は w-* だけだと表が入れ物より広いときに縮むので min-w も付ける。
-                詳細・状態は横スクロールしても右端に残す（状態 w-28 = 7rem の左に詳細。状態はエラーの理由も出すので広め） */}
-            <th className={cn(th, 'sticky right-[7rem] w-16 min-w-[4rem] bg-gray-50 text-center', stickyEdge)}>詳細</th>
-            <th className={cn(th, 'sticky right-0 w-28 min-w-[7rem] bg-gray-50 text-center')}>状態</th>
+            <th className={cn(th, 'w-36 min-w-[9rem]')}>点検開始日</th>
+            <th className={cn(th, 'w-36 min-w-[9rem]')}>点検終了日</th>
+            <th className={cn(th, 'min-w-[14rem]')}>備考（作業時間を記載下さい）</th>
+            <th className={cn(th, 'min-w-[9rem]')} title="CSV には出ません（点検月の変更などの覚え書き）">
+              メモ
+            </th>
+            {/* 幅は w-* だけだと表が入れ物より広いときに縮むので min-w も付ける。詳細は横スクロールしても右端に残す */}
+            <th className={cn(th, 'sticky right-0 w-16 min-w-[4rem] bg-gray-50 text-center', stickyEdge)}>詳細</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row, index) => {
             if (!isVisible(row)) return null;
-            const terminalIds = terminalIdsFor(masterData.properties, row.propertyCode);
-            const propExists = !!row.propertyCode && propertyCodes.has(String(row.propertyCode));
-            // 選ぶ必要があるときだけ端末を入力欄にする（2台以上、または取込の端末IDが物件に無く空になった行）
-            const terminalNeedsSelect =
-              terminalIds.length >= 2 || (terminalIds.length === 1 && row.terminalId !== terminalIds[0]);
-            const unregisteredInspection = !!row.inspectionType && inspectionNames.size > 0 && !inspectionNames.has(row.inspectionType);
+            const schedule = row.schedule;
+            const locked = !!schedule?.locked;
+            const info = infoOf(row);
+            const terminalIds = schedule ? schedule.terminalIds : terminalIdsFor(masterData.properties, row.propertyCode);
+            const propExists = !!schedule || (!!row.propertyCode && propertyCodes.has(String(row.propertyCode)));
+            const unregisteredInspection =
+              !schedule && !!row.inspectionType && inspectionNames.size > 0 && !inspectionNames.has(row.inspectionType);
             const hasDetail = hasRowDetail(row, displayTimeDefault);
             const remarksLength = remarksLongestLine(row.remarks);
             const selected = selectedIds.has(row.id);
+            const noTerminal = !schedule && propExists && terminalIds.length === 0;
             // 右端に固定する列は下の列が透けないよう背景を塗る（選択中の行の色に合わせる）
-            const stickyBg = selected ? 'bg-blue-50' : 'bg-white';
+            const stickyBg = selected ? 'bg-blue-50' : locked ? 'bg-gray-50' : 'bg-white';
             return (
               <tr
                 key={row.id}
                 data-row-id={row.id}
-                draggable
-                onDragStart={handleDragStart(row.id)}
-                onDragOver={handleDragOver(row.id)}
-                onDrop={handleDrop(row.id)}
-                onDragEnd={handleDragEnd}
+                data-schedule={schedule ? (locked ? 'locked' : 'open') : undefined}
+                draggable={!schedule}
+                onDragStart={schedule ? undefined : handleDragStart(row.id)}
+                onDragOver={schedule ? undefined : handleDragOver(row.id)}
+                onDrop={schedule ? undefined : handleDrop(row.id)}
+                onDragEnd={schedule ? undefined : handleDragEnd}
                 onContextMenu={(e) => {
+                  if (schedule) return;
                   e.preventDefault();
                   setContextMenu({ x: e.clientX, y: e.clientY, rowId: row.id });
                 }}
                 className={cn(
                   'border-b align-top',
+                  locked && 'bg-gray-50',
+                  info.status === 'overdue' && !selected && 'bg-red-50/60',
                   selected && 'bg-blue-50',
                   draggedRowId === row.id && 'opacity-50',
                   dragOverRowId === row.id && draggedRowId !== row.id && 'border-t-2 border-t-blue-500',
@@ -276,147 +316,226 @@ export function BulkTable({ onOpenRowDetail, confirm }: BulkTableProps) {
                 <td className="cell text-center align-middle">
                   <input
                     type="checkbox"
+                    aria-label={`${visibleNo.get(row.id)}行目を選択`}
                     checked={selected}
                     onChange={() => toggleSelection(row.id)}
                     className="h-4 w-4 rounded border-gray-300"
                   />
                 </td>
-                <td className="cell align-middle text-xs text-gray-400">{index + 1}</td>
                 <td className="cell">
-                  <SearchableSelect
-                    value={row.propertyCode}
-                    options={propertyOptions}
-                    placeholder="-- 物件を選択 --"
-                    showTitle
-                    searchPlaceholder="物件名で検索..."
-                    onChange={(v) => changeProperty(row.id, v)}
-                    onPicked={() => focusNextOf(row.id, COL.property)}
-                    dataCol={COL.property}
-                    onKeyDown={(e) => handleCellKeyDown(e, index, COL.property)}
-                    invalid={hasError(row, '物件')}
-                    initialSearch={row.pastedPropertyName}
-                  />
-                  {/* 取込で見つからなかった物件名。選択欄を開くとこの文字で検索した状態になる */}
-                  {row.pastedPropertyName && !row.propertyCode && (
-                    <p className="mt-0.5 truncate text-[11px] text-red-600" title={row.pastedPropertyName}>
-                      未一致: {row.pastedPropertyName}
-                    </p>
-                  )}
-                </td>
-                <td className="cell">
-                  {terminalNeedsSelect ? (
-                    <select
-                      data-col={COL.terminal}
-                      aria-label="端末"
-                      title={row.terminalId || '端末を選択'}
-                      value={row.terminalId}
-                      onChange={(e) => updateRow(row.id, { terminalId: e.target.value })}
-                      onKeyDown={(e) => handleCellKeyDown(e, index, COL.terminal)}
-                      className={terminalSelect(hasError(row, '端末'))}
-                    >
-                      <option value="">-- 端末 --</option>
-                      {terminalIds.map((id) => (
-                        <option key={id} value={id}>
-                          {id}
-                        </option>
-                      ))}
-                    </select>
-                  ) : row.terminalId ? (
-                    <span className={cn(cellText, 'text-gray-700')} title={row.terminalId}>
-                      {row.terminalId}
-                    </span>
-                  ) : propExists ? (
-                    <span
-                      className={cn(cellText, 'font-medium text-red-600')}
-                      title="この物件には端末が登録されていません"
-                    >
-                      端末未設置
-                    </span>
+                  {info.status ? (
+                    <>
+                      <StatusBadge status={info.status} />
+                      {info.reason && (
+                        <p className="mt-0.5 max-w-[12rem] whitespace-pre-line text-[11px] leading-tight text-amber-800">
+                          理由: {info.reason}
+                        </p>
+                      )}
+                    </>
                   ) : (
-                    <span className={cn(cellText, 'text-gray-400')}>-</span>
+                    <span className={cn(cellText, 'text-gray-400')}>－</span>
+                  )}
+                </td>
+                <td className="cell whitespace-nowrap">{info.actions ?? <span className={cn(cellText, 'text-gray-400')}>－</span>}</td>
+                <td className="cell whitespace-nowrap text-xs text-gray-400">
+                  <div>{visibleNo.get(row.id)}</div>
+                  {schedule && (
+                    <div className="text-[11px] tabular-nums text-gray-700" data-testid="target-month">
+                      {schedule.targetMonth ? formatMonth(schedule.targetMonth) : '点検月未登録'}
+                    </div>
                   )}
                 </td>
                 <td className="cell">
-                  <SearchableSelect
-                    value={row.inspectionType}
-                    options={inspectionOptions}
-                    placeholder="-- 点検種別を選択 --"
-                    showTitle
-                    searchPlaceholder="点検種別で検索..."
-                    onChange={(v) => updateRow(row.id, { inspectionType: v })}
-                    onPicked={() => focusNextOf(row.id, COL.inspection)}
-                    dataCol={COL.inspection}
-                    onKeyDown={(e) => handleCellKeyDown(e, index, COL.inspection)}
-                    invalid={hasError(row, '点検種別') || unregisteredInspection}
-                    initialSearch={unregisteredInspection ? row.inspectionType : undefined}
-                  />
-                  {/* マスターに無い点検種別（取込の表記ゆれなど）は選択欄に出せないので、入っている文字を下に出す。
-                      警告だけで申請・CSV は止めない（v1 と同じ） */}
-                  {unregisteredInspection && (
-                    <p className="mt-0.5 truncate text-[11px] text-red-600" title={row.inspectionType}>
-                      未登録: {row.inspectionType}
-                    </p>
+                  <span className={cn(cellText, 'tabular-nums text-gray-700')}>{info.months || '－'}</span>
+                </td>
+                <td className="cell">
+                  <span className={cn(cellText, 'whitespace-nowrap tabular-nums text-gray-700')}>{info.inspectedOn}</span>
+                </td>
+                <td className="cell">
+                  {schedule ? (
+                    <div className="px-1 text-xs leading-tight" title={`${row.propertyCode} ${schedule.propertyName}`}>
+                      <div className="text-gray-900">{schedule.propertyName}</div>
+                      <div className="text-[11px] text-gray-500">{row.propertyCode}</div>
+                    </div>
+                  ) : (
+                    <>
+                      <SearchableSelect
+                        value={row.propertyCode}
+                        options={propertyOptions}
+                        placeholder="-- 物件を選択 --"
+                        showTitle
+                        searchPlaceholder="物件名で検索..."
+                        onChange={(v) => changeProperty(row.id, v)}
+                        onPicked={() => focusNextOf(row.id, COL.property)}
+                        dataCol={COL.property}
+                        onKeyDown={(e) => handleCellKeyDown(e, index, COL.property)}
+                        invalid={hasError(row, '物件', '端末')}
+                        initialSearch={row.pastedPropertyName}
+                      />
+                      {/* 取込で見つからなかった物件名。選択欄を開くとこの文字で検索した状態になる */}
+                      {row.pastedPropertyName && !row.propertyCode && (
+                        <p className="mt-0.5 truncate text-[11px] text-red-600" title={row.pastedPropertyName}>
+                          未一致: {row.pastedPropertyName}
+                        </p>
+                      )}
+                      {/* 端末の列は外した（B8）。端末の無い物件は申請できないので、物件の下に出す（B7） */}
+                      {noTerminal && (
+                        <p className="mt-0.5 text-[11px] font-medium text-red-600" title="この物件には端末が登録されていません">
+                          端末未設置
+                        </p>
+                      )}
+                      {/* 取込の端末IDが物件に無かった行（旧6列の取込）。物件を選び直すと物件の端末になる */}
+                      {!noTerminal && hasError(row, '端末') && (
+                        <p className="mt-0.5 text-[11px] font-medium text-red-600">
+                          端末IDが物件と合いません。物件を選び直してください
+                        </p>
+                      )}
+                    </>
+                  )}
+                </td>
+                {showManagement && (
+                  <td className="cell">
+                    <span className={cn(cellText, 'block max-w-[9rem] truncate text-gray-700')} title={info.managementName}>
+                      {info.managementName || '－'}
+                    </span>
+                  </td>
+                )}
+                {showVendor && (
+                  <td className="cell">
+                    <span className={cn(cellText, 'block max-w-[9rem] truncate text-gray-700')} title={info.vendorName}>
+                      {info.vendorName || '－'}
+                    </span>
+                  </td>
+                )}
+                <td className="cell">
+                  {schedule ? (
+                    <span className={cn(cellText, 'text-gray-900')}>{row.inspectionType || '－'}</span>
+                  ) : (
+                    <>
+                      <SearchableSelect
+                        value={row.inspectionType}
+                        options={inspectionOptions}
+                        placeholder="-- 点検種別を選択 --"
+                        showTitle
+                        searchPlaceholder="点検種別で検索..."
+                        onChange={(v) => updateRow(row.id, { inspectionType: v })}
+                        onPicked={() => focusNextOf(row.id, COL.inspection)}
+                        dataCol={COL.inspection}
+                        onKeyDown={(e) => handleCellKeyDown(e, index, COL.inspection)}
+                        invalid={hasError(row, '点検種別') || unregisteredInspection}
+                        initialSearch={unregisteredInspection ? row.inspectionType : undefined}
+                      />
+                      {/* マスターに無い点検種別（取込の表記ゆれなど）は選択欄に出せないので、入っている文字を下に出す。
+                          警告だけで申請・CSV は止めない（v1 と同じ） */}
+                      {unregisteredInspection && (
+                        <p className="mt-0.5 truncate text-[11px] text-red-600" title={row.inspectionType}>
+                          未登録: {row.inspectionType}
+                        </p>
+                      )}
+                    </>
                   )}
                 </td>
                 <td className="cell">
-                  <input
-                    type="date"
-                    data-col={COL.startDate}
-                    title="点検開始日"
-                    value={row.startDate}
-                    onChange={(e) => changeStartDate(row.id, e.target.value)}
-                    onKeyDown={(e) => handleCellKeyDown(e, index, COL.startDate)}
-                    className={cellInput()}
-                  />
+                  {locked ? (
+                    <span className={cn(cellText, 'tabular-nums')}>{formatDate(row.startDate) || '－'}</span>
+                  ) : (
+                    <input
+                      type="date"
+                      data-col={COL.startDate}
+                      title="点検開始日"
+                      aria-label="点検開始日"
+                      value={row.startDate}
+                      onChange={(e) => changeStartDate(row.id, e.target.value)}
+                      onKeyDown={(e) => handleCellKeyDown(e, index, COL.startDate)}
+                      className={cellInput()}
+                    />
+                  )}
                 </td>
                 <td className="cell">
-                  <input
-                    type="date"
-                    data-col={COL.endDate}
-                    title="点検終了日"
-                    value={row.endDate}
-                    onChange={(e) => updateRow(row.id, { endDate: e.target.value })}
-                    onKeyDown={(e) => handleCellKeyDown(e, index, COL.endDate)}
-                    className={cellInput(hasError(row, '点検終了日'))}
-                  />
+                  {locked ? (
+                    <span className={cn(cellText, 'tabular-nums')}>{formatDate(row.endDate) || '－'}</span>
+                  ) : (
+                    <input
+                      type="date"
+                      data-col={COL.endDate}
+                      title="点検終了日"
+                      aria-label="点検終了日"
+                      value={row.endDate}
+                      onChange={(e) => updateRow(row.id, { endDate: e.target.value })}
+                      onKeyDown={(e) => handleCellKeyDown(e, index, COL.endDate)}
+                      className={cellInput(hasError(row, '点検終了日'))}
+                    />
+                  )}
                 </td>
                 <td className="cell">
-                  {/* 1行の入力欄なので、実際の上限は1行の文字数。入力中に残りの文字数を右端に出す */}
-                  <div className="relative">
+                  {locked ? (
+                    <span className={cn(cellText, 'whitespace-pre-line leading-tight text-gray-700')}>{row.remarks || '－'}</span>
+                  ) : (
+                    // 1行の入力欄なので、実際の上限は1行の文字数。入力中に残りの文字数を右端に出す
+                    <div className="relative">
+                      <input
+                        type="text"
+                        data-col={COL.remarks}
+                        aria-label="備考"
+                        value={row.remarks}
+                        placeholder={REMARKS_PLACEHOLDER}
+                        maxLength={125}
+                        title={row.remarks ? `${row.remarks}\n${REMARKS_HINT}` : REMARKS_HINT}
+                        onChange={(e) => changeRemarks(row.id, e.target.value)}
+                        onKeyDown={(e) => handleCellKeyDown(e, index, COL.remarks)}
+                        className={cn(cellInput(hasError(row, '備考')), row.remarks && 'pr-16')}
+                      />
+                      {row.remarks && (
+                        <span
+                          className={cn(
+                            'pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[11px]',
+                            remarksLength > remarksLimit ? 'font-medium text-red-600' : 'text-gray-400',
+                          )}
+                        >
+                          {remarksLength > remarksLimit
+                            ? `${remarksLength - remarksLimit}文字超過`
+                            : `残り${remarksLimit - remarksLength}文字`}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </td>
+                <td className="cell">
+                  {locked ? (
+                    // 申請に保存したメモを読み取りで出す（B12。読めるのは自分の申請と管理者）
+                    row.memo ? (
+                      <span className={cn(cellText, 'max-w-[14rem] truncate')} title={row.memo}>
+                        {row.memo}
+                      </span>
+                    ) : (
+                      <span className={cn(cellText, 'text-gray-400')}>－</span>
+                    )
+                  ) : (
                     <input
                       type="text"
-                      data-col={COL.remarks}
-                      value={row.remarks}
-                      placeholder="任意入力"
-                      maxLength={125}
-                      title={row.remarks ? `${row.remarks}\n${REMARKS_HINT}` : REMARKS_HINT}
-                      onChange={(e) => changeRemarks(row.id, e.target.value)}
-                      onKeyDown={(e) => handleCellKeyDown(e, index, COL.remarks)}
-                      className={cn(cellInput(hasError(row, '備考')), row.remarks && 'pr-16')}
+                      data-col={COL.memo}
+                      aria-label="メモ"
+                      value={row.memo}
+                      placeholder="CSVに出ないメモ"
+                      maxLength={500}
+                      title={row.memo || '点検月の変更などのメモ（CSV には出ません）'}
+                      onChange={(e) => changeMemo(row.id, e.target.value)}
+                      onKeyDown={(e) => handleCellKeyDown(e, index, COL.memo)}
+                      className={cellInput()}
                     />
-                    {row.remarks && (
-                      <span
-                        className={cn(
-                          'pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[11px]',
-                          remarksLength > remarksLimit ? 'font-medium text-red-600' : 'text-gray-400',
-                        )}
-                      >
-                        {remarksLength > remarksLimit
-                          ? `${remarksLength - remarksLimit}文字超過`
-                          : `残り${remarksLimit - remarksLength}文字`}
-                      </span>
-                    )}
-                  </div>
+                  )}
                 </td>
-                <td className={cn('cell sticky right-[7rem] text-center align-middle', stickyEdge, stickyBg)}>
+                <td className={cn('cell sticky right-0 text-center align-middle', stickyEdge, stickyBg)}>
                   {/* 設定済みかどうかと、表示期間・位置の要約を title で見られるようにする */}
                   <button
                     type="button"
-                    title={`詳細設定\n${rowDetailSummary(row)}`}
+                    data-col={COL.detail}
+                    disabled={locked}
+                    title={locked ? '申請済みの予定は詳細を変えられません' : `詳細設定\n${rowDetailSummary(row)}`}
                     onClick={() => onOpenRowDetail(row.id)}
                     className={cn(
-                      'inline-flex h-7 items-center whitespace-nowrap rounded border px-1.5 text-xs',
-                      hasError(row, '表示', '案内文')
+                      'inline-flex h-7 items-center whitespace-nowrap rounded border px-1.5 text-xs disabled:opacity-40',
+                      hasError(row, '表示', '案内文', '貼紙')
                         ? 'border-red-400 text-red-600'
                         : hasDetail
                           ? 'border-blue-400 bg-blue-50 text-blue-700'
@@ -425,15 +544,6 @@ export function BulkTable({ onOpenRowDetail, confirm }: BulkTableProps) {
                   >
                     {hasDetail ? '詳細✓' : '詳細'}
                   </button>
-                </td>
-                <td className={cn('cell sticky right-0 text-center align-middle', stickyBg)}>
-                  <span title={row.isValid ? '' : `エラー: ${row.errors.join(', ')}`}>
-                    <Badge variant={row.isValid ? 'success' : 'danger'}>{row.isValid ? 'OK' : 'エラー'}</Badge>
-                  </span>
-                  {/* 理由はマウスを乗せなくても読めるよう、バッジの下に短く出す */}
-                  {!row.isValid && (
-                    <p className="mt-0.5 text-left text-[11px] leading-tight text-red-600">{row.errors.join('・')}</p>
-                  )}
                 </td>
               </tr>
             );

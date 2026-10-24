@@ -1,14 +1,22 @@
 import type { DbEntry } from '@/types/database';
-import { customImageBaseName, filterApprovedEntries } from './csv';
+import { APPROVED_STATUSES, customImageBaseName, filterApprovedEntries } from './csv';
 
 /**
- * 追加画像をZIPでダウンロード（承認済みのみ。v1 admin-export.js downloadCustomImages と同じ対象・ファイル名）
+ * 追加画像をZIPでダウンロード（既定は承認済みのみ。v1 admin-export.js downloadCustomImages と同じ対象・ファイル名）
  * ZIP内ファイル名の拡張子を除いた部分は CSV の点検案内TPLNo と一致する（拡張子は .jpg 固定）
+ * statuses: 対象にする申請の状態。'all' なら状態を問わない（承認待ちの「追加登録された画像」タブ）
  */
-export async function downloadCustomImages(entries: DbEntry[]): Promise<number> {
-  const customEntries = filterApprovedEntries(entries).filter(
-    (e) => e.poster_type === 'custom' && e.poster_image,
-  );
+export async function downloadCustomImages(
+  entries: DbEntry[],
+  statuses: readonly DbEntry['status'][] | 'all' = APPROVED_STATUSES,
+): Promise<number> {
+  const targets =
+    statuses === 'all'
+      ? entries
+      : statuses === APPROVED_STATUSES
+        ? filterApprovedEntries(entries)
+        : entries.filter((e) => statuses.includes(e.status));
+  const customEntries = targets.filter((e) => e.poster_type === 'custom' && e.poster_image);
 
   if (customEntries.length === 0) {
     return 0;
@@ -40,4 +48,15 @@ export async function downloadCustomImages(entries: DbEntry[]): Promise<number> 
   saveAs(content, `custom_images_${new Date().toISOString().slice(0, 10)}.zip`);
 
   return customEntries.length;
+}
+
+/** 追加画像を1件ダウンロードする（ファイル名は ZIP の中と同じ。承認待ちの「追加登録された画像」の個別 DL） */
+export async function downloadCustomImage(entry: DbEntry): Promise<void> {
+  if (!entry.poster_image) throw new Error('追加画像がありません');
+  const [{ saveAs }, response] = await Promise.all([
+    import('file-saver'),
+    fetch(entry.poster_image),
+  ]);
+  if (!response.ok) throw new Error(`画像を取得できませんでした（${response.status}）`);
+  saveAs(await response.blob(), `${customImageBaseName(entry)}.jpg`);
 }

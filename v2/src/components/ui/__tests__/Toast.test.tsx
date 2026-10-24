@@ -57,6 +57,18 @@ describe('ToastProvider', () => {
     expect(screen.queryByText(/保存できません/)).toBeNull();
   });
 
+  it('モーダルが無いときは下の中央に出す（一括入力のツールバー右端のテンプレート・時期の操作を覆わない。修正依頼1024 F4）', () => {
+    render(
+      <ToastProvider>
+        <Send message="エラーがあります" type="error" />
+      </ToastProvider>,
+    );
+    act(() => screen.getByText('error').click());
+    const container = screen.getByTestId('toast-container');
+    expect(container).toHaveClass('bottom-4', 'left-1/2');
+    expect(container.className).not.toMatch(/\bright-4\b|\btop-/);
+  });
+
   it('一番手前の dialog の中に出し、dialog が外れたら（DOM から切り離されていても）body へ戻る', () => {
     render(
       <ToastProvider>

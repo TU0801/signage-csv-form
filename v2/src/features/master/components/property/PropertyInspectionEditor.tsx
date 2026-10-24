@@ -6,6 +6,7 @@ import type { DbInspectionType, DbVendor } from '@/types/database';
 import type { PropertyInspection } from '@/types/app';
 import { MonthCheckboxes } from './MonthCheckboxes';
 import { sortVendors } from '@/lib/vendorOptions';
+import { formatInspectedOn } from '@/features/bulk-entry/utils/scheduleRows';
 
 interface PropertyInspectionEditorProps {
   value: PropertyInspection[];
@@ -28,6 +29,8 @@ interface RowForm {
   inspection_months: number[];
   remarks: string;
   remarks2: string;
+  /** 検査月の入力欄の値（YYYY-MM。空は未登録） */
+  inspected_on: string;
 }
 
 const EMPTY_FORM: RowForm = {
@@ -36,6 +39,7 @@ const EMPTY_FORM: RowForm = {
   inspection_months: [],
   remarks: '',
   remarks2: '',
+  inspected_on: '',
 };
 
 /** 入力欄に表へ入れていない値があるか（編集中の行、または何か1つでも入れた追加欄） */
@@ -46,7 +50,8 @@ function hasPendingRow(form: RowForm, editingIndex: number | null): boolean {
     !!form.vendor_id ||
     form.inspection_months.length > 0 ||
     !!form.remarks ||
-    !!form.remarks2
+    !!form.remarks2 ||
+    !!form.inspected_on
   );
 }
 
@@ -101,6 +106,7 @@ export function PropertyInspectionEditor({
       inspection_months: Array.isArray(row.inspection_months) ? row.inspection_months.map(Number) : [],
       remarks: row.remarks ?? '',
       remarks2: row.remarks2 ?? '',
+      inspected_on: row.inspected_on ? String(row.inspected_on).slice(0, 7) : '',
     });
   };
 
@@ -122,12 +128,16 @@ export function PropertyInspectionEditor({
       return;
     }
     // 編集した行は新しい値で置き換える（保守会社用の設備コードは保存時に業務システムの今の値を引き継ぐ）
+    // 検査月は月初の日付で持つ（DB と同じ形）。空欄のままで、元の行の検査月が読めていない（undefined）ときは undefined のまま
+    // （保存で送らない。空欄を「消す」にすると、読めなかっただけの値を消してしまう）
+    const previous = editingIndex !== null ? value[editingIndex]?.inspected_on : null;
     const row: PropertyInspection = {
       inspection_type_id: form.inspection_type_id,
       vendor_id: form.vendor_id || null,
       inspection_months: form.inspection_months,
       remarks: form.remarks,
       remarks2: form.remarks2,
+      inspected_on: form.inspected_on ? `${form.inspected_on}-01` : previous === undefined ? undefined : null,
     };
     onChange(
       editingIndex !== null ? value.map((r, i) => (i === editingIndex ? row : r)) : [...value, row],
@@ -147,6 +157,7 @@ export function PropertyInspectionEditor({
               <th className="cell-head font-medium text-gray-700">設備種類</th>
               <th className="cell-head font-medium text-gray-700">保守会社</th>
               <th className="cell-head font-medium text-gray-700">点検月</th>
+              <th className="cell-head font-medium text-gray-700">検査月</th>
               <th className="cell-head font-medium text-gray-700">備考</th>
               <th className="cell-head font-medium text-gray-700">備考2</th>
               <th className="cell-head font-medium text-gray-700 w-28">操作</th>
@@ -155,7 +166,7 @@ export function PropertyInspectionEditor({
           <tbody>
             {value.length === 0 ? (
               <tr>
-                <td colSpan={6} className="py-4 text-center text-slate-500">
+                <td colSpan={7} className="py-4 text-center text-slate-500">
                   設備が登録されていません
                 </td>
               </tr>
@@ -172,6 +183,7 @@ export function PropertyInspectionEditor({
                       ? row.inspection_months.map((m) => `${m}月`).join(', ')
                       : '-'}
                   </td>
+                  <td className="cell whitespace-nowrap tabular-nums">{formatInspectedOn(row.inspected_on)}</td>
                   <td className="cell">{row.remarks}</td>
                   <td className="cell">{row.remarks2}</td>
                   <td className="cell">
@@ -242,7 +254,19 @@ export function PropertyInspectionEditor({
             />
           </div>
         </div>
-        <div className="grid gap-x-3 gap-y-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+        <div className="grid gap-x-3 gap-y-2 sm:grid-cols-[auto_1fr_1fr_auto] sm:items-end">
+          <div className="space-y-0.5">
+            <label htmlFor="prop-equipment-inspected-on" className={labelClass}>
+              検査月（直近の実施）
+            </label>
+            <input
+              type="month"
+              id="prop-equipment-inspected-on"
+              className={selectClass}
+              value={form.inspected_on}
+              onChange={(e) => setForm({ ...form, inspected_on: e.target.value })}
+            />
+          </div>
           <Input
             label="備考"
             id="prop-equipment-remarks"

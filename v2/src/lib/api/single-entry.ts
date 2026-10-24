@@ -114,6 +114,7 @@ export type EntryInsertRow = Pick<
   | 'inspection_start'
   | 'inspection_end'
   | 'remarks'
+  | 'memo'
   | 'announcement'
   | 'display_start_date'
   | 'display_start_time'

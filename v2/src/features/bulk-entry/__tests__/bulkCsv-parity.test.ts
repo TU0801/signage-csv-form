@@ -48,6 +48,7 @@ function row(over: Partial<BulkEntryRow>): BulkEntryRow {
     startDate: '2026-11-02',
     endDate: '2026-11-03',
     remarks: '',
+    memo: '',
     displayTime: 10,
     noticeText: '',
     displayStartDate: '',
@@ -55,6 +56,9 @@ function row(over: Partial<BulkEntryRow>): BulkEntryRow {
     displayEndDate: '',
     displayEndTime: '',
     showOnBoard: true,
+    emergencyContact: '',
+    posterType: 'template',
+    posterImage: '',
     position: 2,
     isValid: true,
     errors: [],
@@ -116,6 +120,54 @@ describe('bulk CSV parity with v1 js/bulk-data.js generateCSV', () => {
     expect(lines[0]!.split(',')[3]).toBe('受注先名');
     expect(actual).toContain(',False,');
     expect(actual).toContain('2026/10/14 [00:30:00]');
+  });
+
+  it('メモは CSV に出さない（B12）', () => {
+    const csv = generateBulkCsv(
+      rows.map((r) => ({ ...r, memo: '点検月を変更した覚え書き' })),
+      master,
+      { id: 'v1', name: '株式会社テスト保守' },
+      applySettings(DEFAULT_BULK_SETTINGS, settingsRows),
+    );
+    expect(csv).not.toContain('覚え書き');
+    expect(csv.split('\n')[0]!.split(',')).toHaveLength(28);
+  });
+
+  it('詳細設定の連絡先と追加の貼紙を CSV に出す（B18。追加は管理画面の CSV と同じく案内・日付・備考を空に）', () => {
+    const csv = generateBulkCsv(
+      [
+        // 定型文は改行入りなので、行で分けて読めるよう1行の案内文にする
+        row({ id: 1, emergencyContact: '03-1111-2222', noticeText: '独自の案内' }),
+        row({ id: 2, posterType: 'custom', posterImage: 'https://x/poster-images/u1/1700_ab12.png?v=1', remarks: '備考' }),
+      ],
+      master,
+      { id: 'v1', name: '株式会社テスト保守' },
+      applySettings(DEFAULT_BULK_SETTINGS, settingsRows),
+    );
+    const [, template, custom] = csv.split('\n').map((l) => l.split(','));
+    expect(template![4]).toBe('03-1111-2222');
+    expect(template![27]).toBe('テンプレート');
+    expect(custom![4]).toBe('092-000-0000'); // 書き換えていない行は保守会社マスターの緊急連絡先
+    expect(custom![5]).toBe(''); // 点検工事案内
+    expect(custom![7]).toBe('1700_ab12'); // 点検案内TPLNo＝画像のファイル名
+    expect([custom![8], custom![9], custom![10], custom![11]]).toEqual(['', '', '', '']);
+    expect(custom![27]).toBe('追加');
+  });
+
+  it('端末の無い物件の予定行（承認したばかりの建物追加申請など）は端末ID を空欄にし、列はずれない（F7）', () => {
+    const schedule = { key: 'i9:2026-11-01', inspectionId: 'i9', targetMonth: '2026-11-01', locked: false, propertyName: '新築マンション', terminalIds: [] };
+    const csv = generateBulkCsv(
+      // 定型文の無い点検種別にして、改行の入らない1行で列を数える
+      [row({ id: 1, propertyCode: '900099-00', terminalId: '', inspectionType: '消防設備点検', schedule })],
+      master,
+      { id: 'v1', name: '株式会社テスト保守' },
+      applySettings(DEFAULT_BULK_SETTINGS, settingsRows),
+    );
+    const [header, line] = csv.split('\n').map((l) => l.split(','));
+    expect(line).toHaveLength(header!.length);
+    expect(header![1]).toBe('端末ID');
+    expect(line![1]).toBe('');
+    expect(line![2]).toBe('900099-00');
   });
 
   it('returns empty string when no valid rows (same as v1)', () => {

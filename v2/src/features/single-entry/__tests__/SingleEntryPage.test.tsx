@@ -4,6 +4,7 @@ import { ToastProvider } from '@/components/ui/Toast';
 import { HeaderSlotContext } from '@/components/layout/HeaderSlot';
 import { SingleEntryPage } from '@/pages/SingleEntryPage';
 import { useSingleEntryStore } from '@/features/single-entry/stores/singleEntryStore';
+import { useInspectionFormStore } from '@/stores/inspectionFormStore';
 import { PROPERTIES, SETTINGS, TYPES } from './fixtures';
 import type { DbVendor } from '@/types/database';
 
@@ -22,6 +23,9 @@ vi.mock('@/lib/storage', () => ({
   uploadPosterImage: vi.fn(),
   validateImageFile: vi.fn(),
 }));
+// PDF の変換（pdfjs-dist）は jsdom で動かないので差し替える（B18）
+const pdfToPng = vi.hoisted(() => ({ preparePosterImage: vi.fn() }));
+vi.mock('@/lib/pdfToPng', () => pdfToPng);
 vi.mock('@/hooks/useAuth', () => ({
   useAuth: () => ({
     user: { id: 'u1' },
@@ -29,8 +33,9 @@ vi.mock('@/hooks/useAuth', () => ({
     isAdmin,
   }),
 }));
-vi.mock('@/lib/api/masterData', () => ({
-  fetchPropertyManagementCompanies: () =>
+// 管理会社フィルターの候補（範囲つき RPC management_companies_scoped。修正依頼1024 B2）
+vi.mock('@/lib/api/inspection-form', () => ({
+  fetchScopedManagementCompanies: () =>
     Promise.resolve([
       { property_code: '120273-00', management_company_id: 'c-en', management_company_name: '株式会社えん建物管理' },
       { property_code: '2010', management_company_id: null, management_company_name: null },
@@ -71,6 +76,7 @@ function pick(name: string, query: string) {
 beforeEach(() => {
   // 作成データは store に残るので、テストごとに空にする
   useSingleEntryStore.setState({ userId: null, entries: [] });
+  useInspectionFormStore.setState({ managementCompanyId: '' });
   // jsdom には <dialog> の showModal / close が無い（ConfirmDialog が使う）
   HTMLDialogElement.prototype.showModal ??= function () {};
   HTMLDialogElement.prototype.close ??= function () {};
@@ -91,8 +97,8 @@ describe('1件入力画面（一般ユーザー）', () => {
     // 紐付けが1カテゴリ（清掃）だけなので、カテゴリと先頭の紐付け点検種別が選ばれる（v1 applyLinkedDefaults）
     await waitFor(() => expect(screen.getByLabelText('案内カテゴリ')).toHaveValue('清掃'));
     expect(screen.getByRole('combobox', { name: '点検工事案内 *' })).toHaveValue('排水管清掃');
-    // 管理会社フィルターは管理者だけ
-    expect(screen.queryByLabelText('管理会社')).toBeNull();
+    // 保守会社の選択は管理者だけ（このテストはヘッダーを描かないので、ヘッダーの部品は出ない）
+    expect(screen.queryByRole('combobox', { name: '保守会社' })).toBeNull();
 
     pick('物件コード *', 'z0015A01');
     // 端末の無い物件は選ぶ欄の代わりに未設置と出す（入力・申請はできる）
@@ -201,5 +207,26 @@ describe('1件入力画面（作成データの保持）', () => {
     const table = await screen.findByRole('table');
     expect(within(table).getByText('z0015A01')).toBeInTheDocument();
     expect(useSingleEntryStore.getState().entries).toHaveLength(1);
+  });
+});
+
+describe('1件入力画面（追加の貼紙・PDF。修正依頼1024 B18）', () => {
+  it('PDF を選ぶと PNG に変換したものを貼紙画像にし、複数ページなら1ページ目を使うと知らせる', async () => {
+    const png = new File(['png'], '貼紙.png', { type: 'image/png' });
+    pdfToPng.preparePosterImage.mockResolvedValue({ file: png, notice: 'PDF は2ページあります。1ページ目を使用します' });
+    render(
+      <ToastProvider>
+        <SingleEntryPage />
+      </ToastProvider>,
+    );
+    await waitFor(() => expect(screen.getByRole('combobox', { name: '点検工事案内 *' })).toHaveValue('排水管清掃'));
+    fireEvent.click(screen.getByRole('radio', { name: '追加' }));
+    const input = screen.getByLabelText('貼紙画像');
+    expect(input).toHaveAttribute('accept', expect.stringContaining('.pdf'));
+    const pdf = new File(['%PDF'], '貼紙.pdf', { type: 'application/pdf' });
+    fireEvent.change(input, { target: { files: [pdf] } });
+    await waitFor(() => expect(pdfToPng.preparePosterImage).toHaveBeenCalledWith(pdf));
+    expect(await screen.findByText(/1ページ目を使用します/)).toBeInTheDocument();
+    expect(await screen.findByAltText('プレビュー')).toBeInTheDocument();
   });
 });

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { normalizeTerminalId, toTerminal } from '@/lib/terminal';
-import { diffUnitInspections, unitManagedTypeIds } from '../inspections';
+import { diffUnitInspections, saveInspectionsToBiz, unitManagedTypeIds } from '../inspections';
 import { rpcAllRows, overlayInspections } from '../masterData';
 import { addBuildingVendor, BUILDING_REQUEST_DUPLICATE_MESSAGE, getAssignedBuildings } from '../relationships';
 import type { MasterProperty, PropertyUnit } from '@/types/app';
@@ -19,6 +19,11 @@ vi.mock('@/lib/supabase', () => ({
   },
   RPC: {
     inspectionsAll: 'inspections_all',
+    mgmtInspectionsAll: 'mgmt_inspections_all',
+    mgmtAddBuildingVendor: 'mgmt_add_building_vendor',
+    inspectionsForProperty: 'inspections_for_property',
+    upsertPropertyInspection: 'upsert_property_inspection',
+    setPropertyInspectionInspectedOn: 'set_property_inspection_inspected_on',
   },
 }));
 
@@ -203,5 +208,54 @@ describe('addBuildingVendor（一般ユーザーの申請。v1 relationships.js 
     await expect(addBuildingVendor({ propertyCode: 'A', profile: user })).rejects.toThrow(
       BUILDING_REQUEST_DUPLICATE_MESSAGE,
     );
+  });
+});
+
+describe('管理会社の範囲つき RPC（修正依頼1024 C2）', () => {
+  beforeEach(() => {
+    mockRpc.mockReset();
+    mockFrom.mockReset();
+  });
+
+  it('管理会社の点検情報は mgmt_inspections_all、紐付けの追加は mgmt_add_building_vendor（表へ直接書かない）', async () => {
+    mockRpc.mockResolvedValue({ data: [], error: null });
+    await overlayInspections([], 'management');
+    expect(mockRpc).toHaveBeenCalledWith('mgmt_inspections_all');
+
+    mockRpc.mockResolvedValue({ data: { id: 'bv1', status: 'active' }, error: null });
+    const row = await addBuildingVendor({
+      propertyCode: '120409-00',
+      vendorId: 'v1',
+      profile: { id: 'm1', role: 'management', vendor_id: null },
+    });
+    expect(mockRpc).toHaveBeenLastCalledWith('mgmt_add_building_vendor', {
+      p_property_code: '120409-00',
+      p_vendor_id: 'v1',
+    });
+    expect(row).toEqual({ id: 'bv1', status: 'active' });
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+});
+
+describe('saveInspectionsToBiz の検査月（修正依頼1024 B13）', () => {
+  beforeEach(() => mockRpc.mockReset());
+
+  it('upsert の戻り値の点検行 id で検査月を月初の日付で書き、読めていない（undefined）行は送らない', async () => {
+    mockRpc.mockImplementation((fn: string, args: { p_inspection_type_id?: string }) => {
+      if (fn === 'inspections_for_property') return Promise.resolve({ data: [], error: null });
+      if (fn === 'upsert_property_inspection') return Promise.resolve({ data: `pi-${args.p_inspection_type_id}`, error: null });
+      return Promise.resolve({ data: null, error: null });
+    });
+    const row = { vendor_id: null, inspection_months: [4], remarks: '', remarks2: '' };
+    await saveInspectionsToBiz('120409-00', [
+      { ...row, inspection_type_id: 'fire', inspected_on: '2026-04' },
+      { ...row, inspection_type_id: 'clean', inspected_on: null },
+      { ...row, inspection_type_id: 'water' },
+    ]);
+    const dateCalls = mockRpc.mock.calls.filter(([fn]) => fn === 'set_property_inspection_inspected_on');
+    expect(dateCalls).toEqual([
+      ['set_property_inspection_inspected_on', { p_inspection_id: 'pi-fire', p_inspected_on: '2026-04-01' }],
+      ['set_property_inspection_inspected_on', { p_inspection_id: 'pi-clean', p_inspected_on: null }],
+    ]);
   });
 });

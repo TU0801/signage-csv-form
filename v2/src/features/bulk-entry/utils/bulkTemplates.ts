@@ -78,10 +78,12 @@ export function templateLabel(t: BulkTemplate): string {
  */
 export function saveTemplate(name: string, rows: BulkEntryRow[], vendor: BulkVendorSelection): void {
   const templates = getStoredTemplates();
-  const rowsData: BulkRowInput[] = rows.map((r) => ({
+  // 点検予定の行はテンプレートに入れない（予定は DB から出る）
+  const rowsData: BulkRowInput[] = rows.filter((r) => !r.schedule).map((r) => ({
     propertyCode: r.propertyCode,
     terminalId: r.terminalId,
     inspectionType: r.inspectionType,
+    memo: r.memo,
     displayTime: r.displayTime,
     noticeText: r.noticeText,
     displayStartDate: r.displayStartDate,
@@ -89,6 +91,9 @@ export function saveTemplate(name: string, rows: BulkEntryRow[], vendor: BulkVen
     displayEndDate: r.displayEndDate,
     displayEndTime: r.displayEndTime,
     showOnBoard: r.showOnBoard,
+    emergencyContact: r.emergencyContact,
+    posterType: r.posterType,
+    posterImage: r.posterImage,
     position: r.position,
   }));
 

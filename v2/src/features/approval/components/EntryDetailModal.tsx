@@ -21,6 +21,8 @@ interface EntryDetailModalProps {
   onApprove?: (entry: DbEntry) => void;
   onReject?: (entry: DbEntry) => void;
   onEdit?: (entry: DbEntry) => void;
+  /** 差戻し（管理会社。却下＝削除の代わりに理由を付けて保守会社へ戻す） */
+  onSendBack?: (entry: DbEntry) => void;
 }
 
 function DetailRow({ label, children }: { label: string; children: ReactNode }) {
@@ -54,6 +56,7 @@ export function EntryDetailModal({
   onApprove,
   onReject,
   onEdit,
+  onSendBack,
 }: EntryDetailModalProps) {
   if (!entry) return null;
 
@@ -78,6 +81,11 @@ export function EntryDetailModal({
           {onReject && (
             <Button variant="danger" onClick={() => onReject(entry)}>
               却下
+            </Button>
+          )}
+          {onSendBack && (
+            <Button variant="danger" onClick={() => onSendBack(entry)}>
+              差戻し
             </Button>
           )}
           {onApprove && (
@@ -130,6 +138,10 @@ export function EntryDetailModal({
         <Section title="案内文・作業時間 及び 備考">
           <DetailRow label="案内文">{entry.announcement || '-'}</DetailRow>
           <DetailRow label="作業時間 及び 備考">{entry.remarks || '-'}</DetailRow>
+          {/* 申請者のメモ（CSV・掲示には出さない。点検月の変更などの覚え書き。修正依頼1024 B12） */}
+          <DetailRow label="メモ（CSV外）">
+            <span className="whitespace-pre-line">{entry.memo || '-'}</span>
+          </DetailRow>
         </Section>
 
         <Section title="登録情報">

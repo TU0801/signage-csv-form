@@ -16,6 +16,11 @@ interface ModalProps {
    * footer のキャンセルなど呼び出し側のボタンは明示的な破棄として扱い、確認しない。
    */
   dirty?: boolean;
+  /**
+   * 処理中（送信の途中など）で閉じてはいけないか。true の間は Escape・背景クリック・× で閉じない
+   * （確認も出さない）。footer のボタンは呼び出し側で無効にする
+   */
+  busy?: boolean;
 }
 
 /** 開いたときにフォーカスする欄。[data-autofocus] が無ければ本文の最初の入力欄（チェックボックス等は除く） */
@@ -27,7 +32,7 @@ const FIRST_FIELD =
  * 中央に出すモーダル（<dialog> の showModal）。見出し・本文（スクロール）・footer（固定）の 3 段。
  * 開くと本文の [data-autofocus] か最初の入力欄にフォーカスする。dirty で閉じる前の破棄確認を出す。
  */
-export function Modal({ open, onClose, title, children, footer, className, dirty = false }: ModalProps) {
+export function Modal({ open, onClose, title, children, footer, className, dirty = false, busy = false }: ModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const backToEditRef = useRef<HTMLButtonElement>(null);
@@ -73,6 +78,7 @@ export function Modal({ open, onClose, title, children, footer, className, dirty
   }, [showDiscardConfirm]);
 
   const requestClose = () => {
+    if (busy) return;
     if (dirty) setConfirming(true);
     else onClose();
   };
@@ -90,6 +96,10 @@ export function Modal({ open, onClose, title, children, footer, className, dirty
       // cancel / close は React の木を伝わって上がるので、中に入れたモーダル（確認ダイアログ等）のものは無視する
       onCancel={(e) => {
         if (e.target !== e.currentTarget) return;
+        if (busy) {
+          e.preventDefault();
+          return;
+        }
         if (dirty && !discardedRef.current) {
           e.preventDefault();
           setConfirming(true);
@@ -100,6 +110,10 @@ export function Modal({ open, onClose, title, children, footer, className, dirty
         // Chrome は Escape の連打などで cancel の preventDefault を無視して閉じることがある。開いたままのはずなら開き直す
         // （open=false で親が閉じたときの close はそのまま onClose へ）
         const dialog = dialogRef.current;
+        if (open && busy && dialog) {
+          dialog.showModal();
+          return;
+        }
         if (open && dirty && !discardedRef.current && dialog) {
           dialog.showModal();
           setConfirming(true);
@@ -135,7 +149,8 @@ export function Modal({ open, onClose, title, children, footer, className, dirty
               type="button"
               aria-label="閉じる"
               onClick={requestClose}
-              className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+              disabled={busy}
+              className="text-gray-400 hover:text-gray-600 text-xl leading-none disabled:opacity-40 disabled:hover:text-gray-400"
             >
               &times;
             </button>

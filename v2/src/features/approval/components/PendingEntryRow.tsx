@@ -15,9 +15,13 @@ interface PendingEntryRowProps {
   email: string;
   onToggleSelect: (id: string) => void;
   onApprove: (id: string) => void;
-  onReject: (id: string) => void;
+  /** 却下（削除）。管理会社には渡さない（削除できないため） */
+  onReject?: (id: string) => void;
   onViewDetail: (entry: DbEntry) => void;
-  onEdit: (entry: DbEntry) => void;
+  /** 編集。管理会社には渡さない（申請の内容を直接は変えられないため） */
+  onEdit?: (entry: DbEntry) => void;
+  /** 差戻し（管理会社） */
+  onSendBack?: (entry: DbEntry) => void;
 }
 
 const td = 'cell text-sm text-gray-900';
@@ -41,6 +45,7 @@ export function PendingEntryRow({
   onReject,
   onViewDetail,
   onEdit,
+  onSendBack,
 }: PendingEntryRowProps) {
   const periodWarning = displayPeriodWarning(entry);
   return (
@@ -56,11 +61,11 @@ export function PendingEntryRow({
       </td>
       <td className={nowrap}>
         {entry.property_code}
-        {/* 点検一覧（/portal）からの申請は管理会社も承認・差戻しを扱うので、見分けられるよう印を付ける */}
+        {/* 点検予定の行（点検登録フォーム）からの申請は点検に紐付くので、見分けられるよう印を付ける */}
         {entry.property_inspection_id && (
-          <span title="点検一覧からの申請。管理会社も承認・差戻しできます。差戻し（削除せず保守会社へ戻す）は点検一覧から行います">
+          <span title="点検登録フォームの点検予定の行からの申請（点検に紐付いています）。管理会社も承認・差戻しできます">
             <Badge variant="primary" className="ml-1 px-1 py-0 text-[10px]">
-              点検一覧
+              点検予定
             </Badge>
           </span>
         )}
@@ -112,15 +117,24 @@ export function PendingEntryRow({
           <Button size="sm" variant="ghost" onClick={() => onViewDetail(entry)}>
             詳細
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => onEdit(entry)}>
-            編集
-          </Button>
+          {onEdit && (
+            <Button size="sm" variant="ghost" onClick={() => onEdit(entry)}>
+              編集
+            </Button>
+          )}
           <Button size="sm" variant="success" onClick={() => onApprove(entry.id)}>
             承認
           </Button>
-          <Button size="sm" variant="danger" onClick={() => onReject(entry.id)}>
-            却下
-          </Button>
+          {onReject && (
+            <Button size="sm" variant="danger" onClick={() => onReject(entry.id)}>
+              却下
+            </Button>
+          )}
+          {onSendBack && (
+            <Button size="sm" variant="danger" onClick={() => onSendBack(entry)}>
+              差戻し
+            </Button>
+          )}
         </div>
       </td>
     </tr>

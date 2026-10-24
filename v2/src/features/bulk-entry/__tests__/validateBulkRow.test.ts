@@ -62,4 +62,10 @@ describe('validateBulkRow (v1 js/bulk-table.js validateRow)', () => {
     expect(errorsOf({ noticeText: '1234567890' })).toEqual([]);
     expect(errorsOf({ noticeText: '12345678901' })).toEqual(['案内文(10文字以下)']);
   });
+
+  it('追加の貼紙は画像が無いとエラー（B18）', () => {
+    expect(validateBulkRow({ ...base, posterType: 'custom', posterImage: '' }, properties, settings)).toEqual(['貼紙画像']);
+    expect(validateBulkRow({ ...base, posterType: 'custom', posterImage: 'https://x/a.png' }, properties, settings)).toEqual([]);
+    expect(validateBulkRow({ ...base, posterType: 'template', posterImage: '' }, properties, settings)).toEqual([]);
+  });
 });

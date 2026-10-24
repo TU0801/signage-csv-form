@@ -1,4 +1,10 @@
 // signage-admin-users - 管理者によるユーザー作成・パスワード変更（service_role が必要な操作）
+// 管理会社のアカウント（修正依頼1024 C3）も、自社の範囲だけ使える:
+//   - 作成: 自社の管理会社ユーザーだけ（会社は呼び出し元の会社に固定）。管理者・保守会社（権限 user）のアカウントは作れない
+//     （保守会社のアカウントは全管理会社分の点検・報告書を見られる。管理会社は自社物件への保守会社の紐付けを自分で書けるので、
+//       保守会社アカウントの作成を開くと、任意の保守会社のアカウントを作って他社のデータに入れてしまう）
+//   - パスワード変更・有効化／無効化（set_status）: 自社の管理会社ユーザーだけ
+//   範囲はここで service_role として確かめる（scripts/fix-1024-mgmt.sql）
 //
 // ブラウザの anon クライアントでは他人のパスワードを変更できず、ユーザー作成も signUp で
 // 管理者のセッションが新ユーザーに一時的に切り替わっていたため、管理者検証付きでここに集約する。
@@ -16,10 +22,17 @@ const corsHeaders = {
 const MIN_PASSWORD_LENGTH = 6;
 
 // service_role での書き込みは監査トリガーが操作者を記録できない（auth.uid() が NULL）ため、操作した管理者をここで残す
-// deno-lint-ignore no-explicit-any
-async function writeAudit(admin: any, actorId: string, operation: string, targetId: string, data: Record<string, unknown>) {
+async function writeAudit(
+  // deno-lint-ignore no-explicit-any
+  admin: any,
+  actorId: string,
+  operation: string,
+  targetId: string,
+  data: Record<string, unknown>,
+  tableName = 'auth.users',
+) {
   const { error } = await admin.from('signage_audit_logs').insert({
-    table_name: 'auth.users',
+    table_name: tableName,
     operation,
     record_id: targetId,
     user_id: actorId,
@@ -49,10 +62,21 @@ Deno.serve(async (req) => {
   if (!caller) return json({ error: 'ログインが必要です' }, 401);
 
   const { data: callerProfile } = await admin
-    .from('signage_profiles').select('role, status').eq('id', caller.id).maybeSingle();
-  if (callerProfile?.role !== 'admin' || callerProfile.status !== 'active') {
+    .from('signage_profiles').select('role, status, management_company_id').eq('id', caller.id).maybeSingle();
+  const callerIsAdmin = callerProfile?.role === 'admin' && callerProfile.status === 'active';
+  // 管理会社: 会社が付いた有効なアカウントだけ。以降の操作は callerCompanyId の範囲に限る
+  const callerCompanyId: string | null =
+    callerProfile?.role === 'management' && callerProfile.status === 'active' && callerProfile.management_company_id
+      ? callerProfile.management_company_id
+      : null;
+  if (!callerIsAdmin && !callerCompanyId) {
     return json({ error: '管理者権限が必要です' }, 403);
   }
+
+  /** 管理会社の呼び出し元が扱える相手か（自社の管理会社ユーザーだけ） */
+  // deno-lint-ignore no-explicit-any
+  const inManagementScope = (target: any) =>
+    !!target && target.role === 'management' && target.management_company_id === callerCompanyId;
 
   let body: Record<string, unknown>;
   try {
@@ -77,15 +101,24 @@ Deno.serve(async (req) => {
     if (!email || !role) return json({ error: 'メールアドレスと権限を指定してください' }, 400);
     // Microsoft でログインする人はパスワード無しで作る（GoTrue がランダムな値を入れるので、パスワードではログインできない）
     if (password && passwordError) return passwordError;
-    if (role === 'management' && !managementCompanyId) return json({ error: '管理会社を選択してください' }, 400);
+    let finalManagementCompanyId = managementCompanyId;
+    if (!callerIsAdmin) {
+      // 管理会社: 作れるのは自社の管理会社ユーザーだけ（会社は自社に固定）。管理者・保守会社のアカウントは管理者が作る
+      if (role === 'admin') return json({ error: '管理者のアカウントは作成できません' }, 403);
+      if (role === 'user') return json({ error: '保守会社のアカウントは管理者が作成します' }, 403);
+      // 将来 role が増えても管理会社が作れるのは management だけ（保守会社は持たせない）
+      if (role !== 'management' || vendorId) return json({ error: '管理会社のアカウントだけ作成できます' }, 403);
+      finalManagementCompanyId = callerCompanyId;
+    }
+    if (role === 'management' && !finalManagementCompanyId) return json({ error: '管理会社を選択してください' }, 400);
     if (vendorId) {
       const { data: vendor } = await admin.from('signage_master_vendors').select('id').eq('id', vendorId).maybeSingle();
       if (!vendor) return json({ error: '保守会社が見つかりません' }, 400);
     }
-    if (managementCompanyId) {
+    if (finalManagementCompanyId) {
       // 管理会社は業務システム（biz.companies）の会社。管理会社の印が無い会社を選ばせない（外部キーだけでは区別できない）
       const { data: company, error: companyError } = await admin.schema('biz')
-        .from('companies').select('id').eq('id', managementCompanyId).eq('is_management_company', true).maybeSingle();
+        .from('companies').select('id').eq('id', finalManagementCompanyId).eq('is_management_company', true).maybeSingle();
       if (companyError) return json({ error: `管理会社の確認に失敗しました: ${companyError.message}` }, 500);
       if (!company) return json({ error: '管理会社が見つかりません' }, 400);
     }
@@ -106,7 +139,7 @@ Deno.serve(async (req) => {
 
     // management_company_id は管理会社のときだけ送る（列を足す DDL の前に配備しても、従来の作成が通るように）
     const profileRow: Record<string, unknown> = { id: created.user.id, email: created.user.email, role, vendor_id: vendorId, status: 'active' };
-    if (role === 'management') profileRow.management_company_id = managementCompanyId;
+    if (role === 'management') profileRow.management_company_id = finalManagementCompanyId;
     const { data: profile, error: profileError } = await admin
       .from('signage_profiles')
       .upsert(profileRow, { onConflict: 'id' })
@@ -124,7 +157,7 @@ Deno.serve(async (req) => {
       email: created.user.email,
       role,
       vendor_id: vendorId,
-      management_company_id: managementCompanyId,
+      management_company_id: finalManagementCompanyId,
     });
     return json({ user: profile });
   }
@@ -132,8 +165,10 @@ Deno.serve(async (req) => {
   if (body.action === 'set_password') {
     const userId = typeof body.userId === 'string' ? body.userId : '';
     // baran プロジェクトの auth.users は他アプリと共用のため、signage のユーザーに限定する
-    const { data: target } = await admin.from('signage_profiles').select('id, email').eq('id', userId).maybeSingle();
-    if (!target) return json({ error: 'ユーザーが見つかりません' }, 404);
+    const { data: target } = await admin
+      .from('signage_profiles').select('id, email, role, management_company_id').eq('id', userId).maybeSingle();
+    // 管理会社には範囲外のユーザーを「見つからない」と返す（他社のアカウントの有無を知らせない）
+    if (!target || (!callerIsAdmin && !inManagementScope(target))) return json({ error: 'ユーザーが見つかりません' }, 404);
     // 他アプリ（noj/mansion/biz）でも使われているアカウントは、変更が他アプリのログインにも及ぶため拒否する
     const { data: shared, error: sharedError } = await admin.rpc('is_shared_auth_user', { target: userId });
     if (sharedError) return json({ error: `共用アカウントの確認に失敗しました: ${sharedError.message}` }, 500);
@@ -146,6 +181,21 @@ Deno.serve(async (req) => {
     const { error } = await admin.auth.admin.updateUserById(userId, { password });
     if (error) return json({ error: `パスワード変更に失敗しました: ${error.message}` }, 400);
     await writeAudit(admin, caller.id, 'SET_PASSWORD', userId, { email: target.email });
+    return json({ ok: true });
+  }
+
+  if (body.action === 'set_status') {
+    // 有効化・無効化（管理会社の画面から。profiles の状態の列はトリガーが管理者以外の更新を断るので service_role で書く）
+    const userId = typeof body.userId === 'string' ? body.userId : '';
+    const status = body.status === 'active' || body.status === 'inactive' ? body.status : null;
+    if (!status) return json({ error: '状態を指定してください' }, 400);
+    if (userId === caller.id) return json({ error: '自分の状態は変更できません' }, 400);
+    const { data: target } = await admin
+      .from('signage_profiles').select('id, email, role, management_company_id').eq('id', userId).maybeSingle();
+    if (!target || (!callerIsAdmin && !inManagementScope(target))) return json({ error: 'ユーザーが見つかりません' }, 404);
+    const { error } = await admin.from('signage_profiles').update({ status }).eq('id', userId);
+    if (error) return json({ error: `状態の変更に失敗しました: ${error.message}` }, 400);
+    await writeAudit(admin, caller.id, 'SET_STATUS', userId, { email: target.email, status }, 'signage_profiles');
     return json({ ok: true });
   }
 

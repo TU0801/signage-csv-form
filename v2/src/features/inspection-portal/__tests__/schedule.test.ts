@@ -3,7 +3,6 @@ import {
   addMonths,
   applicationState,
   buildSchedule,
-  countSchedule,
   entryMatches,
   todayJst,
   unscheduledInspections,
@@ -112,7 +111,7 @@ describe('buildSchedule', () => {
     const items = buildSchedule([inspection()], [], [], { today: '2026-10-21', monthsAhead: 3 });
     expect(items.map((i) => i.targetMonth)).toEqual(['2026-05-01', '2026-08-01', '2026-11-01']);
     expect(items.map((i) => i.timing)).toEqual(['overdue', 'overdue', 'upcoming']);
-    expect(countSchedule(items).overdueUnapplied).toBe(2);
+    expect(items.filter((i) => i.overdueUnapplied)).toHaveLength(2);
   });
 
   it('申請（承認待ち・承認済み）があれば超過にしない。差戻し（pending）は未申請として超過に数える', () => {
@@ -155,7 +154,7 @@ describe('buildSchedule', () => {
     );
     const may = items.find((i) => i.targetMonth === '2026-05-01')!;
     expect(may.report?.id).toBe('cur');
-    expect(countSchedule(items).reportsReturned).toBe(1);
+    expect(items.filter((i) => i.report?.status === 'returned')).toHaveLength(1);
   });
 });
 

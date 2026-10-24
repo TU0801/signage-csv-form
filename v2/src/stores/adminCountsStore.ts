@@ -10,18 +10,23 @@ interface AdminCountsState {
   pendingEntries: number;
   /** ビル追加リクエスト（signage_building_vendors.status=pending） */
   buildingRequests: number;
+  /** 新規建物の申請（signage_property_requests.status=pending。管理者だけ） */
+  propertyRequests: number;
   /** データ一覧（承認済み）に今の絞り込みで出る件数 */
   approved: number;
   setPendingEntries: (n: number) => void;
   setBuildingRequests: (n: number) => void;
+  setPropertyRequests: (n: number) => void;
   setApproved: (n: number) => void;
 }
 
 export const useAdminCountsStore = create<AdminCountsState>((set) => ({
   pendingEntries: 0,
   buildingRequests: 0,
+  propertyRequests: 0,
   approved: 0,
   setPendingEntries: (n) => set({ pendingEntries: n }),
   setBuildingRequests: (n) => set({ buildingRequests: n }),
+  setPropertyRequests: (n) => set({ propertyRequests: n }),
   setApproved: (n) => set({ approved: n }),
 }));

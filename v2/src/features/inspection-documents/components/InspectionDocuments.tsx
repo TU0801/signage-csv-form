@@ -30,6 +30,7 @@ import { ReportsTable } from './ReportsTable';
 import { ReportEditModal } from './ReportEditModal';
 import { ReportReturnModal } from './ReportReturnModal';
 import { ReportUploadModal } from './ReportUploadModal';
+import { BulkReportUploadModal } from './BulkReportUploadModal';
 import type { ReportAction } from './ReportRowActions';
 
 /**
@@ -77,6 +78,9 @@ export function InspectionDocuments() {
   const [returning, setReturning] = useState<DbInspectionReport | null>(null);
   const [deleting, setDeleting] = useState<DbInspectionReport | null>(null);
   const [resubmit, setResubmit] = useState<{ report: DbInspectionReport; inspection: PortalInspectionRow } | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  // 一括アップロードは提出できるロール（保守会社・管理者）だけ。管理者は保守会社を選ばず全社の点検から選ぶ
+  const canBulkUpload = isAdmin || !isManagement;
 
   const viewer = useMemo(() => ({ isAdmin, isManagement, vendorId }), [isAdmin, isManagement, vendorId]);
   const filtered = useMemo(() => filterReports(reports, filters), [reports, filters]);
@@ -228,6 +232,11 @@ export function InspectionDocuments() {
         <p className="text-xs text-gray-500">
           建物・年・点検種別で整理して表示します。左のフォルダを選ぶと表を絞り込めます。
         </p>
+        {canBulkUpload && (
+          <Button size="sm" className="ml-auto self-center text-xs" onClick={() => setBulkOpen(true)}>
+            報告書一括アップロード
+          </Button>
+        )}
       </div>
       <ReportFiltersBar
         filters={filters}
@@ -377,6 +386,14 @@ export function InspectionDocuments() {
         // 再提出は前の版を置き換え済みにするので、1行の差し替えでなく読み直す
         onUploaded={() => void reload()}
       />
+      {canBulkUpload && (
+        <BulkReportUploadModal
+          open={bulkOpen}
+          onClose={() => setBulkOpen(false)}
+          vendorId={isAdmin ? null : (vendorId ?? null)}
+          onUploaded={() => void reload()}
+        />
+      )}
     </div>
   );
 }

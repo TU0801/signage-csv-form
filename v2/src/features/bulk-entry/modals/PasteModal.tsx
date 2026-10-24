@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
-import { downloadCsv } from '@/lib/csv';
-import { buildPasteTemplateCsv, PASTE_COLUMNS } from '../utils/parseExcelPaste';
+import { useToast } from '@/components/ui/Toast';
+import { downloadPasteTemplate, PASTE_COLUMNS, PASTE_TEMPLATE_EXAMPLES } from '../utils/parseExcelPaste';
 
 interface PasteModalProps {
   open: boolean;
@@ -11,14 +11,19 @@ interface PasteModalProps {
   onImport: (text: string) => boolean;
 }
 
-const EXAMPLE = ['アソシアグロッツォ天神サウス', 'z1003A01', 'エレベーター...', '2025/1/15', '2025/1/15', '午前中'];
+const EXAMPLE = PASTE_TEMPLATE_EXAMPLES[0]!;
+/** 列一覧の見出し（A〜E。列の数に合わせる） */
+const COLUMN_LETTERS = PASTE_COLUMNS.map((_, i) => String.fromCharCode(65 + i));
+/** 備考欄の書き方（見出し名は「備考」のまま） */
+const REMARKS_HINT = '作業時間を記載下さい（例: 10:00～12:00 / No2号機11:00～12:00）';
 
 /**
- * Excel からの貼り付け（6列固定）。ヘッダー行は自動で飛ばす。
+ * Excel からの貼り付け（5列。旧6列〔B列が端末ID〕も読む）。ヘッダー行は自動で飛ばす。
  * v1: bulk.html #pasteModal / js/bulk-modals.js openPasteModal / importFromPaste / downloadExcelTemplate
  */
 export function PasteModal({ open, onClose, onImport }: PasteModalProps) {
   const [text, setText] = useState('');
+  const { addToast } = useToast();
 
   const handleClose = () => {
     setText('');
@@ -27,6 +32,12 @@ export function PasteModal({ open, onClose, onImport }: PasteModalProps) {
 
   const handleImport = () => {
     if (onImport(text)) setText('');
+  };
+
+  const handleDownloadTemplate = () => {
+    downloadPasteTemplate().catch(() => {
+      addToast('テンプレート書式をダウンロードできませんでした', 'error');
+    });
   };
 
   return (
@@ -54,10 +65,10 @@ export function PasteModal({ open, onClose, onImport }: PasteModalProps) {
           <Button
             size="sm"
             variant="secondary"
-            title="Excelテンプレートをダウンロード"
-            onClick={() => downloadCsv(buildPasteTemplateCsv(), '一括入力テンプレート.csv')}
+            title="Excelのテンプレート書式（一括入力テンプレート.xlsx）をダウンロード"
+            onClick={handleDownloadTemplate}
           >
-            テンプレート
+            テンプレート書式DL
           </Button>
         </div>
 
@@ -77,7 +88,7 @@ export function PasteModal({ open, onClose, onImport }: PasteModalProps) {
             <table className="w-full border-collapse">
               <thead>
                 <tr className="bg-gray-200">
-                  {['A', 'B', 'C', 'D', 'E', 'F'].map((c) => (
+                  {COLUMN_LETTERS.map((c) => (
                     <th key={c} className="border border-gray-300 p-1 text-left">
                       {c}列
                     </th>
@@ -87,8 +98,9 @@ export function PasteModal({ open, onClose, onImport }: PasteModalProps) {
               <tbody>
                 <tr>
                   {PASTE_COLUMNS.map((c) => (
-                    <td key={c} className="border border-gray-300 p-1">
+                    <td key={c} className="border border-gray-300 p-1 align-top">
                       {c}
+                      {c === '備考' && <span className="block text-[11px] font-normal text-gray-500">{REMARKS_HINT}</span>}
                     </td>
                   ))}
                 </tr>
@@ -101,7 +113,6 @@ export function PasteModal({ open, onClose, onImport }: PasteModalProps) {
                 </tr>
               </tbody>
             </table>
-            <p className="mt-2 text-gray-500">※ 端末ID（B列）は省略可能です。省略時は物件から自動設定されます。</p>
           </div>
         </details>
       </div>

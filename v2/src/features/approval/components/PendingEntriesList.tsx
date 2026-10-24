@@ -4,6 +4,8 @@ import { Spinner } from '@/components/ui/Spinner';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
+import { useAuthStore } from '@/stores/authStore';
+import { SendBackDialog } from '@/features/inspection-portal/components/SendBackDialog';
 import { entryErrorReason } from '@/lib/api/admin-entries';
 import { EntryEditModal } from '@/features/entries-list/components/EntryEditModal';
 import { useEntryLookups } from '@/features/entries-list/hooks/useEntryLookups';
@@ -40,9 +42,13 @@ export function PendingEntriesList() {
     rejectEntry,
     approveBulk,
     rejectBulk,
+    sendBackEntry,
   } = usePendingEntries();
   const lookups = useEntryLookups();
   const { addToast } = useToast();
+  // 管理会社: 承認と差戻しだけ（却下＝削除・編集は管理者だけ）
+  const isManagement = useAuthStore((s) => s.profile?.role === 'management');
+  const [sendBackTarget, setSendBackTarget] = useState<DbEntry | null>(null);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [detailEntry, setDetailEntry] = useState<DbEntry | null>(null);
@@ -56,7 +62,7 @@ export function PendingEntriesList() {
   // 別のタブから戻ったら読み直す（詳細・編集・確認を開いている間は読み直さない）
   useRefetchOnVisible(
     fetchPendingEntries,
-    !loading && !detailEntry && !editEntry && confirm === null,
+    !loading && !detailEntry && !editEntry && confirm === null && !sendBackTarget,
   );
 
   // 読み直した一覧に無い行は選択から外す
@@ -148,6 +154,20 @@ export function PendingEntriesList() {
     }
   }, [rejectBulk, selected, addToast]);
 
+  const handleSendBack = useCallback(
+    async (entry: DbEntry, reason: string) => {
+      try {
+        await sendBackEntry(entry.id, reason);
+        addToast('差し戻しました', 'success');
+      } catch (err) {
+        console.error('Failed to send back entry:', err);
+        addToast(`差戻しに失敗しました: ${entryErrorReason(err)}`, 'error');
+        throw err;
+      }
+    },
+    [sendBackEntry, addToast],
+  );
+
   // 確認ダイアログに出す対象の1行（物件・点検種別・点検日）。却下は削除なので、何を消すかを確かめられるようにする
   const describeEntry = (entry: DbEntry) => {
     const name = lookups.propertyNames.get(entry.property_code) || '';
@@ -201,23 +221,31 @@ export function PendingEntriesList() {
               <h2 className="text-sm font-semibold text-gray-900">
                 データ承認待ち ({entries.length}件)
               </h2>
-              {/* 管理会社の「差戻し」（点検一覧）と同じ申請を扱うので、結果の違いを言葉で示す（挙動は v1 どおり） */}
-              <p className="text-xs text-gray-500">
-                「却下」は申請データを削除します。削除せず理由を付けて保守会社へ戻す「差戻し」は点検一覧から行います。
-              </p>
+              {/* 「却下」（削除）と「差戻し」（削除せず保守会社へ戻す）の結果の違いを言葉で示す（却下の挙動は v1 どおり） */}
+              {isManagement ? (
+                <p className="text-xs text-gray-500">
+                  自社が管理する物件の申請だけを表示します。「差戻し」は申請を削除せず、理由を付けて保守会社へ戻します。
+                </p>
+              ) : (
+                <p className="text-xs text-gray-500">
+                  「却下」は申請データを削除します。「差戻し」は申請を削除せず、理由を付けて保守会社へ戻します。
+                </p>
+              )}
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {selected.length > 0 && (
                 <span className="text-sm font-medium text-blue-800">{selected.length}件選択中</span>
               )}
-              <Button
-                size="sm"
-                variant="danger"
-                disabled={selected.length === 0}
-                onClick={() => setConfirm({ kind: 'bulkReject' })}
-              >
-                選択を却下
-              </Button>
+              {!isManagement && (
+                <Button
+                  size="sm"
+                  variant="danger"
+                  disabled={selected.length === 0}
+                  onClick={() => setConfirm({ kind: 'bulkReject' })}
+                >
+                  選択を却下
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="success"
@@ -286,9 +314,10 @@ export function PendingEntriesList() {
                       email={lookups.emailOf(entry.user_id)}
                       onToggleSelect={handleToggleSelect}
                       onApprove={(id) => setConfirm({ kind: 'approve', id })}
-                      onReject={(id) => setConfirm({ kind: 'reject', id })}
+                      onReject={isManagement ? undefined : (id) => setConfirm({ kind: 'reject', id })}
                       onViewDetail={setDetailEntry}
-                      onEdit={setEditEntry}
+                      onEdit={isManagement ? undefined : setEditEntry}
+                      onSendBack={setSendBackTarget}
                     />
                   ))}
                 </tbody>
@@ -309,14 +338,33 @@ export function PendingEntriesList() {
           setDetailEntry(null);
           setConfirm({ kind: 'approve', id: e.id });
         }}
-        onReject={(e) => {
+        onReject={
+          isManagement
+            ? undefined
+            : (e) => {
+                setDetailEntry(null);
+                setConfirm({ kind: 'reject', id: e.id });
+              }
+        }
+        onEdit={
+          isManagement
+            ? undefined
+            : (e) => {
+                setDetailEntry(null);
+                setEditEntry(e);
+              }
+        }
+        onSendBack={(e) => {
           setDetailEntry(null);
-          setConfirm({ kind: 'reject', id: e.id });
+          setSendBackTarget(e);
         }}
-        onEdit={(e) => {
-          setDetailEntry(null);
-          setEditEntry(e);
-        }}
+      />
+
+      <SendBackDialog
+        open={sendBackTarget !== null}
+        subject={sendBackTarget ? describeEntry(sendBackTarget) : ''}
+        onClose={() => setSendBackTarget(null)}
+        onConfirm={(reason) => (sendBackTarget ? handleSendBack(sendBackTarget, reason) : Promise.resolve())}
       />
 
       <EntryEditModal

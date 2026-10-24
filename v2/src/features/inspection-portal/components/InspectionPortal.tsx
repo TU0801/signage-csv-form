@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
@@ -9,9 +9,10 @@ import type { PortalEntryRow, PortalInspectionRow } from '@/types/portal';
 import { useRefetchOnVisible } from '@/features/approval/hooks/useRefetchOnVisible';
 import { ReportUploadModal } from '@/features/inspection-documents/components/ReportUploadModal';
 import { usePortalData } from '../hooks/usePortalData';
-import { appliedEntry, canSubmit, type PortalRole } from '../lib/actions';
-import { companyOptions, filterSchedule, filterUnscheduled, INITIAL_FILTERS, type PortalFilters } from '../lib/filters';
-import { buildSchedule, countSchedule, formatMonth, todayJst, unscheduledInspections, type ScheduleItem } from '../lib/schedule';
+import { reportEntryId, canSubmit, type PortalRole } from '../lib/actions';
+import { filterSchedule, filterUnscheduled, INITIAL_FILTERS, type PortalFilters } from '../lib/filters';
+import { buildSchedule, formatMonth, todayJst, unscheduledInspections, type ScheduleItem } from '../lib/schedule';
+import { completionKeys, countStatuses, itemStatus } from '../lib/status';
 import { ApplyModal, type ApplyTarget } from './ApplyModal';
 import { CountBadges } from './CountBadges';
 import { EntryDetailModal, type EntryDetailTarget } from './EntryDetailModal';
@@ -73,21 +74,17 @@ export function InspectionPortal() {
     () => buildUnscheduledItems(unscheduledInspections(data.inspections), data.entries, data.reports),
     [data.inspections, data.entries, data.reports],
   );
-  const counts = useMemo(() => countSchedule([...schedule, ...unscheduledAll]), [schedule, unscheduledAll]);
-  const visible = useMemo(() => filterSchedule(schedule, filters, today), [schedule, filters, today]);
-  const unscheduled = useMemo(() => filterUnscheduled(unscheduledAll, filters), [unscheduledAll, filters]);
+  // ステータス（修正依頼1024 B14）。完了連絡を含めて決める
+  const completed = useMemo(() => completionKeys(data.completions), [data.completions]);
+  const statusOf = useCallback((item: ScheduleItem) => itemStatus(item, completed, today), [completed, today]);
+  const counts = useMemo(
+    () => countStatuses([...schedule, ...unscheduledAll].map(statusOf)),
+    [schedule, unscheduledAll, statusOf],
+  );
+  const visible = useMemo(() => filterSchedule(schedule, filters, today, statusOf), [schedule, filters, today, statusOf]);
+  const unscheduled = useMemo(() => filterUnscheduled(unscheduledAll, filters, statusOf), [unscheduledAll, filters, statusOf]);
 
-  const vendorOptions = useMemo(
-    () => (isAdmin || isManagement ? companyOptions(data.inspections, (i) => ({ id: i.vendor_id, name: i.vendor_name })) : null),
-    [data.inspections, isAdmin, isManagement],
-  );
-  const managementOptions = useMemo(
-    () =>
-      isAdmin
-        ? companyOptions(data.inspections, (i) => ({ id: i.management_company_id, name: i.management_company_name }))
-        : null,
-    [data.inspections, isAdmin],
-  );
+  // 管理会社の絞り込みは点検登録フォームのヘッダーへ移した（修正依頼1024 B19）。この一覧は管理会社のアカウントが見る
 
   const approve = async (entry: PortalEntryRow) => {
     if (busyEntryId) return;
@@ -130,7 +127,7 @@ export function InspectionPortal() {
     setReportTarget({
       inspection: item.inspection,
       targetMonth: item.targetMonth,
-      entryId: appliedEntry(item)?.id ?? null,
+      entryId: reportEntryId(item),
       // 提出中・受領済みの版があるときも置き換わる（DB が同じ点検・対象月の版を superseded にする）ので、前の版として見せる。
       // DB が置き換えるのは同じ保守会社の版だけ（台ごとに別の会社が居る点検）なので、他社の版は前の版にしない
       previous: item.report && (isAdmin || item.report.vendor_id === vendorId) ? item.report : null,
@@ -174,8 +171,6 @@ export function InspectionPortal() {
       <PortalFilterBar
         filters={filters}
         onChange={setFilters}
-        vendorOptions={vendorOptions}
-        managementOptions={managementOptions}
       />
       {data.loaded && data.error && (
         // 読み直しに失敗しても前の一覧は残す（古い状態であることだけ知らせ、読み直せるようにする）
@@ -191,13 +186,14 @@ export function InspectionPortal() {
           {visible.length}件
         </span>
         <span className="text-gray-500">
-          点検月を過ぎて承認待ち・承認済みの申請が無いものを「点検月超過」と表示します（日本時間の月末で判定）。
+          点検月を過ぎて承認待ち・承認済みの申請が無いものを「点検月超過」、承認済みで点検日を過ぎて報告書が無いものを「報告書未提出」と表示します（日本時間で判定）。
         </span>
       </div>
 
       <ScheduleTable
         items={visible}
         role={role}
+        statusOf={statusOf}
         busyEntryId={busyEntryId}
         onApply={(item, resubmit) => setApplyTarget({ inspection: item.inspection, targetMonth: item.targetMonth, resubmit })}
         onReport={openReport}
@@ -207,6 +203,7 @@ export function InspectionPortal() {
       <UnscheduledTable
         items={unscheduled}
         role={role}
+        statusOf={statusOf}
         busyEntryId={busyEntryId}
         onApply={(item) => setApplyTarget({ inspection: item.inspection, targetMonth: null, resubmit: null })}
         onResubmit={(item, entry) => setApplyTarget({ inspection: item.inspection, targetMonth: null, resubmit: entry })}

@@ -21,8 +21,10 @@ vi.mock('@/lib/supabase', () => ({
 }));
 
 const mockUploadAdImage = vi.fn();
+const mockDeleteStorageFile = vi.fn();
 vi.mock('@/lib/storage', () => ({
   uploadAdImage: (...args: unknown[]) => mockUploadAdImage(...args),
+  deleteStorageFile: (...args: unknown[]) => mockDeleteStorageFile(...args),
 }));
 
 /** signage_ad_slots の実列（本番の slot 3 と同じ形） */
@@ -47,6 +49,7 @@ describe('useAdSlots', () => {
     mockOrder.mockResolvedValue({ data: [], error: null });
     mockUpdate.mockReturnValue({ eq: mockEq });
     mockEq.mockResolvedValue({ error: null });
+    mockDeleteStorageFile.mockResolvedValue(undefined);
   });
 
   it('fetches slots on mount', async () => {
@@ -133,7 +136,72 @@ describe('useAdSlots', () => {
     });
 
     expect(mockUploadAdImage).toHaveBeenCalledWith(file, 3);
-    expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ image_url: newUrl }));
+    // 同じパスへの上書きでも古い画像が出ないよう ?v=<更新時刻> を付ける（updated_at と同じ時刻）
+    const saved = mockUpdate.mock.calls[0]![0] as { image_url: string; updated_at: string };
+    expect(saved.image_url).toBe(`${newUrl}?v=${Date.parse(saved.updated_at)}`);
+  });
+
+  it('saveSlot deletes the old slot file when the extension changes (png -> jpg), and keeps it when it does not', async () => {
+    const base = 'https://pdouwmjyswswfmzpfjzf.supabase.co/storage/v1/object/public/poster-images/ads/';
+    const { result } = renderHook(() => useAdSlots());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    mockUploadAdImage.mockResolvedValue(`${base}slot_3.jpg`);
+    await act(async () => {
+      await result.current.saveSlot(
+        { ...slot3, image_url: `${base}slot_3.png?v=1` },
+        { imageFile: new File(['x'], 'slot_3.jpg', { type: 'image/jpeg' }), caption: '', linkUrl: '', isActive: true },
+      );
+    });
+    expect(mockDeleteStorageFile).toHaveBeenCalledWith('ads/slot_3.png');
+
+    mockDeleteStorageFile.mockClear();
+    await act(async () => {
+      await result.current.saveSlot(
+        { ...slot3, image_url: `${base}slot_3.jpg?v=2` },
+        { imageFile: new File(['x'], 'slot_3.jpg', { type: 'image/jpeg' }), caption: '', linkUrl: '', isActive: true },
+      );
+    });
+    expect(mockDeleteStorageFile).not.toHaveBeenCalled();
+  });
+
+  it('clearSlot empties the row (keeps it) and then deletes ads/slot_{n}.png / .jpg and the current image file', async () => {
+    const { result } = renderHook(() => useAdSlots());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.clearSlot({
+        ...slot3,
+        image_url: 'http://127.0.0.1:55321/storage/v1/object/public/poster-images/ads/ad3.png?v=5',
+        caption: '鍵の案内',
+        is_active: true,
+      });
+    });
+
+    expect(mockUpdate).toHaveBeenCalledWith({
+      image_url: null,
+      caption: '',
+      link_url: '',
+      is_active: false,
+      updated_at: expect.any(String),
+    });
+    expect(mockEq).toHaveBeenCalledWith('slot_index', 3);
+    expect(mockDeleteStorageFile.mock.calls.map((c) => c[0])).toEqual([
+      'ads/slot_3.png',
+      'ads/slot_3.jpg',
+      'ads/ad3.png',
+    ]);
+    // 行を先に空にする（ファイルの削除に失敗してもログイン画面が消えたファイルを指さない）
+    expect(mockUpdate.mock.invocationCallOrder[0]!).toBeLessThan(mockDeleteStorageFile.mock.invocationCallOrder[0]!);
+  });
+
+  it('clearSlot does not delete files when the row update fails', async () => {
+    mockEq.mockResolvedValue({ error: { message: 'denied' } });
+    const { result } = renderHook(() => useAdSlots());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await expect(result.current.clearSlot(slot3)).rejects.toEqual({ message: 'denied' });
+    expect(mockDeleteStorageFile).not.toHaveBeenCalled();
   });
 
   it('saveSlot does not update the row when the upload fails', async () => {
