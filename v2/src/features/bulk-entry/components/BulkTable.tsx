@@ -247,11 +247,14 @@ export function BulkTable({
                 className="h-4 w-4 rounded border-gray-300"
               />
             </th>
+            {/* 並びは注記の配置どおり: ステータス・報告書UP・完了連絡 → No（対象月）→ 点検月・検査月 → 物件（F15） */}
+            <th className={cn(th, 'min-w-[7rem]')}>ステータス</th>
+            <th className={cn(th, 'min-w-[8.5rem]')}>報告書UP・完了連絡</th>
             <th className={cn(th, 'w-20 min-w-[5rem]')}>
               No<div className="text-[10px] font-normal text-gray-400">対象月</div>
             </th>
-            <th className={cn(th, 'min-w-[7rem]')}>ステータス</th>
-            <th className={cn(th, 'min-w-[8.5rem]')}>報告書UP・完了連絡</th>
+            <th className={cn(th, 'min-w-[5rem]')}>点検月</th>
+            <th className={cn(th, 'min-w-[5.5rem]')}>検査月</th>
             <th className={cn(th, 'min-w-[15rem]')}>
               物件<span className="text-red-500">*</span>
             </th>
@@ -260,8 +263,6 @@ export function BulkTable({
             <th className={cn(th, 'min-w-[12rem]')}>
               点検種別<span className="text-red-500">*</span>
             </th>
-            <th className={cn(th, 'min-w-[5rem]')}>点検月</th>
-            <th className={cn(th, 'min-w-[5.5rem]')}>検査月</th>
             <th className={cn(th, 'w-36 min-w-[9rem]')}>点検開始日</th>
             <th className={cn(th, 'w-36 min-w-[9rem]')}>点検終了日</th>
             <th className={cn(th, 'min-w-[14rem]')}>備考（作業時間を記載下さい）</th>
@@ -321,14 +322,6 @@ export function BulkTable({
                     className="h-4 w-4 rounded border-gray-300"
                   />
                 </td>
-                <td className="cell whitespace-nowrap text-xs text-gray-400">
-                  <div>{visibleNo.get(row.id)}</div>
-                  {schedule && (
-                    <div className="text-[11px] tabular-nums text-gray-700" data-testid="target-month">
-                      {schedule.targetMonth ? formatMonth(schedule.targetMonth) : '点検月未登録'}
-                    </div>
-                  )}
-                </td>
                 <td className="cell">
                   {info.status ? (
                     <>
@@ -344,6 +337,20 @@ export function BulkTable({
                   )}
                 </td>
                 <td className="cell whitespace-nowrap">{info.actions ?? <span className={cn(cellText, 'text-gray-400')}>－</span>}</td>
+                <td className="cell whitespace-nowrap text-xs text-gray-400">
+                  <div>{visibleNo.get(row.id)}</div>
+                  {schedule && (
+                    <div className="text-[11px] tabular-nums text-gray-700" data-testid="target-month">
+                      {schedule.targetMonth ? formatMonth(schedule.targetMonth) : '点検月未登録'}
+                    </div>
+                  )}
+                </td>
+                <td className="cell">
+                  <span className={cn(cellText, 'tabular-nums text-gray-700')}>{info.months || '－'}</span>
+                </td>
+                <td className="cell">
+                  <span className={cn(cellText, 'whitespace-nowrap tabular-nums text-gray-700')}>{info.inspectedOn}</span>
+                </td>
                 <td className="cell">
                   {schedule ? (
                     <div className="px-1 text-xs leading-tight" title={`${row.propertyCode} ${schedule.propertyName}`}>
@@ -427,12 +434,6 @@ export function BulkTable({
                       )}
                     </>
                   )}
-                </td>
-                <td className="cell">
-                  <span className={cn(cellText, 'tabular-nums text-gray-700')}>{info.months || '－'}</span>
-                </td>
-                <td className="cell">
-                  <span className={cn(cellText, 'whitespace-nowrap tabular-nums text-gray-700')}>{info.inspectedOn}</span>
                 </td>
                 <td className="cell">
                   {locked ? (

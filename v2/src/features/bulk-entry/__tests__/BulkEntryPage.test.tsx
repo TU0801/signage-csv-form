@@ -231,6 +231,12 @@ describe('BulkEntryPage (v1 js/bulk.js init / adminVendorSelect)', () => {
     // 表示フィルター・状態の列は無い（B7）
     expect(screen.queryByRole('columnheader', { name: '状態' })).toBeNull();
     expect(screen.queryByRole('columnheader', { name: '端末' })).toBeNull();
+    // 列の並びは注記の配置どおり（ステータス・報告書UP・完了連絡 → No（対象月）→ 点検月・検査月 → 物件。F15）
+    const heads = screen.getAllByRole('columnheader').map((h) => h.textContent ?? '');
+    const at = (label: string) => heads.findIndex((h) => h.startsWith(label));
+    expect([at('ステータス'), at('報告書UP'), at('No'), at('点検月'), at('検査月'), at('物件')]).toEqual(
+      [1, 2, 3, 4, 5, 6],
+    );
 
     fireEvent.click(screen.getByRole('button', { name: '↑ 申請する' }));
     expect(await screen.findByText(/入力にエラーがある行が1件あります/)).toBeInTheDocument();
