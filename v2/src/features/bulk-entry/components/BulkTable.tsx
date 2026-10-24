@@ -527,7 +527,7 @@ export function BulkTable({
                     onClick={() => onOpenRowDetail(row.id)}
                     className={cn(
                       'inline-flex h-7 items-center whitespace-nowrap rounded border px-1.5 text-xs disabled:opacity-40',
-                      hasError(row, '表示', '案内文')
+                      hasError(row, '表示', '案内文', '貼紙')
                         ? 'border-red-400 text-red-600'
                         : hasDetail
                           ? 'border-blue-400 bg-blue-50 text-blue-700'

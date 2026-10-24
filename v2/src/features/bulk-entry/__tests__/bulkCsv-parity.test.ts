@@ -56,6 +56,9 @@ function row(over: Partial<BulkEntryRow>): BulkEntryRow {
     displayEndDate: '',
     displayEndTime: '',
     showOnBoard: true,
+    emergencyContact: '',
+    posterType: 'template',
+    posterImage: '',
     position: 2,
     isValid: true,
     errors: [],
@@ -128,6 +131,27 @@ describe('bulk CSV parity with v1 js/bulk-data.js generateCSV', () => {
     );
     expect(csv).not.toContain('覚え書き');
     expect(csv.split('\n')[0]!.split(',')).toHaveLength(28);
+  });
+
+  it('詳細設定の連絡先と追加の貼紙を CSV に出す（B18。追加は管理画面の CSV と同じく案内・日付・備考を空に）', () => {
+    const csv = generateBulkCsv(
+      [
+        // 定型文は改行入りなので、行で分けて読めるよう1行の案内文にする
+        row({ id: 1, emergencyContact: '03-1111-2222', noticeText: '独自の案内' }),
+        row({ id: 2, posterType: 'custom', posterImage: 'https://x/poster-images/u1/1700_ab12.png?v=1', remarks: '備考' }),
+      ],
+      master,
+      { id: 'v1', name: '株式会社テスト保守' },
+      applySettings(DEFAULT_BULK_SETTINGS, settingsRows),
+    );
+    const [, template, custom] = csv.split('\n').map((l) => l.split(','));
+    expect(template![4]).toBe('03-1111-2222');
+    expect(template![27]).toBe('テンプレート');
+    expect(custom![4]).toBe('092-000-0000'); // 書き換えていない行は保守会社マスターの緊急連絡先
+    expect(custom![5]).toBe(''); // 点検工事案内
+    expect(custom![7]).toBe('1700_ab12'); // 点検案内TPLNo＝画像のファイル名
+    expect([custom![8], custom![9], custom![10], custom![11]]).toEqual(['', '', '', '']);
+    expect(custom![27]).toBe('追加');
   });
 
   it('returns empty string when no valid rows (same as v1)', () => {

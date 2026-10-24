@@ -12,7 +12,7 @@ export const DEFAULT_BULK_SETTINGS: BulkSettings = {
   notice_text_max_chars: 200,
 };
 
-export const EMPTY_BULK_MASTER: BulkMasterData = { properties: [], vendors: [], notices: [] };
+export const EMPTY_BULK_MASTER: BulkMasterData = { properties: [], vendors: [], notices: [], templateImages: [] };
 
 /**
  * 設定行を反映する（値は parseInt。0 や数字でない値は文字列のまま）。
@@ -88,6 +88,11 @@ export function toBulkMasterData(data: MasterData): BulkMasterData {
       inspectionType: it.inspection_name,
       templateNo: it.template_no || '',
       noticeText: it.default_text || '',
+    })),
+    templateImages: (data.templateImages ?? []).map((t) => ({
+      image_key: t.image_key,
+      image_url: t.image_url,
+      display_name: t.display_name,
     })),
   };
 }

@@ -93,12 +93,13 @@ describe('Excel paste parity with v1 js/bulk-modals.js importFromPaste', () => {
     const result = parseExcelPaste(PASTE, master.properties);
     result.rows.forEach((r) => useBulkStore.getState().addRow(r));
     // pastedPropertyName は v2 だけが画面用に持つ（v1 には無い）ので比べる前に外す
-    // memo も v2 だけの項目（修正依頼1024 B12）
-    const v2Rows = useBulkStore.getState().rows.map(({ pastedPropertyName: _p, memo: _m, ...r }) => {
-      void _p;
-      void _m;
-      return comparable({ ...r });
-    });
+    // memo（修正依頼1024 B12）・連絡先・貼紙（B18）も v2 だけの項目
+    const v2Rows = useBulkStore
+      .getState()
+      .rows.map(({ pastedPropertyName: _p, memo: _m, emergencyContact: _c, posterType: _t, posterImage: _i, ...r }) => {
+        void [_p, _m, _c, _t, _i];
+        return comparable({ ...r });
+      });
 
     expect(v2Rows).toEqual(v1Rows);
     expect(v2Rows).toHaveLength(5);

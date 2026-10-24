@@ -47,6 +47,9 @@ export function writeAutoSave(userId: string | null, allRows: BulkEntryRow[], ro
         displayEndDate: r.displayEndDate,
         displayEndTime: r.displayEndTime,
         showOnBoard: r.showOnBoard,
+        emergencyContact: r.emergencyContact,
+        posterType: r.posterType,
+        posterImage: r.posterImage,
         position: r.position,
       })),
     };

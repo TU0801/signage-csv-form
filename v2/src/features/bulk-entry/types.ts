@@ -4,6 +4,8 @@
  * 共有の EntryFormData / BulkRow ではなくこちらを使う。
  */
 
+import type { DbTemplateImage } from '@/types/database';
+
 /** 一括入力の1行。v1: js/bulk-table.js addRow の row */
 export interface BulkEntryRow {
   id: number;
@@ -23,6 +25,15 @@ export interface BulkEntryRow {
   displayEndDate: string;
   displayEndTime: string;
   showOnBoard: boolean;
+  /**
+   * 連絡先（CSV 5列目「緊急連絡先番号」・申請の emergency_contact）。空なら画面上部の保守会社の緊急連絡先（保守会社マスター）。
+   * 詳細設定で書き換えたときだけ値が入る（B18）
+   */
+  emergencyContact: string;
+  /** 貼紙（template＝点検種別のテンプレート / custom＝追加の画像。B18） */
+  posterType: 'template' | 'custom';
+  /** 追加の貼紙画像の公開 URL（poster-images に選んだ時点でアップロード済み。File は持たない） */
+  posterImage: string;
   /** 貼紙表示位置（0〜4。貼り付けの8列目が数字でないと NaN になりうる＝v1 と同じ） */
   position: number;
   isValid: boolean;
@@ -85,6 +96,8 @@ export interface BulkMasterData {
   properties: BulkProperty[];
   vendors: BulkVendor[];
   notices: BulkNotice[];
+  /** テンプレート画像（詳細設定のプレビューとテンプレート名。template_images_master） */
+  templateImages?: Pick<DbTemplateImage, 'image_key' | 'image_url' | 'display_name'>[];
 }
 
 /** v1: js/bulk-state.js state.appSettings（設定値は parseInt 済み。数値にならない値は文字列のまま） */

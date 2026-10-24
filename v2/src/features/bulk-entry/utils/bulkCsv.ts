@@ -8,10 +8,18 @@ function escapeCsvField(v: unknown): string {
   return s.includes(',') || s.includes('"') || s.includes('\n') ? '"' + s.replace(/"/g, '""') + '"' : s;
 }
 
+/** 画像 URL のファイル名（拡張子・クエリなし）。例: https://…/poster-images/u1/1700_ab12.png → 1700_ab12 */
+export function posterImageBaseName(url: string): string {
+  const name = (url.split(/[?#]/)[0] ?? '').split('/').pop() ?? '';
+  return name.replace(/\.[^.]+$/, '');
+}
+
 /**
  * 一括入力の CSV（有効な行だけ。無ければ空文字）。管理画面の本番出力（generateAdminCsv）とは別物で、
- * v1 の一括入力と同じ形にする: 行区切り LF、掲示板表示は TRUE/False、貼紙区分は常に「テンプレート」、
- * 受注先名は行の vendorName、緊急連絡先は画面上部の保守会社から引く。
+ * v1 の一括入力と同じ形にする: 行区切り LF、掲示板表示は TRUE/False、受注先名は行の vendorName。
+ * 緊急連絡先は詳細設定で書き換えた行の値、無ければ画面上部の保守会社から引く（B18）。
+ * 追加の貼紙の行（B18）は管理画面の CSV（lib/csv.ts generateAdminCsv）と同じく 点検工事案内・日付・備考・案内文を空にし、
+ * 貼紙区分を「追加」、点検案内TPLNo を画像のファイル名（拡張子なし）にする（申請前で ID が無いので customImageBaseName は使えない）。
  * 変更日は UTC の日付、変更日時の時刻はローカル時刻（v1 と同じ混在）。
  * v1: js/bulk-data.js generateCSV
  */
@@ -46,6 +54,7 @@ export function generateBulkCsv(
     const remarksText = (row.remarks || '').replace(/\n/g, '\r\n');
     const noticeText = (row.noticeText || inspection?.noticeText || '').replace(/\n/g, '\r\n');
     const showOnBoard = row.showOnBoard !== false ? 'TRUE' : 'False';
+    const isCustom = row.posterType === 'custom';
     const positionValue = row.position !== undefined ? String(row.position) : '2';
 
     const values = [
@@ -53,14 +62,14 @@ export function generateBulkCsv(
       row.terminalId || property?.terminalId || '', // 端末ID
       row.propertyCode, // 物件コード
       row.vendorName, // 受注先名
-      vendor?.emergencyContact || '', // 緊急連絡先番号
-      row.inspectionType, // 点検工事案内
+      row.emergencyContact || vendor?.emergencyContact || '', // 緊急連絡先番号
+      isCustom ? '' : row.inspectionType, // 点検工事案内
       showOnBoard, // 掲示板に表示する
-      inspection?.templateNo || '', // 点検案内TPLNo
-      sd, // 点検開始日
-      ed, // 点検完了日
-      remarksText, // 掲示備考
-      noticeText, // 掲示板用案内文
+      isCustom ? posterImageBaseName(row.posterImage) : inspection?.templateNo || '', // 点検案内TPLNo
+      isCustom ? '' : sd, // 点検開始日
+      isCustom ? '' : ed, // 点検完了日
+      isCustom ? '' : remarksText, // 掲示備考
+      isCustom ? '' : noticeText, // 掲示板用案内文
       positionValue, // frame_No
       dsd, // 表示開始日
       ded, // 表示終了日
@@ -76,7 +85,7 @@ export function generateBulkCsv(
       `${dateStr} [${timeStr}]`, // 変更日時
       `${sd} [00:00:00]`, // 点検日時
       `${dsd} [00:00:00]`, // 表示日時
-      'テンプレート', // 貼紙区分
+      isCustom ? '追加' : 'テンプレート', // 貼紙区分
     ];
 
     csvRows.push(values.map(escapeCsvField).join(','));

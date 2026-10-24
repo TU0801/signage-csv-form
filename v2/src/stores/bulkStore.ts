@@ -22,7 +22,16 @@ import { todayUtc } from '@/lib/utils';
 /** 行の詳細設定モーダルで変える項目 */
 export type BulkRowDetail = Pick<
   BulkEntryRow,
-  'noticeText' | 'displayStartDate' | 'displayStartTime' | 'displayEndDate' | 'displayEndTime' | 'displayTime' | 'position'
+  | 'noticeText'
+  | 'displayStartDate'
+  | 'displayStartTime'
+  | 'displayEndDate'
+  | 'displayEndTime'
+  | 'displayTime'
+  | 'position'
+  | 'emergencyContact'
+  | 'posterType'
+  | 'posterImage'
 >;
 
 /** 選択行への一括設定で上書きできる項目（入れた項目だけを渡す） */
@@ -161,6 +170,9 @@ export const useBulkStore = create<BulkState>((set, get) => {
       displayEndDate: data.displayEndDate || '',
       displayEndTime: data.displayEndTime || '',
       showOnBoard: data.showOnBoard !== undefined ? data.showOnBoard : true,
+      emergencyContact: data.emergencyContact || '',
+      posterType: data.posterType === 'custom' ? 'custom' : 'template',
+      posterImage: data.posterImage || '',
       position: data.position !== undefined ? data.position : 2,
       isValid: false,
       errors: [],
@@ -199,6 +211,9 @@ export const useBulkStore = create<BulkState>((set, get) => {
     displayEndDate: r.displayEndDate,
     displayEndTime: r.displayEndTime,
     showOnBoard: r.showOnBoard,
+    emergencyContact: r.emergencyContact,
+    posterType: r.posterType,
+    posterImage: r.posterImage,
     position: r.position,
   });
 
@@ -251,6 +266,9 @@ export const useBulkStore = create<BulkState>((set, get) => {
           displayEndDate: '',
           displayEndTime: '',
           showOnBoard: true,
+          emergencyContact: '',
+          posterType: 'template',
+          posterImage: '',
           position: 2,
           isValid: false,
           errors: [],
@@ -286,6 +304,9 @@ export const useBulkStore = create<BulkState>((set, get) => {
                 displayEndDate: '',
                 displayEndTime: '',
                 showOnBoard: true,
+                emergencyContact: '',
+                posterType: 'template',
+                posterImage: '',
                 position: 2,
               })
             : r,
@@ -369,6 +390,9 @@ export const useBulkStore = create<BulkState>((set, get) => {
         displayEndDate: '',
         displayEndTime: '',
         showOnBoard: true,
+        emergencyContact: '',
+        posterType: 'template',
+        posterImage: '',
         position: 2,
         isValid: false,
         errors: [],
@@ -453,7 +477,7 @@ export const useBulkStore = create<BulkState>((set, get) => {
       get().triggerAutoSave();
     },
 
-    // 表示期間・表示時間・案内文の検証をすぐ反映するため検証し直す（v1 はここで検証し直さない）。
+    // 表示期間・表示時間・案内文・貼紙画像の検証をすぐ反映するため検証し直す（v1 はここで検証し直さない）。
     // v1: js/bulk-modals.js applyRowDetail
     applyRowDetail: (id, detail) => {
       mapRow(id, (r) => validate({ ...r, ...detail }));

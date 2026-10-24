@@ -62,6 +62,7 @@ export function buildBulkEntries(
       const inspection = masterData.notices.find((i) => i.inspectionType === row.inspectionType);
       const today = todayUtc();
       const link = inspectionLinkOf(row, links, currentVendor.id);
+      const isCustom = row.posterType === 'custom';
 
       return {
         property_code: String(row.propertyCode),
@@ -69,7 +70,8 @@ export function buildBulkEntries(
         terminal_id: normalizeTerminalId(row.terminalId) || '',
         // 管理者が保守会社を選んでいないと null になり、NOT NULL で INSERT が失敗する（v1 と同じ）
         vendor_name: currentVendor.name as string,
-        emergency_contact: vendor?.emergencyContact || '',
+        // 詳細設定で書き換えた連絡先があればそれ、無ければ保守会社マスターの緊急連絡先（B18）
+        emergency_contact: row.emergencyContact || vendor?.emergencyContact || '',
         inspection_type: row.inspectionType,
         template_no: inspection?.templateNo || '',
         inspection_start: row.startDate || null,
@@ -81,8 +83,9 @@ export function buildBulkEntries(
         display_end_date: row.displayEndDate || row.endDate || null,
         display_end_time: row.displayEndTime || null,
         display_duration: row.displayTime || Number(settings.display_time_default) || 6,
-        poster_type: row.showOnBoard !== false ? 'template' : 'custom',
-        poster_image: null,
+        // 追加の貼紙（B18）は画像の URL を入れる。テンプレートの行で掲示板表示が False（v1 の自動保存・テンプレート由来）は v1 と同じく custom
+        poster_type: isCustom || row.showOnBoard === false ? 'custom' : 'template',
+        poster_image: isCustom ? row.posterImage || null : null,
         poster_position: row.position !== undefined ? String(row.position) : '2',
         status: 'draft',
         // メモは CSV に出さない（申請の行にだけ残す）

@@ -91,6 +91,9 @@ export function saveTemplate(name: string, rows: BulkEntryRow[], vendor: BulkVen
     displayEndDate: r.displayEndDate,
     displayEndTime: r.displayEndTime,
     showOnBoard: r.showOnBoard,
+    emergencyContact: r.emergencyContact,
+    posterType: r.posterType,
+    posterImage: r.posterImage,
     position: r.position,
   }));
 

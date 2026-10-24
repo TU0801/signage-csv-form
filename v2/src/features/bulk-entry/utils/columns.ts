@@ -17,6 +17,7 @@ const ERROR_COL: { prefix: string; col: number }[] = [
   { prefix: '備考', col: COL.remarks },
   { prefix: '表示', col: COL.detail },
   { prefix: '案内文', col: COL.detail },
+  { prefix: '貼紙', col: COL.detail },
 ];
 
 /** トーストに出すエラーの説明（validateBulkRow の短い文言を読める形にする） */
@@ -30,6 +31,8 @@ export function errorLabel(error: string): string {
       return '点検種別を選択してください';
     case '点検種別(未登録)':
       return '点検種別がマスターにありません';
+    case '貼紙画像':
+      return '追加の貼紙画像を選択してください（詳細設定）';
     default:
       return error;
   }
