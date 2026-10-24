@@ -59,8 +59,8 @@ export function AddUserModal({ open, onClose, vendors, managementCompanies, onAd
     if (!email.trim()) next.email = 'メールアドレスを入力してください';
     // noValidate でブラウザの形式チェックが無くなるため、ここで見る（Edge Function は英語のエラーを返す）
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) next.email = 'メールアドレスの形式が正しくありません';
-    if (!password) next.password = 'パスワードを入力してください';
-    else if (password.length < MIN_PASSWORD_LENGTH) {
+    // 空欄は Microsoft でログインする人（パスワード無しで作る）
+    if (password && password.length < MIN_PASSWORD_LENGTH) {
       next.password = `パスワードは${MIN_PASSWORD_LENGTH}文字以上で入力してください`;
     }
     const companyError = companyRequiredError(role, vendorId || null, managementCompanyId || null);
@@ -120,10 +120,9 @@ export function AddUserModal({ open, onClose, vendors, managementCompanies, onAd
           error={errors.email}
         />
         <Input
-          label="パスワード *"
+          label="パスワード"
           id="newUserPassword"
           type="password"
-          required
           minLength={MIN_PASSWORD_LENGTH}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -131,6 +130,9 @@ export function AddUserModal({ open, onClose, vendors, managementCompanies, onAd
           autoComplete="new-password"
           error={errors.password}
         />
+        <p className="-mt-2 text-xs text-gray-500">
+          Microsoft でログインする人はパスワードを空欄にし、メールアドレスは Outlook に表示されるアドレスで登録してください。
+        </p>
         {/* 権限で保守会社・管理会社のどちらが要るかが決まるので、権限を先に選ぶ */}
         <Select
           label="権限 *"

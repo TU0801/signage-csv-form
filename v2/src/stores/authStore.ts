@@ -6,6 +6,7 @@ import {
   fetchProfileAccess,
   accessMessage,
   LOGIN_FAILED_MESSAGE,
+  MICROSOFT_LOGIN_FAILED_MESSAGE,
   PROFILE_UNKNOWN_MESSAGE,
 } from '@/lib/api/auth';
 
@@ -21,6 +22,8 @@ interface AuthState {
   sessionChanged: boolean;
   /** ログインし、使えるアカウントならプロファイルを返す。使えなければこの端末のセッションを破棄して日本語の Error を投げる */
   signIn: (email: string, password: string) => Promise<DbProfile>;
+  /** Microsoft（Entra ID）の画面へ移る。戻り先は /login で、セッションの交換とプロファイルの判定は initialize が行う */
+  signInWithMicrosoft: () => Promise<void>;
   signOut: () => Promise<void>;
   /** プロファイルを確認できないセッションを、この端末だけ破棄してログイン画面に案内を出す */
   rejectUnknownSession: () => Promise<void>;
@@ -49,6 +52,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
     set({ session: data.session, user: data.user, profile });
     return profile;
+  },
+
+  // 受け入れるテナントの確認・未登録者の拒否は DB 側（scripts/sso-azure.sql）が行う。
+  // email スコープが無いと ID トークンにメールが入らず、事前登録したアカウントにリンクできない
+  signInWithMicrosoft: async () => {
+    set({ notice: null });
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'azure',
+      options: { scopes: 'email', redirectTo: `${window.location.origin}/login` },
+    });
+    if (error) throw new Error(MICROSOFT_LOGIN_FAILED_MESSAGE);
   },
 
   signOut: async () => {

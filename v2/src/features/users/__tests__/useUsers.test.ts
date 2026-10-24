@@ -130,6 +130,20 @@ describe('useUsers', () => {
     });
   });
 
+  it('addUser accepts an empty password (Microsoft login) but still rejects a short one', async () => {
+    const { result } = await renderReady();
+
+    await expect(
+      result.current.addUser({ email: 'm@haseko.co.jp', password: '123', role: 'management', management_company_id: 'c1', vendor_id: null }),
+    ).rejects.toThrow('パスワードは6文字以上で入力してください');
+    await act(async () => {
+      await result.current.addUser({ email: 'm@haseko.co.jp', password: '', role: 'management', management_company_id: 'c1', vendor_id: null });
+    });
+
+    expect(mockCreateUser).toHaveBeenCalledTimes(1);
+    expect(mockCreateUser).toHaveBeenCalledWith(expect.objectContaining({ email: 'm@haseko.co.jp', password: '' }));
+  });
+
   it('addUser requires a management company for a management account and drops the vendor', async () => {
     const { result } = await renderReady();
 

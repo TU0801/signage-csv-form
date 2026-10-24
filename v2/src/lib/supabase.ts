@@ -11,7 +11,11 @@ export const SUPABASE_URL: string = supabaseUrl;
 export const SUPABASE_ANON_KEY: string = supabaseAnonKey;
 
 // baranプロジェクトはアプリ別スキーマ構成。本アプリのテーブルはsignageスキーマに在る
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, { db: { schema: 'signage' } });
+// Microsoft ログインは PKCE（戻り先 /login の ?code= を初期化時にセッションへ交換する）
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  db: { schema: 'signage' },
+  auth: { flowType: 'pkce' },
+});
 
 /** v1テーブル名 → v2コード内で使う定数 */
 export const TABLES = {

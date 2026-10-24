@@ -75,7 +75,8 @@ Deno.serve(async (req) => {
       ? body.managementCompanyId
       : null;
     if (!email || !role) return json({ error: 'メールアドレスと権限を指定してください' }, 400);
-    if (passwordError) return passwordError;
+    // Microsoft でログインする人はパスワード無しで作る（GoTrue がランダムな値を入れるので、パスワードではログインできない）
+    if (password && passwordError) return passwordError;
     if (role === 'management' && !managementCompanyId) return json({ error: '管理会社を選択してください' }, 400);
     if (vendorId) {
       const { data: vendor } = await admin.from('signage_master_vendors').select('id').eq('id', vendorId).maybeSingle();
@@ -91,7 +92,7 @@ Deno.serve(async (req) => {
 
     const { data: created, error: createError } = await admin.auth.admin.createUser({
       email,
-      password,
+      ...(password ? { password } : {}),
       email_confirm: true,
       user_metadata: { role },
     });

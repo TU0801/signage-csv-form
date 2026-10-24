@@ -12,6 +12,23 @@ export const PROFILE_UNKNOWN_MESSAGE =
 export const LOGIN_FAILED_MESSAGE =
   'ログインに失敗しました。メールアドレスとパスワードを確認してください。';
 
+export const MICROSOFT_LOGIN_FAILED_MESSAGE =
+  'Microsoft でのログインに失敗しました。登録されているメールアドレスのアカウントか確認し、解決しない場合は管理者にお問い合わせください。';
+
+/**
+ * Microsoft ログインから戻った URL のエラー（クエリまたはハッシュの error / error_description）を案内文にする。
+ * 拒否は DB 側（未登録・受け入れないテナント）で起きる。before user created フックの断り文言は日本語なのでそのまま出し、
+ * それ以外（GoTrue の英語の文言）は共通の案内にする。エラーが無ければ null
+ */
+export function oauthErrorMessage(search: string, hash: string): string | null {
+  const query = new URLSearchParams(search);
+  const fragment = new URLSearchParams(hash.replace(/^#/, ''));
+  const pick = (key: string) => query.get(key) ?? fragment.get(key);
+  if (!pick('error') && !pick('error_code') && !pick('error_description')) return null;
+  const description = pick('error_description') ?? '';
+  return /[぀-ヿ一-鿿]/.test(description) ? description : MICROSOFT_LOGIN_FAILED_MESSAGE;
+}
+
 /** active: 使える / inactive: 無効化 / no_profile: signage のプロファイルが無い / unknown: 通信エラー等で判定できない */
 export type AccountAccess = 'active' | 'inactive' | 'no_profile' | 'unknown';
 
