@@ -1,5 +1,5 @@
 import type { DbInspectionReport, PortalEntryRow, PortalInspectionRow } from '@/types/portal';
-import { appliedEntry } from '@/features/inspection-portal/lib/actions';
+import { reportEntryId } from '@/features/inspection-portal/lib/actions';
 import {
   buildSchedule,
   formatMonth,
@@ -86,7 +86,7 @@ export function buildTargets(
       key: item.key,
       inspection: item.inspection,
       targetMonth: item.targetMonth,
-      entryId: appliedEntry(item)?.id ?? null,
+      entryId: reportEntryId(item),
       group: formatMonth(item.targetMonth),
       // 閉じた選択欄でも対象月が分かるように、見出しだけでなく選択肢にも月を入れる
       label: `${formatMonth(item.targetMonth)}・${name(item.inspection)}`,

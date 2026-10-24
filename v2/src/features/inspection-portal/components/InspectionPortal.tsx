@@ -9,7 +9,7 @@ import type { PortalEntryRow, PortalInspectionRow } from '@/types/portal';
 import { useRefetchOnVisible } from '@/features/approval/hooks/useRefetchOnVisible';
 import { ReportUploadModal } from '@/features/inspection-documents/components/ReportUploadModal';
 import { usePortalData } from '../hooks/usePortalData';
-import { appliedEntry, canSubmit, type PortalRole } from '../lib/actions';
+import { reportEntryId, canSubmit, type PortalRole } from '../lib/actions';
 import { filterSchedule, filterUnscheduled, INITIAL_FILTERS, type PortalFilters } from '../lib/filters';
 import { buildSchedule, formatMonth, todayJst, unscheduledInspections, type ScheduleItem } from '../lib/schedule';
 import { completionKeys, countStatuses, itemStatus } from '../lib/status';
@@ -127,7 +127,7 @@ export function InspectionPortal() {
     setReportTarget({
       inspection: item.inspection,
       targetMonth: item.targetMonth,
-      entryId: appliedEntry(item)?.id ?? null,
+      entryId: reportEntryId(item),
       // 提出中・受領済みの版があるときも置き換わる（DB が同じ点検・対象月の版を superseded にする）ので、前の版として見せる。
       // DB が置き換えるのは同じ保守会社の版だけ（台ごとに別の会社が居る点検）なので、他社の版は前の版にしない
       previous: item.report && (isAdmin || item.report.vendor_id === vendorId) ? item.report : null,

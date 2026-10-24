@@ -31,7 +31,7 @@ import { clearAutoSave } from '@/features/bulk-entry/utils/bulkAutoSave';
 import { getStoredTemplates, getVisibleTemplates, templateRows } from '@/features/bulk-entry/utils/bulkTemplates';
 import type { BulkEntryRow } from '@/features/bulk-entry/types';
 import { usePortalData } from '@/features/inspection-portal/hooks/usePortalData';
-import { appliedEntry } from '@/features/inspection-portal/lib/actions';
+import { reportEntryId } from '@/features/inspection-portal/lib/actions';
 import { matchTiming, TIMING_OPTIONS, type TimingFilter } from '@/features/inspection-portal/lib/filters';
 import {
   buildSchedule,
@@ -249,7 +249,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       setReportTarget({
         inspection: item.inspection,
         targetMonth: item.targetMonth,
-        entryId: appliedEntry(item)?.id ?? null,
+        entryId: reportEntryId(item),
         // DB が置き換えるのは同じ保守会社の版だけなので、他社の版は前の版にしない（点検一覧と同じ）
         previous: item.report && (isAdmin || item.report.vendor_id === profileVendorId) ? item.report : null,
       });

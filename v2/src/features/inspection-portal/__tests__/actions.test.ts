@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { rowActions } from '../lib/actions';
-import { makeEntry } from './fixtures';
+import { reportEntryId, rowActions } from '../lib/actions';
+import { makeEntry, makeInspection } from './fixtures';
 
 const vendor = { isAdmin: false, isManagement: false };
 const management = { isAdmin: false, isManagement: true };
@@ -56,5 +56,13 @@ describe('行の操作（ロール別）', () => {
     expect(a.report).toBe(true);
     expect(a.approve).toBe(draft);
     expect(a.sendBack).toBe(draft);
+  });
+});
+
+describe('報告書に渡す申請 id（修正依頼1024 F3）', () => {
+  it('点検行に紐付いた申請だけ渡し、旧来・1件入力の申請（property_inspection_id なし）は null にする', () => {
+    const inspection = makeInspection();
+    expect(reportEntryId({ inspection, entries: [makeEntry({ id: 'linked' })] })).toBe('linked');
+    expect(reportEntryId({ inspection, entries: [makeEntry({ id: 'legacy', property_inspection_id: null, target_month: null })] })).toBeNull();
   });
 });
