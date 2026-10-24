@@ -130,6 +130,10 @@ export function EntryDetailModal({
         <Section title="案内文・作業時間 及び 備考">
           <DetailRow label="案内文">{entry.announcement || '-'}</DetailRow>
           <DetailRow label="作業時間 及び 備考">{entry.remarks || '-'}</DetailRow>
+          {/* 申請者のメモ（CSV・掲示には出さない。点検月の変更などの覚え書き。修正依頼1024 B12） */}
+          <DetailRow label="メモ（CSV外）">
+            <span className="whitespace-pre-line">{entry.memo || '-'}</span>
+          </DetailRow>
         </Section>
 
         <Section title="登録情報">
