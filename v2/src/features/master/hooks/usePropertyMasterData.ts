@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMasterData } from '@/hooks/useMasterData';
-import { fetchUnitInspections } from '@/lib/api/masterData';
+import { fetchPropertyInspectionDates, fetchUnitInspections, inspectionDateKey } from '@/lib/api/masterData';
 import { useAuthStore } from '@/stores/authStore';
 import type { MasterProperty, PropertyUnit, UnitInspectionTypeOption } from '@/types/app';
 
@@ -14,6 +14,16 @@ interface UnitData {
   typeOptions: UnitInspectionTypeOption[];
 }
 
+/** 検査月（物件コード|点検種別 → 月初の日付）。読めなかったときは null（設備情報の検査月を undefined のままにして、保存で消さない） */
+async function loadInspectionDates(): Promise<Map<string, string> | null> {
+  try {
+    return await fetchPropertyInspectionDates();
+  } catch (e) {
+    console.warn('[inspection-dates] 検査月を取得できませんでした。検査月は保存時に変更しません:', e);
+    return null;
+  }
+}
+
 /**
  * 物件マスター用のデータ。マスターデータ（点検情報は biz から）に、台ごとの保守（管理者だけ読める）を足す。
  * **台の一覧を読み終える前に物件モーダルを開かせない**（読めていないと、台で管理している点検種別が設備情報の表に出てしまう）。
@@ -25,17 +35,22 @@ export function usePropertyMasterData() {
   // 管理会社は自社物件の台だけ（mgmt_unit_inspections_all）
   const role = useAuthStore((s) => s.profile?.role ?? null);
   const [unitData, setUnitData] = useState<UnitData | null>(null);
+  // 検査月。undefined は読み込み中、null は読めなかった
+  const [inspectionDates, setInspectionDates] = useState<Map<string, string> | null | undefined>(undefined);
 
   const loadUnits = useCallback(async () => {
-    const data = await fetchUnitInspections(role);
+    const [data, dates] = await Promise.all([fetchUnitInspections(role), loadInspectionDates()]);
     setUnitData(data);
+    setInspectionDates(dates);
   }, [role]);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const data = await fetchUnitInspections(role);
-      if (!cancelled) setUnitData(data);
+      const [data, dates] = await Promise.all([fetchUnitInspections(role), loadInspectionDates()]);
+      if (cancelled) return;
+      setUnitData(data);
+      setInspectionDates(dates);
     })();
     return () => {
       cancelled = true;
@@ -50,9 +65,15 @@ export function usePropertyMasterData() {
     () =>
       master.properties.map((p) => ({
         ...p,
+        inspections: inspectionDates
+          ? p.inspections.map((i) => ({
+              ...i,
+              inspected_on: inspectionDates.get(inspectionDateKey(p.property_code, i.inspection_type_id)) ?? null,
+            }))
+          : p.inspections,
         units: unitData?.unitsByProperty.get(p.property_code) ?? [],
       })),
-    [master.properties, unitData],
+    [master.properties, unitData, inspectionDates],
   );
 
   return {
@@ -60,7 +81,7 @@ export function usePropertyMasterData() {
     vendors: master.vendors,
     inspectionTypes: master.inspectionTypes,
     unitTypeOptions: unitData?.typeOptions ?? [],
-    loading: master.loading || unitData === null,
+    loading: master.loading || unitData === null || inspectionDates === undefined,
     error: master.error,
     refetch,
   };

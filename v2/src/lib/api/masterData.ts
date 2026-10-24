@@ -7,6 +7,7 @@ import type {
   DbInspectionType,
   DbCategory,
   DbTemplateImage,
+  RpcPropertyInspectionDateRow,
 } from '@/types/database';
 import type {
   MasterData,
@@ -111,6 +112,20 @@ export function toMasterProperties(rows: DbProperty[]): MasterProperty[] {
  */
 export function fetchPropertyManagementCompanies(): Promise<RpcPropertyManagementCompanyRow[]> {
   return rpcAllRows<RpcPropertyManagementCompanyRow>(RPC.propertyManagementCompanies);
+}
+
+/** 検査月の引き当てのキー（物件コード × 点検種別。biz の一意制約と同じ組） */
+export function inspectionDateKey(propertyCode: string, inspectionTypeId: string): string {
+  return `${propertyCode}|${inspectionTypeId}`;
+}
+
+/**
+ * 物件×点検種別の検査月（マスター管理の物件の編集で使う。値のある点検だけ）。管理者は全件・管理会社は自社物件、ほかは0件。
+ * inspections_all は検査月を返さない（戻り値の型を変えられない）ので別の RPC で読む。失敗はそのまま投げる
+ */
+export async function fetchPropertyInspectionDates(): Promise<Map<string, string>> {
+  const rows = await rpcAllRows<RpcPropertyInspectionDateRow>(RPC.propertyInspectionDates);
+  return new Map(rows.map((r) => [inspectionDateKey(r.property_code, r.inspection_type_id), r.inspected_on]));
 }
 
 /**

@@ -60,6 +60,9 @@ describe('property form helpers (v1 js/admin-masters.js)', () => {
     const row = { inspection_type_id: 'fire', vendor_id: null, inspection_months: [4, 10], remarks: '', remarks2: '' };
     expect(inspectionsChanged([row], [{ ...row, vendor_id: '' as unknown as null, inspection_months: [10, 4] }])).toBe(false);
     expect(inspectionsChanged([row], [{ ...row, remarks: '2基' }])).toBe(true);
+    // 検査月（YYYY-MM-01）。読めていない（undefined）と未登録（null）は同じ扱い
+    expect(inspectionsChanged([row], [{ ...row, inspected_on: '2026-04-01' }])).toBe(true);
+    expect(inspectionsChanged([{ ...row, inspected_on: null }], [row])).toBe(false);
     expect(inspectionsChanged([row], [])).toBe(true);
   });
 

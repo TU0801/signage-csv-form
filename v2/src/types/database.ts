@@ -246,6 +246,13 @@ export interface DbInspectionCompletion {
   completed_by: string | null;
 }
 
+/** RPC property_inspection_dates の1行（物件×点検種別の検査月。値のある点検だけ。管理者は全件・管理会社は自社物件） */
+export interface RpcPropertyInspectionDateRow {
+  property_code: string;
+  inspection_type_id: string;
+  inspected_on: string;
+}
+
 /** RPC portal_inspection_dates の1行（検査月＝biz.property_inspections.inspected_on。値のある点検だけ返る） */
 export interface RpcInspectionDateRow {
   inspection_id: string;

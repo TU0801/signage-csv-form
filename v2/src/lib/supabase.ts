@@ -81,6 +81,9 @@ export const RPC = {
   portalMarkCompleted: 'portal_mark_completed',
   portalUnmarkCompleted: 'portal_unmark_completed',
   portalInspectionDates: 'portal_inspection_dates',
+  /** マスター管理の物件の検査月（管理者・管理会社は自社物件）。書き込みは upsert の戻り値の点検行 id で */
+  propertyInspectionDates: 'property_inspection_dates',
+  setPropertyInspectionInspectedOn: 'set_property_inspection_inspected_on',
 } as const;
 
 /** Storage のバケット */

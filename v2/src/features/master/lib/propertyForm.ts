@@ -43,6 +43,7 @@ function inspectionKey(rows: PropertyInspection[]): string {
       [...(r.inspection_months ?? [])].map(Number).sort((a, b) => a - b),
       r.remarks ?? '',
       r.remarks2 ?? '',
+      r.inspected_on ? String(r.inspected_on).slice(0, 7) : '',
     ]),
   );
 }

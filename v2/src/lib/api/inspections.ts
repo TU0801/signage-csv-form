@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { RPC, supabase } from '@/lib/supabase';
 import { inspectionRpc } from './scopedRpc';
 import type {
   PropertyInspection,
@@ -62,7 +62,7 @@ export async function saveInspectionsToBiz(
     const months = Array.isArray(e.inspection_months)
       ? e.inspection_months.map(Number).filter((n) => n >= 1 && n <= 12)
       : [];
-    const { error } = await supabase.rpc(rpcNames.upsertPropertyInspection, {
+    const { data: inspectionId, error } = await supabase.rpc(rpcNames.upsertPropertyInspection, {
       p_property_code: String(propertyCode),
       p_inspection_type_id: e.inspection_type_id,
       p_maintainer_id: e.vendor_id || null,
@@ -73,6 +73,16 @@ export async function saveInspectionsToBiz(
       p_remarks2: e.remarks2 || null,
     });
     if (error) throw error;
+    // 検査月は upsert の引数に無いので、戻り値の点検行 id で別に書く（管理者・自社物件の管理会社だけ。同じ値なら DB は何もしない）。
+    // undefined（読めていない）は送らない。送ると入っている値を消す
+    if (e.inspected_on !== undefined && inspectionId) {
+      const month = normalizeInspectedMonth(e.inspected_on);
+      const { error: dateError } = await supabase.rpc(RPC.setPropertyInspectionInspectedOn, {
+        p_inspection_id: inspectionId,
+        p_inspected_on: month ? `${month}-01` : null,
+      });
+      if (dateError) throw dateError;
+    }
   }
   return { saved: list.length };
 }

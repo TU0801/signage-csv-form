@@ -1,4 +1,4 @@
--- 修正依頼1024 core（点検登録フォーム）: メモ列・完了連絡・管理会社フィルターの候補・検査月
+-- 修正依頼1024 core（点検登録フォーム）: メモ列・完了連絡・管理会社フィルターの候補・検査月（表示と、マスター管理での入力）
 -- 2026-10-24 作成。本番へは未適用（適用はユーザー承認後）。すべて追加（既存の表・関数・ポリシーは変えない）。冪等。
 -- 適用方法: ファイル全体を1つのクエリとして流す（Management API なら1回の query に全文を入れる。psql なら psql -1 -f）。
 --   1つのクエリは暗黙の1トランザクションになるので、途中の1文が失敗しても半分だけ適用された状態にならない（全部戻る）。
@@ -183,7 +183,76 @@ GRANT EXECUTE ON FUNCTION signage.management_companies_scoped() TO authenticated
 GRANT EXECUTE ON FUNCTION signage.portal_inspection_dates() TO authenticated, service_role;
 
 -- ============================================================
+-- 6. 検査月の入力（B13）。マスター管理の物件の点検情報（物件×点検種別の行）で検査月を入れる
+--    既存の upsert_property_inspection / mgmt_upsert_property_inspection は引数を変えない（追加だけ）。
+--    画面は upsert の戻り値（点検行の id）でこの関数を呼ぶ。保存形式は台の保守（upsert_unit_inspection）と同じ月初の日付
+-- ============================================================
+-- 点検行の検査月を書く。管理者、または点検行の物件（biz.properties の行そのもの）が自社の管理会社。NULL は消す。
+-- 台ごとの保守の書き戻し行（from_units）は台の側で入れるので、同じ値なら何もせず、違う値は断る
+CREATE OR REPLACE FUNCTION signage.set_property_inspection_inspected_on(p_inspection_id uuid, p_inspected_on date)
+ RETURNS date
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'biz', 'signage', 'pg_temp'
+AS $function$
+DECLARE
+  r biz.property_inspections%rowtype;
+  v_month date := date_trunc('month', p_inspected_on)::date;
+BEGIN
+  -- 行が無いときと他社の行のときは同じ文言にする（他社の点検行があるかを漏らさない）
+  IF p_inspection_id IS NULL OR NOT (
+       signage.is_active_admin()
+       OR (signage.current_role_kind() = 'management'
+           AND signage.current_management_company_id() IS NOT NULL
+           AND EXISTS (SELECT 1 FROM biz.property_inspections pi
+                        JOIN biz.properties b ON b.id = pi.property_id
+                       WHERE pi.id = p_inspection_id
+                         AND b.management_company_id = signage.current_management_company_id()))) THEN
+    RAISE EXCEPTION 'この点検の検査月を変更する権限がありません' USING ERRCODE = '42501';
+  END IF;
+  SELECT * INTO r FROM biz.property_inspections WHERE id = p_inspection_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'この点検の検査月を変更する権限がありません' USING ERRCODE = '42501';
+  END IF;
+  IF r.inspected_on IS NOT DISTINCT FROM v_month THEN
+    RETURN v_month;
+  END IF;
+  IF r.from_units THEN
+    RAISE EXCEPTION 'この点検は台ごとに管理しています。検査月は台ごとの保守で入れてください';
+  END IF;
+  UPDATE biz.property_inspections SET inspected_on = v_month WHERE id = r.id;
+  RETURN v_month;
+END;
+$function$;
+
+-- 物件×点検種別の検査月（マスター管理の物件の編集で読む。inspections_all・mgmt_inspections_all は戻り値の型を変えられないので別にする）
+-- 管理者: 全件。管理会社: 自社が管理する物件。ほか（保守会社・無効なアカウント）: 0行
+CREATE OR REPLACE FUNCTION signage.property_inspection_dates()
+ RETURNS TABLE(property_code text, inspection_type_id uuid, inspected_on date)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'biz', 'signage', 'pg_temp'
+AS $function$
+  select s.property_code, pi.inspection_type_id, pi.inspected_on
+  from biz.property_inspections pi
+  join biz.properties b on b.id = pi.property_id
+  join signage.signage_master_properties s on s.id = b.signage_property_id
+  where pi.inspected_on is not null
+    and (signage.is_active_admin()
+         or (signage.current_role_kind() = 'management'
+             and signage.current_management_company_id() is not null
+             and b.management_company_id = signage.current_management_company_id()))
+  order by s.property_code;
+$function$;
+
+REVOKE ALL ON FUNCTION signage.set_property_inspection_inspected_on(uuid, date) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION signage.property_inspection_dates() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION signage.set_property_inspection_inspected_on(uuid, date) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION signage.property_inspection_dates() TO authenticated, service_role;
+
+-- ============================================================
 -- 戻し手順
+-- DROP FUNCTION signage.property_inspection_dates(); DROP FUNCTION signage.set_property_inspection_inspected_on(uuid, date);
 -- DROP FUNCTION signage.portal_inspection_dates(); DROP FUNCTION signage.management_companies_scoped();
 -- DROP FUNCTION signage.portal_completions(); DROP FUNCTION signage.portal_unmark_completed(uuid, date);
 -- DROP FUNCTION signage.portal_mark_completed(uuid, date); DROP TABLE signage.signage_inspection_completions;
