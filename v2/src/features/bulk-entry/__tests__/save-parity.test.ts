@@ -53,6 +53,7 @@ function row(over: Partial<BulkEntryRow>): BulkEntryRow {
     startDate: '2026-11-02',
     endDate: '2026-11-03',
     remarks: '',
+    memo: '',
     displayTime: 10,
     noticeText: '',
     displayStartDate: '',
@@ -117,7 +118,9 @@ describe('bulk submit / auto-save parity with v1 js/bulk-data.js', () => {
       { id: 'v1', name: '株式会社テスト保守' },
       applySettings(DEFAULT_BULK_SETTINGS, settingsRows),
     );
-    expect(actual).toEqual(expected);
+    // memo は v2 だけの列（修正依頼1024 B12。CSV には出さない）なので比べる前に外す
+    expect(actual.map(({ memo: _m, ...e }) => (void _m, e))).toEqual(expected);
+    expect(actual.every((e) => e.memo === null)).toBe(true);
     expect(actual).toHaveLength(2);
     expect(actual[1]).toMatchObject({
       poster_type: 'custom',
@@ -149,6 +152,12 @@ describe('bulk submit / auto-save parity with v1 js/bulk-data.js', () => {
 
     writeAutoSave('user-1', rows, 3);
     expect(autoSaveKey('user-1')).toBe('bulk_autosave_user-1');
-    expect(localStorage.getItem('bulk_autosave_user-1')).toBe(expected);
+    // memo は v2 だけの項目（v1 の自動保存には無い）なので外して比べる
+    const saved = JSON.parse(localStorage.getItem('bulk_autosave_user-1')!) as { rows: Record<string, unknown>[] };
+    saved.rows.forEach((r) => {
+      expect(r).toHaveProperty('memo');
+      delete r.memo;
+    });
+    expect(JSON.stringify(saved)).toBe(expected);
   });
 });

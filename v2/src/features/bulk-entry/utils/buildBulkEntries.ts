@@ -3,6 +3,45 @@ import { todayUtc } from '@/lib/utils';
 import type { BulkEntryInsert } from '@/lib/api/bulk-entry';
 import type { BulkEntryRow, BulkMasterData, BulkSettings, BulkVendorSelection } from '../types';
 
+/** 申請を点検行に結び付けるための、選択中の保守会社の点検行（portal_inspections の一部） */
+export interface BulkInspectionLink {
+  inspection_id: string;
+  property_code: string;
+  inspection_type_label: string | null;
+}
+
+/** YYYY-MM-DD → YYYY-MM-01 */
+function monthOfDate(date: string): string {
+  return `${date.slice(0, 7)}-01`;
+}
+
+/**
+ * 申請の点検行・保守会社・対象月（修正依頼1024 B6〜B14）。点検予定の行はその点検行と対象月（点検月の無い点検は点検開始日の月）。
+ * 手で足した行は、保守会社の点検行と物件コード＋点検種別が一致すれば紐付け、対象月は点検開始日の月。一致しなければ紐付けない
+ */
+export function inspectionLinkOf(
+  row: Pick<BulkEntryRow, 'schedule' | 'propertyCode' | 'inspectionType' | 'startDate'>,
+  links: BulkInspectionLink[],
+  vendorId: string | null,
+): { property_inspection_id: string; vendor_id: string | null; target_month: string | null } | null {
+  if (row.schedule) {
+    return {
+      property_inspection_id: row.schedule.inspectionId,
+      vendor_id: vendorId,
+      target_month: row.schedule.targetMonth ?? (row.startDate ? monthOfDate(row.startDate) : null),
+    };
+  }
+  const hit = links.find(
+    (l) => l.property_code === String(row.propertyCode) && (l.inspection_type_label ?? '') === row.inspectionType,
+  );
+  if (!hit) return null;
+  return {
+    property_inspection_id: hit.inspection_id,
+    vendor_id: vendorId,
+    target_month: row.startDate ? monthOfDate(row.startDate) : null,
+  };
+}
+
 /**
  * 有効な行を signage_entries に入れる値にする（user_id は API 側で付ける）。
  * 保守会社名は画面上部の保守会社、表示開始日の既定は今日（UTC の日付）、表示終了日の既定は点検終了日、
@@ -14,6 +53,7 @@ export function buildBulkEntries(
   masterData: BulkMasterData,
   currentVendor: BulkVendorSelection,
   settings: BulkSettings,
+  links: BulkInspectionLink[] = [],
 ): BulkEntryInsert[] {
   return rows
     .filter((r) => r.isValid)
@@ -21,6 +61,7 @@ export function buildBulkEntries(
       const vendor = masterData.vendors.find((v) => v.vendorName === currentVendor.name);
       const inspection = masterData.notices.find((i) => i.inspectionType === row.inspectionType);
       const today = todayUtc();
+      const link = inspectionLinkOf(row, links, currentVendor.id);
 
       return {
         property_code: String(row.propertyCode),
@@ -44,6 +85,9 @@ export function buildBulkEntries(
         poster_image: null,
         poster_position: row.position !== undefined ? String(row.position) : '2',
         status: 'draft',
+        // メモは CSV に出さない（申請の行にだけ残す）
+        memo: row.memo || null,
+        ...(link ?? {}),
       };
     });
 }

@@ -20,6 +20,7 @@ const row = (over: Partial<BulkEntryRow> = {}): BulkEntryRow => ({
   startDate: '2026-11-02',
   endDate: '2026-11-03',
   remarks: 'メモ',
+  memo: '',
   displayTime: 10,
   noticeText: '',
   displayStartDate: '',

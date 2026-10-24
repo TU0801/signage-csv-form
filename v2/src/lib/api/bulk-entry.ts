@@ -22,7 +22,14 @@ export type BulkEntryInsert = Pick<
   | 'poster_type'
   | 'poster_image'
   | 'poster_position'
-> & { status: 'draft' };
+> & {
+  status: 'draft';
+  memo?: string | null;
+  /** 点検行に結び付いた申請だけ（修正依頼1024） */
+  property_inspection_id?: string | null;
+  vendor_id?: string | null;
+  target_month?: string | null;
+};
 
 /** 設定（有効メンバーは読める。値は text） */
 // v1: js/supabase/settings.js getSettings

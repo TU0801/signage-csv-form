@@ -48,6 +48,7 @@ function row(over: Partial<BulkEntryRow>): BulkEntryRow {
     startDate: '2026-11-02',
     endDate: '2026-11-03',
     remarks: '',
+    memo: '',
     displayTime: 10,
     noticeText: '',
     displayStartDate: '',
@@ -116,6 +117,17 @@ describe('bulk CSV parity with v1 js/bulk-data.js generateCSV', () => {
     expect(lines[0]!.split(',')[3]).toBe('受注先名');
     expect(actual).toContain(',False,');
     expect(actual).toContain('2026/10/14 [00:30:00]');
+  });
+
+  it('メモは CSV に出さない（B12）', () => {
+    const csv = generateBulkCsv(
+      rows.map((r) => ({ ...r, memo: '点検月を変更した覚え書き' })),
+      master,
+      { id: 'v1', name: '株式会社テスト保守' },
+      applySettings(DEFAULT_BULK_SETTINGS, settingsRows),
+    );
+    expect(csv).not.toContain('覚え書き');
+    expect(csv.split('\n')[0]!.split(',')).toHaveLength(28);
   });
 
   it('returns empty string when no valid rows (same as v1)', () => {

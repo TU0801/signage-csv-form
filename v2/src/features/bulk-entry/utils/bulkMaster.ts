@@ -84,6 +84,7 @@ export function toBulkMasterData(data: MasterData): BulkMasterData {
       emergencyContact: v.emergency_contact || '',
     })),
     notices: data.inspectionTypes.map((it) => ({
+      id: it.id,
       inspectionType: it.inspection_name,
       templateNo: it.template_no || '',
       noticeText: it.default_text || '',

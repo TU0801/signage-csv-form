@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -22,7 +22,8 @@ import { EntryDataList } from '@/features/single-entry/components/EntryDataList'
 import { PosterPreview } from '@/features/single-entry/components/PosterPreview';
 import { DisplaySettings } from '@/features/single-entry/components/DisplaySettings';
 import { AdminVendorSelect } from '@/features/single-entry/components/AdminVendorSelect';
-import { ManagementCompanySelect } from '@/features/single-entry/components/ManagementCompanySelect';
+import { ManagementCompanyFilter } from '@/features/single-entry/components/ManagementCompanySelect';
+import { useInspectionFormStore } from '@/stores/inspectionFormStore';
 import { useManagementCompanies } from '@/features/single-entry/hooks/useManagementCompanies';
 import { useSingleEntryStore } from '@/features/single-entry/stores/singleEntryStore';
 import { HeaderSlot } from '@/components/layout/HeaderSlot';
@@ -46,9 +47,12 @@ function errorMessage(err: unknown): string {
   return '';
 }
 
-/** 1件入力（点検日入力）。マスターデータと設定を読み終えてから入力欄を出す */
+/**
+ * 1件入力（点検日入力）。マスターデータと設定を読み終えてから入力欄を出す。
+ * 点検登録フォーム（InspectionFormPage）の「1件入力」。modeSwitch は1件入力・一括入力の切替（入力の枠の左上に出す）
+ */
 // v1: index.html initAuth（設定 → マスターデータ → initScript の順）
-export function SingleEntryPage() {
+export function SingleEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
   const master = useMasterData();
   const settings = useAppSettings();
 
@@ -69,15 +73,16 @@ export function SingleEntryPage() {
     );
   }
 
-  return <SingleEntryWorkspace master={master} settings={settings} />;
+  return <SingleEntryWorkspace master={master} settings={settings} modeSwitch={modeSwitch} />;
 }
 
 interface WorkspaceProps {
   master: MasterData;
   settings: AppSettings;
+  modeSwitch?: ReactNode;
 }
 
-function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
+function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) {
   const { addToast } = useToast();
   const { user, profile, isAdmin } = useAuth();
   const { properties, vendors, inspectionTypes, templateImages } = master;
@@ -108,9 +113,11 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
   const submitted = useSubmittedEntries(user?.id ?? null);
 
   const [signageOnly, setSignageOnly] = useState(false);
-  // 管理者の管理会社フィルター（'' = 全て）。保守会社・サイネージ設置物件のみと AND で効く
-  const managementIndex = useManagementCompanies(isAdmin);
-  const [managementCompanyId, setManagementCompanyId] = useState('');
+  // 管理会社フィルター（'' = 全て。管理者と保守会社。B2）。保守会社・サイネージ設置物件のみと AND で効く。
+  // 一括入力と同じ値を使う（切り替えても残す）
+  const managementIndex = useManagementCompanies(true);
+  const managementCompanyId = useInspectionFormStore((s) => s.managementCompanyId);
+  const setManagementCompanyId = useInspectionFormStore((s) => s.setManagementCompanyId);
   const [tab, setTab] = useState<'preview' | 'settings'>('preview');
   // 作成データは store（画面を移っても残す）。別のユーザーの行は見せない
   const userId = user?.id ?? null;
@@ -296,28 +303,32 @@ function SingleEntryWorkspace({ master, settings }: WorkspaceProps) {
     // 段階B（tall のときだけ）：1画面に収め、上段はカードの中身の高さ、作成データ一覧が残りを取って内部スクロールする
     // 見出しの行は1行分を取るので置かない（ユーザー指定 2026-10-15）。h1 は読み上げ用にだけ残し、クリアは入力カードの見出しへ
     <div className="space-y-3 tall:grid tall:h-[calc(100dvh-var(--header-h)-1.5rem)] tall:grid-rows-[minmax(0,auto)_minmax(9rem,1fr)] tall:gap-3 tall:space-y-0">
-      {/* 管理者の保守会社選択はヘッダーに出す（780f151。ポータルなので置き場所はレイアウトに影響しない） */}
-      {isAdmin && (
-        <HeaderSlot>
-          <AdminVendorSelect vendors={vendors} value={vendorCtx.adminVendorId} onChange={handleAdminVendorChange}>
-            {managementIndex && (
-              <ManagementCompanySelect
-                companies={managementIndex.companies}
-                value={managementCompanyId}
-                onChange={handleManagementCompanyChange}
-              />
-            )}
-          </AdminVendorSelect>
-        </HeaderSlot>
-      )}
+      {/* 管理者の保守会社選択と、管理会社フィルター（管理者・保守会社）はヘッダーに出す（780f151。ポータルなので置き場所はレイアウトに影響しない） */}
+      <HeaderSlot>
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <AdminVendorSelect vendors={vendors} value={vendorCtx.adminVendorId} onChange={handleAdminVendorChange} />
+          )}
+          {managementIndex && (
+            <ManagementCompanyFilter
+              companies={managementIndex.companies}
+              value={managementCompanyId}
+              onChange={handleManagementCompanyChange}
+            />
+          )}
+        </div>
+      </HeaderSlot>
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 tall:min-h-0 tall:grid-rows-[minmax(0,1fr)]">
         <Card className="tall:flex tall:min-h-0 tall:flex-col">
           <CardHeader className="flex items-center justify-between gap-3">
             <h1 className="sr-only">点検日入力</h1>
-            <h2 className="text-sm font-semibold text-gray-900">
-              {editingId ? '掲示内容入力（編集中）' : '掲示内容入力'}
-            </h2>
+            <div className="flex items-center gap-3">
+              {modeSwitch}
+              <h2 className="text-sm font-semibold text-gray-900">
+                {editingId ? '掲示内容入力（編集中）' : '掲示内容入力'}
+              </h2>
+            </div>
             <Button variant="secondary" size="sm" onClick={handleClear}>
               クリア
             </Button>

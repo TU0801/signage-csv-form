@@ -91,6 +91,64 @@ describe('bulkStore (v1 js/bulk-table.js / bulk-modals.js の行操作)', () => 
     expect(s().rows[0]!.isValid).toBe(true);
   });
 
+  it('点検開始日を変えると、終了日が空・旧開始日と同じ・新開始日より前なら新開始日にし、手で入れた後の日は残す（B10）', () => {
+    s().addRow({ propertyCode: 'z0001A01', startDate: '2026-11-01', endDate: '2026-11-01' });
+    s().addRow({ propertyCode: 'z0001A01', startDate: '2026-11-01', endDate: '2026-11-03' });
+    s().addRow({ propertyCode: 'z0001A01', startDate: '2026-11-01', endDate: '2026-11-03' });
+    const [same, later, before] = s().rows.map((r) => r.id);
+    s().changeStartDate(same!, '2026-11-05');
+    s().changeStartDate(later!, '2026-11-02');
+    s().changeStartDate(before!, '2026-11-10');
+    expect(s().rows.map((r) => r.endDate)).toEqual(['2026-11-05', '2026-11-03', '2026-11-10']);
+  });
+
+  it('物件を選んで点検種別が空なら、その物件の保守会社の点検行 → 無ければ保守会社に紐付けた点検種別の先頭を入れる（B9）', () => {
+    s().setMasterData({
+      ...master,
+      notices: [
+        { id: 't-ev', inspectionType: 'エレベーター定期点検', templateNo: '1', noticeText: '' },
+        { id: 't-fire', inspectionType: '消防設備点検', templateNo: '7', noticeText: '' },
+        { id: 't-clean', inspectionType: '定期清掃', templateNo: '3', noticeText: '' },
+      ],
+    });
+    s().setInspectionDefaults({
+      // 物件Bの点検行は 定期清掃・消防設備点検（マスターの並び順で消防設備点検が先）
+      vendorInspections: [
+        { propertyCode: '120442-00', label: '定期清掃' },
+        { propertyCode: '120442-00', label: '消防設備点検' },
+      ],
+      linkedIds: ['t-clean', 't-ev'],
+    });
+    s().addRow();
+    s().addRow();
+    s().addRow({ inspectionType: '定期清掃' });
+    const [b, a, kept] = s().rows.map((r) => r.id);
+    s().changeProperty(b!, '120442-00');
+    s().changeProperty(a!, 'z0001A01');
+    s().changeProperty(kept!, '120442-00');
+    expect(s().rows.map((r) => r.inspectionType)).toEqual(['消防設備点検', 'エレベーター定期点検', '定期清掃']);
+  });
+
+  it('点検予定の行は入れ直しても入力中の値を残し、自動保存・テンプレートの置き換えでは消えない', () => {
+    const meta = { key: 'i1:2026-11-01', inspectionId: 'i1', targetMonth: '2026-11-01', locked: false, propertyName: '物件Z', terminalIds: [] };
+    s().syncScheduleRows([{ meta, row: { propertyCode: 'z9999A01', inspectionType: '消防設備点検' } }]);
+    s().addRow({ propertyCode: 'z0001A01', inspectionType: '消防設備点検' });
+    const scheduleId = s().rows[0]!.id;
+    // 保守会社の物件マスターに無い物件・端末0台でも、予定の行はエラーにしない（点検一覧の申請と同じ）
+    expect(s().rows[0]).toMatchObject({ isValid: true, startDate: '' });
+    s().changeStartDate(scheduleId, '2026-11-12');
+    s().syncScheduleRows([{ meta, row: { propertyCode: 'z9999A01', inspectionType: '消防設備点検' } }]);
+    expect(s().rows[0]).toMatchObject({ id: scheduleId, startDate: '2026-11-12', endDate: '2026-11-12' });
+    vi.advanceTimersByTime(1000);
+    const saved = JSON.parse(localStorage.getItem('bulk_autosave_user-1')!) as { rows: { propertyCode: string }[] };
+    expect(saved.rows.map((r) => r.propertyCode)).toEqual(['z0001A01']);
+    s().replaceRows([{ propertyCode: '120442-00' }]);
+    expect(s().rows.map((r) => r.propertyCode)).toEqual(['z9999A01', '120442-00']);
+    // 申請済みになったら読み取り（入力していた値は申請の値に置き換わる）
+    s().syncScheduleRows([{ meta: { ...meta, locked: true }, row: { propertyCode: 'z9999A01', startDate: '2026-11-20' } }]);
+    expect(s().rows[0]).toMatchObject({ startDate: '2026-11-20', schedule: { locked: true } });
+  });
+
   it('bulk apply overwrites only the given fields on the given rows and fills an empty end date', () => {
     s().addRow({ propertyCode: 'z0001A01', remarks: '残す', position: 3 });
     s().addRow({ propertyCode: '120442-00', endDate: '2026-12-31' });
