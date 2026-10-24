@@ -48,6 +48,7 @@ AS $function$
 DECLARE
   r signage.signage_inspection_completions;
   v_vendor uuid;
+  v_months int[];
 BEGIN
   IF p_inspection_id IS NULL OR NOT signage.inspection_writable(p_inspection_id) THEN
     RAISE EXCEPTION 'この点検の完了連絡をする権限がありません' USING ERRCODE = '42501';
@@ -55,7 +56,13 @@ BEGIN
   IF p_target_month IS NULL THEN
     RAISE EXCEPTION '対象月を指定してください' USING ERRCODE = '22023';
   END IF;
-  -- 保守会社は自社。管理者は点検行の保守会社
+  -- 点検月がある点検は、その月だけ（画面は点検月の行にしか出さない。RPC を直に呼んだときの取り違えを止める）。点検月未登録は月を問わない
+  SELECT coalesce(inspection_months, '{}') INTO v_months FROM biz.property_inspections WHERE id = p_inspection_id;
+  IF cardinality(v_months) > 0 AND NOT (extract(month from p_target_month)::int = ANY (v_months)) THEN
+    RAISE EXCEPTION '対象月がこの点検の点検月ではありません' USING ERRCODE = '22023';
+  END IF;
+  -- 保守会社は自社。管理者は点検行の保守会社（管理者が号機の保守会社の代わりに連絡した記録は、その号機の保守会社からは取り消せない。
+  -- 取り消すのは管理者か点検行の保守会社）
   IF signage.is_active_admin() THEN
     SELECT maintainer_id INTO v_vendor FROM biz.property_inspections WHERE id = p_inspection_id;
   ELSE
