@@ -30,9 +30,13 @@ vi.mock('@/lib/supabase', () => ({
   },
 }));
 
+const mockSetUserStatus = vi.fn();
+const mockFetchOwnCompany = vi.fn();
 vi.mock('@/lib/api/users', () => ({
   createUser: (...args: unknown[]) => mockCreateUser(...args),
   setUserPassword: (...args: unknown[]) => mockSetUserPassword(...args),
+  setUserStatus: (...args: unknown[]) => mockSetUserStatus(...args),
+  fetchOwnManagementCompany: () => mockFetchOwnCompany(),
 }));
 
 vi.mock('@/lib/api/masterData', () => ({
@@ -43,10 +47,11 @@ vi.mock('@/lib/api/portal', () => ({
   fetchManagementCompanies: () => mockFetchManagementCompanies(),
 }));
 
-// ログイン中の管理者は id 'me'
+// ログイン中の管理者は id 'me'（管理会社の場合だけ profile.role を management にする）
+const authState = vi.hoisted(() => ({ profile: null as { role: string } | null }));
 vi.mock('@/stores/authStore', () => ({
-  useAuthStore: (selector: (s: { user: { id: string } }) => unknown) =>
-    selector({ user: { id: 'me' } }),
+  useAuthStore: (selector: (s: { user: { id: string }; profile: { role: string } | null }) => unknown) =>
+    selector({ user: { id: 'me' }, profile: authState.profile }),
 }));
 
 /** signage_profiles の実列 */
@@ -267,5 +272,37 @@ describe('useUsers', () => {
       result.current.editUser('me', { role: 'user', vendor_id: 'v1' }),
     ).rejects.toThrow('自分は編集できません');
     expect(mockUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe('useUsers（管理会社: 修正依頼1024 C3）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    authState.profile = { role: 'management' };
+    mockSelect.mockReturnValue({ order: mockOrder });
+    mockOrder.mockResolvedValue({ data: [profile('m2', { role: 'management', vendor_id: null })], error: null });
+    mockFetchVendors.mockResolvedValue([
+      { id: 'v1', vendor_name: '保守A' },
+      { id: 'v2', vendor_name: '保守B' },
+    ]);
+    mockFetchOwnCompany.mockResolvedValue([{ id: 'm1', name: '自社' }]);
+  });
+
+  it('保守会社は読まず、管理会社は自社だけ。編集はパスワードだけ、無効化は Edge Function で行う', async () => {
+    const { result } = await renderReady();
+    await waitFor(() => expect(result.current.managementCompanies).toEqual([{ id: 'm1', name: '自社' }]));
+    expect(result.current.vendors).toEqual([]);
+    expect(mockFetchVendors).not.toHaveBeenCalled();
+    expect(mockFetchManagementCompanies).not.toHaveBeenCalled();
+
+    await act(() =>
+      result.current.editUser('m2', { role: 'management', vendor_id: null, management_company_id: 'm1', password: 'secret1' }),
+    );
+    expect(mockSetUserPassword).toHaveBeenCalledWith('m2', 'secret1');
+    await act(() => result.current.updateUserStatus('m2', 'inactive'));
+    expect(mockSetUserStatus).toHaveBeenCalledWith('m2', 'inactive');
+    // profiles の表は直接更新しない（権限列のガードが管理会社の更新を断るため）
+    expect(mockUpdate).not.toHaveBeenCalled();
+    authState.profile = null;
   });
 });

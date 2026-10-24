@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMasterData } from '@/hooks/useMasterData';
 import { fetchUnitInspections } from '@/lib/api/masterData';
+import { useAuthStore } from '@/stores/authStore';
 import type { MasterProperty, PropertyUnit, UnitInspectionTypeOption } from '@/types/app';
 
 /** 物件マスターで使う物件（台ごとの保守を足したもの。v1 getAllMasterData の管理者向け prop.units） */
@@ -21,23 +22,25 @@ interface UnitData {
 export function usePropertyMasterData() {
   const master = useMasterData();
   const { refetch: refetchMaster } = master;
+  // 管理会社は自社物件の台だけ（mgmt_unit_inspections_all）
+  const role = useAuthStore((s) => s.profile?.role ?? null);
   const [unitData, setUnitData] = useState<UnitData | null>(null);
 
   const loadUnits = useCallback(async () => {
-    const data = await fetchUnitInspections();
+    const data = await fetchUnitInspections(role);
     setUnitData(data);
-  }, []);
+  }, [role]);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const data = await fetchUnitInspections();
+      const data = await fetchUnitInspections(role);
       if (!cancelled) setUnitData(data);
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [role]);
 
   const refetch = useCallback(async () => {
     await Promise.all([refetchMaster(), loadUnits()]);

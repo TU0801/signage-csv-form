@@ -1,4 +1,5 @@
-import { supabase, RPC } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
+import { inspectionRpc } from './scopedRpc';
 import type {
   PropertyInspection,
   PropertyUnit,
@@ -14,8 +15,10 @@ import type { RpcPropertyInspectionRow } from '@/types/rpc';
 // v1: js/supabase/relationships.js saveInspectionsToBiz（inspections_for_property の呼び出し）
 export async function fetchInspectionsForProperty(
   propertyCode: string,
+  /** 管理会社は自社物件だけを扱う mgmt_* を使う */
+  role?: string | null,
 ): Promise<RpcPropertyInspectionRow[]> {
-  const { data, error } = await supabase.rpc(RPC.inspectionsForProperty, {
+  const { data, error } = await supabase.rpc(inspectionRpc(role).inspectionsForProperty, {
     p_property_code: String(propertyCode),
   });
   if (error) throw error;
@@ -32,19 +35,21 @@ export async function saveInspectionsToBiz(
   propertyCode: string,
   inspections: PropertyInspection[],
   skipTypeIds: Set<string> = new Set(),
+  role?: string | null,
 ): Promise<{ saved: number }> {
+  const rpcNames = inspectionRpc(role);
   const list = (Array.isArray(inspections) ? inspections : []).filter(
     (e) => !(e && skipTypeIds.has(e.inspection_type_id)),
   );
 
-  const current = await fetchInspectionsForProperty(propertyCode);
+  const current = await fetchInspectionsForProperty(propertyCode, role);
 
   const wantIds = new Set(list.map((e) => e?.inspection_type_id).filter(Boolean));
   // 画面から消えた点検を削除する。残すと消したはずの案内が出続ける
   for (const row of current) {
     if (skipTypeIds.has(row.inspection_type_id)) continue;
     if (!wantIds.has(row.inspection_type_id)) {
-      const { error } = await supabase.rpc(RPC.deletePropertyInspection, { p_id: row.id });
+      const { error } = await supabase.rpc(rpcNames.deletePropertyInspection, { p_id: row.id });
       if (error) throw error;
     }
   }
@@ -57,7 +62,7 @@ export async function saveInspectionsToBiz(
     const months = Array.isArray(e.inspection_months)
       ? e.inspection_months.map(Number).filter((n) => n >= 1 && n <= 12)
       : [];
-    const { error } = await supabase.rpc(RPC.upsertPropertyInspection, {
+    const { error } = await supabase.rpc(rpcNames.upsertPropertyInspection, {
       p_property_code: String(propertyCode),
       p_inspection_type_id: e.inspection_type_id,
       p_maintainer_id: e.vendor_id || null,
@@ -197,7 +202,9 @@ function unitInspectionErrorMessage(error: { code?: string; message?: string }):
 // v1: js/supabase/relationships.js saveUnitInspectionsToBiz
 export async function saveUnitInspectionsToBiz(
   diff: UnitInspectionDiff,
+  role?: string | null,
 ): Promise<{ saved: number; errors: string[] }> {
+  const rpcNames = inspectionRpc(role);
   let saved = 0;
   const errors: string[] = [];
   const run = async (fn: string, args: Record<string, unknown>) => {
@@ -207,10 +214,10 @@ export async function saveUnitInspectionsToBiz(
   };
 
   for (const d of diff.deletes || []) {
-    await run(RPC.deleteUnitInspection, { p_id: d.inspection_id });
+    await run(rpcNames.deleteUnitInspection, { p_id: d.inspection_id });
   }
   for (const u of diff.upserts || []) {
-    await run(RPC.upsertUnitInspection, {
+    await run(rpcNames.upsertUnitInspection, {
       p_unit_id: u.unit_id,
       p_inspection_type_id: u.inspection_type_id,
       p_maintainer_id: u.vendor_id,

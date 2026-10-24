@@ -131,7 +131,8 @@ describe('useRelationships', () => {
       summary = await result.current.removeBuildingVendors(['bv1', 'bv9']);
     });
 
-    expect(mockApiRemoveBuildingVendor.mock.calls).toEqual([['bv1'], ['bv9']]);
+    // 2つ目は権限（管理会社は自社物件だけを解除する RPC を使う）
+    expect(mockApiRemoveBuildingVendor.mock.calls).toEqual([['bv1', 'admin'], ['bv9', 'admin']]);
     expect(summary).toEqual({ removed: 1, failed: 1 });
     expect(mockFetchBuildingVendors).toHaveBeenCalledTimes(1);
   });

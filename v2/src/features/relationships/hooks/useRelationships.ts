@@ -149,23 +149,23 @@ export function useRelationships(vendorId: string | null, activeTab: Relationshi
   // v1: js/admin-relationships.js handleRemoveBuildingVendor
   const removeBuildingVendor = useCallback(
     async (id: string) => {
-      await apiRemoveBuildingVendor(id);
+      await apiRemoveBuildingVendor(id, profile?.role);
       await loadBuildings();
     },
-    [loadBuildings],
+    [loadBuildings, profile?.role],
   );
 
   /** まとめて解除する。失敗した行があっても残りは解除し、読み直しは最後に1回だけ */
   const removeBuildingVendors = useCallback(
     async (ids: string[]): Promise<RemoveSummary> => {
       try {
-        const results = await Promise.allSettled(ids.map((id) => apiRemoveBuildingVendor(id)));
+        const results = await Promise.allSettled(ids.map((id) => apiRemoveBuildingVendor(id, profile?.role)));
         return summarizeRemoveResults(results);
       } finally {
         await loadBuildings();
       }
     },
-    [loadBuildings],
+    [loadBuildings, profile?.role],
   );
 
   // v1: js/admin-relationships.js confirmInspectionSelection

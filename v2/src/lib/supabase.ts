@@ -59,6 +59,22 @@ export const RPC = {
   inspectionTypeOptionsForRequest: 'inspection_type_options_for_request',
   approvePropertyRequest: 'approve_property_request',
   rejectPropertyRequest: 'reject_property_request',
+  /**
+   * 管理会社メニュー（修正依頼1024 C2・C3）。管理会社のアカウントで、自社が管理する物件だけを読み書きする。
+   * 戻り値の形は管理者用の同名（mgmt_ を外したもの）と同じ。scripts/fix-1024-mgmt.sql
+   */
+  mgmtInspectionsAll: 'mgmt_inspections_all',
+  mgmtInspectionsForProperty: 'mgmt_inspections_for_property',
+  mgmtUpsertPropertyInspection: 'mgmt_upsert_property_inspection',
+  mgmtDeletePropertyInspection: 'mgmt_delete_property_inspection',
+  mgmtUnitInspectionsAll: 'mgmt_unit_inspections_all',
+  mgmtUnitInspectionTypeOptions: 'mgmt_unit_inspection_type_options',
+  mgmtUpsertUnitInspection: 'mgmt_upsert_unit_inspection',
+  mgmtDeleteUnitInspection: 'mgmt_delete_unit_inspection',
+  mgmtReviewBuildingRequest: 'mgmt_review_building_request',
+  mgmtAddBuildingVendor: 'mgmt_add_building_vendor',
+  mgmtRemoveBuildingVendor: 'mgmt_remove_building_vendor',
+  mgmtOwnCompany: 'mgmt_own_company',
 } as const;
 
 /** Storage のバケット */

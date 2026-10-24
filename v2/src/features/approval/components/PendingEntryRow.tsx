@@ -15,9 +15,13 @@ interface PendingEntryRowProps {
   email: string;
   onToggleSelect: (id: string) => void;
   onApprove: (id: string) => void;
-  onReject: (id: string) => void;
+  /** 却下（削除）。管理会社には渡さない（削除できないため） */
+  onReject?: (id: string) => void;
   onViewDetail: (entry: DbEntry) => void;
-  onEdit: (entry: DbEntry) => void;
+  /** 編集。管理会社には渡さない（申請の内容を直接は変えられないため） */
+  onEdit?: (entry: DbEntry) => void;
+  /** 差戻し（管理会社） */
+  onSendBack?: (entry: DbEntry) => void;
 }
 
 const td = 'cell text-sm text-gray-900';
@@ -41,6 +45,7 @@ export function PendingEntryRow({
   onReject,
   onViewDetail,
   onEdit,
+  onSendBack,
 }: PendingEntryRowProps) {
   const periodWarning = displayPeriodWarning(entry);
   return (
@@ -112,15 +117,24 @@ export function PendingEntryRow({
           <Button size="sm" variant="ghost" onClick={() => onViewDetail(entry)}>
             詳細
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => onEdit(entry)}>
-            編集
-          </Button>
+          {onEdit && (
+            <Button size="sm" variant="ghost" onClick={() => onEdit(entry)}>
+              編集
+            </Button>
+          )}
           <Button size="sm" variant="success" onClick={() => onApprove(entry.id)}>
             承認
           </Button>
-          <Button size="sm" variant="danger" onClick={() => onReject(entry.id)}>
-            却下
-          </Button>
+          {onReject && (
+            <Button size="sm" variant="danger" onClick={() => onReject(entry.id)}>
+              却下
+            </Button>
+          )}
+          {onSendBack && (
+            <Button size="sm" variant="danger" onClick={() => onSendBack(entry)}>
+              差戻し
+            </Button>
+          )}
         </div>
       </td>
     </tr>

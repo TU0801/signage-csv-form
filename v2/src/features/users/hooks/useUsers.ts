@@ -1,6 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, TABLES } from '@/lib/supabase';
-import { createUser, setUserPassword } from '@/lib/api/users';
+import {
+  createUser,
+  fetchOwnManagementCompany,
+  setUserPassword,
+  setUserStatus,
+} from '@/lib/api/users';
 import { fetchMasterVendors } from '@/lib/api/masterData';
 import { fetchManagementCompanies } from '@/lib/api/portal';
 import { useAuthStore } from '@/stores/authStore';
@@ -9,8 +14,15 @@ import type { ManagementCompanyRow } from '@/types/portal';
 import { applyDefaultStartDate } from '@/features/entries-list/hooks/useEntriesFilters';
 import { MIN_PASSWORD_LENGTH, companyColumns, companyRequiredError } from '../constants';
 
+/**
+ * ユーザー管理。管理会社のアカウント（修正依頼1024 C3）は:
+ * - 一覧: 自社の管理会社ユーザーだけ（RLS mgmt_select_profiles が絞る。保守会社のユーザーは管理者だけが扱う）
+ * - 作成: 自社の管理会社ユーザーだけ（Edge Function が確かめる）
+ * - 編集はパスワードだけ、無効化・有効化も Edge Function 経由で、自社の管理会社ユーザーだけ
+ */
 export function useUsers() {
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
+  const isManagement = useAuthStore((s) => s.profile?.role === 'management');
   const [users, setUsers] = useState<DbProfile[]>([]);
   const [vendors, setVendors] = useState<DbVendor[]>([]);
   const [managementCompanies, setManagementCompanies] = useState<ManagementCompanyRow[]>([]);
@@ -38,20 +50,22 @@ export function useUsers() {
   // v1: js/admin-users.js openUserModal / loadUsers の保守会社（getMasterVendors。保守会社名順）
   const fetchVendors = useCallback(async () => {
     try {
-      setVendors(await fetchMasterVendors());
+      // 管理会社は保守会社のユーザーを扱わないので読まない
+      setVendors(isManagement ? [] : await fetchMasterVendors());
     } catch (err) {
       console.error('Failed to load vendors:', err);
     }
-  }, []);
+  }, [isManagement]);
 
   // 管理会社アカウントの作成・付け替えと一覧の社名に使う（RPC management_companies_master。管理者だけ行が返る）
+  // 管理会社のアカウントは自社だけ（management_companies_master は管理者専用）
   const fetchManagementCompanyList = useCallback(async () => {
     try {
-      setManagementCompanies(await fetchManagementCompanies());
+      setManagementCompanies(isManagement ? await fetchOwnManagementCompany() : await fetchManagementCompanies());
     } catch (err) {
       console.error('Failed to load management companies:', err);
     }
-  }, []);
+  }, [isManagement]);
 
   useEffect(() => {
     fetchUsers();
@@ -122,6 +136,13 @@ export function useUsers() {
         throw new Error(`パスワードは${MIN_PASSWORD_LENGTH}文字以上で入力してください`);
       }
 
+      // 管理会社は権限・会社を変えられない（パスワードだけ。範囲は Edge Function が確かめる）
+      if (isManagement) {
+        if (newPassword) await setUserPassword(id, newPassword);
+        await fetchUsers();
+        return !!newPassword;
+      }
+
       if (newPassword) {
         await setUserPassword(id, newPassword);
       }
@@ -143,7 +164,7 @@ export function useUsers() {
       await fetchUsers();
       return !!newPassword;
     },
-    [assertNotSelf, fetchUsers],
+    [assertNotSelf, fetchUsers, isManagement],
   );
 
   /** 無効化（'inactive'）・有効化（'active'）。無効化されたユーザーはログインできない */
@@ -154,6 +175,12 @@ export function useUsers() {
         id,
         status === 'inactive' ? '自分を無効化することはできません' : '自分の状態は変更できません',
       );
+      if (isManagement) {
+        // 管理会社は profiles の状態の列を直接は変えられない（guard_profile_privileged_columns）
+        await setUserStatus(id, status);
+        await fetchUsers();
+        return;
+      }
       const { error: err } = await supabase
         .from(TABLES.profiles)
         .update({ status })
@@ -163,7 +190,7 @@ export function useUsers() {
       if (err) throw err;
       await fetchUsers();
     },
-    [assertNotSelf, fetchUsers],
+    [assertNotSelf, fetchUsers, isManagement],
   );
 
   return {
@@ -171,6 +198,7 @@ export function useUsers() {
     vendors,
     managementCompanies,
     currentUserId,
+    isManagement,
     loading,
     error,
     refetch: fetchUsers,

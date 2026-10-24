@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
 import { useToast } from '@/components/ui/Toast';
+import { useAuthStore } from '@/stores/authStore';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EntryDetailModal } from '@/features/approval/components/EntryDetailModal';
 import {
@@ -58,6 +59,8 @@ const tdActions = `${td} sticky right-0 bg-white shadow-[inset_1px_0_0_var(--col
 // v1: js/admin-entries.js loadEntries / renderEntries
 export function EntriesTable() {
   const { filters, updateFilter, clearFilters } = useEntriesFilters();
+  // 管理会社は自社物件の承認済みを閲覧・出力するだけ（削除・編集・取込状態の変更は管理者だけ）
+  const isManagement = useAuthStore((s) => s.profile?.role === 'management');
   const { entries, loading, error, refetch } = useEntriesTable(filters);
   const lookups = useEntryLookups();
   const { addToast } = useToast();
@@ -185,6 +188,7 @@ export function EntriesTable() {
               displayTimeDefault={lookups.displayTimeDefault}
               onStatusChange={handleStatusChange}
               onBulkDelete={handleBulkDelete}
+              readOnly={isManagement}
             />
           </div>
         </CardHeader>
@@ -301,17 +305,21 @@ export function EntriesTable() {
                           <Button size="sm" variant="ghost" onClick={() => setDetailEntry(entry)}>
                             詳細
                           </Button>
-                          <Button size="sm" variant="ghost" onClick={() => setEditEntry(entry)}>
-                            編集
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-red-600 hover:text-red-700"
-                            onClick={() => setConfirmDelete(entry.id)}
-                          >
-                            削除
-                          </Button>
+                          {!isManagement && (
+                            <>
+                              <Button size="sm" variant="ghost" onClick={() => setEditEntry(entry)}>
+                                編集
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-red-600 hover:text-red-700"
+                                onClick={() => setConfirmDelete(entry.id)}
+                              >
+                                削除
+                              </Button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>

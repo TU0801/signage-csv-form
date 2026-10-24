@@ -10,6 +10,7 @@ import { MasterToolbar } from '../components/MasterToolbar';
 import { PropertyFormModal } from '../components/property/PropertyFormModal';
 import { propertyListSummary, terminalSummary, vendorSummary } from '../lib/propertyForm';
 import { vendorOptions } from '@/lib/vendorOptions';
+import { useAuthStore } from '@/stores/authStore';
 
 const BIZ_PROPERTIES_URL = 'https://system.1984.jp/properties';
 
@@ -37,6 +38,8 @@ const SEARCH_FIELDS: (keyof PropertyRecord & string)[] = ['property_code', 'prop
 export function PropertiesMaster() {
   const { properties, vendors, inspectionTypes, unitTypeOptions, loading, error, refetch } =
     usePropertyMasterData();
+  // 管理会社: 自社が管理する物件だけ（RLS が絞る）。物件の追加は業務システムで管理者が行うので、追加のリンクを出さない
+  const isManagement = useAuthStore((s) => s.profile?.role === 'management');
 
   const [search, setSearch] = useRememberedSearch('properties');
   // 保守会社での絞り込み（'' はすべて）と、設備情報が未登録の物件だけを出す絞り込み
@@ -106,6 +109,7 @@ export function PropertiesMaster() {
         }
         note={
           <>
+            {isManagement && '自社が管理する物件だけを表示します。編集できるのは設備情報（点検）と台ごとの保守です。'}
             物件の追加・削除と物件コード・物件名・端末の変更は業務システムの物件で行います（
             <a href={BIZ_PROPERTIES_URL} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
               物件一覧を開く
@@ -115,14 +119,16 @@ export function PropertiesMaster() {
         }
         action={
           // 物件の追加は業務システムで行う（方針は 2026-10-15 のまま。ここでは物件一覧を新しいタブで開くだけ）
-          <a
-            href={BIZ_PROPERTIES_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center whitespace-nowrap rounded-md border border-blue-600 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50"
-          >
-            業務システムで追加<span aria-hidden="true">&nbsp;↗</span>
-          </a>
+          isManagement ? undefined : (
+            <a
+              href={BIZ_PROPERTIES_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center whitespace-nowrap rounded-md border border-blue-600 px-3 py-1.5 text-sm font-medium text-blue-600 hover:bg-blue-50"
+            >
+              業務システムで追加<span aria-hidden="true">&nbsp;↗</span>
+            </a>
+          )
         }
       />
 

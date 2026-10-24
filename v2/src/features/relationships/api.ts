@@ -1,4 +1,4 @@
-import { supabase, TABLES } from '@/lib/supabase';
+import { supabase, TABLES, RPC } from '@/lib/supabase';
 import { BuildingVendorStatus, VendorInspectionStatus } from '@/lib/constants';
 import type { DbBuildingVendor, DbProperty, DbVendorInspection } from '@/types/database';
 
@@ -99,6 +99,18 @@ export async function approveBuildingRequest(
 // v1: js/supabase/relationships.js rejectBuildingRequest
 export async function rejectBuildingRequest(buildingVendorId: string): Promise<void> {
   const { error } = await supabase.from(TABLES.buildingVendors).delete().eq('id', buildingVendorId);
+  if (error) throw error;
+}
+
+/**
+ * 管理会社によるビル追加リクエストの承認・却下（自社物件の pending だけ。却下は管理者と同じく行を消す）。
+ * 管理会社は表へ直接書けないので RPC mgmt_review_building_request を使う
+ */
+export async function reviewBuildingRequestAsManagement(
+  buildingVendorId: string,
+  action: 'approve' | 'reject',
+): Promise<void> {
+  const { error } = await supabase.rpc(RPC.mgmtReviewBuildingRequest, { p_id: buildingVendorId, p_action: action });
   if (error) throw error;
 }
 
