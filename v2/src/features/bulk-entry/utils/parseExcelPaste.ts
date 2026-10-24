@@ -34,9 +34,13 @@ const HEADER_FIELDS: Array<[PasteField, string[]]> = [
 
 const normalizeHeader = (s: string) => s.toLowerCase().replace(/\s+/g, '');
 
+/** 見出しに無いときに既定の位置で補う列（案内文・表示位置は別扱い） */
+const FALLBACK_FIELDS: PasteField[] = ['property', 'terminal', 'inspectionType', 'startDate', 'endDate', 'remarks'];
+
 /**
  * ヘッダー行の見出し名で列を割り当てる。端末ID の列があれば旧6列を既定にし、
  * 見出しに無い列は既定の位置を（他の列と重ならなければ）使う。
+ * 案内文・表示位置は、既定の位置に別の見出しがあれば補わない（点検報告書の「保守会社」など知らない見出しの列を表示位置として読まないように）。
  */
 function columnsFromHeader(headerCols: string[]): ColumnMap {
   const named: ColumnMap = {};
@@ -49,8 +53,14 @@ function columnsFromHeader(headerCols: string[]): ColumnMap {
   const base = named.terminal !== undefined ? LEGACY_LAYOUT : NEW_LAYOUT;
   const used = new Set(Object.values(named));
   const map: ColumnMap = { ...named };
-  for (const [field, index] of Object.entries(base) as Array<[PasteField, number]>) {
-    if (map[field] === undefined && !used.has(index)) map[field] = index;
+  for (const field of FALLBACK_FIELDS) {
+    const index = base[field];
+    if (index !== undefined && map[field] === undefined && !used.has(index)) map[field] = index;
+  }
+  // 案内文・表示位置は、既定の位置に見出しが何も無い（見出し行が5列で止まっている）ときだけ既定の位置で読む
+  for (const field of ['noticeText', 'position'] as const) {
+    const index = base[field];
+    if (index !== undefined && map[field] === undefined && !used.has(index) && !(headerCols[index]?.trim())) map[field] = index;
   }
   return map;
 }
@@ -59,19 +69,30 @@ const looksLikeDate = (s: string | undefined) => formatDateForInput(s?.trim() ||
 
 /**
  * ヘッダーが無いときの形式の推定。最初に見分けのつく行で決める:
+ * - cols[1] がマスターにある端末ID → 旧6列（日付が1つも無い行でも見分けられる）
  * - cols[1] が日付でなく cols[2] が日付 → 新5列
+ * - cols[4] が日付 → 旧6列（新5列では cols[4] は備考。旧6列で点検種別か開始日が空の行もここで拾う）
  * - cols[3] が日付で、cols[2] が日付でない文字（点検種別）→ 旧6列
  * どの行でも決まらなければ新5列（今のテンプレート書式）。
  * 新5列で開始日が空・終了日だけの行（cols[3] だけが日付）は cols[2] が空なので旧6列とはみなさない。
  */
-function detectLayout(lines: string[]): ColumnMap {
+function detectLayout(lines: string[], terminalIds: Set<string>): ColumnMap {
   for (const line of lines) {
     const cols = line.split('\t');
+    const c1 = cols[1]?.trim() || '';
+    if (c1 !== '' && terminalIds.has(c1)) return LEGACY_LAYOUT;
     if (!looksLikeDate(cols[1]) && looksLikeDate(cols[2])) return NEW_LAYOUT;
+    if (looksLikeDate(cols[4])) return LEGACY_LAYOUT;
     const c2 = cols[2]?.trim() || '';
     if (looksLikeDate(cols[3]) && c2 !== '' && !looksLikeDate(c2)) return LEGACY_LAYOUT;
   }
   return NEW_LAYOUT;
+}
+
+/** 表示位置の値（0〜4。rowDetail.ts POSITIONS）。数でない・範囲外は既定の 2（②上中） */
+function parsePosition(raw: string | undefined): number {
+  const n = parseInt(raw?.trim() || '', 10);
+  return Number.isFinite(n) && n >= 0 && n <= 4 ? n : 2;
 }
 
 export interface PasteResult {
@@ -116,7 +137,8 @@ export function parseExcelPaste(raw: string, properties: BulkProperty[]): PasteR
     (keyword) => firstColLower === keyword.toLowerCase() || secondColLower === keyword.toLowerCase(),
   );
   if (isHeaderRow) startIndex = 1;
-  const columns = isHeaderRow ? columnsFromHeader(firstCols) : detectLayout(lines);
+  const terminalIds = new Set(properties.map((p) => p.terminalId).filter((t) => t !== ''));
+  const columns = isHeaderRow ? columnsFromHeader(firstCols) : detectLayout(lines, terminalIds);
   const cell = (cols: string[], field: PasteField): string => {
     const index = columns[field];
     return index === undefined ? '' : cols[index]?.trim() || '';
@@ -148,8 +170,6 @@ export function parseExcelPaste(raw: string, properties: BulkProperty[]): PasteR
       if (!unresolvedNames.includes(propValue)) unresolvedNames.push(propValue);
     }
 
-    const positionIndex = columns.position;
-    const positionRaw = positionIndex === undefined ? undefined : cols[positionIndex];
     rows.push({
       propertyCode: property?.propertyCode || '',
       ...(unresolved ? { pastedPropertyName: propValue } : {}),
@@ -159,7 +179,7 @@ export function parseExcelPaste(raw: string, properties: BulkProperty[]): PasteR
       endDate: formatDateForInput(cell(cols, 'endDate')),
       remarks: cell(cols, 'remarks'),
       noticeText: cell(cols, 'noticeText'),
-      position: positionRaw ? parseInt(positionRaw) : 2,
+      position: parsePosition(cell(cols, 'position')),
     });
   }
 

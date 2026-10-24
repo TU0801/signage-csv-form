@@ -84,6 +84,41 @@ describe('Excel 取込（新5列）', () => {
     expect(rows[0]).toMatchObject({ remarks: '', noticeText: '本日点検します', position: 4 });
   });
 
+  it('見出しに無い列は案内文・表示位置として読まず、表示位置は数でない・範囲外なら 2 にする', () => {
+    // 点検報告書の見出し（保守会社の列が既定の表示位置の場所にある）
+    const report = parseExcelPaste(
+      '物件コード\t物件名\t点検種別\t点検開始日\t点検終了日\t作業時間及び備考\t保守会社\t登録日時\n' +
+        'z0001A01\t物件A\tEV\t2026/11/1\t2026/11/2\t10:00\tABC保守\t2026/10/1',
+      properties,
+    ).rows[0]!;
+    expect(report).toMatchObject({ propertyCode: 'z0001A01', inspectionType: 'EV', remarks: '10:00', noticeText: '', position: 2 });
+
+    const extra = parseExcelPaste('物件名\t点検種別\t開始日\t終了日\t備考\tメモ\t担当\n物件A\tEV\t2026/11/1\t\t\tメモです\t山田', properties).rows[0]!;
+    expect(extra).toMatchObject({ noticeText: '', position: 2 });
+
+    const named = parseExcelPaste('物件名\t点検種別\t開始日\t終了日\t備考\t案内文\t表示位置\n物件A\tEV\t2026/11/1\t\t\t案内\t0', properties).rows[0]!;
+    expect(named).toMatchObject({ noticeText: '案内', position: 0 });
+
+    // 見出し行が5列で止まっていれば、6・7列目は今どおり案内文・表示位置
+    const short = parseExcelPaste('物件名\t点検種別\t開始日\t終了日\t備考\n物件A\tEV\t2026/11/1\t\t\t案内\t3', properties).rows[0]!;
+    expect(short).toMatchObject({ noticeText: '案内', position: 3 });
+
+    const bad = parseExcelPaste('物件A\tEV\t2026/11/1\t\t\t案内\t上\n物件A\tEV\t2026/11/1\t\t\t案内\t9', properties).rows;
+    expect(bad.map((r) => r.position)).toEqual([2, 2]);
+  });
+
+  it('ヘッダー無しの旧6列で点検種別・開始日が空でも、日付が無くても列をずらさない', () => {
+    const noType = parseExcelPaste('物件A\tt1\t\t2026/11/1\t2026/11/2\t午前', properties).rows[0]!;
+    expect(noType).toMatchObject({ terminalId: 't1', inspectionType: '', startDate: '2026-11-01', endDate: '2026-11-02', remarks: '午前' });
+
+    const noStart = parseExcelPaste('物件A\tt1\tEV\t\t2026/11/2\t午前', properties).rows[0]!;
+    expect(noStart).toMatchObject({ terminalId: 't1', inspectionType: 'EV', startDate: '', endDate: '2026-11-02', remarks: '午前' });
+
+    // 日付が1つも無くても、B列がマスターの端末ID なら旧6列
+    const noDates = parseExcelPaste('物件A\tT-A1\tEV\t\t\t', properties).rows[0]!;
+    expect(noDates).toMatchObject({ terminalId: 'T-A1', inspectionType: 'EV' });
+  });
+
   it('テンプレート書式は5列（端末ID なし・見出しは「備考」のまま）で、備考の例は作業時間', () => {
     const sheet = buildPasteTemplateSheet();
     expect(sheet[0]).toEqual(['物件名', '点検種別', '開始日', '終了日', '備考']);
