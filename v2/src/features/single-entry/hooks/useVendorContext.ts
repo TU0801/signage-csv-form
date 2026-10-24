@@ -24,7 +24,7 @@ interface UseVendorContextArgs {
 
 /**
  * 紐付けを読む保守会社は、一般ユーザーは自社（profile.vendor_id）、管理者は画面で選んだ保守会社。
- * 保守会社が決まったら、その紐付け点検種別（と管理者なら担当物件）を読む。記録する保守会社（vendor）は下の v1 準拠の決め方。
+ * 保守会社が決まったら、その紐付け点検種別（と管理者なら担当物件）を読む。記録する保守会社（vendor）も同じ会社。
  * 選択を速く切り替えても最後の選択の結果だけを反映する（v1 adminVendorChangeSeq の last-wins）。
  */
 // v1: js/script.js onAdminVendorChange / init（window.currentVendorId の紐付け反映）
@@ -79,14 +79,15 @@ export function useVendorContext({
     return properties.filter((p) => codes.has(p.property_code));
   }, [isAdmin, adminVendorId, properties, current]);
 
-  // 記録・プレビューに使う保守会社は v1 と同じ決め方にする（ユーザー決定 2026-10-15）:
-  // 管理者がヘッダーで選んだときはその会社、それ以外（一般ユーザー・未選択の管理者）は社名順の先頭の会社。
-  // v1 は隠し項目 #vendor が '0' 固定で masterData.vendors[0] を使う（index.html:363, script.js:304-309, 952）。
-  // 一般ユーザーでも自社ではなく先頭の会社名・緊急連絡先が入る点は承知のうえでの決定。紐付けの読み込みは自社（vendorId）のまま
+  // 記録・プレビューに使う保守会社（申請の vendor_name・emergency_contact。CSV の受注先名・緊急連絡先にも出る）は、
+  // 保守会社のアカウントは自社（profile.vendor_id）、管理者はヘッダーで選んだ会社（未選択なら無し＝データを追加で止める）。
+  // 点検予定に結び付いた申請は、申請のときに結び付いた点検の保守会社で記録し直す（SingleEntryPage handleSubmit）。
+  // ユーザー決定（2026-10-25）で 10/15 の v1 準拠（隠し項目 #vendor = '0' の masterData.vendors[0]＝社名順の先頭。
+  // index.html:363, script.js:304-309, 952）をやめた。v1 とはここが意図して違う
   const vendor = useMemo(() => {
-    if (isAdmin && adminVendorId) return vendors.find((v) => String(v.id) === String(adminVendorId)) ?? null;
-    return vendors[0] ?? null;
-  }, [vendors, isAdmin, adminVendorId]);
+    if (!vendorId) return null;
+    return vendors.find((v) => String(v.id) === String(vendorId)) ?? null;
+  }, [vendors, vendorId]);
 
   const selectAdminVendor = useCallback((id: string) => setAdminVendorId(id), []);
 
@@ -94,7 +95,7 @@ export function useVendorContext({
     adminVendorId,
     selectAdminVendor,
     vendor,
-    /** 点検行に結び付ける保守会社（一般ユーザーは自社、管理者は選んだ会社。未選択は null）。vendor（記録する会社名）とは別 */
+    /** 点検行に結び付ける保守会社（一般ユーザーは自社、管理者は選んだ会社。未選択は null）。vendor（記録する会社）の id と同じ */
     linkVendorId: vendorId,
     visibleProperties,
     linkedIds: current?.linkedIds ?? EMPTY_IDS,

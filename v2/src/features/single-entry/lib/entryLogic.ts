@@ -10,6 +10,7 @@ import {
   matchInspectionLink,
   type InspectionLink,
 } from '@/features/inspection-portal/lib/inspectionLink';
+import { normalizePropertyCode } from '@/features/inspection-portal/lib/schedule';
 import type { PortalInspectionRow } from '@/types/portal';
 
 /** 案内カテゴリの選択肢（v1 index.html #inspectionCategory。'' = 全て） */
@@ -204,6 +205,31 @@ export function applyInspectionType(
   };
 }
 
+/**
+ * 物件を選んだときの点検工事案内（修正依頼1024 本番確認 ②。一括入力の defaultInspectionType（B9）と同じ規則）。
+ * (a) その物件×保守会社の点検行の点検種別（点検種別マスターの並びで先頭）→ 無ければ (b) 保守会社に紐付けた点検種別の先頭。
+ * どちらも無ければ値はそのまま。選んだ種別が今のカテゴリの選択肢に無ければカテゴリを「全て」にする（欄が空に見えないように）。
+ * 物件コードは 120410 と 120410-00 を同じに見る（点検行への結び付けと同じ）。入れてよいか（空か自動で入った値か）は呼び出し側で決める
+ */
+export function applyPropertyInspectionDefault(
+  values: SingleEntryValues,
+  types: DbInspectionType[],
+  inspections: Pick<PortalInspectionRow, 'property_code' | 'inspection_type_label'>[],
+  linkedIds: ReadonlySet<string>,
+): SingleEntryValues {
+  if (!values.propertyCode) return values;
+  const code = normalizePropertyCode(String(values.propertyCode));
+  const labels = new Set(
+    inspections
+      .filter((i) => i.inspection_type_label && normalizePropertyCode(i.property_code) === code)
+      .map((i) => i.inspection_type_label),
+  );
+  const t = types.find((x) => labels.has(x.inspection_name)) ?? types.find((x) => linkedIds.has(x.id));
+  if (!t) return values;
+  const visible = filterInspectionTypes(types, values.category, linkedIds).some((x) => x.id === t.id);
+  return applyInspectionType({ ...values, category: visible ? values.category : '' }, t.id, types);
+}
+
 /** カテゴリを変えたとき（選び直してから点検種別の反映をやり直す） */
 // v1: js/script.js onCategoryChange
 export function applyCategoryChange(
@@ -306,6 +332,8 @@ export function buildLocalEntry(values: SingleEntryValues, ctx: EntryContext): B
   const inspection = ctx.inspectionTypes.find((t) => t.id === values.inspectionTypeId);
   if (isCustom) {
     if (!ctx.customImage) return { ok: false, message: '貼紙画像を選択してください' };
+    // 追加の貼紙でも点検工事案内は必須（点検行への結び付けに使う。選び忘れると点検予定に結び付かない。修正依頼1024 本番確認 ②）
+    if (!inspection) return { ok: false, message: '点検工事案内を選択してください' };
   } else {
     if (!inspection) return { ok: false, message: '点検工事案内を選択してください' };
     if (!ctx.hasTemplateImage(values.templateNo)) {
@@ -369,7 +397,7 @@ export function buildLocalEntry(values: SingleEntryValues, ctx: EntryContext): B
       posterType: values.posterType,
       customImage: isCustom ? ctx.customImage : null,
       linkVendorId: ctx.linkVendorId ?? null,
-      ...(isCustom ? { linkInspectionType: inspection?.inspection_name ?? '' } : {}),
+      ...(isCustom ? { linkInspectionType: inspection!.inspection_name } : {}),
     },
   };
 }

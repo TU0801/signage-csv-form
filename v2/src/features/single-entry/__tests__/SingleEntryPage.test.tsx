@@ -9,7 +9,7 @@ import { PROPERTIES, SETTINGS, TYPES } from './fixtures';
 import type { DbVendor } from '@/types/database';
 
 const VENDORS: DbVendor[] = [
-  // 名前順の先頭（v1 は一般ユーザーでもこの会社になっていた）
+  // 名前順の先頭（v1 は一般ユーザーでもこの会社になっていた。v2 は自社を記録する。ユーザー決定 2026-10-25）
   { id: 'v-first', vendor_name: '㈱IHIﾊﾟｰｷﾝｸﾞｽｸｴｱ', emergency_contact: '03-0000-0000', inspection_type: null, created_at: null },
   { id: 'v-mine', vendor_name: '三菱電機ﾋﾞﾙｿﾘｭｰｼｮﾝｽﾞ㈱', emergency_contact: '0120-000-000', inspection_type: null, created_at: null },
 ];
@@ -54,9 +54,12 @@ vi.mock('@/hooks/useMasterData', () => ({
     error: null,
   }),
 }));
-vi.mock('@/lib/api/relationships', () => ({ fetchActivePropertyCodes: vi.fn() }));
+// 管理者が選んだ保守会社の担当物件（ここでは全物件）
+vi.mock('@/lib/api/relationships', () => ({
+  fetchActivePropertyCodes: () => Promise.resolve(['120273-00', 'z0015A01', '2010']),
+}));
 // 申請を結び付ける点検行（portal_inspections。保守会社のアカウントは DB が担当の点検に絞って返す）。点検月の無い点検行はどの月の申請も結び付く
-const portalApi = vi.hoisted(() => ({ fail: false }));
+const portalApi = vi.hoisted(() => ({ fail: false, extra: [] as Record<string, unknown>[] }));
 vi.mock('@/lib/api/portal', async () => {
   const { makeInspection } = await import('@/features/inspection-portal/__tests__/fixtures');
   return {
@@ -65,6 +68,7 @@ vi.mock('@/lib/api/portal', async () => {
         ? Promise.reject(new Error('portal failed'))
         : Promise.resolve([
             makeInspection({ inspection_id: 'i-clean', property_code: 'z0015A01', inspection_type_label: '排水管清掃', vendor_id: 'v-mine', inspection_months: [] }),
+            ...portalApi.extra.map((over) => makeInspection(over)),
           ]),
   };
 });
@@ -97,13 +101,14 @@ beforeEach(() => {
   HTMLDialogElement.prototype.close ??= function () {};
   isAdmin = false;
   portalApi.fail = false;
+  portalApi.extra = [];
   insertEntries.mockReset();
   insertEntries.mockResolvedValue([]);
 });
 
 describe('1件入力画面（一般ユーザー）', () => {
-  // 記録する保守会社は v1 と同じく社名順の先頭（v1 index.html:363 の #vendor = 0。ユーザー決定 2026-10-15）。紐付けは自社で読む
-  it('自社の紐付けを反映し、v1 と同じく社名順の先頭の保守会社で未設置物件の案内を申請できる', async () => {
+  // 記録する保守会社は自社（ユーザー決定 2026-10-25）。v1 は社名順の先頭（index.html:363 の #vendor = 0）で、ここは v1 と意図して違う
+  it('自社の紐付けを反映し、点検行に結び付けて点検の保守会社（自社）で未設置物件の案内を申請できる', async () => {
     render(
       <ToastProvider>
         <SingleEntryPage />
@@ -131,11 +136,12 @@ describe('1件入力画面（一般ユーザー）', () => {
       user_id: 'u1',
       property_code: 'z0015A01',
       terminal_id: '',
-      vendor_name: '㈱IHIﾊﾟｰｷﾝｸﾞｽｸｴｱ',
+      vendor_name: '三菱電機ﾋﾞﾙｿﾘｭｰｼｮﾝｽﾞ㈱',
+      emergency_contact: '0120-000-000',
       inspection_type: '排水管清掃',
       display_duration: 10,
       status: 'draft',
-      // 点検行に一致したので結び付ける。保守会社は記録する会社名（社名順の先頭）ではなく自社（DB が自社以外を拒む）
+      // 点検行に一致したので結び付ける。保守会社は自社（DB が自社以外を拒む）
       property_inspection_id: 'i-clean',
       vendor_id: 'v-mine',
       target_month: `${String(rows[0]!.inspection_start).slice(0, 7)}-01`,
@@ -191,6 +197,12 @@ describe('1件入力画面（管理者の管理会社フィルター）', () => 
     );
 
     const filter = await screen.findByLabelText('管理会社');
+    // 管理者は保守会社を選ばないと追加できない（記録する保守会社が無い。ユーザー決定 2026-10-25）
+    pick('保守会社', '三菱');
+    await waitFor(() => {
+      fireEvent.click(screen.getByRole('combobox', { name: '物件コード *' }));
+      expect(screen.getByRole('listbox')).toBeInTheDocument();
+    });
     pick('物件コード *', '120273-00');
     pick('点検工事案内 *', '排水管');
     fireEvent.click(screen.getByRole('button', { name: 'データを追加' }));
@@ -319,5 +331,52 @@ describe('1件入力画面（点検予定への結び付け。修正依頼1024 �
     const row = await submitCustomEntry();
     expect(row).not.toHaveProperty('property_inspection_id');
     expect(await screen.findByText('1件を申請しました（点検予定には結び付けていません）')).toBeInTheDocument();
+  });
+});
+
+describe('1件入力画面（物件を選んだときの点検工事案内。修正依頼1024 本番確認 ②）', () => {
+  it('物件を選ぶとその物件の点検行の点検種別を入れ（自動で入った紐付けの既定は置き換える）、手で選んだ種別は保つ。追加の貼紙でも欄は見える', async () => {
+    portalApi.extra = [
+      { inspection_id: 'i-ev', property_code: '2010', inspection_type_label: 'エレベーター定期点検', vendor_id: 'v-mine', inspection_months: [] },
+    ];
+    render(
+      <ToastProvider>
+        <SingleEntryPage />
+      </ToastProvider>,
+    );
+    const typeBox = () => screen.getByRole('combobox', { name: '点検工事案内 *' });
+    await waitFor(() => expect(typeBox()).toHaveValue('排水管清掃'));
+
+    pick('物件コード *', '2010');
+    await waitFor(() => expect(typeBox()).toHaveValue('エレベーター定期点検'));
+
+    // 手で選んだ点検種別は、物件を選び直しても変えない
+    pick('点検工事案内 *', '外壁');
+    pick('物件コード *', 'z0015A01');
+    expect(typeBox()).toHaveValue('外壁工事');
+
+    // 追加の貼紙でも点検工事案内の欄は出る（選び忘れで点検予定に結び付かないように）
+    fireEvent.click(screen.getByRole('radio', { name: '追加' }));
+    expect(typeBox()).toHaveValue('外壁工事');
+  });
+});
+
+describe('1件入力画面（記録する保守会社。修正依頼1024 本番確認 ③・ユーザー決定 2026-10-25）', () => {
+  it('点検予定に結び付かない申請も、保守会社のアカウントは自社の社名・緊急連絡先で記録する（v1 の社名順の先頭ではない）', async () => {
+    render(
+      <ToastProvider>
+        <SingleEntryPage />
+      </ToastProvider>,
+    );
+    await waitFor(() => expect(screen.getByRole('combobox', { name: '点検工事案内 *' })).toHaveValue('排水管清掃'));
+    // 120273-00 には点検行が無いので結び付かない
+    pick('物件コード *', '120273-00');
+    fireEvent.click(screen.getByRole('button', { name: 'データを追加' }));
+    await screen.findByRole('table');
+    fireEvent.click(screen.getByRole('button', { name: '申請する' }));
+    await waitFor(() => expect(insertEntries).toHaveBeenCalledTimes(1));
+    const row = (insertEntries.mock.calls[0]![0] as Record<string, unknown>[])[0]!;
+    expect(row).not.toHaveProperty('property_inspection_id');
+    expect(row).toMatchObject({ vendor_name: '三菱電機ﾋﾞﾙｿﾘｭｰｼｮﾝｽﾞ㈱', emergency_contact: '0120-000-000' });
   });
 });

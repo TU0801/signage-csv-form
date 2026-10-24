@@ -4,6 +4,7 @@ import {
   applyInspectionType,
   applyLinkedDefaults,
   applyPropertyChange,
+  applyPropertyInspectionDefault,
   applyStartDateChange,
   applyEndDateChange,
   applyVendorCleared,
@@ -148,6 +149,23 @@ describe('点検日の連動（v1 init の change）', () => {
   });
 });
 
+describe('物件を選んだときの点検工事案内（修正依頼1024 本番確認 ②。一括入力 B9 と同じ規則）', () => {
+  const rows = [
+    makeInspection({ property_code: '120273', inspection_type_label: '外壁工事' }),
+    makeInspection({ property_code: '120273-00', inspection_type_label: 'エレベーター定期点検' }),
+    makeInspection({ property_code: '2010', inspection_type_label: '消防点検のお知らせ' }),
+  ];
+
+  it('その物件の点検行の点検種別（マスターの並びで先頭）→ 無ければ紐付けの先頭 → どちらも無ければそのまま。カテゴリは見える値に戻す', () => {
+    const own = applyPropertyInspectionDefault(values({ propertyCode: '120273-00', category: '清掃' }), TYPES, rows, NO_LINKS);
+    expect(own).toMatchObject({ inspectionTypeId: 'ev', templateNo: 'elevator_inspection', noticeText: 'EV停止', category: '' });
+    const linked = applyPropertyInspectionDefault(values({ propertyCode: 'z0015A01' }), TYPES, rows, new Set(['work', 'clean']));
+    expect(linked).toMatchObject({ inspectionTypeId: 'clean', templateNo: 'cleaning' });
+    const none = values({ propertyCode: 'z0015A01', category: '点検' });
+    expect(applyPropertyInspectionDefault(none, TYPES, rows, NO_LINKS)).toEqual(none);
+  });
+});
+
 describe('データを追加（v1 addEntry）', () => {
   const ok = values({ propertyCode: 'z0015A01', inspectionTypeId: 'ev', templateNo: 'elevator_inspection' });
 
@@ -170,6 +188,13 @@ describe('データを追加（v1 addEntry）', () => {
       ok: false,
       message: '貼紙画像を選択してください',
     });
+  });
+
+  it('追加の貼紙でも点検工事案内は必須（点検予定に結び付けるため。修正依頼1024 本番確認 ②）', () => {
+    const file = new File(['x'], 'poster.png', { type: 'image/png' });
+    expect(
+      buildLocalEntry(values({ ...ok, posterType: 'custom', inspectionTypeId: '' }), ctx({ customImage: { file, dataUrl: 'data:' } })),
+    ).toEqual({ ok: false, message: '点検工事案内を選択してください' });
   });
 
   it('設定値による検査はまとめて改行区切りで出す', () => {

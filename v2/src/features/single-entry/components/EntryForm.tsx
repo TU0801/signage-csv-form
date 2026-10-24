@@ -168,18 +168,17 @@ export function EntryForm({
           value={values.category}
           onChange={(e) => form.changeCategory(e.target.value)}
         />
-        {!isCustom && (
-          <Combobox
-            id="se-inspection-type"
-            label="点検工事案内"
-            required
-            placeholder="選択してください"
-            options={inspectionOptions}
-            groups={INSPECTION_GROUPS}
-            value={values.inspectionTypeId}
-            onChange={form.changeInspectionType}
-          />
-        )}
+        {/* 追加の貼紙でも出す（必須。点検行への結び付けに使う。隠すと選び忘れたまま申請できた。修正依頼1024 本番確認 ②） */}
+        <Combobox
+          id="se-inspection-type"
+          label="点検工事案内"
+          required
+          placeholder="選択してください"
+          options={inspectionOptions}
+          groups={INSPECTION_GROUPS}
+          value={values.inspectionTypeId}
+          onChange={form.changeInspectionType}
+        />
 
         <fieldset className="space-y-0.5">
           <legend className="text-xs font-medium text-gray-600">貼紙</legend>
