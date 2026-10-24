@@ -43,14 +43,15 @@ beforeEach(() => {
 
 async function setup() {
   const onUploaded = vi.fn();
-  render(<BulkReportUploadModal open onClose={vi.fn()} vendorId="v1" onUploaded={onUploaded} />);
+  const onClose = vi.fn();
+  render(<BulkReportUploadModal open onClose={onClose} vendorId="v1" onUploaded={onUploaded} />);
   fireEvent.change(screen.getByTestId('bulk-report-file-input'), {
     target: { files: [new File(['%PDF-1.4'], 'まとめ.pdf', { type: 'application/pdf' })] },
   });
   await screen.findByTestId('bulk-page-4');
   // 選択肢（点検一覧）の読み込みを待つ
   await screen.findAllByRole('option', { name: /テスト第二マンション/ });
-  return { onUploaded };
+  return { onUploaded, onClose };
 }
 
 const pick = (no: number, name: RegExp) => {
@@ -104,5 +105,51 @@ describe('BulkReportUploadModal', () => {
     await waitFor(() => expect(onUploaded).toHaveBeenCalledTimes(1));
     // 失敗した区間だけを再送できる
     expect(screen.getByRole('button', { name: '残りの1区間を提出する' })).toBeInTheDocument();
+  });
+
+  it('送信の途中は Escape・背景・× で閉じない', async () => {
+    let resolve!: (v: unknown) => void;
+    api.registerInspectionReport.mockImplementationOnce(() => new Promise((r) => (resolve = r)));
+    const { onClose } = await setup();
+    fireEvent.change(screen.getByLabelText('実施日（全区間の既定）'), { target: { value: '2026-10-05' } });
+    pick(1, /テスト第一マンション/);
+    fireEvent.click(screen.getByRole('button', { name: '1区間を提出する' }));
+    await waitFor(() => expect(api.registerInspectionReport).toHaveBeenCalledTimes(1));
+
+    const dialog = screen.getByTestId('bulk-segment-1').closest('dialog')!;
+    const cancel = new Event('cancel', { cancelable: true });
+    fireEvent(dialog, cancel);
+    expect(cancel.defaultPrevented).toBe(true);
+    fireEvent.mouseDown(dialog);
+    fireEvent.click(dialog);
+    fireEvent.click(screen.getByRole('button', { name: '閉じる', hidden: true }));
+    expect(onClose).not.toHaveBeenCalled();
+
+    resolve(makeReport({ file_name: 'a.pdf' }));
+    expect(await within(screen.getByTestId('bulk-segment-1')).findByText(/提出しました/)).toBeInTheDocument();
+  });
+
+  it('区切りを変えると前の失敗の表示を消す', async () => {
+    api.registerInspectionReport.mockRejectedValueOnce({ message: '通信に失敗しました' });
+    await setup();
+    fireEvent.change(screen.getByLabelText('実施日（全区間の既定）'), { target: { value: '2026-10-05' } });
+    pick(1, /テスト第一マンション/);
+    fireEvent.click(screen.getByRole('button', { name: '1区間を提出する' }));
+    expect(await within(screen.getByTestId('bulk-segment-1')).findByText(/失敗:/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '2ページと3ページの間で区切る' }));
+    fireEvent.click(screen.getByRole('button', { name: '2ページと3ページの間の区切りを外す' }));
+    expect(screen.queryByText(/失敗:/)).toBeNull();
+  });
+
+  it('実施日が今日より後なら区間ごとに注意を出す（提出は止めない）', async () => {
+    await setup();
+    fireEvent.change(screen.getByLabelText('実施日（全区間の既定）'), { target: { value: '2999-01-01' } });
+    expect(
+      within(screen.getByTestId('bulk-segment-1')).getByText('実施日が未来の日付です。誤りがないか確かめてください'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '1区間を提出する' })).toBeEnabled();
+    fireEvent.change(screen.getByLabelText('区間1の実施日'), { target: { value: '2026-10-01' } });
+    expect(screen.queryByText(/実施日が未来の日付です/)).toBeNull();
   });
 });

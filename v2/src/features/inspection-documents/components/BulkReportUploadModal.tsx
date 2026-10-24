@@ -131,7 +131,9 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
       setTouched(false);
     } catch (err) {
       console.error('PDF open failed:', err);
-      setFileError('PDF を開けませんでした（壊れたファイル・パスワード付きの PDF は扱えません）');
+      setFileError(
+        'PDF を開けませんでした（壊れたファイル・パスワード付きの PDF は扱えません。ブラウザが古い場合は最新版に更新してください）',
+      );
     } finally {
       setOpening(false);
     }
@@ -214,6 +216,8 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
       title="報告書一括アップロード"
       className="max-w-6xl"
       dirty={dirty && !submitting}
+      // 送信の途中で閉じると、残りの区間の送信が裏で続き、区間ごとの結果が見えなくなる
+      busy={submitting}
       footer={
         <>
           <Button variant="secondary" size="sm" onClick={onClose} disabled={submitting}>
@@ -319,7 +323,13 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
                         }
                         title={breaks.has(page) ? '区切りを外す' : 'ここで区切る'}
                         disabled={locked || submitting}
-                        onClick={() => setBreaks((prev) => toggleBreak(prev, page))}
+                        onClick={() => {
+                          setBreaks((prev) => toggleBreak(prev, page));
+                          // 区間の組み方が変わるので、前の失敗の表示は消す（別のページの区間に残さない）
+                          setResults((prev) =>
+                            Object.fromEntries(Object.entries(prev).filter(([, r]) => r.state === 'ok')),
+                          );
+                        }}
                         className={cn(
                           'mx-0.5 w-3 rounded-sm',
                           breaks.has(page)
@@ -359,6 +369,7 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
                     segment={seg}
                     input={inputs[seg.start] ?? EMPTY_INPUT}
                     defaultPerformedOn={defaultPerformedOn}
+                    today={today}
                     groups={groups}
                     target={targetMap.get((inputs[seg.start] ?? EMPTY_INPUT).targetKey) ?? null}
                     reports={data.reports}
@@ -453,6 +464,7 @@ interface SegmentRowProps {
   segment: Segment;
   input: SegmentInput;
   defaultPerformedOn: string;
+  today: string;
   groups: [string, BulkTarget[]][];
   target: BulkTarget | null;
   reports: Parameters<typeof existingReport>[0];
@@ -466,6 +478,7 @@ function SegmentRow({
   segment,
   input,
   defaultPerformedOn,
+  today,
   groups,
   target,
   reports,
@@ -528,6 +541,10 @@ function SegmentRow({
           onChange={(e) => onChange({ performedOn: e.target.value })}
         />
         {errors?.performedOn && <p className="mt-0.5 text-[11px] text-red-600">{errors.performedOn}</p>}
+        {/* 1件の報告書と同じ注意（提出は止めない） */}
+        {!errors?.performedOn && performedOn > today && (
+          <p className="mt-0.5 text-[11px] text-amber-700">実施日が未来の日付です。誤りがないか確かめてください</p>
+        )}
       </td>
       <td className="px-1 py-1">
         <input
