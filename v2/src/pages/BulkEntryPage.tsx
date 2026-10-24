@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { HeaderSlot } from '@/components/layout/HeaderSlot';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -106,7 +106,7 @@ function focusErrorCell(rowId: number, col: number) {
  * v1: bulk.html / js/bulk.js
  */
 export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
-  const { addToast } = useToast();
+  const { addToast, dismissToast } = useToast();
   const { user, isAdmin, vendorId: profileVendorId } = useAuth();
   const { confirm, dialog: confirmDialog } = useBulkConfirm();
   const { ready, vendors, changeVendor, loadFailed, reload } = useBulkSession(confirm);
@@ -122,6 +122,30 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
   const applyToRows = useBulkStore((s) => s.applyToRows);
   const syncScheduleRows = useBulkStore((s) => s.syncScheduleRows);
   const setInspectionDefaults = useBulkStore((s) => s.setInspectionDefaults);
+
+  // 申請のエラーのトースト（× を押すまで残る）。行のエラーはその行を直した・消したとき、どれも次に申請できたときと
+  // 一括入力の画面を離れた（1件入力へ切り替えた）ときに消す（修正依頼1024 本番確認: 直した後も数分残っていた）
+  const saveErrorToasts = useRef<{ id: string; rowId: number | null }[]>([]);
+  const showSaveError = useCallback(
+    (message: string, rowId: number | null = null) => {
+      saveErrorToasts.current.push({ id: addToast(message, 'error'), rowId });
+    },
+    [addToast],
+  );
+  const dismissSaveErrors = useCallback(() => {
+    saveErrorToasts.current.forEach((t) => dismissToast(t.id));
+    saveErrorToasts.current = [];
+  }, [dismissToast]);
+  useEffect(() => dismissSaveErrors, [dismissSaveErrors]);
+  useEffect(() => {
+    saveErrorToasts.current = saveErrorToasts.current.filter((t) => {
+      if (t.rowId === null) return true;
+      const row = rows.find((r) => r.id === t.rowId);
+      if (row && !row.isValid) return true;
+      dismissToast(t.id);
+      return false;
+    });
+  }, [rows, dismissToast]);
 
   // 点検の予定・申請・報告書・完了連絡・検査月（範囲は DB が絞る）
   const portal = usePortalData();
@@ -503,11 +527,11 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
     const { masterData, currentVendor: vendor, appSettings, userId, rows: all } = useBulkStore.getState();
     const targets = applyTargets();
     if (targets.length === 0) {
-      addToast('申請するデータがありません（予定の行は点検開始日を入れると申請の対象になります）', 'error');
+      showSaveError('申請するデータがありません（予定の行は点検開始日を入れると申請の対象になります）');
       return;
     }
     if (saveBlockedReason) {
-      addToast(saveBlockedReason, 'error');
+      showSaveError(saveBlockedReason);
       return;
     }
     const errorRows = targets.filter((r) => !r.isValid);
@@ -515,9 +539,9 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       const first = firstError(errorRows)!;
       // 表の No と同じ（表示中の行の通し番号）
       const rowNo = all.filter(isVisible).findIndex((r) => r.id === first.rowId) + 1;
-      addToast(
+      showSaveError(
         `入力にエラーがある行が${errorRows.length}件あります。直してから申請してください\n${rowNo}行目: ${errorLabel(first.message)}`,
-        'error',
+        first.rowId,
       );
       focusErrorCell(first.rowId, first.col);
       return;
@@ -532,6 +556,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       // 予定の行は入力を空に戻す（読み直しで申請済みの行になる。点検月未登録の行は未申請のまま残るので二重に申請させない）
       const manualIds = targets.filter((r) => !r.schedule).map((r) => r.id);
       const scheduleIds = targets.filter((r) => r.schedule).map((r) => r.id);
+      dismissSaveErrors();
       addToast(
         hidden > 0
           ? `${targets.length}件のデータを申請しました\n絞り込みで隠れている${hidden}件は申請していません`
@@ -543,7 +568,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       void portal.refetch();
     } catch (error) {
       console.error('Save failed:', error);
-      addToast(saveErrorMessage(error), 'error');
+      showSaveError(saveErrorMessage(error));
     } finally {
       setSaving(false);
     }

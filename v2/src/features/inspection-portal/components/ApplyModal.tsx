@@ -10,6 +10,7 @@ import { useMasterData } from '@/hooks/useMasterData';
 import { normalizeTerminalId } from '@/lib/terminal';
 import { insertEntries } from '@/lib/api/single-entry';
 import { templateFileUrl } from '@/lib/templateStorage';
+import { safePosterUrl } from '@/lib/posterUrl';
 import { useAppSettings } from '@/features/single-entry/hooks/useAppSettings';
 import { noticeUsage, remarksUsage } from '@/features/single-entry/lib/entryLogic';
 import { resolveTemplateImageUrl } from '@/features/single-entry/lib/templateImages';
@@ -148,16 +149,23 @@ function ApplyForm({
     return ctx.property ? initial : { ...initial, terminalId: normalizeTerminalId(inspection.terminal_ids[0] ?? '') };
   });
   const [loadingEntry, setLoadingEntry] = useState(!!resubmit);
+  // 再申請では保守会社名を書き換えない（toResubmitPatch）ので、表示も元の申請の保守会社名にする
+  const [existingVendorName, setExistingVendorName] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   // 他の方が作った差戻しは直せない（RLS）ので、新しい申請として出す
   const canEditExisting = !!resubmit && (resubmit.is_mine || isAdmin);
+  // 追加貼紙（1件入力・一括入力で画像を付けた申請）の差戻し。このモーダルは貼紙を選べないので、貼紙は元の追加画像のまま出す
+  const customPoster = resubmit?.poster_type === 'custom' ? resubmit : null;
+  const customPosterUrl = safePosterUrl(customPoster?.poster_image);
 
   useEffect(() => {
     if (!resubmit || !canEditExisting) return;
     let cancelled = false;
     fetchEntryForEdit(resubmit.id)
       .then((row) => {
-        if (!cancelled) setValues(valuesFromDbEntry(row, defaultMonth));
+        if (cancelled) return;
+        setValues(valuesFromDbEntry(row, defaultMonth));
+        setExistingVendorName(row.vendor_name ?? '');
       })
       .catch((err: unknown) => {
         if (!cancelled) addToast(`申請を読み込めませんでした: ${errorMessage(err)}`, 'error');
@@ -186,7 +194,8 @@ function ApplyForm({
       addToast('ログインが必要です', 'error');
       return;
     }
-    const result = buildApplyRow(values, ctx, userId, today);
+    // 追加貼紙はテンプレート画像を使わないので、テンプレート画像の有無では止めない
+    const result = buildApplyRow(values, customPoster ? { ...ctx, hasTemplateImage: () => true } : ctx, userId, today);
     if (!result.ok) {
       addToast(result.message, 'error');
       return;
@@ -194,10 +203,25 @@ function ApplyForm({
     setSubmitting(true);
     try {
       if (resubmit && canEditExisting) {
-        await resubmitEntry(resubmit.id, toResubmitPatch(result.row));
+        // 直せる欄だけを書き換える（貼紙・保守会社などは元の申請のまま）
+        await resubmitEntry(
+          resubmit.id,
+          toResubmitPatch(result.row, { terminal: terminals.length > 1, targetMonth: !target.targetMonth }),
+        );
         addToast('再申請しました', 'success');
       } else {
-        await insertEntries([result.row]);
+        // 他の方の追加貼紙の差戻しを新しい申請として出すときも、貼紙は元の追加画像を使う
+        await insertEntries([
+          customPoster
+            ? {
+                ...result.row,
+                poster_type: 'custom',
+                poster_image: customPoster.poster_image,
+                template_no: customPoster.template_no ?? '',
+                inspection_type: customPoster.inspection_type,
+              }
+            : result.row,
+        ]);
         addToast('申請しました', 'success');
       }
       onApplied();
@@ -228,9 +252,31 @@ function ApplyForm({
         <dt className="text-gray-500">点検種別</dt>
         <dd>{inspection.inspection_type_label ?? '（未設定）'}</dd>
         <dt className="text-gray-500">保守会社</dt>
-        <dd>{ctx.vendor?.vendor_name || <span className="text-red-600">未設定</span>}</dd>
-        <dt className="text-gray-500">テンプレートNo</dt>
-        <dd>{inspection.template_no || ctx.inspectionType?.template_no || '－'}</dd>
+        <dd>{(existingVendorName ?? ctx.vendor?.vendor_name) || <span className="text-red-600">未設定</span>}</dd>
+        {customPoster ? (
+          <>
+            <dt className="text-gray-500">貼紙</dt>
+            <dd>
+              追加画像（貼紙は変わりません）
+              {customPosterUrl ? (
+                <a href={customPosterUrl} target="_blank" rel="noopener noreferrer" title="別のタブで開く" className="mt-0.5 block">
+                  <img
+                    src={customPosterUrl}
+                    alt="追加画像"
+                    className="max-h-32 max-w-[12rem] rounded border border-gray-200 object-contain"
+                  />
+                </a>
+              ) : (
+                <span className="ml-1 text-gray-500">（画像を表示できません）</span>
+              )}
+            </dd>
+          </>
+        ) : (
+          <>
+            <dt className="text-gray-500">テンプレートNo</dt>
+            <dd>{inspection.template_no || ctx.inspectionType?.template_no || '－'}</dd>
+          </>
+        )}
         {target.targetMonth && (
           <>
             <dt className="text-gray-500">対象月</dt>

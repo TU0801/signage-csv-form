@@ -11,7 +11,7 @@ vi.mock('@/lib/api/single-entry', async (orig) => ({
 }));
 const entryApi = vi.hoisted(() => ({ fetchEntryForEdit: vi.fn(), resubmitEntry: vi.fn(async () => ({})) }));
 vi.mock('../lib/entryApi', () => entryApi);
-vi.mock('@/lib/supabase', () => ({ supabase: {}, TABLES: {}, RPC: {}, BUCKETS: {} }));
+vi.mock('@/lib/supabase', () => ({ supabase: {}, TABLES: {}, RPC: {}, BUCKETS: {}, SUPABASE_URL: 'https://sb.example' }));
 vi.mock('@/lib/storage', () => ({ getPublicUrl: (p: string) => `https://storage/${p}` }));
 vi.mock('@/features/single-entry/hooks/useAppSettings', async () => {
   const { DEFAULT_APP_SETTINGS: s } = await import('@/lib/api/single-entry');
@@ -159,8 +159,62 @@ describe('ApplyModal（点検ポータルの申請）', () => {
     await waitFor(() => expect(entryApi.resubmitEntry).toHaveBeenCalledTimes(1));
     const [id, patch] = entryApi.resubmitEntry.mock.calls[0] as unknown as [string, Record<string, unknown>];
     expect(id).toBe('e9');
-    expect(patch).toMatchObject({ status: 'draft', inspection_start: '2026-11-12', inspection_end: '2026-11-12', terminal_id: 'T-2', vendor_id: 'v1' });
+    expect(patch).toMatchObject({ status: 'draft', inspection_start: '2026-11-12', inspection_end: '2026-11-12', terminal_id: 'T-2' });
+    // 画面に無い欄（作成者・保守会社・点検行）は元の申請のまま（修正依頼1024 本番確認）
     expect(patch).not.toHaveProperty('user_id');
+    expect(patch).not.toHaveProperty('vendor_id');
     expect(api.insertEntries).not.toHaveBeenCalled();
+  });
+
+  it('追加貼紙の申請を再申請しても、貼紙の種類・画像・テンプレートNo・保守会社・点検種別を変えない（画像を見せ、テンプレートNoは出さない）', async () => {
+    const image = 'https://sb.example/storage/v1/object/public/poster-images/custom/a.png';
+    entryApi.fetchEntryForEdit.mockResolvedValue({
+      id: 'e9',
+      terminal_id: 'T-2',
+      inspection_start: '2026-11-03',
+      inspection_end: '2026-11-03',
+      announcement: '',
+      remarks: '',
+      display_start_date: '2026-11-03',
+      display_end_date: '2026-11-03',
+      target_month: '2026-11-01',
+      poster_type: 'custom',
+      poster_image: image,
+      template_no: 'poster.png',
+      inspection_type: '追加画像',
+      vendor_name: '三菱電機ビルソリューションズ',
+    });
+    const sentBack = makeEntry({ id: 'e9', status: 'pending', poster_type: 'custom', poster_image: image, template_no: 'poster.png' });
+    render(
+      <ApplyModal
+        // テンプレート画像の無い点検種別でも、追加貼紙なのでテンプレートの検査で止めない
+        target={{
+          inspection: makeInspection({ inspection_type_id: 'zz', inspection_type_label: '未登録の点検', template_no: null }),
+          targetMonth: '2026-11-01',
+          resubmit: sentBack,
+        }}
+        onClose={vi.fn()}
+        onApplied={vi.fn()}
+        userId="u1"
+        isAdmin={false}
+        profileVendorId="v1"
+      />,
+    );
+    expect(await screen.findByLabelText('点検開始日 *')).toHaveValue('2026-11-03');
+    expect(screen.getByRole('img', { name: '追加画像' })).toHaveAttribute('src', image);
+    expect(screen.queryByText('テンプレートNo')).toBeNull();
+    // 保守会社の表示も、保存される元の申請の保守会社名（アカウントの保守会社「テスト保守」ではない）
+    expect(screen.getByText('三菱電機ビルソリューションズ')).toBeInTheDocument();
+    expect(screen.queryByText('テスト保守')).toBeNull();
+    fireEvent.change(screen.getByLabelText('点検開始日 *'), { target: { value: '2026-11-12' } });
+    fireEvent.click(screen.getByRole('button', { name: '再申請する' }));
+
+    await waitFor(() => expect(entryApi.resubmitEntry).toHaveBeenCalledTimes(1));
+    expect(toast.addToast).not.toHaveBeenCalledWith(expect.anything(), 'error');
+    const [, patch] = entryApi.resubmitEntry.mock.calls[0] as unknown as [string, Record<string, unknown>];
+    expect(patch).toMatchObject({ status: 'draft', inspection_start: '2026-11-12' });
+    for (const col of ['poster_type', 'poster_image', 'template_no', 'vendor_name', 'emergency_contact', 'inspection_type', 'vendor_id']) {
+      expect(patch).not.toHaveProperty(col);
+    }
   });
 });

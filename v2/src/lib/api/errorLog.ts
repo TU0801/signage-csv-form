@@ -61,9 +61,12 @@ function safeStringify(value: unknown): string {
 // v1: js/error-handler.js saveErrorToSupabase
 async function saveErrorLog(log: ErrorLogPayload): Promise<void> {
   if (pageUnloading || errorSendCount >= MAX_ERROR_SENDS_PER_PAGE) return;
+  // 未ログイン（ログアウト直後を含む）の失敗は送らない。anon の INSERT は RLS が必ず弾き、連番（error_logs_id_seq）だけが進む
+  // （修正依頼1024 本番確認: ログアウト直後のマスタ読み直しの失敗で 401 / 42501 になった）
+  const accessToken = readStoredSession()?.access_token;
+  if (!accessToken) return;
   errorSendCount++;
   try {
-    const accessToken = readStoredSession()?.access_token || SUPABASE_ANON_KEY;
     await fetch(`${SUPABASE_URL}/rest/v1/${TABLES.errorLogs}`, {
       method: 'POST',
       headers: {

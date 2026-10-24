@@ -181,13 +181,31 @@ export function buildApplyRow(v: ApplyValues, ctx: ApplyContext, userId: string,
   };
 }
 
-/** 差戻しの再申請で UPDATE する列（作成者は変えない） */
-export type ResubmitPatch = Omit<EntryInsertRow, 'user_id'>;
+/**
+ * 差戻しの再申請で UPDATE する列。申請のモーダルで直せる欄（点検日・案内文・掲示備考・表示期間、出しているときは端末と対象月）だけ。
+ * 貼紙の種類・画像・テンプレートNo・点検種別・保守会社・緊急連絡先・点検行・作成者・メモ・表示時間などは元の申請のまま
+ * （修正依頼1024 本番確認: 行全体で上書きしていたため、追加貼紙の申請がテンプレート貼紙に書き換わった）
+ */
+export type ResubmitPatch = Pick<
+  EntryInsertRow,
+  'inspection_start' | 'inspection_end' | 'announcement' | 'remarks' | 'display_start_date' | 'display_end_date' | 'status'
+> &
+  Partial<Pick<EntryInsertRow, 'terminal_id' | 'target_month'>>;
 
-export function toResubmitPatch(row: EntryInsertRow): ResubmitPatch {
-  const patch: Partial<EntryInsertRow> = { ...row };
-  delete patch.user_id;
-  // 再申請のモーダルにはメモ欄が無いので、点検登録フォームで書いたメモを消さない
-  delete patch.memo;
-  return patch as ResubmitPatch;
+export function toResubmitPatch(
+  row: EntryInsertRow,
+  /** モーダルに出している欄（端末は2台以上の物件だけ、対象月は点検月の無い点検行から開いたときだけ選べる） */
+  editable: { terminal: boolean; targetMonth: boolean },
+): ResubmitPatch {
+  return {
+    inspection_start: row.inspection_start,
+    inspection_end: row.inspection_end,
+    announcement: row.announcement,
+    remarks: row.remarks,
+    display_start_date: row.display_start_date,
+    display_end_date: row.display_end_date,
+    status: row.status,
+    ...(editable.terminal ? { terminal_id: row.terminal_id } : {}),
+    ...(editable.targetMonth ? { target_month: row.target_month } : {}),
+  };
 }
