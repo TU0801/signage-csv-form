@@ -9,6 +9,7 @@ import { safePosterUrl } from '@/lib/posterUrl';
 import { cn } from '@/lib/utils';
 import type { DbEntry } from '@/types/database';
 import { useRefetchOnVisible } from '../hooks/useRefetchOnVisible';
+import { OrphanImagesModal } from './OrphanImagesModal';
 
 const STATUS_LABEL: Record<string, string> = {
   pending: '未申請',
@@ -36,13 +37,14 @@ export function entryPeriod(e: Pick<DbEntry, 'inspection_start' | 'inspection_en
 }
 
 /** 承認待ちの3つ目のタブ: 貼紙で「追加」を選んで登録された画像（状態は問わない。承認待ちが先頭） */
-export function CustomImagesList({ onCount }: { onCount?: (n: number) => void }) {
+export function CustomImagesList({ onCount, canCleanup = false }: { onCount?: (n: number) => void; canCleanup?: boolean }) {
   const { addToast } = useToast();
   const { propertyNames } = useEntryLookups();
   const [entries, setEntries] = useState<DbEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState<string | 'all' | null>(null);
+  const [orphanOpen, setOrphanOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -118,6 +120,11 @@ export function CustomImagesList({ onCount }: { onCount?: (n: number) => void })
             >
               {downloading === 'all' ? 'DL中...' : 'まとめてDL'}
             </Button>
+            {canCleanup && (
+              <Button size="sm" variant="secondary" onClick={() => setOrphanOpen(true)}>
+                使われていない画像を整理
+              </Button>
+            )}
           </div>
         </div>
         <p className="mt-0.5 text-xs text-gray-500">
@@ -231,6 +238,7 @@ export function CustomImagesList({ onCount }: { onCount?: (n: number) => void })
           </div>
         )}
       </CardContent>
+      {canCleanup && <OrphanImagesModal open={orphanOpen} onClose={() => setOrphanOpen(false)} />}
     </Card>
   );
 }

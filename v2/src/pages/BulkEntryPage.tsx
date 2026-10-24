@@ -29,6 +29,7 @@ import { errorLabel, firstError } from '@/features/bulk-entry/utils/columns';
 import { formatInspectedOn, isApplyTarget, scheduleRowEntry, scheduleRowInput } from '@/features/bulk-entry/utils/scheduleRows';
 import { clearAutoSave } from '@/features/bulk-entry/utils/bulkAutoSave';
 import { getStoredTemplates, getVisibleTemplates, templateRows } from '@/features/bulk-entry/utils/bulkTemplates';
+import { discardUnheldRowImages, rowPosterImages } from '@/features/bulk-entry/utils/discardRowImages';
 import type { BulkEntryRow } from '@/features/bulk-entry/types';
 import { usePortalData } from '@/features/inspection-portal/hooks/usePortalData';
 import { reportEntryId } from '@/features/inspection-portal/lib/actions';
@@ -438,7 +439,10 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       return;
     }
     if (!(await confirm(`${ids.length}件の行を削除しますか？`))) return;
+    const idSet = new Set(ids);
+    const images = rowPosterImages(useBulkStore.getState().rows.filter((r) => idSet.has(r.id)));
     removeRows(ids);
+    discardUnheldRowImages(images);
     addToast(`${ids.length}件の行を削除しました`, 'success');
   }, [removeRows, addToast, confirm]);
 
@@ -471,7 +475,10 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
     const template = getStoredTemplates().find((t) => t.id === id);
     if (!template) return;
     if (useBulkStore.getState().rows.some((r) => !r.schedule) && !(await confirm('現在のデータを置き換えますか？'))) return;
+    // 置き換えで消える手の行の画像は、適用したテンプレートが同じ画像を持っていなければ片付ける
+    const images = rowPosterImages(useBulkStore.getState().rows.filter((r) => !r.schedule));
     replaceRows(templateRows(template));
+    discardUnheldRowImages(images);
     addToast(`テンプレート「${template.name}」を適用しました`, 'success');
   };
 

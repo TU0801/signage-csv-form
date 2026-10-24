@@ -9,6 +9,7 @@ import { useBulkDragDrop } from '../hooks/useBulkDragDrop';
 import { defaultDisplayTime, terminalIdsFor, uniqueProperties } from '../utils/bulkMaster';
 import { COL, LAST_INPUT_COL } from '../utils/columns';
 import { hasRowDetail, rowDetailSummary } from '../utils/rowDetail';
+import { discardUnheldRowImages, rowPosterImages } from '../utils/discardRowImages';
 import { ContextMenu } from './ContextMenu';
 import { SearchableSelect } from './SearchableSelect';
 import type { BulkEntryRow } from '../types';
@@ -225,7 +226,9 @@ export function BulkTable({
         onClick: async () => {
           if (rowIndex === -1) return;
           if (await confirm('この行を削除しますか？')) {
+            const images = rowPosterImages(useBulkStore.getState().rows.filter((r) => r.id === rowId));
             removeRows([rowId]);
+            discardUnheldRowImages(images);
             addToast('行を削除しました', 'success');
           }
         },

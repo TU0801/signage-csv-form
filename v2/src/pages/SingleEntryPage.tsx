@@ -7,7 +7,7 @@ import { useToast } from '@/components/ui/Toast';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useMasterData } from '@/hooks/useMasterData';
 import { useAuth } from '@/hooks/useAuth';
-import { uploadPosterImage } from '@/lib/storage';
+import { discardOwnPosterImages, uploadPosterImage } from '@/lib/storage';
 import { templateFileUrl } from '@/lib/templateStorage';
 import { cn, todayUtc } from '@/lib/utils';
 import { PosterType } from '@/lib/constants';
@@ -273,18 +273,25 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
     const sending = localEntries;
     const sentIds = new Set(sending.map((e) => e._id));
     setSubmitting(true);
+    // 申請に至らなかったときに片付ける、この申請でアップロードした画像
+    let uploaded: string[] = [];
     try {
-      const urls = await Promise.all(
+      const results = await Promise.allSettled(
         sending.map((e) => {
           if (e.posterType !== PosterType.CUSTOM || !e.customImage) return Promise.resolve(null);
-          return uploadPosterImage(e.customImage.file, user.id).catch((uploadError: unknown) => {
-            console.error('Image upload failed:', uploadError);
-            return Promise.reject(new Error('画像のアップロードに失敗しました'));
-          });
+          return uploadPosterImage(e.customImage.file, user.id);
         }),
       );
+      const urls = results.map((r) => (r.status === 'fulfilled' ? r.value : null));
+      uploaded = urls.filter((u): u is string => !!u);
+      const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+      if (failed) {
+        console.error('Image upload failed:', failed.reason);
+        throw new Error('画像のアップロードに失敗しました');
+      }
       const today = todayUtc();
       await insertEntries(sending.map((e, i) => toInsertRow(e, urls[i] ?? null, user.id, settings, today)));
+      uploaded = [];
       addToast(`${sending.length}件を申請しました`, 'success');
       setLocalEntries((prev) => prev.filter((e) => !sentIds.has(e._id)));
       setEditingId((id) => (id && sentIds.has(id) ? null : id));
@@ -292,6 +299,8 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
     } catch (err) {
       console.error('Submit failed:', err);
       addToast(`申請に失敗しました: ${errorMessage(err)}`, 'error');
+      // 申請が入らなかったので、先にアップロードした画像はどこからも使われない（もう一度申請すると新しくアップロードする）
+      void discardOwnPosterImages(uploaded, user.id);
     } finally {
       setSubmitting(false);
     }

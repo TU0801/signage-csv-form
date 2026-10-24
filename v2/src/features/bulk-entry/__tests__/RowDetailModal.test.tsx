@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { ToastProvider } from '@/components/ui/Toast';
@@ -10,10 +11,14 @@ import { createMemoryStorage } from './memoryStorage';
 const io = vi.hoisted(() => ({
   preparePosterImage: vi.fn(),
   uploadPosterImage: vi.fn(),
+  discardOwnPosterImages: vi.fn(),
 }));
 vi.mock('@/lib/supabase', () => ({ supabase: {}, TABLES: {}, RPC: {} }));
 vi.mock('@/lib/pdfToPng', () => ({ preparePosterImage: io.preparePosterImage }));
-vi.mock('@/lib/storage', () => ({ uploadPosterImage: io.uploadPosterImage }));
+vi.mock('@/lib/storage', () => ({
+  uploadPosterImage: io.uploadPosterImage,
+  discardOwnPosterImages: io.discardOwnPosterImages,
+}));
 vi.mock('@/lib/templateStorage', () => ({ templateFileUrl: (f: string) => `https://storage/templates/${f}` }));
 
 function setup() {
@@ -40,6 +45,18 @@ function setup() {
   return id;
 }
 
+/** 閉じるとフォームが外れる（実際の画面と同じ）。片付けの確認用 */
+function ClosingHarness({ rowId }: { rowId: number }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <ToastProvider>
+      <RowDetailModal open={open} rowId={rowId} onClose={() => setOpen(false)} />
+    </ToastProvider>
+  );
+}
+
+const IMG = (n: string) => `https://storage/poster-images/user-1/${n}.png`;
+
 const rowOf = (id: number) => useBulkStore.getState().rows.find((r) => r.id === id)!;
 
 describe('RowDetailModal（修正依頼1024 B18）', () => {
@@ -55,6 +72,7 @@ describe('RowDetailModal（修正依頼1024 B18）', () => {
     resetBulkSession();
     io.preparePosterImage.mockReset();
     io.uploadPosterImage.mockReset();
+    io.discardOwnPosterImages.mockReset();
   });
   afterEach(() => {
     cleanup();
@@ -126,5 +144,56 @@ describe('RowDetailModal（修正依頼1024 B18）', () => {
       posterImage: 'https://storage/poster-images/user-1/1_ab.png',
       isValid: true,
     });
+  });
+
+  it('キャンセルで閉じると、開いている間にアップロードした画像を片付ける（行の画像は変えない）', async () => {
+    const store = useBulkStore.getState();
+    store.setUserId('user-1');
+    const id = store.addRow({ propertyCode: 'z0001A01', posterType: 'custom', posterImage: IMG('old') });
+    render(<ClosingHarness rowId={id} />);
+    io.preparePosterImage.mockImplementation(async (f: File) => ({ file: f }));
+    io.uploadPosterImage.mockResolvedValue(IMG('new'));
+
+    fireEvent.change(screen.getByLabelText('貼紙画像'), { target: { files: [new File(['x'], 'a.png', { type: 'image/png' })] } });
+    await waitFor(() => expect(screen.getByAltText('追加の貼紙')).toHaveAttribute('src', IMG('new')));
+    fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }));
+
+    expect(io.discardOwnPosterImages).toHaveBeenCalledTimes(1);
+    expect(io.discardOwnPosterImages).toHaveBeenCalledWith([IMG('new')], 'user-1');
+    expect(rowOf(id).posterImage).toBe(IMG('old'));
+  });
+
+  it('差し替えて保存すると、途中でアップロードした画像と前の画像を片付ける。複製した行がまだ持つ前の画像は残す', async () => {
+    const store = useBulkStore.getState();
+    store.setUserId('user-1');
+    const id = store.addRow({ propertyCode: 'z0001A01', posterType: 'custom', posterImage: IMG('old') });
+    store.addRow({ propertyCode: 'z0001A01', posterType: 'custom', posterImage: IMG('old') });
+    render(<ClosingHarness rowId={id} />);
+    io.preparePosterImage.mockImplementation(async (f: File) => ({ file: f }));
+    io.uploadPosterImage.mockResolvedValueOnce(IMG('mid')).mockResolvedValueOnce(IMG('final'));
+
+    for (const want of ['mid', 'final']) {
+      fireEvent.change(screen.getByLabelText('貼紙画像'), { target: { files: [new File(['x'], 'a.png', { type: 'image/png' })] } });
+      await waitFor(() => expect(screen.getByAltText('追加の貼紙')).toHaveAttribute('src', IMG(want)));
+    }
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+    expect(rowOf(id).posterImage).toBe(IMG('final'));
+    // old は2行目が持っているので候補から外れる
+    expect(io.discardOwnPosterImages).toHaveBeenCalledTimes(1);
+    expect(io.discardOwnPosterImages).toHaveBeenCalledWith([IMG('mid')], 'user-1');
+  });
+
+  it('テンプレートに戻して保存すると、行が持っていた画像を片付ける', () => {
+    const store = useBulkStore.getState();
+    store.setUserId('user-1');
+    const id = store.addRow({ propertyCode: 'z0001A01', posterType: 'custom', posterImage: IMG('old') });
+    render(<ClosingHarness rowId={id} />);
+
+    fireEvent.click(screen.getByRole('radio', { name: 'テンプレート' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+    expect(rowOf(id)).toMatchObject({ posterType: 'template', posterImage: '' });
+    expect(io.discardOwnPosterImages).toHaveBeenCalledWith([IMG('old')], 'user-1');
   });
 });

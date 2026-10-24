@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
@@ -12,6 +12,8 @@ import { PosterPreview } from '@/features/single-entry/components/PosterPreview'
 import { resolveTemplateImageUrl } from '@/features/single-entry/lib/templateImages';
 import { formatPosterDate } from '@/features/single-entry/lib/entryLogic';
 import { formatMonth } from '@/features/inspection-portal/lib/schedule';
+import { rowDetailDiscards } from '@/lib/posterPath';
+import { discardUnheldRowImages } from '../utils/discardRowImages';
 import { POSITIONS, hasCustomDisplayPeriod, submittedDisplayPeriod, templateDisplayName } from '../utils/rowDetail';
 import type { BulkEntryRow, BulkMasterData } from '../types';
 
@@ -79,6 +81,26 @@ function RowDetailForm({ row, masterData, onClose }: { row: BulkEntryRow; master
   const [posterType, setPosterType] = useState<'template' | 'custom'>(row.posterType === 'custom' ? 'custom' : 'template');
   const [posterImage, setPosterImage] = useState(row.posterImage || '');
   const [uploading, setUploading] = useState(false);
+  // 開いている間にアップロードした画像と、保存したときに行に残す画像。閉じたとき（保存・キャンセル・×・Escape）に、
+  // 行に残らない画像を片付ける（閉じ方によらずフォームが外れるときに1回だけ）
+  const uploadedRef = useRef<string[]>([]);
+  const keptRef = useRef<string | null>(null);
+  const closedRef = useRef(false);
+  const originalImage = row.posterImage || '';
+  useEffect(() => {
+    closedRef.current = false;
+    return () => {
+      closedRef.current = true;
+      const discards = rowDetailDiscards({
+        original: originalImage,
+        uploaded: uploadedRef.current,
+        kept: keptRef.current ?? originalImage,
+      });
+      uploadedRef.current = [];
+      keptRef.current = null;
+      discardUnheldRowImages(discards);
+    };
+  }, [originalImage]);
 
   // 表示期間は既定（空・点検期間のまま）なら畳む。開いたら空の欄に点検期間を入れる（旧モーダルと同じ既定）
   const [periodOpen, setPeriodOpen] = useState(() => hasCustomDisplayPeriod(row));
@@ -111,6 +133,12 @@ function RowDetailForm({ row, masterData, onClose }: { row: BulkEntryRow; master
       const prepared = await preparePosterImage(file);
       if (!userId) throw new Error('ログイン情報を確認できません。画面を読み込み直してください');
       const url = await uploadPosterImage(prepared.file, userId);
+      // アップロード中に閉じられたら、行には入らないのでその場で片付ける
+      if (closedRef.current) {
+        discardUnheldRowImages([url]);
+        return;
+      }
+      uploadedRef.current.push(url);
       setPosterImage(url);
       if (prepared.notice) addToast(prepared.notice, 'info');
     } catch (err) {
@@ -126,6 +154,7 @@ function RowDetailForm({ row, masterData, onClose }: { row: BulkEntryRow; master
       addToast('追加の貼紙画像を選択してください', 'error');
       return;
     }
+    keptRef.current = isCustom ? posterImage : '';
     applyRowDetail(row.id, {
       noticeText,
       // 保守会社マスターと同じなら持たない（マスターの変更に追従させる）
