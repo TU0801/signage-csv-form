@@ -15,6 +15,7 @@ import {
   duplicateValues,
   filterInspectionTypes,
   formatPosterDate,
+  initialValues,
   remarksUsage,
   submittedStatusLabel,
   toInsertRow,
@@ -120,6 +121,15 @@ describe('案内文・備考の文字数と行数の表示', () => {
 });
 
 describe('点検日の連動（v1 init の change）', () => {
+  it('初期値は点検開始日・終了日・表示開始日・表示終了日がすべて今日（B10。終了日を空にしない）', () => {
+    expect(initialValues(SETTINGS, '2026-10-24')).toMatchObject({
+      startDate: '2026-10-24',
+      endDate: '2026-10-24',
+      displayStartDate: '2026-10-24',
+      displayEndDate: '2026-10-24',
+    });
+  });
+
   it('開始日は表示開始日に追従し、終了日が空なら終了日・表示終了日も埋める。終了日は表示終了日に追従', () => {
     const v = applyStartDateChange(values({ endDate: '' }), '2026-10-20');
     expect(v).toMatchObject({ startDate: '2026-10-20', displayStartDate: '2026-10-20', endDate: '2026-10-20', displayEndDate: '2026-10-20' });

@@ -31,12 +31,14 @@ export function initialValues(settings: AppSettings, today: string): SingleEntry
     noticeText: '',
     templateNo: '',
     startDate: today,
-    endDate: '',
+    // 点検終了日は点検開始日と同じ日を既定にする（B10。編集できる）
+    endDate: today,
     remarks: '',
     memo: '',
     displayStartDate: today,
     displayStartTime: '',
-    displayEndDate: '',
+    // 表示終了日は点検終了日に追従する（applyStartDateChange・applyEndDateChange と同じ）
+    displayEndDate: today,
     displayEndTime: '',
     displayTime: String(settings.display_time_default),
     frameNo: DEFAULT_FRAME_NO,

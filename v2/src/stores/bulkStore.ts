@@ -153,14 +153,17 @@ export const useBulkStore = create<BulkState>((set, get) => {
    */
   const buildRow = (id: number, data: BulkRowInput): BulkEntryRow => {
     const { masterData, appSettings, currentVendor } = get();
+    const startDate = data.startDate || todayUtc();
     const row: BulkEntryRow = {
       id,
       propertyCode: data.propertyCode || '',
       terminalId: data.terminalId || '',
       vendorName: data.vendorName || currentVendor.name || '',
       inspectionType: data.inspectionType || '',
-      startDate: data.startDate || todayUtc(),
-      endDate: data.endDate || '',
+      startDate,
+      // 点検終了日は点検開始日と同じ日を既定にする（B10。新しい行は開始日に今日が入るので終了日も今日）。
+      // 取込などで空を明示したとき（''）はそのまま空にする
+      endDate: data.endDate || (data.endDate === undefined ? startDate : ''),
       remarks: data.remarks || '',
       memo: data.memo || '',
       displayTime: data.displayTime || defaultDisplayTime(appSettings),

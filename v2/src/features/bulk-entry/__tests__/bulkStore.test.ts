@@ -48,6 +48,17 @@ describe('bulkStore (v1 js/bulk-table.js / bulk-modals.js の行操作)', () => 
     });
   });
 
+  it('新しい行は点検終了日も点検開始日と同じ今日にし、取込などで空を明示した終了日は空のまま（B10）', () => {
+    s().addRow();
+    s().addRow({ startDate: '2026-11-02', endDate: '' });
+    s().addRow({ startDate: '2026-11-05' });
+    expect(s().rows.map((r) => [r.startDate, r.endDate])).toEqual([
+      ['2026-10-14', '2026-10-14'],
+      ['2026-11-02', ''],
+      ['2026-11-05', '2026-11-05'],
+    ]);
+  });
+
   it('add-row copies the last row except remarks and detail settings', () => {
     s().addRow({ propertyCode: 'z0001A01', terminalId: 'T-A2', inspectionType: '消防設備点検', remarks: 'x', noticeText: '案内', position: 3 });
     s().addRowWithCopy();
