@@ -18,9 +18,11 @@ const insertEntries = vi.fn();
 let isAdmin = false;
 
 vi.mock('@/lib/supabase', () => ({ supabase: {}, TABLES: {} }));
+const storageApi = vi.hoisted(() => ({ uploadPosterImage: vi.fn(), discardOwnPosterImages: vi.fn() }));
 vi.mock('@/lib/storage', () => ({
   getPublicUrl: (p: string) => `https://storage/${p}`,
-  uploadPosterImage: vi.fn(),
+  uploadPosterImage: storageApi.uploadPosterImage,
+  discardOwnPosterImages: storageApi.discardOwnPosterImages,
   validateImageFile: vi.fn(),
 }));
 // PDF の変換（pdfjs-dist）は jsdom で動かないので差し替える（B18）
@@ -242,5 +244,33 @@ describe('1件入力画面（追加の貼紙・PDF。修正依頼1024 B18）', (
     await waitFor(() => expect(pdfToPng.preparePosterImage).toHaveBeenCalledWith(pdf));
     expect(await screen.findByText(/1ページ目を使用します/)).toBeInTheDocument();
     expect(await screen.findByAltText('プレビュー')).toBeInTheDocument();
+  });
+});
+
+describe('1件入力画面（使われない貼紙画像の片付け。修正依頼1024 後続 orphan）', () => {
+  it('画像をアップロードしたあと申請の登録に失敗したら、その画像を片付ける', async () => {
+    const png = new File(['png'], '貼紙.png', { type: 'image/png' });
+    pdfToPng.preparePosterImage.mockResolvedValue({ file: png });
+    storageApi.uploadPosterImage.mockReset().mockResolvedValue('https://storage/poster-images/u1/1_ab.png');
+    storageApi.discardOwnPosterImages.mockReset();
+    insertEntries.mockRejectedValue(new Error('insert failed'));
+    render(
+      <ToastProvider>
+        <SingleEntryPage />
+      </ToastProvider>,
+    );
+    await waitFor(() => expect(screen.getByRole('combobox', { name: '点検工事案内 *' })).toHaveValue('排水管清掃'));
+    pick('物件コード *', 'z0015A01');
+    fireEvent.click(screen.getByRole('radio', { name: '追加' }));
+    fireEvent.change(screen.getByLabelText('貼紙画像'), { target: { files: [png] } });
+    expect(await screen.findByAltText('プレビュー')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'データを追加' }));
+    await screen.findByRole('table');
+
+    fireEvent.click(screen.getByRole('button', { name: '申請する' }));
+    await waitFor(() =>
+      expect(storageApi.discardOwnPosterImages).toHaveBeenCalledWith(['https://storage/poster-images/u1/1_ab.png'], 'u1'),
+    );
+    expect(storageApi.uploadPosterImage).toHaveBeenCalledWith(png, 'u1');
   });
 });

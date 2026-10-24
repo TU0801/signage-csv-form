@@ -93,7 +93,8 @@ export function ApprovalPage() {
           {isAdmin && <PropertyRequestsList />}
         </div>
       )}
-      {current === 'images' && <CustomImagesList onCount={setImageCount} />}
+      {/* 使われていない画像の整理（Storage の削除）は管理者だけ */}
+      {current === 'images' && <CustomImagesList onCount={setImageCount} canCleanup={isAdmin} />}
     </div>
   );
 }

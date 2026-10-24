@@ -1,4 +1,4 @@
-import { supabase, TABLES } from '@/lib/supabase';
+import { supabase, RPC, TABLES } from '@/lib/supabase';
 import type { DbEntry } from '@/types/database';
 
 /*
@@ -41,4 +41,30 @@ export async function countCustomImageEntries(): Promise<number> {
     .neq('poster_image', '');
   if (error) throw error;
   return count ?? 0;
+}
+
+/** 使われていない貼紙画像（poster-images の利用者フォルダにあり、どの申請からも参照されず、作成から7日以上たったもの） */
+export interface OrphanPosterImage {
+  /** バケット内のパス（{userId}/{ファイル名}） */
+  name: string;
+  size: number;
+  mimetype: string | null;
+  created_at: string;
+  owner_id: string | null;
+  owner_email: string | null;
+  owner_company: string | null;
+}
+
+/** 使われていない貼紙画像の一覧（管理者だけが呼べる RPC。古い順） */
+export async function fetchOrphanPosterImages(): Promise<OrphanPosterImage[]> {
+  const { data, error } = await supabase.rpc(RPC.orphanPosterImages);
+  if (error) throw error;
+  return ((data ?? []) as OrphanPosterImage[]).map((r) => ({ ...r, size: Number(r.size) || 0 }));
+}
+
+/** バイト数を KB / MB で（一覧の合計・各行のサイズ） */
+export function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
