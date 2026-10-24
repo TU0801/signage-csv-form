@@ -1,5 +1,6 @@
 import { POSTER_PNG_SIZE } from './constants';
 import { validateImageFile } from './storage';
+import { loadPdfjs } from './pdfjs';
 
 /** PDF か（MIME が空のときもあるので拡張子も見る） */
 export function isPdfFile(file: Pick<File, 'type' | 'name'>): boolean {
@@ -17,16 +18,6 @@ export function containFit(
   const width = srcWidth * scale;
   const height = srcHeight * scale;
   return { x: (dstWidth - width) / 2, y: (dstHeight - height) / 2, width, height, scale };
-}
-
-/** pdfjs-dist を読み込む（初めて PDF を選んだときだけ。worker は Vite の ?url でバンドルしたものを使い、CDN は使わない） */
-async function loadPdfjs() {
-  const [pdfjs, worker] = await Promise.all([
-    import('pdfjs-dist'),
-    import('pdfjs-dist/build/pdf.worker.min.mjs?url'),
-  ]);
-  if (!pdfjs.GlobalWorkerOptions.workerSrc) pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
-  return pdfjs;
 }
 
 function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob> {

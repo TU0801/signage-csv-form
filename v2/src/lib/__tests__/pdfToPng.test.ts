@@ -4,9 +4,9 @@ import { POSTER_PNG_SIZE } from '../constants';
 
 vi.mock('@/lib/supabase', () => ({ supabase: {} }));
 
-// pdfjs-dist は jsdom で動かないので、ページの大きさとページ数だけ返す偽物にする
+// pdfjs-dist（legacy ビルド。修正依頼1024 F5）は jsdom で動かないので、ページの大きさとページ数だけ返す偽物にする
 const pdf = vi.hoisted(() => ({ numPages: 1, width: 595, height: 842, render: vi.fn() }));
-vi.mock('pdfjs-dist', () => ({
+vi.mock('pdfjs-dist/legacy/build/pdf.mjs', () => ({
   GlobalWorkerOptions: { workerSrc: '' },
   getDocument: () => ({
     promise: Promise.resolve({
@@ -22,7 +22,7 @@ vi.mock('pdfjs-dist', () => ({
     destroy: async () => {},
   }),
 }));
-vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?url', () => ({ default: '/pdf.worker.js' }));
+vi.mock('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url', () => ({ default: '/pdf.worker.js' }));
 
 describe('PDF → 貼紙 PNG（修正依頼1024 B18）', () => {
   const drawImage = vi.fn();
