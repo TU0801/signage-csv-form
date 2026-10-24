@@ -10,6 +10,8 @@ import type { MasterData } from '@/types/app';
 export function useMasterData() {
   const role = useAuthStore((s) => s.profile?.role ?? null);
   const vendorId = useAuthStore((s) => s.profile?.vendor_id ?? null);
+  // ログアウトでユーザーが外れたら読み直さない（未ログインでは RPC が 401 になり、失敗とエラーログを出すだけ。修正依頼1024 本番確認）
+  const signedIn = useAuthStore((s) => !!s.user);
   const [data, setData] = useState<MasterData>({
     properties: [],
     vendors: [],
@@ -21,6 +23,7 @@ export function useMasterData() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchAll = useCallback(async () => {
+    if (!signedIn) return;
     setLoading(true);
     setError(null);
     try {
@@ -30,7 +33,7 @@ export function useMasterData() {
     } finally {
       setLoading(false);
     }
-  }, [role, vendorId]);
+  }, [role, vendorId, signedIn]);
 
   useEffect(() => {
     fetchAll();
