@@ -10,7 +10,7 @@ import { useRefetchOnVisible } from '@/features/approval/hooks/useRefetchOnVisib
 import { ReportUploadModal } from '@/features/inspection-documents/components/ReportUploadModal';
 import { usePortalData } from '../hooks/usePortalData';
 import { appliedEntry, canSubmit, type PortalRole } from '../lib/actions';
-import { companyOptions, filterSchedule, filterUnscheduled, INITIAL_FILTERS, type PortalFilters } from '../lib/filters';
+import { filterSchedule, filterUnscheduled, INITIAL_FILTERS, type PortalFilters } from '../lib/filters';
 import { buildSchedule, formatMonth, todayJst, unscheduledInspections, type ScheduleItem } from '../lib/schedule';
 import { completionKeys, countStatuses, itemStatus } from '../lib/status';
 import { ApplyModal, type ApplyTarget } from './ApplyModal';
@@ -84,10 +84,6 @@ export function InspectionPortal() {
   const visible = useMemo(() => filterSchedule(schedule, filters, today, statusOf), [schedule, filters, today, statusOf]);
   const unscheduled = useMemo(() => filterUnscheduled(unscheduledAll, filters, statusOf), [unscheduledAll, filters, statusOf]);
 
-  const vendorOptions = useMemo(
-    () => (isAdmin || isManagement ? companyOptions(data.inspections, (i) => ({ id: i.vendor_id, name: i.vendor_name })) : null),
-    [data.inspections, isAdmin, isManagement],
-  );
   // 管理会社の絞り込みは点検登録フォームのヘッダーへ移した（修正依頼1024 B19）。この一覧は管理会社のアカウントが見る
 
   const approve = async (entry: PortalEntryRow) => {
@@ -175,7 +171,6 @@ export function InspectionPortal() {
       <PortalFilterBar
         filters={filters}
         onChange={setFilters}
-        vendorOptions={vendorOptions}
       />
       {data.loaded && data.error && (
         // 読み直しに失敗しても前の一覧は残す（古い状態であることだけ知らせ、読み直せるようにする）

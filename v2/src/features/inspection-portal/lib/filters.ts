@@ -37,8 +37,6 @@ export interface PortalFilters {
   timing: TimingFilter;
   status: StatusFilter;
   search: string;
-  /** 保守会社 ID（'' = すべて） */
-  vendorId: string;
   /** 管理会社 ID（'' = すべて、NONE = 未設定） */
   managementCompanyId: string;
 }
@@ -47,7 +45,6 @@ export const INITIAL_FILTERS: PortalFilters = {
   timing: 'default',
   status: '',
   search: '',
-  vendorId: '',
   managementCompanyId: '',
 };
 
@@ -78,14 +75,11 @@ function matchStatus(item: ScheduleItem, status: StatusFilter, statusOf: StatusO
   return !status || statusOf(item) === status;
 }
 
-/** 点検行（予定と未登録の両方）に効く条件: 検索・保守会社・管理会社 */
+/** 点検行（予定と未登録の両方）に効く条件: 検索・管理会社（保守会社の絞り込みは消した。ユーザー決定1） */
 export function matchInspection(
   inspection: PortalInspectionRow,
-  f: Pick<PortalFilters, 'search' | 'vendorId' | 'managementCompanyId'>,
+  f: Pick<PortalFilters, 'search' | 'managementCompanyId'>,
 ): boolean {
-  if (f.vendorId && inspection.vendor_id !== f.vendorId && !inspection.unit_vendor_ids.includes(f.vendorId)) {
-    return false;
-  }
   if (f.managementCompanyId) {
     const want = f.managementCompanyId === NONE ? null : f.managementCompanyId;
     if (inspection.management_company_id !== want) return false;
@@ -111,19 +105,4 @@ export function filterSchedule(items: ScheduleItem[], f: PortalFilters, today: s
 export function filterUnscheduled<T extends ScheduleItem>(items: T[], f: PortalFilters, statusOf: StatusOf): T[] {
   if (f.timing === 'overdue') return [];
   return items.filter((i) => matchStatus(i, f.status, statusOf) && matchInspection(i.inspection, f));
-}
-
-/** 絞り込みの選択肢にする会社（点検行に出てくるものだけ、名前順） */
-export function companyOptions(
-  inspections: PortalInspectionRow[],
-  pick: (i: PortalInspectionRow) => { id: string | null; name: string | null },
-): { value: string; label: string }[] {
-  const map = new Map<string, string>();
-  inspections.forEach((i) => {
-    const { id, name } = pick(i);
-    if (id) map.set(id, name || '（名称なし）');
-  });
-  return [...map]
-    .map(([value, label]) => ({ value, label }))
-    .sort((a, b) => a.label.localeCompare(b.label, 'ja'));
 }

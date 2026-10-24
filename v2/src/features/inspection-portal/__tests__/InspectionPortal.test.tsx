@@ -202,6 +202,8 @@ describe('点検一覧（InspectionPortal）', () => {
     await screen.findByText('点検一覧');
     expect(headers()).toContain('保守会社');
     expect(headers()).not.toContain('管理会社');
+    // 保守会社の絞り込みは消した（ユーザー決定1。列で見る）
+    expect(screen.queryByRole('combobox', { name: '保守会社' })).toBeNull();
     second.unmount();
     auth.value = { user: { id: 'a-user' }, isAdmin: true, isManagement: false, vendorId: null };
     render(<InspectionPortal />);

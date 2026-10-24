@@ -42,7 +42,7 @@ describe('点検一覧の絞り込み', () => {
     expect(counts.sent_back).toBe(1);
   });
 
-  it('物件名・コードの検索、保守会社（台の会社を含む）、管理会社（未設定）で絞る', () => {
+  it('物件名・コードの検索、管理会社（未設定）で絞る', () => {
     const items = buildSchedule(
       [
         makeInspection(),
@@ -56,7 +56,6 @@ describe('点検一覧の絞り込み', () => {
       [...new Set(filterSchedule(items, { ...INITIAL_FILTERS, timing: 'all', ...f }, TODAY, statusOf).map((i) => i.inspection.inspection_id))];
     expect(ids({ search: '９００００２' })).toEqual(['i2']);
     expect(ids({ search: '第一' })).toEqual(['i1']);
-    expect(ids({ vendorId: 'v3' })).toEqual(['i2']);
     expect(ids({ managementCompanyId: '__none__' })).toEqual(['i2']);
   });
 
