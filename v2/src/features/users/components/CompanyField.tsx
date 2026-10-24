@@ -14,6 +14,11 @@ interface CompanyFieldProps {
   onVendorChange: (value: string) => void;
   onManagementCompanyChange: (value: string) => void;
   error?: string;
+  /**
+   * 管理会社のアカウントが操作するとき（修正依頼1024 C3）。管理会社は自社に固定して選ばせず、
+   * 保守会社の候補は自社物件を担当する保守会社だけ（呼ぶ側が絞った vendors を渡す）
+   */
+  managementCaller?: boolean;
 }
 
 /**
@@ -31,7 +36,20 @@ export function CompanyField({
   onVendorChange,
   onManagementCompanyChange,
   error,
+  managementCaller = false,
 }: CompanyFieldProps) {
+  if (role === 'management' && managementCaller) {
+    const own = managementCompanies[0];
+    return (
+      <div className="space-y-1">
+        <p className="text-xs font-medium text-gray-600">管理会社</p>
+        <p id={`${idPrefix}ManagementCompany`} className="text-sm text-gray-900">
+          {own?.name ?? '-'}
+        </p>
+        <p className="text-xs text-gray-500">自社の管理会社アカウントだけを作成できます</p>
+      </div>
+    );
+  }
   if (role === 'management') {
     return (
       <div className="space-y-1">
@@ -61,7 +79,11 @@ export function CompanyField({
         onChange={onVendorChange}
         error={error}
       />
-      <p className="text-xs text-gray-500">一般ユーザーは必須です。管理者は未選択のままで構いません</p>
+      <p className="text-xs text-gray-500">
+        {managementCaller
+          ? '必須です。自社が管理する物件を担当する保守会社だけを選べます'
+          : '権限「保守会社」は必須です。管理者は未選択のままで構いません'}
+      </p>
     </div>
   );
 }
