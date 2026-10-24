@@ -170,6 +170,15 @@ export function BuildingRequestModal({
     };
   }, [open, vendor]);
 
+  // 直した欄のエラーは消す（申請するを押すまで他の欄は確かめ直さない）
+  const clearError = (key: keyof typeof errors) =>
+    setErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+
   const dirty =
     !submitted && (propertyName.trim() !== '' || address.trim() !== '' || months.length > 0);
 
@@ -263,7 +272,10 @@ export function BuildingRequestModal({
                 id="buildingRequestVendor"
                 label="保守会社 *"
                 value={vendor}
-                onChange={(e) => setVendor(e.target.value)}
+                onChange={(e) => {
+                  setVendor(e.target.value);
+                  clearError('vendor');
+                }}
                 placeholder="選択してください"
                 options={vendors.map((v) => ({ value: v.id, label: v.name }))}
                 error={errors.vendor}
@@ -284,7 +296,10 @@ export function BuildingRequestModal({
               id="buildingRequestCompany"
               label="管理会社 *"
               value={company}
-              onChange={(e) => setCompany(e.target.value)}
+              onChange={(e) => {
+                setCompany(e.target.value);
+                clearError('managementCompany');
+              }}
               placeholder="選択してください"
               options={companies.map((c) => ({ value: c.id, label: c.name }))}
               error={errors.managementCompany}
@@ -294,7 +309,10 @@ export function BuildingRequestModal({
               label="建物名 *"
               value={propertyName}
               maxLength={200}
-              onChange={(e) => setPropertyName(e.target.value)}
+              onChange={(e) => {
+                setPropertyName(e.target.value);
+                clearError('propertyName');
+              }}
               placeholder="例: ○○マンション"
               error={errors.propertyName}
               data-autofocus
@@ -311,14 +329,24 @@ export function BuildingRequestModal({
               id="buildingRequestInspectionType"
               label="点検種別"
               value={inspectionType}
-              onChange={(e) => setInspectionType(e.target.value)}
+              onChange={(e) => {
+                setInspectionType(e.target.value);
+                clearError('inspectionType');
+              }}
               placeholder="（指定しない）"
               options={typeOptions.map((t) => ({ value: t.id, label: t.name }))}
               error={errors.inspectionType}
             />
             <div className="space-y-0.5">
               <span className="block text-xs font-medium text-gray-600">点検月（任意）</span>
-              <MonthCheckboxes value={months} onChange={setMonths} label="点検月" />
+              <MonthCheckboxes
+                value={months}
+                onChange={(m) => {
+                  setMonths(m);
+                  clearError('inspectionType');
+                }}
+                label="点検月"
+              />
             </div>
           </div>
           <p className="text-xs text-gray-400">
