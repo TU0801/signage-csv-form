@@ -39,3 +39,10 @@ export const REMARKS_MAX_CHARS_PER_LINE = 25;
 export const NOTICE_TEXT_MAX_CHARS = 200;
 /** ログイン画面の広告枠数（v1.27.0 で3枠。DB の slot_index は 1〜7 まで許すが 4〜7 は使わない） */
 export const MAX_AD_SLOTS = 3;
+
+/**
+ * 追加の貼紙を PDF から作るときの PNG の大きさ（px）。マンションサイネージの画面全体（3:4、テンプレート画像と同じ 1080×1440）。
+ * 貼紙表示位置（①〜④・⓪）ごとの寸法は分かっていないので全位置この大きさにする。枠ごとの寸法が分かったらここを差し替える
+ * （修正依頼1024 ユーザー決定6）
+ */
+export const POSTER_PNG_SIZE = { width: 1080, height: 1440 } as const;

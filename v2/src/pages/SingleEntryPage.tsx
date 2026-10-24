@@ -350,6 +350,7 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
               onDuplicate={handleDuplicate}
               canDuplicate={localEntries.length > 0}
               onImageError={(m) => addToast(m, 'error')}
+              onImageNotice={(m) => addToast(m, 'info')}
             />
           </CardContent>
         </Card>

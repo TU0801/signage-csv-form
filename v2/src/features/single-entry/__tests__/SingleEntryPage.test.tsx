@@ -23,6 +23,9 @@ vi.mock('@/lib/storage', () => ({
   uploadPosterImage: vi.fn(),
   validateImageFile: vi.fn(),
 }));
+// PDF の変換（pdfjs-dist）は jsdom で動かないので差し替える（B18）
+const pdfToPng = vi.hoisted(() => ({ preparePosterImage: vi.fn() }));
+vi.mock('@/lib/pdfToPng', () => pdfToPng);
 vi.mock('@/hooks/useAuth', () => ({
   useAuth: () => ({
     user: { id: 'u1' },
@@ -204,5 +207,26 @@ describe('1件入力画面（作成データの保持）', () => {
     const table = await screen.findByRole('table');
     expect(within(table).getByText('z0015A01')).toBeInTheDocument();
     expect(useSingleEntryStore.getState().entries).toHaveLength(1);
+  });
+});
+
+describe('1件入力画面（追加の貼紙・PDF。修正依頼1024 B18）', () => {
+  it('PDF を選ぶと PNG に変換したものを貼紙画像にし、複数ページなら1ページ目を使うと知らせる', async () => {
+    const png = new File(['png'], '貼紙.png', { type: 'image/png' });
+    pdfToPng.preparePosterImage.mockResolvedValue({ file: png, notice: 'PDF は2ページあります。1ページ目を使用します' });
+    render(
+      <ToastProvider>
+        <SingleEntryPage />
+      </ToastProvider>,
+    );
+    await waitFor(() => expect(screen.getByRole('combobox', { name: '点検工事案内 *' })).toHaveValue('排水管清掃'));
+    fireEvent.click(screen.getByRole('radio', { name: '追加' }));
+    const input = screen.getByLabelText('貼紙画像');
+    expect(input).toHaveAttribute('accept', expect.stringContaining('.pdf'));
+    const pdf = new File(['%PDF'], '貼紙.pdf', { type: 'application/pdf' });
+    fireEvent.change(input, { target: { files: [pdf] } });
+    await waitFor(() => expect(pdfToPng.preparePosterImage).toHaveBeenCalledWith(pdf));
+    expect(await screen.findByText(/1ページ目を使用します/)).toBeInTheDocument();
+    expect(await screen.findByAltText('プレビュー')).toBeInTheDocument();
   });
 });
