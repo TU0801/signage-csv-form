@@ -127,6 +127,13 @@ describe('点検日の連動（v1 init の change）', () => {
     expect(w).toMatchObject({ endDate: '2026-10-25', displayEndDate: '2026-10-25' });
     expect(applyEndDateChange(w, '2026-10-26').displayEndDate).toBe('2026-10-26');
   });
+
+  it('終了日が旧開始日と同じ・新開始日より前なら新開始日に合わせる（B10）', () => {
+    const same = applyStartDateChange(values({ startDate: '2026-10-20', endDate: '2026-10-20' }), '2026-10-22');
+    expect(same).toMatchObject({ endDate: '2026-10-22', displayEndDate: '2026-10-22' });
+    const before = applyStartDateChange(values({ startDate: '2026-10-20', endDate: '2026-10-21' }), '2026-10-25');
+    expect(before).toMatchObject({ endDate: '2026-10-25', displayEndDate: '2026-10-25' });
+  });
 });
 
 describe('データを追加（v1 addEntry）', () => {
@@ -194,6 +201,7 @@ describe('申請する行（v1 submitEntries）', () => {
       inspection_start: '2026-10-20',
       inspection_end: '2026-10-21',
       remarks: '',
+      memo: null,
       announcement: '',
       display_start_date: '2026-10-15',
       display_start_time: null,

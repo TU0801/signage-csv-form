@@ -1,11 +1,15 @@
+import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { useBulkStore } from '@/stores/bulkStore';
 import { templateLabel, type BulkTemplate } from '../utils/bulkTemplates';
-import { BulkStatsBar } from './BulkStatsBar';
 
 interface BulkToolbarProps {
   /** 読み込みが済むまで操作させない（v1: js/bulk.js init は読み込み後にイベントを登録） */
   disabled?: boolean;
+  /** 左端に出す部品（1件入力・一括入力の切替） */
+  leading?: ReactNode;
+  /** 表示の絞り込み（時期・物件の検索） */
+  filters?: ReactNode;
   templates: BulkTemplate[];
   onAddRow: () => void;
   onDuplicate: () => void;
@@ -13,44 +17,41 @@ interface BulkToolbarProps {
   /** 選択行に同じ点検種別・日付・表示設定をまとめて入れる */
   onOpenBulkApply: () => void;
   onOpenPaste: () => void;
+  /** 報告書一括アップロード（保守会社・管理者。出さないときは undefined） */
+  onOpenBulkReport?: () => void;
+  /** 建物追加の申請 */
+  onOpenBuildingRequest?: () => void;
   onApplyTemplate: (id: string) => void;
   onOpenSaveTemplate: () => void;
   onOpenManageTemplate: () => void;
 }
 
-function Stat({ value, label, className }: { value: number; label: string; className?: string }) {
-  return (
-    <div className="flex items-baseline gap-1">
-      <span className={`text-base font-bold ${className ?? 'text-gray-900'}`}>{value}</span>
-      <span className="text-xs text-gray-500">{label}</span>
-    </div>
-  );
-}
-
 /**
- * 行操作・データ入出力・表示の絞り込み・件数（1 行にまとめる）。
- * v1: bulk.html .bulk-toolbar / js/bulk-data.js updateStats / js/bulk-table.js updateSelectedCount
+ * 行操作・データ入出力・報告書・建物追加・表示の絞り込み（左）と、テンプレート（右端に小さく。修正依頼1024 B6）。
+ * 表示フィルター（すべて/有効のみ/エラーのみ）と件数は B7 で外した（エラーは申請時に知らせて該当の欄へ移る）。
+ * v1: bulk.html .bulk-toolbar
  */
 export function BulkToolbar({
   disabled = false,
+  leading,
+  filters,
   templates,
   onAddRow,
   onDuplicate,
   onDeleteSelected,
   onOpenBulkApply,
   onOpenPaste,
+  onOpenBulkReport,
+  onOpenBuildingRequest,
   onApplyTemplate,
   onOpenSaveTemplate,
   onOpenManageTemplate,
 }: BulkToolbarProps) {
-  const rows = useBulkStore((s) => s.rows);
   const selectedCount = useBulkStore((s) => s.selectedIds.size);
 
-  const total = rows.length;
-  const valid = rows.filter((r) => r.isValid).length;
-
   return (
-    <div className="flex flex-wrap items-end gap-x-4 gap-y-2 border-b border-gray-200 bg-gray-50 px-3 py-2">
+    <div className="flex flex-wrap items-end gap-x-3 gap-y-1.5 border-b border-gray-200 bg-gray-50 px-3 py-1.5">
+      {leading}
       <div className="space-y-0.5">
         <div className="text-[11px] font-semibold text-gray-500">行操作</div>
         <div className="flex items-center gap-1.5">
@@ -79,62 +80,79 @@ export function BulkToolbar({
           >
             選択行に一括設定
           </Button>
-        </div>
-      </div>
-
-      <div className="space-y-0.5">
-        <div className="text-[11px] font-semibold text-gray-500">データ入出力</div>
-        <div className="flex items-center gap-1.5">
           <Button size="sm" variant="secondary" onClick={onOpenPaste} disabled={disabled} title="Excelからデータを貼り付け">
             Excelから取込
           </Button>
-          <div className="mx-1 h-6 w-px bg-gray-300" />
-          <select
-            aria-label="テンプレート"
-            value=""
-            disabled={disabled}
-            onChange={(e) => {
-              if (e.target.value) onApplyTemplate(e.target.value);
-            }}
-            className="h-7 w-56 max-w-[16rem] truncate rounded-md border border-gray-300 px-2 py-0 text-sm"
-          >
-            <option value="">テンプレート</option>
-            {templates.map((t) => (
-              <option key={t.id} value={t.id} title={templateLabel(t)}>
-                {templateLabel(t)}
-              </option>
-            ))}
-          </select>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={onOpenSaveTemplate}
-            disabled={disabled}
-            title="現在の設定をテンプレートとして保存"
-          >
-            テンプレ保存
-          </Button>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={onOpenManageTemplate}
-            disabled={disabled}
-            title="登録済みテンプレートの管理・削除"
-          >
-            管理
-          </Button>
+          {onOpenBulkReport && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={onOpenBulkReport}
+              disabled={disabled}
+              title="複数の点検をまとめた1つのPDFを切り分けて報告書として登録する"
+              className="border-blue-300 text-blue-700"
+            >
+              報告書一括アップロード
+            </Button>
+          )}
+          {onOpenBuildingRequest && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={onOpenBuildingRequest}
+              disabled={disabled}
+              title="担当する建物が一覧に無いときに追加を申請する"
+              className="border-green-300 text-green-700"
+            >
+              建物追加 申請
+            </Button>
+          )}
         </div>
       </div>
 
-      <div className="ml-auto flex items-center gap-3">
-        <BulkStatsBar />
-        <div className="flex items-center gap-3 rounded-lg bg-white px-3 py-1 shadow-sm">
-          <Stat value={total} label="件" />
-          <div className="h-5 w-px bg-gray-200" />
-          <Stat value={valid} label="有効" className="text-green-600" />
-          <Stat value={total - valid} label="エラー" className="text-red-600" />
-          <Stat value={selectedCount} label="選択中" className="text-blue-600" />
+      {filters && (
+        <div className="space-y-0.5">
+          <div className="text-[11px] font-semibold text-gray-500">表示</div>
+          <div className="flex items-center gap-1.5">{filters}</div>
         </div>
+      )}
+
+      {/* テンプレートはあまり使わないので小さく右端へ（B6） */}
+      <div className="ml-auto flex items-center gap-1" aria-label="テンプレート">
+        <select
+          aria-label="テンプレート"
+          value=""
+          disabled={disabled}
+          onChange={(e) => {
+            if (e.target.value) onApplyTemplate(e.target.value);
+          }}
+          className="h-6 w-36 max-w-[10rem] truncate rounded border border-gray-300 px-1 py-0 text-xs text-gray-600"
+        >
+          <option value="">テンプレート</option>
+          {templates.map((t) => (
+            <option key={t.id} value={t.id} title={templateLabel(t)}>
+              {templateLabel(t)}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={onOpenSaveTemplate}
+          disabled={disabled}
+          title="現在の設定をテンプレートとして保存"
+          className="h-6 rounded border border-gray-300 bg-white px-1.5 text-xs text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+        >
+          テンプレ保存
+        </button>
+        <button
+          type="button"
+          onClick={onOpenManageTemplate}
+          disabled={disabled}
+          title="登録済みテンプレートの管理・削除"
+          className="h-6 rounded border border-gray-300 bg-white px-1.5 text-xs text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+        >
+          管理
+        </button>
       </div>
     </div>
   );

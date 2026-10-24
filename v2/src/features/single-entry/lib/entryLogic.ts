@@ -3,6 +3,7 @@ import type { AppSettings, EntryInsertRow } from '@/lib/api/single-entry';
 import type { MasterProperty } from '@/types/app';
 import type { DbInspectionType, DbVendor, Terminal } from '@/types/database';
 import type { RpcPropertyManagementCompanyRow } from '@/types/rpc';
+import { followEndDate } from '@/lib/inspectionDates';
 import type { CustomImage, LocalEntry, SingleEntryValues } from '../types';
 
 /** 案内カテゴリの選択肢（v1 index.html #inspectionCategory。'' = 全て） */
@@ -32,6 +33,7 @@ export function initialValues(settings: AppSettings, today: string): SingleEntry
     startDate: today,
     endDate: '',
     remarks: '',
+    memo: '',
     displayStartDate: today,
     displayStartTime: '',
     displayEndDate: '',
@@ -239,13 +241,17 @@ export function applyVendorCleared(values: SingleEntryValues): SingleEntryValues
   return { ...values, category: '', inspectionTypeId: '', templateNo: '' };
 }
 
-/** 点検開始日を変えたとき: 表示開始日は常に追従、終了日が空なら終了日・表示終了日も同じ日に */
-// v1: js/script.js init（startDate の change）
+/**
+ * 点検開始日を変えたとき: 表示開始日は常に追従。終了日は followEndDate の規則（空・旧開始日と同じ・新開始日より前なら
+ * 新開始日。修正依頼1024 B10）で、変わったときは表示終了日も同じ日に
+ */
+// v1: js/script.js init（startDate の change。v1 は終了日が空のときだけ追従）
 export function applyStartDateChange(values: SingleEntryValues, startDate: string): SingleEntryValues {
   const next = { ...values, startDate, displayStartDate: startDate };
-  if (!values.endDate) {
-    next.endDate = startDate;
-    next.displayEndDate = startDate;
+  const endDate = followEndDate(values.startDate, values.endDate, startDate);
+  if (endDate !== values.endDate) {
+    next.endDate = endDate;
+    next.displayEndDate = endDate;
   }
   return next;
 }
@@ -342,6 +348,7 @@ export function buildLocalEntry(values: SingleEntryValues, ctx: EntryContext): B
       startDate: values.startDate,
       endDate: values.endDate,
       remarks: values.remarks,
+      memo: values.memo,
       noticeText: values.noticeText,
       frameNo: values.frameNo,
       displayStartDate: values.displayStartDate,
@@ -396,6 +403,7 @@ export function valuesFromEntry(
     startDate: e.startDate,
     endDate: e.endDate,
     remarks: e.remarks,
+    memo: e.memo ?? '',
     noticeText: e.noticeText,
     displayStartDate: e.displayStartDate,
     displayEndDate: e.displayEndDate,
@@ -428,6 +436,7 @@ export function duplicateValues(
     startDate: last.startDate || '',
     endDate: last.endDate || '',
     remarks: last.remarks || '',
+    memo: last.memo || '',
     displayTime: String(last.displayTime || ctx.settings.display_time_default),
   };
 }
@@ -455,6 +464,8 @@ export function toInsertRow(
     inspection_start: e.startDate || null,
     inspection_end: e.endDate || null,
     remarks: e.remarks || '',
+    // メモは CSV に出さない（申請の行にだけ残す）
+    memo: e.memo || null,
     announcement: e.noticeText || '',
     display_start_date: e.displayStartDate || today,
     display_start_time: e.displayStartTime || null,

@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 import type {
   BulkEntryRow,
-  BulkFilter,
   BulkMasterData,
   BulkRowInput,
+  BulkScheduleMeta,
   BulkSettings,
   BulkVendorSelection,
 } from '@/features/bulk-entry/types';
@@ -15,12 +15,23 @@ import {
 } from '@/features/bulk-entry/utils/bulkMaster';
 import { validateBulkRow } from '@/features/bulk-entry/utils/validateBulkRow';
 import { AUTO_SAVE_DELAY_MS, writeAutoSave } from '@/features/bulk-entry/utils/bulkAutoSave';
+import { defaultInspectionType } from '@/features/bulk-entry/utils/scheduleRows';
+import { followEndDate } from '@/lib/inspectionDates';
 import { todayUtc } from '@/lib/utils';
 
 /** 行の詳細設定モーダルで変える項目 */
 export type BulkRowDetail = Pick<
   BulkEntryRow,
-  'noticeText' | 'displayStartDate' | 'displayStartTime' | 'displayEndDate' | 'displayEndTime' | 'displayTime' | 'position'
+  | 'noticeText'
+  | 'displayStartDate'
+  | 'displayStartTime'
+  | 'displayEndDate'
+  | 'displayEndTime'
+  | 'displayTime'
+  | 'position'
+  | 'emergencyContact'
+  | 'posterType'
+  | 'posterImage'
 >;
 
 /** 選択行への一括設定で上書きできる項目（入れた項目だけを渡す） */
@@ -42,10 +53,17 @@ export type BulkRowsPatch = Partial<
 
 let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
+/** 点検種別の既定（B9）の材料: 選択中の保守会社の点検行（物件コード・点検種別名）と、保守会社に紐付けた点検種別の id */
+export interface BulkInspectionDefaults {
+  vendorInspections: { propertyCode: string; label: string }[];
+  linkedIds: string[];
+}
+
+const EMPTY_DEFAULTS: BulkInspectionDefaults = { vendorInspections: [], linkedIds: [] };
+
 export interface BulkState {
   rows: BulkEntryRow[];
   rowIdCounter: number;
-  filter: BulkFilter;
   selectedIds: Set<number>;
   draggedRowId: number | null;
   masterData: BulkMasterData;
@@ -56,12 +74,24 @@ export interface BulkState {
   copiedRow: BulkEntryRow | null;
   /** 読み込み（マスター・設定・自動保存の復元の確認）を終えたか。画面を離れて戻ったときに読み直さないため */
   sessionLoaded: boolean;
+  inspectionDefaults: BulkInspectionDefaults;
 
   setUserId: (id: string | null) => void;
   setMasterData: (data: BulkMasterData) => void;
   setAppSettings: (settings: BulkSettings) => void;
   setCurrentVendor: (vendor: BulkVendorSelection) => void;
   setSessionLoaded: (loaded: boolean) => void;
+  setInspectionDefaults: (patch: Partial<BulkInspectionDefaults>) => void;
+  /**
+   * 点検予定の行を入れ直す（予定は表の先頭、手で足した行はその後ろ）。同じ予定の未申請の行は入力中の値を残す。
+   * 自動保存はしない（予定の行は保存しない）
+   */
+  syncScheduleRows: (inputs: { meta: BulkScheduleMeta; row: BulkRowInput }[]) => void;
+  /**
+   * 申請した予定の行の入力（日付・備考・メモ・詳細）を空に戻す。点検月未登録の行は申請後も未申請のまま残るので、
+   * 戻さないと同じ申請をもう一度出せてしまい、未送信の入力として離脱の確認も出続ける
+   */
+  clearScheduleInputs: (ids: number[]) => void;
 
   addRow: (data?: BulkRowInput) => number;
   addRowWithCopy: () => void;
@@ -77,6 +107,7 @@ export interface BulkState {
   changeProperty: (id: number, propertyCode: string) => void;
   changeStartDate: (id: number, startDate: string) => void;
   changeRemarks: (id: number, remarks: string) => void;
+  changeMemo: (id: number, memo: string) => void;
   applyRowDetail: (id: number, detail: BulkRowDetail) => void;
   /** 選んだ行に同じ値を入れる（patch に無い項目は行ごとの値のまま） */
   applyToRows: (ids: number[], patch: BulkRowsPatch) => void;
@@ -88,7 +119,6 @@ export interface BulkState {
   restoreRows: (rows: BulkRowInput[], rowIdCounter: number) => void;
   copyRow: (id: number) => void;
 
-  setFilter: (filter: BulkFilter) => void;
   toggleSelection: (id: number) => void;
   selectAll: () => void;
   clearSelection: () => void;
@@ -99,9 +129,21 @@ export interface BulkState {
 }
 
 export const useBulkStore = create<BulkState>((set, get) => {
-  /** v1: js/bulk-table.js validateRow */
+  /**
+   * v1: js/bulk-table.js validateRow。
+   * 点検予定の行は物件・点検種別が点検行で決まっている（保守会社の物件マスターに無い物件もある）ので、物件と点検種別の照合をせず、
+   * 端末の無い物件も申請できる（点検一覧の申請と同じ）。申請済みの予定の行は検証しない
+   */
   const validate = (row: BulkEntryRow): BulkEntryRow => {
     const { masterData, appSettings } = get();
+    if (row.schedule?.locked) return { ...row, errors: [], isValid: true };
+    if (row.schedule) {
+      const own = [
+        { propertyCode: row.propertyCode, propertyName: row.schedule.propertyName, terminalId: row.terminalId || 'none', supplement: '' },
+      ];
+      const errors = validateBulkRow(row, own, appSettings, []).filter((e) => e !== '端末');
+      return { ...row, errors, isValid: errors.length === 0 };
+    }
     const errors = validateBulkRow(row, masterData.properties, appSettings, masterData.notices);
     return { ...row, errors, isValid: errors.length === 0 };
   };
@@ -120,6 +162,7 @@ export const useBulkStore = create<BulkState>((set, get) => {
       startDate: data.startDate || todayUtc(),
       endDate: data.endDate || '',
       remarks: data.remarks || '',
+      memo: data.memo || '',
       displayTime: data.displayTime || defaultDisplayTime(appSettings),
       noticeText: data.noticeText || '',
       displayStartDate: data.displayStartDate || '',
@@ -127,6 +170,9 @@ export const useBulkStore = create<BulkState>((set, get) => {
       displayEndDate: data.displayEndDate || '',
       displayEndTime: data.displayEndTime || '',
       showOnBoard: data.showOnBoard !== undefined ? data.showOnBoard : true,
+      emergencyContact: data.emergencyContact || '',
+      posterType: data.posterType === 'custom' ? 'custom' : 'template',
+      posterImage: data.posterImage || '',
       position: data.position !== undefined ? data.position : 2,
       isValid: false,
       errors: [],
@@ -146,7 +192,10 @@ export const useBulkStore = create<BulkState>((set, get) => {
     return newRows;
   };
 
-  /** 保守会社名以外を全部写す（複製・コピーした行の貼り付け）。v1: js/bulk-modals.js handleContextMenuAction duplicate */
+  /**
+   * 保守会社名以外を全部写す（複製・コピーした行の貼り付け）。点検予定の行を写すと手で足した行になる（予定の情報は写さない）。
+   * v1: js/bulk-modals.js handleContextMenuAction duplicate
+   */
   const copyFields = (r: BulkEntryRow): BulkRowInput => ({
     propertyCode: r.propertyCode,
     terminalId: r.terminalId,
@@ -154,6 +203,7 @@ export const useBulkStore = create<BulkState>((set, get) => {
     startDate: r.startDate,
     endDate: r.endDate,
     remarks: r.remarks,
+    memo: r.memo,
     displayTime: r.displayTime,
     noticeText: r.noticeText,
     displayStartDate: r.displayStartDate,
@@ -161,6 +211,9 @@ export const useBulkStore = create<BulkState>((set, get) => {
     displayEndDate: r.displayEndDate,
     displayEndTime: r.displayEndTime,
     showOnBoard: r.showOnBoard,
+    emergencyContact: r.emergencyContact,
+    posterType: r.posterType,
+    posterImage: r.posterImage,
     position: r.position,
   });
 
@@ -170,7 +223,6 @@ export const useBulkStore = create<BulkState>((set, get) => {
   return {
     rows: [],
     rowIdCounter: 0,
-    filter: 'all',
     selectedIds: new Set<number>(),
     draggedRowId: null,
     masterData: EMPTY_BULK_MASTER,
@@ -179,12 +231,88 @@ export const useBulkStore = create<BulkState>((set, get) => {
     userId: null,
     copiedRow: null,
     sessionLoaded: false,
+    inspectionDefaults: EMPTY_DEFAULTS,
 
     setUserId: (id) => set({ userId: id }),
     setMasterData: (data) => set({ masterData: data }),
     setAppSettings: (settings) => set({ appSettings: settings }),
     setCurrentVendor: (vendor) => set({ currentVendor: vendor }),
     setSessionLoaded: (loaded) => set({ sessionLoaded: loaded }),
+    setInspectionDefaults: (patch) => set((s) => ({ inspectionDefaults: { ...s.inspectionDefaults, ...patch } })),
+
+    syncScheduleRows: (inputs) => {
+      const { rows, appSettings, currentVendor } = get();
+      const existing = new Map(rows.filter((r) => r.schedule).map((r) => [r.schedule!.key, r]));
+      const manual = rows.filter((r) => !r.schedule);
+      let counter = get().rowIdCounter;
+      const scheduleRows = inputs.map(({ meta, row }) => {
+        const prev = existing.get(meta.key);
+        // 未申請のまま残っている予定は、入力中の値（日付・備考・メモ・詳細）を残して情報だけ入れ替える
+        if (prev && !prev.schedule!.locked && !meta.locked) return validate({ ...prev, schedule: meta });
+        const built: BulkEntryRow = {
+          id: prev?.id ?? ++counter,
+          propertyCode: row.propertyCode ?? '',
+          terminalId: row.terminalId ?? '',
+          vendorName: currentVendor.name || '',
+          inspectionType: row.inspectionType ?? '',
+          startDate: row.startDate ?? '',
+          endDate: row.endDate ?? '',
+          remarks: row.remarks ?? '',
+          memo: row.memo ?? '',
+          displayTime: defaultDisplayTime(appSettings),
+          noticeText: '',
+          displayStartDate: '',
+          displayStartTime: '',
+          displayEndDate: '',
+          displayEndTime: '',
+          showOnBoard: true,
+          emergencyContact: '',
+          posterType: 'template',
+          posterImage: '',
+          position: 2,
+          isValid: false,
+          errors: [],
+          schedule: meta,
+        };
+        return validate(built);
+      });
+      const nextRows = [...scheduleRows, ...manual];
+      const ids = new Set(nextRows.map((r) => r.id));
+      set((s) => ({
+        rows: nextRows,
+        rowIdCounter: counter,
+        selectedIds: new Set([...s.selectedIds].filter((id) => ids.has(id))),
+      }));
+    },
+
+    clearScheduleInputs: (ids) => {
+      const { appSettings } = get();
+      const idSet = new Set(ids);
+      set((s) => ({
+        rows: s.rows.map((r) =>
+          r.schedule && !r.schedule.locked && idSet.has(r.id)
+            ? validate({
+                ...r,
+                startDate: '',
+                endDate: '',
+                remarks: '',
+                memo: '',
+                displayTime: defaultDisplayTime(appSettings),
+                noticeText: '',
+                displayStartDate: '',
+                displayStartTime: '',
+                displayEndDate: '',
+                displayEndTime: '',
+                showOnBoard: true,
+                emergencyContact: '',
+                posterType: 'template',
+                posterImage: '',
+                position: 2,
+              })
+            : r,
+        ),
+      }));
+    },
 
     // v1: js/bulk-table.js addRow
     addRow: (data = {}) => {
@@ -194,9 +322,11 @@ export const useBulkStore = create<BulkState>((set, get) => {
     },
 
     // 最後の行の物件・端末・点検種別・点検日・表示時間・位置を引き継ぐ（備考は空）。v1: js/bulk-table.js addRowWithCopy
+    // 点検予定の行は写さない（手で足した行が無ければ空の行）
     addRowWithCopy: () => {
       const { rows, addRow } = get();
-      const last = rows[rows.length - 1];
+      const manual = rows.filter((r) => !r.schedule);
+      const last = manual[manual.length - 1];
       if (!last) {
         addRow({});
         return;
@@ -252,6 +382,7 @@ export const useBulkStore = create<BulkState>((set, get) => {
         startDate: '',
         endDate: '',
         remarks: '',
+        memo: '',
         displayTime: defaultDisplayTime(appSettings),
         noticeText: '',
         displayStartDate: '',
@@ -259,6 +390,9 @@ export const useBulkStore = create<BulkState>((set, get) => {
         displayEndDate: '',
         displayEndTime: '',
         showOnBoard: true,
+        emergencyContact: '',
+        posterType: 'template',
+        posterImage: '',
         position: 2,
         isValid: false,
         errors: [],
@@ -299,8 +433,9 @@ export const useBulkStore = create<BulkState>((set, get) => {
     },
 
     // 画面で物件を変えたら最初の端末を選ぶ。v1: js/bulk-table.js propertySelect change → updateTerminals
+    // 点検種別が空なら保守会社の点検種別を入れる（B9）
     changeProperty: (id, propertyCode) => {
-      const { masterData } = get();
+      const { masterData, inspectionDefaults } = get();
       mapRow(id, (r) =>
         validate({
           ...r,
@@ -308,14 +443,24 @@ export const useBulkStore = create<BulkState>((set, get) => {
           pastedPropertyName: undefined,
           propertyCode,
           terminalId: resolveTerminal(masterData.properties, propertyCode, r.terminalId, false),
+          inspectionType:
+            r.inspectionType ||
+            (propertyCode
+              ? defaultInspectionType(
+                  propertyCode,
+                  inspectionDefaults.vendorInspections,
+                  inspectionDefaults.linkedIds,
+                  masterData.notices,
+                )
+              : ''),
         }),
       );
       get().triggerAutoSave();
     },
 
-    // 点検終了日が空なら開始日を入れる。v1: js/bulk-table.js .start-date change
+    // 点検終了日を開始日に合わせる（空・旧開始日と同じ・新開始日より前のとき。B10）。v1: js/bulk-table.js .start-date change（v1 は空のときだけ）
     changeStartDate: (id, startDate) => {
-      mapRow(id, (r) => validate({ ...r, startDate, endDate: !r.endDate && startDate ? startDate : r.endDate }));
+      mapRow(id, (r) => validate({ ...r, startDate, endDate: followEndDate(r.startDate, r.endDate, startDate) }));
       get().triggerAutoSave();
     },
 
@@ -326,21 +471,28 @@ export const useBulkStore = create<BulkState>((set, get) => {
       get().triggerAutoSave();
     },
 
-    // 表示期間・表示時間・案内文の検証をすぐ反映するため検証し直す（v1 はここで検証し直さない）。
+    // メモは検証しない（CSV にも出さない）
+    changeMemo: (id, memo) => {
+      mapRow(id, (r) => ({ ...r, memo }));
+      get().triggerAutoSave();
+    },
+
+    // 表示期間・表示時間・案内文・貼紙画像の検証をすぐ反映するため検証し直す（v1 はここで検証し直さない）。
     // v1: js/bulk-modals.js applyRowDetail
     applyRowDetail: (id, detail) => {
       mapRow(id, (r) => validate({ ...r, ...detail }));
       get().triggerAutoSave();
     },
 
-    // 点検開始日を入れて終了日が空の行は、セルで入れたときと同じく開始日を入れる
+    // 点検開始日を入れたら、セルで入れたときと同じ規則で終了日を合わせる（B10）。
+    // 申請済みの予定の行は変えない。予定の行の点検種別は点検行で決まっているので変えない
     applyToRows: (ids, patch) => {
       const idSet = new Set(ids);
       set((s) => ({
         rows: s.rows.map((r) => {
-          if (!idSet.has(r.id)) return r;
-          const next = { ...r, ...patch };
-          if (patch.startDate && patch.endDate === undefined && !r.endDate) next.endDate = patch.startDate;
+          if (!idSet.has(r.id) || r.schedule?.locked) return r;
+          const next = r.schedule ? { ...r, ...patch, inspectionType: r.inspectionType } : { ...r, ...patch };
+          if (patch.startDate && patch.endDate === undefined) next.endDate = followEndDate(r.startDate, r.endDate, patch.startDate);
           return validate(next);
         }),
       }));
@@ -365,9 +517,9 @@ export const useBulkStore = create<BulkState>((set, get) => {
     // v1: js/bulk-state.js clearRows（自動保存は呼ばない）
     clearRows: () => set({ rows: [], selectedIds: new Set() }),
 
-    // v1: js/bulk-modals.js applyTemplate（clearRows → addRow）
+    // v1: js/bulk-modals.js applyTemplate（clearRows → addRow）。点検予定の行は残す
     replaceRows: (inputs) => {
-      set({ rows: [], selectedIds: new Set() });
+      set((s) => ({ rows: s.rows.filter((r) => r.schedule), selectedIds: new Set() }));
       appendRows(inputs);
       get().triggerAutoSave();
     },
@@ -383,8 +535,6 @@ export const useBulkStore = create<BulkState>((set, get) => {
       const row = get().rows.find((r) => r.id === id);
       if (row) set({ copiedRow: { ...row } });
     },
-
-    setFilter: (filter) => set({ filter }),
 
     toggleSelection: (id) =>
       set((s) => {
@@ -440,7 +590,6 @@ export function resetBulkSession(): void {
   useBulkStore.setState({
     rows: [],
     rowIdCounter: 0,
-    filter: 'all',
     selectedIds: new Set<number>(),
     draggedRowId: null,
     masterData: EMPTY_BULK_MASTER,
@@ -449,6 +598,7 @@ export function resetBulkSession(): void {
     userId: null,
     copiedRow: null,
     sessionLoaded: false,
+    inspectionDefaults: EMPTY_DEFAULTS,
   });
 }
 

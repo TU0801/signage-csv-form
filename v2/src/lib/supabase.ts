@@ -75,6 +75,12 @@ export const RPC = {
   mgmtAddBuildingVendor: 'mgmt_add_building_vendor',
   mgmtRemoveBuildingVendor: 'mgmt_remove_building_vendor',
   mgmtOwnCompany: 'mgmt_own_company',
+  /** 点検登録フォーム（2026-10-24）。scripts/fix-1024-core.sql */
+  managementCompaniesScoped: 'management_companies_scoped',
+  portalCompletions: 'portal_completions',
+  portalMarkCompleted: 'portal_mark_completed',
+  portalUnmarkCompleted: 'portal_unmark_completed',
+  portalInspectionDates: 'portal_inspection_dates',
 } as const;
 
 /** Storage のバケット */

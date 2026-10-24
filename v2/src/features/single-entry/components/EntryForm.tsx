@@ -4,7 +4,8 @@ import { TextArea } from '@/components/ui/TextArea';
 import { Select } from '@/components/ui/Select';
 import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { Button } from '@/components/ui/Button';
-import { PosterType } from '@/lib/constants';
+import { POSTER_PNG_SIZE, PosterType } from '@/lib/constants';
+import { preparePosterImage } from '@/lib/pdfToPng';
 import { cn } from '@/lib/utils';
 import type { AppSettings } from '@/lib/api/single-entry';
 import type { DbInspectionType, Terminal } from '@/types/database';
@@ -32,6 +33,8 @@ interface EntryFormProps {
   onDuplicate: () => void;
   canDuplicate: boolean;
   onImageError: (message: string) => void;
+  /** 画像選択の知らせ（複数ページの PDF は1ページ目を使う、など） */
+  onImageNotice?: (message: string) => void;
 }
 
 const categoryOptions = CATEGORY_OPTIONS.map((c) => ({ value: c, label: c }));
@@ -58,6 +61,7 @@ export function EntryForm({
   onDuplicate,
   canDuplicate,
   onImageError,
+  onImageNotice,
 }: EntryFormProps) {
   const { values, customImage } = form;
   const isCustom = values.posterType === PosterType.CUSTOM;
@@ -84,11 +88,22 @@ export function EntryForm({
     const input = e.target;
     const file = input.files?.[0];
     if (!file) return;
-    const error = await form.selectImage(file);
+    // PDF は1ページ目を PNG に変換してから選ぶ（B18。一括入力の詳細設定と同じユーティリティ）
+    let prepared: Awaited<ReturnType<typeof preparePosterImage>>;
+    try {
+      prepared = await preparePosterImage(file);
+    } catch (e) {
+      onImageError(e instanceof Error ? e.message : '画像を選択できませんでした');
+      input.value = '';
+      return;
+    }
+    const error = await form.selectImage(prepared.file);
     if (error) {
       onImageError(error);
       input.value = '';
+      return;
     }
+    if (prepared.notice) onImageNotice?.(prepared.notice);
   };
 
   // v1: js/script.js clearCustomImage
@@ -201,7 +216,7 @@ export function EntryForm({
             <input
               ref={fileInputRef}
               type="file"
-              accept=".jpg,.jpeg,.png"
+              accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
               onChange={(e) => void handleFile(e)}
               className="hidden"
               aria-label="貼紙画像"
@@ -221,7 +236,9 @@ export function EntryForm({
               >
                 クリックして画像を選択
                 <br />
-                <small>JPG, JPEG, PNG形式（5MB以下）</small>
+                <small>
+                  JPG, JPEG, PNG, PDF形式（5MB以下）。PDF は1ページ目を {POSTER_PNG_SIZE.width}×{POSTER_PNG_SIZE.height} の PNG に変換します
+                </small>
               </button>
             )}
           </div>
@@ -280,9 +297,9 @@ export function EntryForm({
         <div className="space-y-0.5 sm:col-span-2">
           <TextArea
             id="se-remarks"
-            label="作業時間及び備考"
+            label="備考（作業時間を記載下さい）"
             rows={3}
-            placeholder="例：10:00〜12:00"
+            placeholder="例: 10:00～12:00 / No2号機11:00～12:00"
             value={values.remarks}
             disabled={isCustom}
             className={isCustom ? 'bg-gray-200' : undefined}
@@ -293,6 +310,17 @@ export function EntryForm({
               {remarks.lines}/{remarks.maxLines}行・1行最長 {remarks.longest}/{remarks.perLine}字
             </p>
           )}
+        </div>
+        {/* メモは掲示・CSV に出さない（点検月の変更などの覚え書き。承認の画面で管理者が見る） */}
+        <div className="sm:col-span-2">
+          <Input
+            id="se-memo"
+            label="メモ（掲示・CSVには出ません）"
+            placeholder="例: 点検月を11月に変更"
+            value={values.memo}
+            maxLength={500}
+            onChange={(e) => form.setField('memo', e.target.value)}
+          />
         </div>
       </div>
       <div className="flex shrink-0 gap-2 border-t border-gray-200 px-3 py-2">

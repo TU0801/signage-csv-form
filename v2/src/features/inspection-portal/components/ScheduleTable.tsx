@@ -4,7 +4,9 @@ import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
 import type { DbInspectionReport, PortalEntryRow } from '@/types/portal';
 import { appliedEntry, rowActions, type PortalRole } from '../lib/actions';
+import type { StatusOf } from '../lib/filters';
 import { focusEntry, formatDate, formatMonth, type ScheduleItem } from '../lib/schedule';
+import { StatusBadge } from './StatusBadge';
 
 /** 行の操作（ページが申請・報告書・承認・差戻しのモーダルを開く） */
 export interface ScheduleRowHandlers {
@@ -17,6 +19,8 @@ export interface ScheduleRowHandlers {
 interface ScheduleTableProps extends ScheduleRowHandlers {
   items: ScheduleItem[];
   role: PortalRole;
+  /** 行のステータス（完了連絡を含めて決める） */
+  statusOf: StatusOf;
   /** 承認・差戻しを送っている申請（二度押しを止める） */
   busyEntryId: string | null;
 }
@@ -33,25 +37,6 @@ const REPORT_LABEL: Record<string, { label: string; variant: 'primary' | 'succes
   accepted: { label: '受領済み', variant: 'success' },
   returned: { label: '差戻し', variant: 'warning' },
 };
-
-export function ApplicationBadge({ item }: { item: Pick<ScheduleItem, 'application' | 'overdueUnapplied'> }) {
-  if (item.overdueUnapplied) {
-    // 差戻しのまま月を過ぎたものも超過（承認待ち・承認済みの申請が無い）
-    return (
-      <Badge variant="danger">{item.application === 'sent_back' ? '点検月超過（差戻し）' : '点検月超過'}</Badge>
-    );
-  }
-  switch (item.application) {
-    case 'approved':
-      return <Badge variant="success">承認済み</Badge>;
-    case 'applied':
-      return <Badge variant="primary">申請済み（承認待ち）</Badge>;
-    case 'sent_back':
-      return <Badge variant="warning">差戻し</Badge>;
-    default:
-      return <Badge>未申請</Badge>;
-  }
-}
 
 /**
  * 報告書の状態。押すとその報告書に絞った点検報告書の画面を開く（受領・差戻し・プレビューはそちらで行う。
@@ -116,15 +101,24 @@ const th = 'whitespace-nowrap px-2 py-1 text-left font-medium text-gray-600';
 const td = 'px-2 py-1 align-top';
 
 /** 点検の予定（点検行 × 対象月）の表。行高を詰め、操作は右端にまとめる */
+/**
+ * 列の出し分け（修正依頼1024 B19）。保守会社列: 管理会社・管理者に出す（保守会社のアカウントには出さない）。
+ * 管理会社列: 保守会社・管理者に出す（管理会社のアカウントには出さない）
+ */
+export function portalColumns(role: PortalRole): { showVendor: boolean; showManagement: boolean } {
+  return { showVendor: role.isAdmin || role.isManagement, showManagement: role.isAdmin || !role.isManagement };
+}
+
 export function ScheduleTable({
   items,
   role,
+  statusOf,
   busyEntryId,
   onApply,
   onReport,
   onReview,
 }: ScheduleTableProps) {
-  const showManagement = role.isAdmin;
+  const { showVendor, showManagement } = portalColumns(role);
   if (items.length === 0) {
     return <p className="px-2 py-4 text-center text-sm text-gray-500">条件に合う点検はありません</p>;
   }
@@ -136,9 +130,9 @@ export function ScheduleTable({
             <th className={th}>対象月</th>
             <th className={th}>物件</th>
             <th className={th}>点検種別</th>
-            <th className={th}>保守会社</th>
+            {showVendor && <th className={th}>保守会社</th>}
             {showManagement && <th className={th}>管理会社</th>}
-            <th className={th}>申請状況</th>
+            <th className={th}>ステータス</th>
             <th className={th}>点検日</th>
             <th className={th}>報告書</th>
             <th className={th}>操作</th>
@@ -158,10 +152,10 @@ export function ScheduleTable({
                   <div className="text-[11px] text-gray-500">{inspection.property_code}</div>
                 </td>
                 <td className={td}>{inspection.inspection_type_label ?? '－'}</td>
-                <td className={td}>{inspection.vendor_name ?? '－'}</td>
+                {showVendor && <td className={td}>{inspection.vendor_name ?? '－'}</td>}
                 {showManagement && <td className={td}>{inspection.management_company_name ?? '－'}</td>}
                 <td className={td}>
-                  <ApplicationBadge item={item} />
+                  <StatusBadge status={statusOf(item)} />
                   {sentBackEntry?.review_comment && (
                     <div className="mt-0.5 max-w-[16rem] whitespace-pre-line text-[11px] text-amber-800">
                       理由: {sentBackEntry.review_comment}
@@ -190,7 +184,7 @@ export function ScheduleTable({
                         className={small}
                         onClick={() => onReport(item)}
                       >
-                        {item.report?.status === 'returned' ? '報告書を再提出' : '報告書'}
+                        {item.report?.status === 'returned' ? '報告書を再提出' : '報告書UP'}
                       </Button>
                     )}
                     <ReviewButtons

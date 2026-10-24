@@ -20,7 +20,9 @@ export interface AutoSaveData {
  * 行を保存する（0行ならキーを消す）。書き込み失敗は警告だけ。
  * v1: js/bulk-data.js saveAutoSave
  */
-export function writeAutoSave(userId: string | null, rows: BulkEntryRow[], rowIdCounter: number): void {
+export function writeAutoSave(userId: string | null, allRows: BulkEntryRow[], rowIdCounter: number): void {
+  // 点検予定の行は開くたびに DB から作り直すので保存しない（修正依頼1024）
+  const rows = allRows.filter((r) => !r.schedule);
   try {
     if (rows.length === 0) {
       localStorage.removeItem(autoSaveKey(userId));
@@ -37,6 +39,7 @@ export function writeAutoSave(userId: string | null, rows: BulkEntryRow[], rowId
         startDate: r.startDate,
         endDate: r.endDate,
         remarks: r.remarks,
+        memo: r.memo,
         displayTime: r.displayTime,
         noticeText: r.noticeText,
         displayStartDate: r.displayStartDate,
@@ -44,6 +47,9 @@ export function writeAutoSave(userId: string | null, rows: BulkEntryRow[], rowId
         displayEndDate: r.displayEndDate,
         displayEndTime: r.displayEndTime,
         showOnBoard: r.showOnBoard,
+        emergencyContact: r.emergencyContact,
+        posterType: r.posterType,
+        posterImage: r.posterImage,
         position: r.position,
       })),
     };

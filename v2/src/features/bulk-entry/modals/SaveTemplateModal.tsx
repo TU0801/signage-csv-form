@@ -35,7 +35,8 @@ function SaveTemplateForm({ onClose, onSaved }: { onClose: () => void; onSaved: 
       return;
     }
     const { rows, currentVendor } = useBulkStore.getState();
-    if (rows.length === 0) {
+    // 点検予定の行はテンプレートに入れないので、手で足した行だけを数える
+    if (!rows.some((r) => !r.schedule)) {
       addToast('保存するデータがありません', 'error');
       return;
     }

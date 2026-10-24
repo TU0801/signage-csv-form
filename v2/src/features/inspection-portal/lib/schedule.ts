@@ -179,27 +179,3 @@ export function buildSchedule(
 export function unscheduledInspections(inspections: PortalInspectionRow[]): PortalInspectionRow[] {
   return inspections.filter((i) => i.inspection_months.length === 0);
 }
-
-export interface ScheduleCounts {
-  /** 点検月を過ぎて未申請 */
-  overdueUnapplied: number;
-  /** 承認待ち（申請済み） */
-  awaitingApproval: number;
-  /** 差戻し中 */
-  sentBack: number;
-  /** 報告書の確認待ち */
-  reportsAwaitingReview: number;
-  /** 報告書の差戻し */
-  reportsReturned: number;
-}
-
-/** 件数バッジ。点検月の無い点検の行（buildUnscheduledItems）も渡す（その行は超過にならないので超過の数には入らない） */
-export function countSchedule(items: ScheduleItem[]): ScheduleCounts {
-  return {
-    overdueUnapplied: items.filter((i) => i.overdueUnapplied).length,
-    awaitingApproval: items.filter((i) => i.application === 'applied').length,
-    sentBack: items.filter((i) => i.application === 'sent_back').length,
-    reportsAwaitingReview: items.filter((i) => i.report?.status === 'submitted').length,
-    reportsReturned: items.filter((i) => i.report?.status === 'returned').length,
-  };
-}

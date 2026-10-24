@@ -1,15 +1,29 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { entryErrorReason } from '@/lib/api/admin-entries';
 import { fetchInspectionReports, fetchPortalEntries, fetchPortalInspections } from '@/lib/api/portal';
+import { fetchCompletions, fetchInspectionDates } from '@/lib/api/inspection-form';
+import type { DbInspectionCompletion, RpcInspectionDateRow } from '@/types/database';
 import type { DbInspectionReport, PortalEntryRow, PortalInspectionRow } from '@/types/portal';
 
 export interface PortalData {
   inspections: PortalInspectionRow[];
   entries: PortalEntryRow[];
   reports: DbInspectionReport[];
+  /** 完了連絡（修正依頼1024） */
+  completions: DbInspectionCompletion[];
+  /** 検査月（直近の実施年月）のある点検 */
+  inspectionDates: RpcInspectionDateRow[];
 }
 
-const EMPTY: PortalData = { inspections: [], entries: [], reports: [] };
+const EMPTY: PortalData = { inspections: [], entries: [], reports: [], completions: [], inspectionDates: [] };
+
+/** 完了連絡・検査月は補助の情報なので、読めなくても一覧は出す（空として続ける） */
+function orEmpty<T>(p: Promise<T[]>, what: string): Promise<T[]> {
+  return p.catch((err: unknown) => {
+    console.error(`${what}の取得に失敗しました:`, err);
+    return [];
+  });
+}
 
 /**
  * 点検一覧の元データ（点検行・申請・報告書）を並べて読む。範囲は DB 側（RPC・RLS）が絞る。
@@ -27,13 +41,15 @@ export function usePortalData() {
     const mine = ++seq.current;
     setLoading(true);
     try {
-      const [inspections, entries, reports] = await Promise.all([
+      const [inspections, entries, reports, completions, inspectionDates] = await Promise.all([
         fetchPortalInspections(),
         fetchPortalEntries(),
         fetchInspectionReports(),
+        orEmpty(fetchCompletions(), '完了連絡'),
+        orEmpty(fetchInspectionDates(), '検査月'),
       ]);
       if (mine !== seq.current) return;
-      setData({ inspections, entries, reports });
+      setData({ inspections, entries, reports, completions, inspectionDates });
       setError(null);
       setLoaded(true);
     } catch (err) {

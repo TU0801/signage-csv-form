@@ -5,6 +5,8 @@ import { useAuthStore } from '@/stores/authStore';
 import { useBulkStore } from '@/stores/bulkStore';
 import { hasUnsentSingleEntries, useSingleEntryStore } from '@/features/single-entry/stores/singleEntryStore';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { hasUnsentInput } from '@/features/bulk-entry/utils/scheduleRows';
+import { useInspectionFormStore } from '@/stores/inspectionFormStore';
 import { cn } from '@/lib/utils';
 import { HeaderSlotContext } from './HeaderSlot';
 
@@ -19,7 +21,7 @@ export type LayoutWidth = 'standard' | 'full';
 
 /** width は本文（UserLayout の main）と同じ値にして、ロゴと本文の左端をそろえる */
 export function AppHeader({ width = 'standard' }: { width?: LayoutWidth }) {
-  const { profile, isAdmin, isManagement } = useAuth();
+  const { profile, isAdmin } = useAuth();
   const signOut = useAuthStore((s) => s.signOut);
   const location = useLocation();
   const { setTarget } = useContext(HeaderSlotContext);
@@ -28,23 +30,22 @@ export function AppHeader({ width = 'standard' }: { width?: LayoutWidth }) {
   // 一括入力の行・1件入力の申請前の作成データは画面を移っても store に残るので、どの画面からのログアウトでも確認する
   const handleLogout = () => {
     // 1件入力は今のユーザーの行だけ数える（別のユーザーが残した行で確認を出さない）
-    if (useBulkStore.getState().rows.length > 0 || hasUnsentSingleEntries()) {
+    // 一括入力の点検予定の行は、入力したものだけ数える（予定は開くたびに DB から出る）
+    if (useBulkStore.getState().rows.some(hasUnsentInput) || hasUnsentSingleEntries()) {
       setConfirmingLogout(true);
       return;
     }
     // 別のユーザーが残した行があっても、ログアウトで捨てる
     useSingleEntryStore.getState().clear();
+    useInspectionFormStore.getState().setManagementCompanyId('');
     void signOut();
   };
 
-  // 管理会社は申請を作らないので点検ポータルだけ。保守会社・管理者は入力画面に加えて点検ポータル
-  const portalItems = [
-    { to: '/portal', label: '点検一覧' },
+  // 点検登録フォーム（1件入力・一括入力・点検一覧をまとめた画面。管理会社には点検一覧を出す）と点検報告書（修正依頼1024 B3）
+  const navItems = [
+    { to: '/', label: '点検登録フォーム' },
     { to: '/portal/documents', label: '点検報告書' },
   ];
-  const navItems = isManagement
-    ? portalItems
-    : [{ to: '/', label: '1件入力' }, { to: '/bulk', label: '一括入力' }, ...portalItems];
 
   return (
     // 高さは枠線込みで --header-h（border-box）。サイドバーや画面の高さに合わせる枠はこの変数で引き算する
@@ -53,7 +54,7 @@ export function AppHeader({ width = 'standard' }: { width?: LayoutWidth }) {
         <div className="flex items-center justify-between h-full">
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2">
-              <Link to={isManagement ? '/portal' : '/'} className="text-lg font-bold text-gray-900">
+              <Link to="/" className="text-lg font-bold text-gray-900">
                 サイネージCMS
               </Link>
               {/* v1: index.html / bulk.html / admin.html の #appVersion（js/version.js APP_VERSION） */}
@@ -76,6 +77,8 @@ export function AppHeader({ width = 'standard' }: { width?: LayoutWidth }) {
                   {item.label}
                 </Link>
               ))}
+              {/* 管理者メニュー（旧『管理』。B5）。管理会社に出すのは AdminRoute が管理会社を通すようになってから（C2・担当 mgmt）。
+                  今は AdminRoute が管理者しか通さないので、管理会社にリンクを出すと「管理者権限が必要です」で戻される */}
               {isAdmin && (
                 <Link
                   to="/admin"
@@ -86,7 +89,7 @@ export function AppHeader({ width = 'standard' }: { width?: LayoutWidth }) {
                       : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900',
                   )}
                 >
-                  管理
+                  管理者メニュー
                 </Link>
               )}
             </nav>
@@ -108,6 +111,7 @@ export function AppHeader({ width = 'standard' }: { width?: LayoutWidth }) {
         onConfirm={() => {
           // 1件入力の作成データは確認のうえ捨てる（同じタブで別のユーザーが入っても残さない）
           useSingleEntryStore.getState().clear();
+          useInspectionFormStore.getState().setManagementCompanyId('');
           void signOut();
         }}
         title="確認"
