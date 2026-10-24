@@ -1,4 +1,5 @@
 import { supabase, RPC } from '@/lib/supabase';
+import { rpcAllRows } from '@/lib/api/masterData';
 import type { DbInspectionCompletion, RpcInspectionDateRow } from '@/types/database';
 import type { RpcPropertyManagementCompanyRow } from '@/types/rpc';
 
@@ -8,10 +9,9 @@ import type { RpcPropertyManagementCompanyRow } from '@/types/rpc';
  */
 
 /** 物件ごとの管理会社（管理会社フィルターの候補）。管理者は全物件、保守会社は担当物件と担当の点検の物件 */
-export async function fetchScopedManagementCompanies(): Promise<RpcPropertyManagementCompanyRow[]> {
-  const { data, error } = await supabase.rpc(RPC.managementCompaniesScoped);
-  if (error) throw error;
-  return (data ?? []) as RpcPropertyManagementCompanyRow[];
+// 物件数が PostgREST の max_rows を超えても欠けないよう、ページを分けて全件読む（旧 property_management_companies と同じ）
+export function fetchScopedManagementCompanies(): Promise<RpcPropertyManagementCompanyRow[]> {
+  return rpcAllRows<RpcPropertyManagementCompanyRow>(RPC.managementCompaniesScoped);
 }
 
 /** 範囲内の完了連絡 */
