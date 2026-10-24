@@ -1,4 +1,6 @@
 import { CSV_HEADERS } from '@/lib/csv';
+import { todayUtc } from '@/lib/utils';
+import { submittedDisplayPeriod } from './rowDetail';
 import type { BulkEntryRow, BulkMasterData, BulkSettings, BulkVendorSelection } from '../types';
 
 /** カンマ・ダブルクォート・LF を含むときだけクォートする。v1: js/shared-utils.js escapeCSVField */
@@ -21,6 +23,8 @@ export function posterImageBaseName(url: string): string {
  * 追加の貼紙の行（B18）は管理画面の CSV（lib/csv.ts generateAdminCsv）と同じく 点検工事案内・日付・備考・案内文を空にし、
  * 貼紙区分を「追加」、点検案内TPLNo を画像のファイル名（拡張子なし）にする（申請前で ID が無いので customImageBaseName は使えない）。
  * 変更日は UTC の日付、変更日時の時刻はローカル時刻（v1 と同じ混在）。
+ * 表示開始日だけは v1 と意図して違う: 空なら申請で DB に入る値（buildBulkEntries と同じ submittedDisplayPeriod の規則。
+ * 申請日＝今日、過ぎた予定は点検開始日）にする。v1 は点検開始日で、申請して管理画面から出す CSV と食い違っていた。
  * v1: js/bulk-data.js generateCSV
  */
 export function generateBulkCsv(
@@ -34,6 +38,7 @@ export function generateBulkCsv(
 
   const now = new Date();
   const dateStr = now.toISOString().split('T')[0]!.replace(/-/g, '/');
+  const today = todayUtc(now);
   const timeStr = now.toTimeString().substring(0, 8);
 
   const csvRows = [CSV_HEADERS.join(',')];
@@ -48,7 +53,8 @@ export function generateBulkCsv(
 
     const sd = formatDate(row.startDate);
     const ed = formatDate(row.endDate) || sd;
-    const dsd = formatDate(row.displayStartDate || row.startDate);
+    // 申請で DB に入る表示開始日（buildBulkEntries の display_start_date と同じ）
+    const dsd = formatDate(submittedDisplayPeriod(row, today).startDate || today);
     const ded = formatDate(row.displayEndDate || row.endDate) || ed;
 
     const remarksText = (row.remarks || '').replace(/\n/g, '\r\n');
