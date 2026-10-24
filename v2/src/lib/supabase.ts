@@ -30,6 +30,8 @@ export const TABLES = {
   errorLogs: 'signage_error_logs',
   /** 点検報告書（点検ポータル）。書き込みは RPC だけ */
   inspectionReports: 'signage_inspection_reports',
+  /** 新規建物の申請（2026-10-24）。承認・却下は RPC だけ */
+  propertyRequests: 'signage_property_requests',
 } as const;
 
 /** signage スキーマの RPC（biz への窓口） */
@@ -52,6 +54,11 @@ export const RPC = {
   portalUpdateReport: 'portal_update_report',
   portalReviewReport: 'portal_review_report',
   managementCompaniesMaster: 'management_companies_master',
+  /** 新規建物の申請（2026-10-24）。管理会社の候補は管理者以外にも返す。承認・却下は管理者だけ */
+  managementCompaniesForRequest: 'management_companies_for_request',
+  inspectionTypeOptionsForRequest: 'inspection_type_options_for_request',
+  approvePropertyRequest: 'approve_property_request',
+  rejectPropertyRequest: 'reject_property_request',
 } as const;
 
 /** Storage のバケット */

@@ -162,6 +162,30 @@ export interface DbBuildingVendor {
   updated_at: string | null;
 }
 
+/**
+ * signage_property_requests テーブル（新規建物の申請。2026-10-24 scripts/fix-1024-approval.sql）。
+ * 申請者が書けるのは中身の列だけ（INSERT）。承認・却下は RPC approve_property_request / reject_property_request。
+ * 読めるのは管理者と申請した本人。inspection_type_id は biz.inspection_types の id（signage の点検種別と同じ値）
+ */
+export interface DbPropertyRequest {
+  id: string;
+  vendor_id: string;
+  management_company_id: string;
+  property_name: string;
+  address: string | null;
+  inspection_type_id: string | null;
+  inspection_months: number[];
+  status: 'pending' | 'approved' | 'rejected';
+  requested_by: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  reject_reason: string | null;
+  /** 承認時に管理者が入れた物件コード（signage_master_properties.property_code になる） */
+  created_property_code: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 /** signage_vendor_inspections テーブル */
 export interface DbVendorInspection {
   id: string;

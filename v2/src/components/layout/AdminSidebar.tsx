@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/icons';
 import { countApprovedEntries, countPendingEntries } from '@/lib/api/admin-entries';
 import { countPendingBuildingRequests } from '@/lib/api/relationships';
+import { countPendingPropertyRequests } from '@/lib/api/property-requests';
 import { currentEntriesFilters } from '@/features/entries-list/hooks/useEntriesFilters';
 import { useAdminCountsStore } from '@/stores/adminCountsStore';
 
@@ -50,6 +51,7 @@ export function AdminSidebar() {
   const location = useLocation();
   const pendingEntries = useAdminCountsStore((s) => s.pendingEntries);
   const buildingRequests = useAdminCountsStore((s) => s.buildingRequests);
+  const propertyRequests = useAdminCountsStore((s) => s.propertyRequests);
   const approved = useAdminCountsStore((s) => s.approved);
   const [collapsed, setCollapsed] = useState(readCollapsed);
 
@@ -66,7 +68,7 @@ export function AdminSidebar() {
   // v1: js/admin.js updateSidebarCounts（承認待ち = データ承認 + ビル追加リクエスト、承認済み = データ一覧の件数）
   useEffect(() => {
     let cancelled = false;
-    const { setPendingEntries, setBuildingRequests, setApproved } = useAdminCountsStore.getState();
+    const { setPendingEntries, setBuildingRequests, setPropertyRequests, setApproved } = useAdminCountsStore.getState();
     const settle = <T,>(p: Promise<T>, set: (v: T) => void) =>
       p.then(
         (v) => {
@@ -76,6 +78,7 @@ export function AdminSidebar() {
       );
     settle(countPendingEntries(), setPendingEntries);
     settle(countPendingBuildingRequests(), setBuildingRequests);
+    settle(countPendingPropertyRequests(), setPropertyRequests);
     settle(countApprovedEntries(currentEntriesFilters()), setApproved);
     return () => {
       cancelled = true;
@@ -83,7 +86,7 @@ export function AdminSidebar() {
   }, [location.pathname]);
 
   const counts: Record<BadgeKey, number> = {
-    pending: pendingEntries + buildingRequests,
+    pending: pendingEntries + buildingRequests + propertyRequests,
     approved,
   };
 

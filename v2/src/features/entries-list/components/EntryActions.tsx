@@ -181,7 +181,7 @@ export function EntryActions({
             コピー
           </Button>
           <Button size="sm" variant="secondary" onClick={handleDownloadImages} disabled={downloading}>
-            {downloading ? 'DL中...' : '追加画像DL'}
+            {downloading ? 'DL中...' : '追加登録された画像ダウンロード'}
           </Button>
         </div>
       </div>

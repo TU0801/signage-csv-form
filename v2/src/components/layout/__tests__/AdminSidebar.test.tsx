@@ -12,9 +12,13 @@ vi.mock('@/lib/api/admin-entries', () => ({
 vi.mock('@/lib/api/relationships', () => ({
   countPendingBuildingRequests: async () => 1,
 }));
+// 新規建物の申請（2026-10-24）も承認待ちに足す
+vi.mock('@/lib/api/property-requests', () => ({
+  countPendingPropertyRequests: async () => 4,
+}));
 
 describe('AdminSidebar (v1 admin.html .sidebar-nav / admin.js updateSidebarCounts)', () => {
-  it('follows the v1 order and labels, counts draft entries plus building requests as 承認待ち', async () => {
+  it('follows the v1 order and labels, counts draft entries plus building requests (紐付け申請＋新規建物の申請) as 承認待ち', async () => {
     render(
       <MemoryRouter initialEntries={['/admin']}>
         <AdminSidebar />
@@ -31,7 +35,7 @@ describe('AdminSidebar (v1 admin.html .sidebar-nav / admin.js updateSidebarCount
       'ユーザー管理',
       '広告枠管理',
     ]);
-    await waitFor(() => expect(within(links[0]!).getByText('3')).toBeInTheDocument());
+    await waitFor(() => expect(within(links[0]!).getByText('7')).toBeInTheDocument());
     expect(within(links[1]!).getByText('5')).toBeInTheDocument();
     // 承認済みはデータ一覧と同じ条件（初回は開始日=今日）で数える
     expect(countApprovedEntries).toHaveBeenCalledWith(

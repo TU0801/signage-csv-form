@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
 import { normalizeTerminalId } from '@/lib/terminal';
-import { SUPABASE_URL } from '@/lib/supabase';
+import { safePosterUrl } from '@/lib/posterUrl';
 import type { PortalEntryRow } from '@/types/portal';
 import { formatDate, todayJst } from '../lib/schedule';
 
@@ -28,24 +28,8 @@ interface EntryDetailModalProps {
 
 const POSTER_LABEL: Record<string, string> = { template: 'テンプレート', custom: '追加画像' };
 
-/**
- * 追加画像の URL を、このプロジェクトの poster-images（公開バケット）のものだけに限る。
- * 値は保守会社が書けるので、javascript: などをそのまま href / src に入れると、開いた管理会社のブラウザで動いてしまう
- */
-export function safePosterUrl(url: string | null | undefined): string | null {
-  if (!url) return null;
-  try {
-    const u = new URL(url);
-    const base = new URL(SUPABASE_URL);
-    return (u.protocol === 'https:' || u.protocol === 'http:') &&
-      u.origin === base.origin &&
-      u.pathname.startsWith('/storage/v1/object/public/poster-images/')
-      ? u.href
-      : null;
-  } catch {
-    return null;
-  }
-}
+// 追加画像の URL の検査は lib/posterUrl.ts に共通化した。既存の import 先を変えないよう再公開する
+export { safePosterUrl };
 
 const STATUS_LABEL: Record<PortalEntryRow['status'], string> = {
   pending: '未申請',
