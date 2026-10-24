@@ -52,6 +52,12 @@ export const RPC = {
   portalUpdateReport: 'portal_update_report',
   portalReviewReport: 'portal_review_report',
   managementCompaniesMaster: 'management_companies_master',
+  /** 点検登録フォーム（2026-10-24）。scripts/fix-1024-core.sql */
+  managementCompaniesScoped: 'management_companies_scoped',
+  portalCompletions: 'portal_completions',
+  portalMarkCompleted: 'portal_mark_completed',
+  portalUnmarkCompleted: 'portal_unmark_completed',
+  portalInspectionDates: 'portal_inspection_dates',
 } as const;
 
 /** Storage のバケット */

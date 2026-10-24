@@ -49,6 +49,8 @@ export interface DbEntry {
   review_comment?: string | null;
   reviewed_by?: string | null;
   reviewed_at?: string | null;
+  /** 申請者のメモ（CSV に出さない。点検月の変更などの覚え書き）。scripts/fix-1024-core.sql */
+  memo?: string | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -207,4 +209,21 @@ export interface DbAuditLog {
   old_data: unknown;
   new_data: unknown;
   created_at: string | null;
+}
+
+/** signage_inspection_completions テーブル / RPC portal_completions の1行（完了連絡。書き込みは RPC だけ）。scripts/fix-1024-core.sql */
+export interface DbInspectionCompletion {
+  id: string;
+  property_inspection_id: string;
+  /** 対象月（月初の日付） */
+  target_month: string;
+  vendor_id: string | null;
+  completed_at: string;
+  completed_by: string | null;
+}
+
+/** RPC portal_inspection_dates の1行（検査月＝biz.property_inspections.inspected_on。値のある点検だけ返る） */
+export interface RpcInspectionDateRow {
+  inspection_id: string;
+  inspected_on: string;
 }
