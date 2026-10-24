@@ -88,6 +88,8 @@ export const RPC = {
   /** マスター管理の物件の検査月（管理者・管理会社は自社物件）。書き込みは upsert の戻り値の点検行 id で */
   propertyInspectionDates: 'property_inspection_dates',
   setPropertyInspectionInspectedOn: 'set_property_inspection_inspected_on',
+  /** 使われていない貼紙画像の一覧（管理者だけ。修正依頼1024 後続 orphan。scripts/fix-1024-followups-orphan.sql） */
+  orphanPosterImages: 'orphan_poster_images',
 } as const;
 
 /** Storage のバケット */

@@ -29,8 +29,14 @@ import { errorLabel, firstError } from '@/features/bulk-entry/utils/columns';
 import { formatInspectedOn, isApplyTarget, scheduleRowEntry, scheduleRowInput } from '@/features/bulk-entry/utils/scheduleRows';
 import { clearAutoSave } from '@/features/bulk-entry/utils/bulkAutoSave';
 import { getStoredTemplates, getVisibleTemplates, templateRows } from '@/features/bulk-entry/utils/bulkTemplates';
+import {
+  discardImagesDroppedBy,
+  discardUnheldRowImages,
+  rowPosterImages,
+} from '@/features/bulk-entry/utils/discardRowImages';
 import type { BulkEntryRow } from '@/features/bulk-entry/types';
 import { usePortalData } from '@/features/inspection-portal/hooks/usePortalData';
+import { inspectionsOfVendor } from '@/features/inspection-portal/lib/inspectionLink';
 import { reportEntryId } from '@/features/inspection-portal/lib/actions';
 import { matchTiming, TIMING_OPTIONS, type TimingFilter } from '@/features/inspection-portal/lib/filters';
 import {
@@ -146,12 +152,10 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
 
   // ---- 点検予定（選択中の保守会社の点検行 × 対象月） ----
   // 保守会社のアカウントは DB が担当の点検（台の保守会社を含む）に絞って返す。管理者は選んだ保守会社の点検だけ（未選択なら出さない）
-  const vendorInspections = useMemo(() => {
-    if (!isAdmin) return portal.inspections;
-    const v = currentVendor.id;
-    if (!v) return [];
-    return portal.inspections.filter((i) => i.vendor_id === v || i.unit_vendor_ids.includes(v));
-  }, [portal.inspections, isAdmin, currentVendor.id]);
+  const vendorInspections = useMemo(
+    () => inspectionsOfVendor(portal.inspections, isAdmin, currentVendor.id),
+    [portal.inspections, isAdmin, currentVendor.id],
+  );
 
   const scheduleItems = useMemo<ScheduleItem[]>(() => {
     const scheduled = buildSchedule(vendorInspections, portal.entries, portal.reports, { today, monthsAhead: MONTHS_AHEAD });
@@ -188,7 +192,8 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
   // 予定を表の行にする（読み込み・保守会社の切り替え・申請のあとに入れ直す）。点検種別の既定（B9）にも点検行を渡す
   useEffect(() => {
     if (!ready || !portal.loaded) return;
-    syncScheduleRows(scheduleItems.map((item) => scheduleRowInput(item, entryMemos)));
+    // 予定から外れた行（予定の変更など）が持っていた画像は片付ける
+    discardImagesDroppedBy(() => syncScheduleRows(scheduleItems.map((item) => scheduleRowInput(item, entryMemos))));
   }, [ready, portal.loaded, scheduleItems, entryMemos, syncScheduleRows]);
   useEffect(() => {
     setInspectionDefaults({
@@ -438,7 +443,10 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       return;
     }
     if (!(await confirm(`${ids.length}件の行を削除しますか？`))) return;
+    const idSet = new Set(ids);
+    const images = rowPosterImages(useBulkStore.getState().rows.filter((r) => idSet.has(r.id)));
     removeRows(ids);
+    discardUnheldRowImages(images);
     addToast(`${ids.length}件の行を削除しました`, 'success');
   }, [removeRows, addToast, confirm]);
 
@@ -471,7 +479,10 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
     const template = getStoredTemplates().find((t) => t.id === id);
     if (!template) return;
     if (useBulkStore.getState().rows.some((r) => !r.schedule) && !(await confirm('現在のデータを置き換えますか？'))) return;
+    // 置き換えで消える手の行の画像は、適用したテンプレートが同じ画像を持っていなければ片付ける
+    const images = rowPosterImages(useBulkStore.getState().rows.filter((r) => !r.schedule));
     replaceRows(templateRows(template));
+    discardUnheldRowImages(images);
     addToast(`テンプレート「${template.name}」を適用しました`, 'success');
   };
 

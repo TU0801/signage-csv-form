@@ -61,9 +61,9 @@ export function PendingEntryRow({
       </td>
       <td className={nowrap}>
         {entry.property_code}
-        {/* 点検予定の行（点検登録フォーム）からの申請は点検に紐付くので、見分けられるよう印を付ける */}
+        {/* 点検に紐付いた申請（点検登録フォームの予定の行・一括入力・1件入力で点検行に一致したもの）に、見分けられるよう印を付ける */}
         {entry.property_inspection_id && (
-          <span title="点検登録フォームの点検予定の行からの申請（点検に紐付いています）。管理会社も承認・差戻しできます">
+          <span title="点検に紐付いた申請です。管理会社も承認・差戻しできます">
             <Badge variant="primary" className="ml-1 px-1 py-0 text-[10px]">
               点検予定
             </Badge>

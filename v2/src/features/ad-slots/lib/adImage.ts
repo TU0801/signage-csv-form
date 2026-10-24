@@ -11,9 +11,6 @@ export const AD_CROP_HEIGHT = 960;
 /** JPEG で書き出すときの品質 */
 const AD_JPEG_QUALITY = 0.9;
 
-/** 公開 URL の中で poster-images バケットのパスが始まる目印 */
-const BUCKET_MARKER = '/poster-images/';
-
 export interface AdImageFormat {
   type: 'image/png' | 'image/jpeg';
   ext: 'png' | 'jpg';
@@ -24,15 +21,8 @@ export function adOutputFormat(sourceType: string): AdImageFormat {
   return sourceType === 'image/png' ? { type: 'image/png', ext: 'png' } : { type: 'image/jpeg', ext: 'jpg' };
 }
 
-/** 公開 URL から poster-images 内のパス（例 ads/slot_1.png）を取り出す。クエリ（?v=…）は外す。当てはまらなければ null */
-export function storagePathFromPublicUrl(url: string | null | undefined): string | null {
-  if (!url) return null;
-  const withoutQuery = url.split(/[?#]/)[0] ?? '';
-  const at = withoutQuery.indexOf(BUCKET_MARKER);
-  if (at < 0) return null;
-  const path = decodeURIComponent(withoutQuery.slice(at + BUCKET_MARKER.length));
-  return path || null;
-}
+/** 公開 URL から poster-images 内のパスを取り出す（貼紙画像の片付けと共通なので lib/posterPath に置く） */
+export { storagePathFromPublicUrl } from '@/lib/posterPath';
 
 /** 公開 URL の画像の形式を拡張子から推す（保存済みの画像を切り抜き直すときの書き出し形式に使う） */
 export function sourceTypeFromUrl(url: string): string {

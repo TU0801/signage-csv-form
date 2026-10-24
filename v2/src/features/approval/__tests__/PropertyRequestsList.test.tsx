@@ -40,8 +40,32 @@ describe('新規建物の申請の承認・却下', () => {
 
     fireEvent.change(input, { target: { value: ' 120410 ' } });
     fireEvent.click(submit);
-    await waitFor(() => expect(onConfirm).toHaveBeenCalledWith('120410'));
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledWith('120410', null));
     expect(await screen.findByText('物件コード「120410」は既に使われています')).toBeInTheDocument();
+  });
+
+  it('端末番号（任意）は形を確かめてから物件コードと一緒に送り、入れたら端末未設置の注意を登録の案内に変える', async () => {
+    const onConfirm = vi.fn(async () => {});
+    render(<ApproveDialog target={target} onClose={vi.fn()} onConfirm={onConfirm} />);
+    fireEvent.change(document.getElementById('propertyRequestCode')!, {
+      target: { value: 'RV-03' },
+    });
+    const terminal = document.getElementById('propertyRequestTerminal')!;
+    const submit = screen.getByRole('button', { name: '物件を登録して承認', hidden: true });
+
+    fireEvent.change(terminal, { target: { value: 'Z0090A01' } });
+    fireEvent.click(submit);
+    expect(onConfirm).not.toHaveBeenCalled();
+    expect(
+      screen.getByText(/端末番号は「英小文字1字＋数字4桁＋英大文字1字＋数字2桁」/),
+    ).toBeInTheDocument();
+
+    fireEvent.change(terminal, { target: { value: ' z0090A01 ' } });
+    const note = screen.getByTestId('propertyRequestTerminalNote');
+    expect(note).toHaveTextContent('端末「z0090A01」を業務システムの物件に登録します');
+    expect(note).not.toHaveTextContent('表示されません');
+    fireEvent.click(submit);
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledWith('RV-03', 'z0090A01'));
   });
 
   it('却下は理由が無いと送らない', async () => {

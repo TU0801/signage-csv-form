@@ -70,14 +70,22 @@ export async function countPendingPropertyRequests(): Promise<number> {
   return count ?? 0;
 }
 
-/** 承認（管理者だけ）。業務システムに物件・保守会社の紐付け・点検行ができる */
+/**
+ * 承認（管理者だけ）。業務システムに物件・保守会社の紐付け・点検行ができる。
+ * 端末番号（任意）を入れると業務システムの物件の端末になり、同期トリガーで signage の物件の端末にも入る
+ * （scripts/fix-1024-followups-terminal.sql。形式と他の物件で使われていないことは DB が確かめる）
+ */
 export async function approvePropertyRequest(
   id: string,
   propertyCode: string,
+  terminalId: string | null = null,
 ): Promise<DbPropertyRequest> {
+  // 端末番号が空なら p_terminal_id を送らない（DB 側の既定 NULL）。SQL より先に画面が出ても、端末なしの承認は 2引数版で通る
+  const term = terminalId?.trim();
   const { data, error } = await supabase.rpc(RPC.approvePropertyRequest, {
     p_id: id,
     p_property_code: propertyCode.trim(),
+    ...(term ? { p_terminal_id: term } : {}),
   });
   if (error) throw error;
   return data as DbPropertyRequest;

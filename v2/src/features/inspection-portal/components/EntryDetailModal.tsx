@@ -28,9 +28,6 @@ interface EntryDetailModalProps {
 
 const POSTER_LABEL: Record<string, string> = { template: 'テンプレート', custom: '追加画像' };
 
-// 追加画像の URL の検査は lib/posterUrl.ts に共通化した。既存の import 先を変えないよう再公開する
-export { safePosterUrl };
-
 const STATUS_LABEL: Record<PortalEntryRow['status'], string> = {
   pending: '未申請',
   draft: '申請済み（承認待ち）',

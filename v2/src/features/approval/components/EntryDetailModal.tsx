@@ -3,6 +3,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import type { DbEntry } from '@/types/database';
 import { normalizeTerminalId } from '@/lib/terminal';
+import { safePosterUrl } from '@/lib/posterUrl';
 import {
   entryStatusLabel,
   formatJaDate,
@@ -61,6 +62,7 @@ export function EntryDetailModal({
   if (!entry) return null;
 
   const isCustom = entry.poster_type === 'custom';
+  const posterUrl = safePosterUrl(entry.poster_image);
 
   return (
     <Modal
@@ -126,11 +128,16 @@ export function EntryDetailModal({
           <DetailRow label="貼紙区分">{isCustom ? '追加' : 'テンプレート'}</DetailRow>
           {isCustom && entry.poster_image && (
             <DetailRow label="貼紙画像">
-              <img
-                src={entry.poster_image}
-                alt="貼紙画像"
-                className="max-h-[200px] max-w-[200px] rounded border border-gray-200"
-              />
+              {/* 値は保守会社が書けるので、このプロジェクトの poster-images の URL だけを出す（点検一覧の詳細と同じ） */}
+              {posterUrl ? (
+                <img
+                  src={posterUrl}
+                  alt="貼紙画像"
+                  className="max-h-[200px] max-w-[200px] rounded border border-gray-200"
+                />
+              ) : (
+                <span className="text-gray-500">表示できない画像の URL です</span>
+              )}
             </DetailRow>
           )}
         </Section>

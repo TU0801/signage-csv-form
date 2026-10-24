@@ -5,6 +5,12 @@ import type { DbInspectionType, DbVendor, Terminal } from '@/types/database';
 import type { RpcPropertyManagementCompanyRow } from '@/types/rpc';
 import { followEndDate } from '@/lib/inspectionDates';
 import type { CustomImage, LocalEntry, SingleEntryValues } from '../types';
+import {
+  inspectionsOfVendor,
+  matchInspectionLink,
+  type InspectionLink,
+} from '@/features/inspection-portal/lib/inspectionLink';
+import type { PortalInspectionRow } from '@/types/portal';
 
 /** 案内カテゴリの選択肢（v1 index.html #inspectionCategory。'' = 全て） */
 export const CATEGORY_OPTIONS = ['点検', '工事', '清掃', 'その他', 'アンケート'] as const;
@@ -272,6 +278,8 @@ export interface EntryContext {
   customImage: CustomImage | null;
   hasTemplateImage: (templateNo: string) => boolean;
   settings: AppSettings;
+  /** 点検行に結び付けるときの保守会社（useVendorContext の linkVendorId） */
+  linkVendorId?: string | null;
 }
 
 export type BuildEntryResult =
@@ -360,6 +368,8 @@ export function buildLocalEntry(values: SingleEntryValues, ctx: EntryContext): B
       displayTime,
       posterType: values.posterType,
       customImage: isCustom ? ctx.customImage : null,
+      linkVendorId: ctx.linkVendorId ?? null,
+      ...(isCustom ? { linkInspectionType: inspection?.inspection_name ?? '' } : {}),
     },
   };
 }
@@ -392,7 +402,9 @@ export function valuesFromEntry(
   types: DbInspectionType[],
   linkedIds: ReadonlySet<string>,
 ): SingleEntryValues {
-  const t = types.find((x) => x.inspection_name === e.inspectionType);
+  // 追加の貼紙は「追加画像」で記録するので、フォームで選んでいた点検工事案内（点検行への結び付けに使う）を戻す
+  const typeName = e.posterType === PosterType.CUSTOM ? (e.linkInspectionType ?? e.inspectionType) : e.inspectionType;
+  const t = typeName ? types.find((x) => x.inspection_name === typeName) : undefined;
   const inspectionTypeId = t?.id ?? '';
   const visible = filterInspectionTypes(types, values.category, linkedIds).some((x) => x.id === inspectionTypeId);
   return {
@@ -454,6 +466,7 @@ export function toInsertRow(
   userId: string,
   settings: AppSettings,
   today: string,
+  link: InspectionLink | null = null,
 ): EntryInsertRow {
   return {
     user_id: userId,
@@ -478,7 +491,31 @@ export function toInsertRow(
     poster_image: posterImageUrl,
     poster_position: String(e.frameNo ?? DEFAULT_FRAME_NO),
     status: EntryStatus.DRAFT,
+    // 保守会社の点検行に一致したときだけ（entryInspectionLink）。一致しなければ今までどおり入れない
+    ...(link ?? {}),
   };
+}
+
+/**
+ * 申請を保守会社の点検行（portal_inspections）に結び付ける（修正依頼1024 後続。一括入力の手で足した行と同じ照合）。
+ * 保守会社は追加した時点のもの（古い作成データは fallbackVendorId＝申請時の保守会社）。管理者は選んだ保守会社の点検行だけを見る
+ */
+export function entryInspectionLink(
+  e: Pick<LocalEntry, 'propertyCode' | 'inspectionType' | 'startDate' | 'linkVendorId' | 'posterType' | 'linkInspectionType'>,
+  inspections: PortalInspectionRow[],
+  isAdmin: boolean,
+  fallbackVendorId: string | null,
+): InspectionLink | null {
+  const vendorId = e.linkVendorId === undefined ? fallbackVendorId : e.linkVendorId;
+  // 追加の貼紙は inspection_type が「追加画像」に固定されるので、フォームで選んでいた点検工事案内で照合する。選んでいなければ結び付けない
+  // （linkInspectionType の無い古い作成データは今までどおり inspectionType）
+  const inspectionType = e.posterType === PosterType.CUSTOM ? (e.linkInspectionType ?? e.inspectionType) : e.inspectionType;
+  if (!inspectionType) return null;
+  return matchInspectionLink(
+    { propertyCode: e.propertyCode, inspectionType, startDate: e.startDate },
+    inspectionsOfVendor(inspections, isAdmin, vendorId),
+    vendorId,
+  );
 }
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];

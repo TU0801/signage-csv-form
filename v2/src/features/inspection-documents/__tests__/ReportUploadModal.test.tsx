@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { PortalInspectionRow } from '@/types/portal';
 import { makeReport } from './fixtures';
 
@@ -109,5 +109,28 @@ describe('ReportUploadModal', () => {
     expect(screen.getByText('報告書の再提出')).toBeInTheDocument();
     expect(screen.getByText(/差戻し理由: 写真が不足しています/)).toBeInTheDocument();
     expect(screen.getByText(/前の版: 20261005_テスト第一ビル_消防設備点検\.pdf/)).toBeInTheDocument();
+  });
+
+  it('送信の途中は Escape・× で閉じない', async () => {
+    let resolve!: (v: unknown) => void;
+    api.fetchInspectionReports.mockResolvedValue([]);
+    api.registerInspectionReport.mockImplementationOnce(() => new Promise((r) => (resolve = r)));
+    const onClose = vi.fn();
+    const { choose } = setup({ onClose });
+    choose(pdfFile());
+    fireEvent.change(screen.getByLabelText('実施日（必須）'), { target: { value: '2026-10-05' } });
+    fireEvent.click(screen.getByRole('button', { name: '提出する' }));
+    await waitFor(() => expect(api.registerInspectionReport).toHaveBeenCalledTimes(1));
+
+    const dialog = screen.getByLabelText('実施日（必須）').closest('dialog')!;
+    const cancel = new Event('cancel', { cancelable: true });
+    fireEvent(dialog, cancel);
+    expect(cancel.defaultPrevented).toBe(true);
+    // 先頭の × が外のモーダルのもの（後ろは中の確認ダイアログ）
+    fireEvent.click(within(dialog).getAllByRole('button', { name: '閉じる', hidden: true })[0]!);
+    expect(onClose).not.toHaveBeenCalled();
+
+    resolve(makeReport());
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
   });
 });

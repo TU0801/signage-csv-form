@@ -4,10 +4,13 @@ const mockRpc = vi.fn();
 vi.mock('@/lib/supabase', () => ({
   supabase: { rpc: (...args: unknown[]) => mockRpc(...args) },
   TABLES: {},
-  RPC: { inspectionTypeOptionsForRequest: 'inspection_type_options_for_request' },
+  RPC: {
+    inspectionTypeOptionsForRequest: 'inspection_type_options_for_request',
+    approvePropertyRequest: 'approve_property_request',
+  },
 }));
 
-import { fetchInspectionTypeOptionsForRequest } from '../property-requests';
+import { approvePropertyRequest, fetchInspectionTypeOptionsForRequest } from '../property-requests';
 
 describe('fetchInspectionTypeOptionsForRequest（建物追加 申請の点検種別）', () => {
   beforeEach(() => mockRpc.mockReset());
@@ -36,5 +39,24 @@ describe('fetchInspectionTypeOptionsForRequest（建物追加 申請の点検種
     // 紐付けが無いと全点検種別（linked=false）
     mockRpc.mockResolvedValue({ data: [{ id: 't9', name: '全体', linked: false }], error: null });
     expect((await fetchInspectionTypeOptionsForRequest('v2')).linked).toBe(false);
+  });
+});
+
+describe('approvePropertyRequest（新規建物の承認）', () => {
+  beforeEach(() => mockRpc.mockReset());
+
+  it('端末番号が空なら p_terminal_id を送らず（DB 更新前の 2引数版でも通る）、入れたときだけ送る', async () => {
+    mockRpc.mockResolvedValue({ data: { id: 'r1' }, error: null });
+    await approvePropertyRequest('r1', ' 120410 ', '  ');
+    expect(mockRpc).toHaveBeenLastCalledWith('approve_property_request', {
+      p_id: 'r1',
+      p_property_code: '120410',
+    });
+    await approvePropertyRequest('r1', '120410', ' z0090A01 ');
+    expect(mockRpc).toHaveBeenLastCalledWith('approve_property_request', {
+      p_id: 'r1',
+      p_property_code: '120410',
+      p_terminal_id: 'z0090A01',
+    });
   });
 });

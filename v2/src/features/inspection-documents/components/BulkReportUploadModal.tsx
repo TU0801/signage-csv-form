@@ -2,9 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/utils';
-import { registerInspectionReport } from '@/lib/api/portal';
+import { fetchInspectionReports, registerInspectionReport, sha256Hex } from '@/lib/api/portal';
+import { useAuth } from '@/hooks/useAuth';
+import type { DbInspectionReport } from '@/types/portal';
 import { entryErrorReason } from '@/lib/api/admin-entries';
 import { usePortalData } from '@/features/inspection-portal/hooks/usePortalData';
 import { formatMonth, todayJst } from '@/features/inspection-portal/lib/schedule';
@@ -19,8 +22,9 @@ import {
   buildTargets,
   effectivePerformedOn,
   effectiveTargetMonth,
-  existingReport,
+  identicalLiveReport,
   pageLabel,
+  reportToReplace,
   toggleBreak,
   validateSegments,
   type BulkTarget,
@@ -58,7 +62,17 @@ const colorOf = (no: number) => SEGMENT_COLORS[(no - 1) % SEGMENT_COLORS.length]
 type SegmentResult =
   | { state: 'running' }
   | { state: 'ok'; fileName: string }
+  /** 切り出した区間が、同じ点検の提出済みの版と同じ内容（SHA-256 が同じ）なので送らなかった。otherMonth はその版が別の対象月のとき */
+  | { state: 'skipped'; otherMonth: string | null }
   | { state: 'error'; message: string };
+
+const isFinished = (r: SegmentResult | undefined) => r?.state === 'ok' || r?.state === 'skipped';
+
+/** 提出の前に切り出した区間の PDF と SHA-256 */
+interface PreparedSegment {
+  file: File;
+  hash: string;
+}
 
 interface LoadedPdf {
   file: File;
@@ -70,6 +84,8 @@ interface LoadedPdf {
 function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUploadModalProps) {
   const { addToast } = useToast();
   const data = usePortalData();
+  // 提出する保守会社は DB 側でアカウントの保守会社（current_vendor_id()）になる。画面で選んだ保守会社（vendorId）ではない
+  const accountVendor = useAuth().vendorId ?? null;
   const today = todayJst();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -83,6 +99,17 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
   const [touched, setTouched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [results, setResults] = useState<Record<number, SegmentResult>>({});
+  /** 提出済みの報告書を置き換える区間があるときの確認（送信前に読み直した報告書の一覧を持つ） */
+  const [confirmReplace, setConfirmReplace] = useState<{
+    count: number;
+    reports: DbInspectionReport[];
+    prepared: Map<number, PreparedSegment>;
+  } | null>(null);
+  /**
+   * 提出の前に切り出した区間の SHA-256（区間の先頭ページ → ハッシュ）。同じ内容の報告書が提出済みの区間は送らないので、
+   * 区間の「置き換えます」の注意から外す。区切り・回転・PDF を変えると中身が変わるので消す
+   */
+  const [hashes, setHashes] = useState<Record<number, string>>({});
 
   // 閉じたら pdfjs の文書を片付ける
   useEffect(() => () => pdf?.pages.destroy(), [pdf]);
@@ -105,9 +132,10 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
     [segments, inputs, targetMap, defaultPerformedOn],
   );
   const segmentOfPage = (page: number) => segments.find((s) => page >= s.start && page <= s.end);
-  // 1区間でも登録できたら、ページの区切り・回転は変えない（登録済みの区間と画面の区間がずれないように）
-  const locked = Object.values(results).some((r) => r.state === 'ok');
-  const pending = segments.filter((s) => results[s.start]?.state !== 'ok');
+  // 登録した（または同じ内容で送らなかった）区間は済み。済みの区間がひとつでもあれば、ページの区切り・回転は変えない
+  // （登録済みの区間と画面の区間がずれないように）
+  const locked = Object.values(results).some(isFinished);
+  const pending = segments.filter((s) => !isFinished(results[s.start]));
   const allDone = segments.length > 0 && pending.length === 0;
 
   const pickFile = async (picked: File | undefined | null) => {
@@ -128,6 +156,7 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
       setBreaks(new Set());
       setInputs({});
       setResults({});
+      setHashes({});
       setTouched(false);
     } catch (err) {
       console.error('PDF open failed:', err);
@@ -142,18 +171,29 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
   const setInput = (start: number, patch: Partial<SegmentInput>) =>
     setInputs((prev) => ({ ...prev, [start]: { ...(prev[start] ?? EMPTY_INPUT), ...patch } }));
 
-  const rotate = (page: number, delta: number) =>
+  const rotate = (page: number, delta: number) => {
     setRotations((prev) => ({ ...prev, [page]: ((((prev[page] ?? 0) + delta) % 360) + 360) % 360 }));
+    setHashes({});
+  };
 
   const handleSubmit = async () => {
     setTouched(true);
     if (!pdf) return;
-    const targetsToSend = pending;
-    if (targetsToSend.some((s) => errors[s.start])) {
+    if (pending.some((s) => errors[s.start])) {
       addToast('直す必要がある区間があります（赤字の区間を確かめてください）', 'error');
       return;
     }
+    // 置き換える版と同じ内容かを見比べるので、送る直前の報告書の一覧で数える（開いた後にほかの人が出した版も入れる）
     setSubmitting(true);
+    let latest: DbInspectionReport[];
+    try {
+      latest = await fetchInspectionReports();
+    } catch (err) {
+      setSubmitting(false);
+      addToast(`提出前の確認に失敗しました: ${entryErrorReason(err)}`, 'error');
+      return;
+    }
+    // 同じ内容で送らない区間は置き換えないので、確認の前に区間を切り出してハッシュを見比べる
     let source;
     try {
       source = await loadSourcePdf(pdf.bytes);
@@ -163,7 +203,46 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
       setSubmitting(false);
       return;
     }
+    const prepared = new Map<number, PreparedSegment>();
+    for (const seg of pending) {
+      try {
+        const bytes = await extractRange(source, seg, rotations);
+        const base = pdf.file.name.replace(/\.pdf$/i, '');
+        const file = new File([bytes as BlobPart], `${base}_${pageLabel(seg).replace('p.', 'p')}.pdf`, {
+          type: 'application/pdf',
+        });
+        prepared.set(seg.start, { file, hash: await sha256Hex(file) });
+      } catch (err) {
+        // 切り出せなかった区間は送信のときにもう一度切り出し、失敗を区間の結果に出す
+        console.error('PDF extract failed:', err);
+      }
+    }
+    setSubmitting(false);
+    setHashes(Object.fromEntries([...prepared].map(([start, p]) => [start, p.hash])));
+    const replacing = pending.filter((seg) => {
+      const input = inputs[seg.start] ?? EMPTY_INPUT;
+      const target = targetMap.get(input.targetKey);
+      if (!target) return false;
+      const performedOn = effectivePerformedOn(input, defaultPerformedOn);
+      const hash = prepared.get(seg.start)?.hash;
+      const month = effectiveTargetMonth(target, performedOn);
+      if (hash && identicalLiveReport(latest, target.inspection.inspection_id, month, hash)) return false;
+      return !!reportToReplace(latest, target, performedOn, accountVendor);
+    }).length;
+    if (replacing > 0) {
+      setConfirmReplace({ count: replacing, reports: latest, prepared });
+      return;
+    }
+    await send(latest, prepared);
+  };
+
+  const send = async (latest: DbInspectionReport[], prepared: Map<number, PreparedSegment>) => {
+    if (!pdf) return;
+    const targetsToSend = pending;
+    setSubmitting(true);
+    let source: Awaited<ReturnType<typeof loadSourcePdf>> | null = null;
     let ok = 0;
+    let skipped = 0;
     let failed = 0;
     // 区間ごとに順に登録する。途中で失敗しても残りを続け、結果は区間ごとに出す
     for (const seg of targetsToSend) {
@@ -173,13 +252,29 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
       const performedOn = effectivePerformedOn(input, defaultPerformedOn);
       try {
         if (!target) throw new Error('点検を選んでください');
-        const bytes = await extractRange(source, seg, rotations);
-        const base = pdf.file.name.replace(/\.pdf$/i, '');
-        const file = new File([bytes as BlobPart], `${base}_${pageLabel(seg).replace('p.', 'p')}.pdf`, {
-          type: 'application/pdf',
-        });
+        let pre = prepared.get(seg.start);
+        if (!pre) {
+          // 確認の前に切り出せなかった区間（失敗はここで区間の結果に出す）
+          source ??= await loadSourcePdf(pdf.bytes);
+          const bytes = await extractRange(source, seg, rotations);
+          const base = pdf.file.name.replace(/\.pdf$/i, '');
+          const file = new File([bytes as BlobPart], `${base}_${pageLabel(seg).replace('p.', 'p')}.pdf`, {
+            type: 'application/pdf',
+          });
+          pre = { file, hash: await sha256Hex(file) };
+        }
+        const { file } = pre;
         const invalid = validateReportFile(file);
         if (invalid) throw new Error(`${invalid}（${formatBytes(file.size)}）`);
+        // 同じ点検に同じ内容の版が提出中・受領済みなら送らない（同じ PDF を出し直しても版が増え、受領がやり直しになるだけ）
+        const month = effectiveTargetMonth(target, performedOn);
+        const same = identicalLiveReport(latest, target.inspection.inspection_id, month, pre.hash);
+        if (same) {
+          skipped += 1;
+          const otherMonth = same.target_month !== month ? same.target_month : null;
+          setResults((prev) => ({ ...prev, [seg.start]: { state: 'skipped', otherMonth } }));
+          continue;
+        }
         const report = await registerInspectionReport({
           inspectionId: target.inspection.inspection_id,
           targetMonth: target.targetMonth,
@@ -203,8 +298,10 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
     }
     setSubmitting(false);
     if (ok > 0) onUploaded?.();
-    if (failed === 0) addToast(`${ok}件の報告書を提出しました`, 'success');
-    else addToast(`${ok}件を提出し、${failed}件は失敗しました（失敗した区間は直して再送できます）`, 'warning');
+    const skippedNote = skipped > 0 ? `（${skipped}件は同じ内容の報告書が提出済みのため送っていません）` : '';
+    if (failed === 0 && ok === 0) addToast(`同じ内容の報告書が提出済みのため、${skipped}件とも送っていません`, 'info');
+    else if (failed === 0) addToast(`${ok}件の報告書を提出しました${skippedNote}`, 'success');
+    else addToast(`${ok}件を提出し、${failed}件は失敗しました${skippedNote}（失敗した区間は直して再送できます）`, 'warning');
   };
 
   const dirty = !!pdf && !allDone;
@@ -325,6 +422,7 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
                         disabled={locked || submitting}
                         onClick={() => {
                           setBreaks((prev) => toggleBreak(prev, page));
+                          setHashes({});
                           // 区間の組み方が変わるので、前の失敗の表示は消す（別のページの区間に残さない）
                           setResults((prev) =>
                             Object.fromEntries(Object.entries(prev).filter(([, r]) => r.state === 'ok')),
@@ -373,9 +471,11 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
                     groups={groups}
                     target={targetMap.get((inputs[seg.start] ?? EMPTY_INPUT).targetKey) ?? null}
                     reports={data.reports}
+                    contentHash={hashes[seg.start] ?? null}
+                    accountVendorId={accountVendor}
                     errors={touched ? errors[seg.start] : undefined}
                     result={results[seg.start]}
-                    disabled={submitting || results[seg.start]?.state === 'ok'}
+                    disabled={submitting || isFinished(results[seg.start])}
                     onChange={(patch) => setInput(seg.start, patch)}
                   />
                 ))}
@@ -384,6 +484,17 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
           </>
         )}
       </div>
+      {/* 中に入れた確認ダイアログの cancel / close は外のモーダルが無視する（components/ui/Modal） */}
+      <ConfirmDialog
+        open={!!confirmReplace}
+        onClose={() => setConfirmReplace(null)}
+        onConfirm={() => {
+          if (confirmReplace) void send(confirmReplace.reports, confirmReplace.prepared);
+        }}
+        title="提出済みの報告書を置き換えます"
+        message={`${confirmReplace?.count ?? 0}件の区間は、同じ点検・対象月に提出済みの報告書があります。\n提出すると前の版は「置き換え済み」になります（同じ内容の区間は数えていません。送りません）。\nこのまま提出しますか？`}
+        confirmLabel="置き換えて提出する"
+      />
     </Modal>
   );
 }
@@ -467,7 +578,11 @@ interface SegmentRowProps {
   today: string;
   groups: [string, BulkTarget[]][];
   target: BulkTarget | null;
-  reports: Parameters<typeof existingReport>[0];
+  reports: DbInspectionReport[];
+  /** 提出の前に切り出したこの区間の SHA-256（まだなら null）。同じ内容の報告書が提出済みなら送らないので置き換えの注意を出さない */
+  contentHash: string | null;
+  /** ログイン中のアカウントの保守会社（管理者は null）。置き換える版の判定に使う */
+  accountVendorId: string | null;
   errors: { target?: string; performedOn?: string } | undefined;
   result: SegmentResult | undefined;
   disabled: boolean;
@@ -482,6 +597,8 @@ function SegmentRow({
   groups,
   target,
   reports,
+  contentHash,
+  accountVendorId,
   errors,
   result,
   disabled,
@@ -489,7 +606,9 @@ function SegmentRow({
 }: SegmentRowProps) {
   const performedOn = effectivePerformedOn(input, defaultPerformedOn);
   const month = target ? effectiveTargetMonth(target, performedOn) : null;
-  const previous = target ? existingReport(reports, target, performedOn) : null;
+  const identical =
+    target && contentHash ? identicalLiveReport(reports, target.inspection.inspection_id, month, contentHash) : null;
+  const previous = target && !identical ? reportToReplace(reports, target, performedOn, accountVendorId) : null;
   return (
     <tr className="border-b border-gray-100 align-top" data-testid={`bulk-segment-${segment.no}`}>
       <td className="px-1 py-1">
@@ -521,7 +640,9 @@ function SegmentRow({
         {target && (
           <p className="mt-0.5 text-[11px] text-gray-500">
             対象月: {month ? formatMonth(month) : '（実施日の月）'}
-            {previous && <span className="ml-1 text-amber-700">提出済みの版（{previous.file_name}）があります</span>}
+            {previous && (
+              <span className="ml-1 text-amber-700">提出済みの報告書を置き換えます（{previous.file_name}）</span>
+            )}
           </p>
         )}
         {errors?.target && <p className="mt-0.5 text-[11px] text-red-600">{errors.target}</p>}
@@ -564,6 +685,11 @@ function SegmentRow({
           </span>
         )}
         {result?.state === 'ok' && <span className="break-all text-green-700">提出しました（{result.fileName}）</span>}
+        {result?.state === 'skipped' && (
+          <span className="text-gray-700">
+            同じ内容の報告書が提出済みです（{result.otherMonth ? `${formatMonth(result.otherMonth)}分・` : ''}送っていません）
+          </span>
+        )}
         {result?.state === 'error' && <span className="break-all text-red-600">失敗: {result.message}</span>}
       </td>
     </tr>

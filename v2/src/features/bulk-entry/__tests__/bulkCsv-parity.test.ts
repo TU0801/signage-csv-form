@@ -100,11 +100,13 @@ describe('bulk CSV parity with v1 js/bulk-data.js generateCSV', () => {
     vi.useRealTimers();
   });
 
-  it('generates byte-identical CSV', () => {
+  it('generates byte-identical CSV（表示開始日が空の行だけは意図して違う）', () => {
     v1State.setMasterData(master);
     v1State.setCurrentVendor('v1', '株式会社テスト保守');
     v1State.setAppSettings(settingsRows);
-    v1State.state.rows = rows.map((r) => ({ ...r }));
+    // 意図した違い: 表示開始日が空の行は、v1 は点検開始日、v2 は申請で DB に入る値（申請日＝今日。buildBulkEntries と同じ）。
+    // その1点を揃えた行を v1 に渡し、ほかの列がすべてバイト一致することを確かめる
+    v1State.state.rows = rows.map((r) => ({ ...r, displayStartDate: r.displayStartDate || '2026-10-14' }));
     const expected: string = v1Data.generateCSV();
 
     const actual = generateBulkCsv(
@@ -120,6 +122,24 @@ describe('bulk CSV parity with v1 js/bulk-data.js generateCSV', () => {
     expect(lines[0]!.split(',')[3]).toBe('受注先名');
     expect(actual).toContain(',False,');
     expect(actual).toContain('2026/10/14 [00:30:00]');
+  });
+
+  it('表示開始日が空の行は申請日（今日）、過ぎた予定は点検開始日にする（DB に入る値と同じ。v1 は点検開始日）', () => {
+    const csv = generateBulkCsv(
+      [
+        row({ id: 1, inspectionType: '消防設備点検' }),
+        // 点検終了日が今日（2026-10-14）より前の予定を後から申請した行
+        row({ id: 2, inspectionType: '消防設備点検', startDate: '2026-10-01', endDate: '2026-10-02' }),
+      ],
+      master,
+      { id: 'v1', name: '株式会社テスト保守' },
+      applySettings(DEFAULT_BULK_SETTINGS, settingsRows),
+    );
+    const [, upcoming, past] = csv.split('\n').map((l) => l.split(','));
+    expect(upcoming![13]).toBe('2026/10/14'); // 表示開始日
+    expect(upcoming![26]).toBe('2026/10/14 [00:00:00]'); // 表示日時
+    expect(upcoming![8]).toBe('2026/11/02'); // 点検開始日はそのまま
+    expect(past![13]).toBe('2026/10/01');
   });
 
   it('メモは CSV に出さない（B12）', () => {

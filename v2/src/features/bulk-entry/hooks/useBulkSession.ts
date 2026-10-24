@@ -7,6 +7,7 @@ import { getAssignedBuildings } from '@/lib/api/relationships';
 import { fetchBulkSettings } from '@/lib/api/bulk-entry';
 import { fetchLinkedInspectionIds } from '@/lib/api/single-entry';
 import { hasUnsentInput } from '../utils/scheduleRows';
+import { discardImagesDroppedBy } from '../utils/discardRowImages';
 import { applySettings, DEFAULT_BULK_SETTINGS, flattenProperties, toBulkMasterData } from '../utils/bulkMaster';
 import { clearAutoSave, readAutoSave } from '../utils/bulkAutoSave';
 import type { BulkVendor } from '../types';
@@ -137,7 +138,7 @@ export function useBulkSession(confirm: (message: string) => Promise<boolean>) {
           store.setCurrentVendor({ id: null, name: null });
           store.setInspectionDefaults({ linkedIds: [] });
           // 保守会社を外したら予定の行も外す（予定は選んだ保守会社のもの）
-          store.syncScheduleRows([]);
+          discardImagesDroppedBy(() => store.syncScheduleRows([]));
           return;
         }
         const selected = vendors.find((v) => v.id === vendorId);
@@ -149,7 +150,9 @@ export function useBulkSession(confirm: (message: string) => Promise<boolean>) {
         store.setMasterData({ ...useBulkStore.getState().masterData, properties: flattenProperties(buildings, true) });
         store.setInspectionDefaults({ linkedIds: [...linked] });
         // 手で足した行は消す。予定の行は画面が選んだ保守会社の予定で入れ直す
-        useBulkStore.setState((st) => ({ rows: st.rows.filter((r) => r.schedule), selectedIds: new Set<number>() }));
+        discardImagesDroppedBy(() =>
+          useBulkStore.setState((st) => ({ rows: st.rows.filter((r) => r.schedule), selectedIds: new Set<number>() })),
+        );
       } catch (error) {
         console.error('Failed to load vendor data:', error);
         addToast('保守会社データの取得に失敗しました', 'error');

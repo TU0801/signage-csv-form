@@ -50,7 +50,7 @@ export function validatePropertyRequest(form: {
 }
 
 /**
- * 承認でできる物件には端末が無い。点検予定の行からの申請は端末が無くてもできる（点検ポータルの「端末なしも可」と同じ）が、
+ * 承認時に管理者が端末番号を入れなかった物件には端末が無い（入れた物件は created_terminal_id に残る）。点検予定の行からの申請は端末が無くてもできる（点検ポータルの「端末なしも可」と同じ）が、
  * 端末ID が空の申請はサイネージに表示されない（CSV の端末ID 列は空欄）
  */
 export const TERMINAL_NOTE =
@@ -394,7 +394,7 @@ export function BuildingRequestModal({
                   </td>
                   <td className="py-0.5 text-gray-700">
                     {h.status === 'approved'
-                      ? h.created_property_code
+                      ? `${h.created_property_code ?? ''}${h.created_terminal_id ? `（端末 ${h.created_terminal_id} 登録済み）` : '（端末未設置）'}`
                       : h.status === 'rejected'
                         ? h.reject_reason
                         : '-'}
@@ -403,7 +403,8 @@ export function BuildingRequestModal({
               ))}
             </tbody>
           </table>
-          {history.some((h) => h.status === 'approved') && (
+          {/* 承認時に端末を登録した物件は表示される。端末未設置の承認済みがあるときだけ注意を出す */}
+          {history.some((h) => h.status === 'approved' && !h.created_terminal_id) && (
             <p
               className="mt-1 text-xs text-gray-500"
               data-testid="buildingRequestHistoryTerminalNote"

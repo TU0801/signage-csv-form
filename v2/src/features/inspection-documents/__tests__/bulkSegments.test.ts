@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { makeEntry, makeInspection } from '@/features/inspection-portal/__tests__/fixtures';
+import { makeReport } from './fixtures';
 import {
   UNSCHEDULED_GROUP,
   buildSegments,
   buildTargets,
+  identicalLiveReport,
+  reportToReplace,
   toggleBreak,
   validateSegments,
 } from '../lib/bulkSegments';
@@ -79,5 +82,52 @@ describe('validateSegments', () => {
     );
     expect(Object.keys(errors).map(Number)).toEqual([0, 1]);
     expect(errors[0]!.target).toContain('区間1・区間2');
+  });
+});
+
+describe('reportToReplace', () => {
+  it('DB と同じく、提出する保守会社（アカウントの会社、無ければ最新の版の会社）の提出済みの版だけを置き換える', () => {
+    const target = {
+      key: 'i1:2026-11-01',
+      inspection: makeInspection({ inspection_id: 'i1', vendor_id: 'v1', unit_vendor_ids: ['v2'] }),
+      targetMonth: '2026-11-01',
+      entryId: null,
+      group: '',
+      label: '',
+    };
+    const base = { property_inspection_id: 'i1', target_month: '2026-11-01' };
+    const reports = [
+      makeReport({ ...base, id: 'old-v1', vendor_id: 'v1', created_at: '2026-11-01T00:00:00Z' }),
+      makeReport({ ...base, id: 'new-v2', vendor_id: 'v2', created_at: '2026-11-02T00:00:00Z' }),
+      makeReport({ ...base, id: 'gone', vendor_id: 'v1', status: 'superseded', created_at: '2026-11-03T00:00:00Z' }),
+      makeReport({ ...base, id: 'other-month', vendor_id: 'v1', target_month: '2026-05-01' }),
+    ];
+    // 保守会社 v1 のアカウント: 他社（v2）の新しい版ではなく自社の版
+    expect(reportToReplace(reports, target, '2026-11-10', 'v1')?.id).toBe('old-v1');
+    // 管理者（アカウントの会社なし）: 最新の版の会社（v2）の版
+    expect(reportToReplace(reports, target, '2026-11-10', null)?.id).toBe('new-v2');
+    // 提出済みの版の無い会社
+    expect(reportToReplace(reports, target, '2026-11-10', 'v3')).toBeNull();
+    // 同じ点検でも別の月の版は置き換えない
+    expect(reportToReplace(reports, { ...target, targetMonth: '2026-12-01' }, '2026-12-10', 'v1')).toBeNull();
+  });
+});
+
+describe('identicalLiveReport', () => {
+  it('同じ点検の提出中・受領済みの同じ内容の版だけを数え、同じ対象月の版を優先する', () => {
+    const base = { property_inspection_id: 'i1', content_hash: 'h' };
+    const reports = [
+      makeReport({ ...base, id: 'returned', status: 'returned', target_month: '2026-11-01' }),
+      makeReport({ ...base, id: 'deleted', status: 'deleted', target_month: '2026-11-01' }),
+      makeReport({ ...base, id: 'superseded', status: 'superseded', target_month: '2026-11-01' }),
+      makeReport({ ...base, id: 'other-inspection', property_inspection_id: 'i2', status: 'submitted', target_month: '2026-11-01' }),
+      makeReport({ ...base, id: 'other-hash', content_hash: 'x', status: 'submitted', target_month: '2026-11-01' }),
+      makeReport({ ...base, id: 'may', status: 'accepted', target_month: '2026-05-01', created_at: '2026-06-01T00:00:00Z' }),
+    ];
+    // 同じ月は差戻し・削除・置き換え済みしか無いので、別の月の受領済みの版
+    expect(identicalLiveReport(reports, 'i1', '2026-11-01', 'h')?.id).toBe('may');
+    const same = makeReport({ ...base, id: 'nov', status: 'submitted', target_month: '2026-11-01', created_at: '2026-01-01T00:00:00Z' });
+    expect(identicalLiveReport([...reports, same], 'i1', '2026-11-01', 'h')?.id).toBe('nov');
+    expect(identicalLiveReport(reports.slice(0, 5), 'i1', '2026-11-01', 'h')).toBeNull();
   });
 });

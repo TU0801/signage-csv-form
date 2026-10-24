@@ -1,4 +1,5 @@
-import { supabase } from './supabase';
+import { supabase, TABLES } from './supabase';
+import { ownPosterPath } from './posterPath';
 
 const STORAGE_BUCKET = 'poster-images';
 export const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -52,6 +53,36 @@ export async function deleteStorageFile(path: string): Promise<void> {
   if (error) {
     console.error('Storage delete error:', error);
   }
+}
+
+/**
+ * 使われなくなった自分の貼紙画像を Storage から消す（差し替えた・テンプレートに戻した・行を消した・詳細設定をキャンセルしたとき）。
+ * 消すのは自分の {userId}/ フォルダの画像で、どの申請（signage_entries.poster_image）からも参照されていないものだけ。
+ * DB の DELETE ポリシーも同じ条件で守る（scripts/fix-1024-followups-orphan.sql）。
+ * 失敗してもログだけ残して投げない（画面の操作は止めない）
+ */
+export async function discardOwnPosterImages(urls: readonly string[], userId: string | null | undefined): Promise<void> {
+  try {
+    const own = urls.filter((u) => ownPosterPath(u, userId));
+    if (own.length === 0) return;
+    const { data, error } = await supabase.from(TABLES.entries).select('poster_image').in('poster_image', own);
+    if (error) throw error;
+    const referenced = new Set((data ?? []).map((r: { poster_image: string | null }) => r.poster_image));
+    const paths = own.filter((u) => !referenced.has(u)).map((u) => ownPosterPath(u, userId)!);
+    if (paths.length === 0) return;
+    const { error: removeError } = await supabase.storage.from(STORAGE_BUCKET).remove(paths);
+    if (removeError) throw removeError;
+  } catch (e) {
+    console.warn('使われなくなった貼紙画像を消せませんでした:', e);
+  }
+}
+
+/** 管理者の整理で、選んだ画像（バケット内のパス）をまとめて消す。消せたパスを返す */
+export async function deletePosterObjects(paths: readonly string[]): Promise<string[]> {
+  if (paths.length === 0) return [];
+  const { data, error } = await supabase.storage.from(STORAGE_BUCKET).remove([...paths]);
+  if (error) throw new Error(`画像を削除できませんでした: ${error.message}`);
+  return (data ?? []).map((o) => o.name);
 }
 
 /** パスから公開URLを取得 */

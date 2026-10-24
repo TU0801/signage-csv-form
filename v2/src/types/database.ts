@@ -184,6 +184,8 @@ export interface DbPropertyRequest {
   reject_reason: string | null;
   /** 承認時に管理者が入れた物件コード（signage_master_properties.property_code になる） */
   created_property_code: string | null;
+  /** 承認時に管理者が入れた端末番号（無ければ null＝端末未設置。scripts/fix-1024-followups-terminal.sql） */
+  created_terminal_id: string | null;
   created_at: string;
   updated_at: string;
 }
