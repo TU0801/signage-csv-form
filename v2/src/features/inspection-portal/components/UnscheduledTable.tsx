@@ -1,10 +1,11 @@
 import { useMemo } from 'react';
-import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import type { DbInspectionReport, PortalEntryRow, PortalInspectionRow } from '@/types/portal';
 import { rowActions, type PortalRole } from '../lib/actions';
+import type { StatusOf } from '../lib/filters';
 import { applicationState, focusEntry, formatMonth, monthOf, type ScheduleItem } from '../lib/schedule';
-import { ReportCell, ReviewButtons } from './ScheduleTable';
+import { portalColumns, ReportCell, ReviewButtons } from './ScheduleTable';
+import { StatusBadge } from './StatusBadge';
 
 /** 点検月の無い点検行の1行（予定の行と同じ操作を使えるよう ScheduleItem の形に寄せる） */
 export interface UnscheduledItem extends ScheduleItem {
@@ -51,6 +52,7 @@ export function buildUnscheduledItems(
 interface UnscheduledTableProps {
   items: UnscheduledItem[];
   role: PortalRole;
+  statusOf: StatusOf;
   busyEntryId: string | null;
   onApply: (item: UnscheduledItem) => void;
   onResubmit: (item: UnscheduledItem, entry: PortalEntryRow) => void;
@@ -63,23 +65,12 @@ interface UnscheduledTableProps {
 const th = 'whitespace-nowrap px-2 py-1 text-left font-medium text-gray-600';
 const td = 'px-2 py-1 align-top';
 
-function LatestBadge({ item }: { item: UnscheduledItem }) {
-  if (item.entries.length === 0) return <span className="text-gray-400">申請なし</span>;
+function LatestBadge({ item, statusOf }: { item: UnscheduledItem; statusOf: StatusOf }) {
   const month = item.latestMonth ? `${formatMonth(item.latestMonth)}分 ` : '';
-  const badge =
-    item.application === 'approved' ? (
-      <Badge variant="success">承認済み</Badge>
-    ) : item.application === 'applied' ? (
-      <Badge variant="primary">申請済み（承認待ち）</Badge>
-    ) : item.application === 'sent_back' ? (
-      <Badge variant="warning">差戻し</Badge>
-    ) : (
-      <Badge>未申請</Badge>
-    );
   return (
     <span className="inline-flex items-center gap-1">
-      <span className="text-gray-500">{month}</span>
-      {badge}
+      {month && <span className="text-gray-500">{month}</span>}
+      <StatusBadge status={statusOf(item)} />
     </span>
   );
 }
@@ -88,6 +79,7 @@ function LatestBadge({ item }: { item: UnscheduledItem }) {
 export function UnscheduledTable({
   items,
   role,
+  statusOf,
   busyEntryId,
   onApply,
   onResubmit,
@@ -106,6 +98,7 @@ export function UnscheduledTable({
     [items, role],
   );
   if (items.length === 0) return null;
+  const { showVendor, showManagement } = portalColumns(role);
   return (
     // key で開閉の既定を切り替える（open を属性で固定すると、利用者が開け閉めできなくなる）
     <details key={forceOpen ? 'open' : 'closed'} open={forceOpen} className="rounded border border-gray-200 bg-white">
@@ -122,9 +115,9 @@ export function UnscheduledTable({
             <tr>
               <th className={th}>物件</th>
               <th className={th}>点検種別</th>
-              <th className={th}>保守会社</th>
-              {role.isAdmin && <th className={th}>管理会社</th>}
-              <th className={th}>申請</th>
+              {showVendor && <th className={th}>保守会社</th>}
+              {showManagement && <th className={th}>管理会社</th>}
+              <th className={th}>ステータス</th>
               <th className={th}>報告書</th>
               <th className={th}>操作</th>
             </tr>
@@ -140,10 +133,10 @@ export function UnscheduledTable({
                     <div className="text-[11px] text-gray-500">{inspection.property_code}</div>
                   </td>
                   <td className={td}>{inspection.inspection_type_label ?? '－'}</td>
-                  <td className={td}>{inspection.vendor_name ?? '－'}</td>
-                  {role.isAdmin && <td className={td}>{inspection.management_company_name ?? '－'}</td>}
+                  {showVendor && <td className={td}>{inspection.vendor_name ?? '－'}</td>}
+                  {showManagement && <td className={td}>{inspection.management_company_name ?? '－'}</td>}
                   <td className={td}>
-                    <LatestBadge item={item} />
+                    <LatestBadge item={item} statusOf={statusOf} />
                   </td>
                   <td className={td}>
                     <ReportCell report={item.report} />
@@ -162,7 +155,7 @@ export function UnscheduledTable({
                       )}
                       {a.report && (
                         <Button variant="secondary" size="sm" className="px-2 py-0.5 text-xs" onClick={() => onReport(item)}>
-                          {item.report?.status === 'returned' ? '報告書を再提出' : '報告書'}
+                          {item.report?.status === 'returned' ? '報告書を再提出' : '報告書UP'}
                         </Button>
                       )}
                       <ReviewButtons

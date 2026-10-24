@@ -1,19 +1,17 @@
 import { Button } from '@/components/ui/Button';
-import { INITIAL_FILTERS, NONE, STATUS_OPTIONS, TIMING_OPTIONS, type PortalFilters, type StatusFilter, type TimingFilter } from '../lib/filters';
+import { INITIAL_FILTERS, STATUS_OPTIONS, TIMING_OPTIONS, type PortalFilters, type StatusFilter, type TimingFilter } from '../lib/filters';
 
 interface PortalFilterBarProps {
   filters: PortalFilters;
   onChange: (next: PortalFilters) => void;
   /** 保守会社の選択肢（管理者・管理会社のとき。保守会社のアカウントは null） */
   vendorOptions: { value: string; label: string }[] | null;
-  /** 管理会社の選択肢（管理者のとき） */
-  managementOptions: { value: string; label: string }[] | null;
 }
 
 const selectClass = 'rounded border border-gray-300 bg-white px-1.5 py-1 text-xs';
 
 /** 点検一覧の絞り込み（1行に詰める） */
-export function PortalFilterBar({ filters, onChange, vendorOptions, managementOptions }: PortalFilterBarProps) {
+export function PortalFilterBar({ filters, onChange, vendorOptions }: PortalFilterBarProps) {
   const set = (patch: Partial<PortalFilters>) => onChange({ ...filters, ...patch });
   return (
     <div className="flex flex-wrap items-center gap-1.5">
@@ -30,7 +28,7 @@ export function PortalFilterBar({ filters, onChange, vendorOptions, managementOp
         ))}
       </select>
       <select
-        aria-label="申請状況"
+        aria-label="ステータス"
         className={selectClass}
         value={filters.status}
         onChange={(e) => set({ status: e.target.value as StatusFilter })}
@@ -62,22 +60,6 @@ export function PortalFilterBar({ filters, onChange, vendorOptions, managementOp
               {o.label}
             </option>
           ))}
-        </select>
-      )}
-      {managementOptions && (
-        <select
-          aria-label="管理会社"
-          className={`${selectClass} max-w-[12rem]`}
-          value={filters.managementCompanyId}
-          onChange={(e) => set({ managementCompanyId: e.target.value })}
-        >
-          <option value="">管理会社: すべて</option>
-          {managementOptions.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-          <option value={NONE}>管理会社: 未設定</option>
         </select>
       )}
       <Button

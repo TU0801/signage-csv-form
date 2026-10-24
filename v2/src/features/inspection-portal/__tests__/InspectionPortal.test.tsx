@@ -12,6 +12,8 @@ const portal = vi.hoisted(() => ({
   reviewEntry: vi.fn(async () => ({})),
 }));
 vi.mock('@/lib/api/portal', () => portal);
+const form = vi.hoisted(() => ({ fetchCompletions: vi.fn(), fetchInspectionDates: vi.fn() }));
+vi.mock('@/lib/api/inspection-form', () => form);
 vi.mock('@/lib/supabase', () => ({ supabase: {}, TABLES: {}, RPC: {}, BUCKETS: {}, SUPABASE_URL: 'https://example.invalid' }));
 const auth = vi.hoisted(() => ({
   value: { user: { id: 'u1' }, isAdmin: false, isManagement: false, vendorId: 'v1' as string | null },
@@ -57,6 +59,8 @@ beforeEach(() => {
   ]);
   portal.fetchPortalEntries.mockResolvedValue([makeEntry({ id: 'e1', property_inspection_id: 'i1' })]);
   portal.fetchInspectionReports.mockResolvedValue([]);
+  form.fetchCompletions.mockResolvedValue([]);
+  form.fetchInspectionDates.mockResolvedValue([]);
 });
 afterEach(() => vi.useRealTimers());
 
@@ -65,18 +69,18 @@ const render = (ui: ReactElement) => rtlRender(<MemoryRouter>{ui}</MemoryRouter>
 const rows = () => screen.getAllByTestId('schedule-row');
 
 describe('点検一覧（InspectionPortal）', () => {
-  it('件数バッジを押すと、その条件の行だけになる', async () => {
+  it('ステータスの件数バッジを押すと、そのステータスの行だけになる', async () => {
     render(<InspectionPortal />);
     await screen.findByText('点検一覧');
     expect(rows()).toHaveLength(3);
-    fireEvent.click(screen.getByRole('button', { name: /点検月を過ぎて未申請\s*1/ }));
+    fireEvent.click(screen.getByRole('button', { name: /点検月超過\s*1/ }));
     expect(rows()).toHaveLength(1);
     expect(within(rows()[0]!).getByText('点検月超過')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /承認待ち\s*1/ }));
+    fireEvent.click(screen.getByRole('button', { name: /点検予定申請中\s*1/ }));
     expect(rows()).toHaveLength(1);
-    expect(within(rows()[0]!).getByText('申請済み（承認待ち）')).toBeInTheDocument();
+    expect(within(rows()[0]!).getByText('点検予定申請中')).toBeInTheDocument();
     // もう一度押すと外れ、時期も既定に戻る
-    fireEvent.click(screen.getByRole('button', { name: /承認待ち\s*1/ }));
+    fireEvent.click(screen.getByRole('button', { name: /点検予定申請中\s*1/ }));
     expect(rows()).toHaveLength(3);
     expect(screen.getByLabelText('時期')).toHaveValue('default');
   });
@@ -87,7 +91,7 @@ describe('点検一覧（InspectionPortal）', () => {
     portal.fetchPortalEntries.mockResolvedValue([makeEntry({ id: 'e9', target_month: '2026-06-01' })]);
     render(<InspectionPortal />);
     const row = await screen.findByTestId('unscheduled-row');
-    fireEvent.click(within(row).getByText('報告書'));
+    fireEvent.click(within(row).getByText('報告書UP'));
     expect(upload.props).toMatchObject({ open: true, targetMonth: null, entryId: null });
   });
 
@@ -99,7 +103,7 @@ describe('点検一覧（InspectionPortal）', () => {
     render(<InspectionPortal />);
     await screen.findByText('点検一覧');
     const may = rows().find((r) => r.textContent?.includes('2026年5月'))!;
-    fireEvent.click(within(may).getByRole('button', { name: '報告書' }));
+    fireEvent.click(within(may).getByRole('button', { name: '報告書UP' }));
     expect(upload.props).toMatchObject({ open: true, targetMonth: '2026-05-01', previous: { id: 'r5' } });
   });
 
@@ -107,7 +111,7 @@ describe('点検一覧（InspectionPortal）', () => {
     render(<InspectionPortal />);
     await screen.findByText('点検一覧');
     expect(screen.getAllByRole('button', { name: '申請' }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('button', { name: '報告書' })).toHaveLength(3);
+    expect(screen.getAllByRole('button', { name: '報告書UP' })).toHaveLength(3);
     expect(screen.queryByRole('button', { name: '承認' })).toBeNull();
     expect(screen.queryByRole('button', { name: '差戻し' })).toBeNull();
     // 保守会社のアカウントには会社の絞り込みを出さない
@@ -133,7 +137,7 @@ describe('点検一覧（InspectionPortal）', () => {
     render(<InspectionPortal />);
     await screen.findByText('点検一覧');
     expect(screen.queryByRole('button', { name: '申請' })).toBeNull();
-    expect(screen.queryByRole('button', { name: '報告書' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '報告書UP' })).toBeNull();
     expect(screen.queryByLabelText('管理会社')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '内容を確認して承認' }));
     expect(screen.getByText('エレベーターが止まります')).toBeInTheDocument();
@@ -157,7 +161,7 @@ describe('点検一覧（InspectionPortal）', () => {
     ]);
     render(<InspectionPortal />);
     const row = await screen.findByTestId('unscheduled-row');
-    expect(within(row).getByText('申請済み（承認待ち）')).toBeInTheDocument();
+    expect(within(row).getByText('点検予定申請中')).toBeInTheDocument();
     expect(within(row).getByText(/2026年11月分/)).toBeInTheDocument();
     fireEvent.click(within(row).getByRole('button', { name: '内容を確認して承認' }));
     fireEvent.click(screen.getByRole('button', { name: '承認' }));
@@ -165,7 +169,7 @@ describe('点検一覧（InspectionPortal）', () => {
     await waitFor(() => expect(portal.reviewEntry).toHaveBeenCalledWith('e-new', 'approve'));
   });
 
-  it('件数バッジと申請状況の絞り込みは点検月の無い点検も対象にし、該当があれば開いて出す', async () => {
+  it('件数バッジとステータスの絞り込みは点検月の無い点検も対象にし、該当があれば開いて出す', async () => {
     portal.fetchPortalInspections.mockResolvedValue([
       makeInspection(),
       makeInspection({ inspection_id: 'i3', property_code: '900003-00', property_name: 'テスト第三マンション', inspection_months: [] }),
@@ -179,11 +183,30 @@ describe('点検一覧（InspectionPortal）', () => {
     await screen.findByText('点検一覧');
     const details = screen.getAllByTestId('unscheduled-row')[0]!.closest('details')!;
     expect(details.open).toBe(false);
-    fireEvent.click(screen.getByRole('button', { name: /承認待ち\s*2/ }));
+    fireEvent.click(screen.getByRole('button', { name: /点検予定申請中\s*2/ }));
     const unscheduled = screen.getAllByTestId('unscheduled-row');
     expect(unscheduled).toHaveLength(1);
     expect(within(unscheduled[0]!).getByText('テスト第三マンション')).toBeInTheDocument();
     expect(unscheduled[0]!.closest('details')!.open).toBe(true);
+  });
+
+  it('保守会社列は管理会社・管理者に、管理会社列は保守会社・管理者に出す（B19）', async () => {
+    const headers = () => screen.getAllByRole('columnheader').map((h) => h.textContent);
+    const { unmount } = render(<InspectionPortal />);
+    await screen.findByText('点検一覧');
+    expect(headers()).toContain('管理会社');
+    expect(headers()).not.toContain('保守会社');
+    unmount();
+    auth.value = { user: { id: 'm-user' }, isAdmin: false, isManagement: true, vendorId: null };
+    const second = render(<InspectionPortal />);
+    await screen.findByText('点検一覧');
+    expect(headers()).toContain('保守会社');
+    expect(headers()).not.toContain('管理会社');
+    second.unmount();
+    auth.value = { user: { id: 'a-user' }, isAdmin: true, isManagement: false, vendorId: null };
+    render(<InspectionPortal />);
+    await screen.findByText('点検一覧');
+    expect(headers()).toEqual(expect.arrayContaining(['保守会社', '管理会社']));
   });
 
   it('報告書のセルは、その報告書に絞った点検報告書の画面へのリンク', async () => {
