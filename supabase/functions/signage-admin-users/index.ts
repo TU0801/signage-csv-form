@@ -1,8 +1,10 @@
 // signage-admin-users - 管理者によるユーザー作成・パスワード変更（service_role が必要な操作）
 // 管理会社のアカウント（修正依頼1024 C3）も、自社の範囲だけ使える:
-//   - 作成: 自社の管理会社ユーザー（会社は呼び出し元の会社に固定）と、自社物件を担当する保守会社のユーザー（権限 user）。管理者は作れない
-//   - パスワード変更・有効化／無効化（set_status）: 自社の管理会社ユーザーだけ（保守会社のユーザーは複数の管理会社にまたがるので不可）
-//   範囲はここで service_role として確かめる（自社物件の担当は signage.vendor_serves_management_company。scripts/fix-1024-mgmt.sql）
+//   - 作成: 自社の管理会社ユーザーだけ（会社は呼び出し元の会社に固定）。管理者・保守会社（権限 user）のアカウントは作れない
+//     （保守会社のアカウントは全管理会社分の点検・報告書を見られる。管理会社は自社物件への保守会社の紐付けを自分で書けるので、
+//       保守会社アカウントの作成を開くと、任意の保守会社のアカウントを作って他社のデータに入れてしまう）
+//   - パスワード変更・有効化／無効化（set_status）: 自社の管理会社ユーザーだけ
+//   範囲はここで service_role として確かめる（scripts/fix-1024-mgmt.sql）
 //
 // ブラウザの anon クライアントでは他人のパスワードを変更できず、ユーザー作成も signUp で
 // 管理者のセッションが新ユーザーに一時的に切り替わっていたため、管理者検証付きでここに集約する。
@@ -100,18 +102,10 @@ Deno.serve(async (req) => {
     if (passwordError) return passwordError;
     let finalManagementCompanyId = managementCompanyId;
     if (!callerIsAdmin) {
-      // 管理会社: 管理者は作れない。管理会社ユーザーは自社に固定、保守会社ユーザーは自社物件を担当する保守会社だけ
+      // 管理会社: 作れるのは自社の管理会社ユーザーだけ（会社は自社に固定）。管理者・保守会社のアカウントは管理者が作る
       if (role === 'admin') return json({ error: '管理者のアカウントは作成できません' }, 403);
-      if (role === 'management') finalManagementCompanyId = callerCompanyId;
-      if (role === 'user') {
-        if (!vendorId) return json({ error: '保守会社を選択してください' }, 400);
-        const { data: serves, error: servesError } = await admin.rpc('vendor_serves_management_company', {
-          p_vendor_id: vendorId,
-          p_company_id: callerCompanyId,
-        });
-        if (servesError) return json({ error: `保守会社の確認に失敗しました: ${servesError.message}` }, 500);
-        if (!serves) return json({ error: '自社が管理する物件を担当する保守会社ではありません' }, 403);
-      }
+      if (role === 'user') return json({ error: '保守会社のアカウントは管理者が作成します' }, 403);
+      finalManagementCompanyId = callerCompanyId;
     }
     if (role === 'management' && !finalManagementCompanyId) return json({ error: '管理会社を選択してください' }, 400);
     if (vendorId) {

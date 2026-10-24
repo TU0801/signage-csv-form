@@ -8,7 +8,7 @@
 --   - 読み: 管理会社用の SELECT ポリシーを足す（申請・物件・紐付けは自社物件だけ、共通マスターは閲覧のみ）
 --   - 書き: 範囲を確かめる管理会社用の RPC（mgmt_*）を足す。表への直接の INSERT / UPDATE / DELETE は開かない
 --   - 申請の承認・差戻しは既存の portal_review_entry（管理会社の範囲を確かめ済み）をそのまま使う
---   - ユーザーの作成・無効化・パスワード変更は Edge Function signage-admin-users（service_role）が範囲を確かめて行う
+--   - ユーザー管理は自社の管理会社ユーザーだけ（作成・無効化・パスワード変更は Edge Function signage-admin-users が範囲を確かめて行う。保守会社ユーザーは管理者だけが扱う）
 -- 戻し手順は末尾。
 
 -- ============================================================
@@ -25,44 +25,25 @@ AS $function$
   select signage.current_role_kind() = 'management' and signage.current_management_company_id() is not null;
 $function$;
 
--- 保守会社がその管理会社の物件を担当しているか。担当の根拠は次のどれか:
---   (1) 紐付け（signage_building_vendors の active）、(2) 業務システムの点検行の保守会社（property_inspections.maintainer_id）、
---   (3) 台ごとの保守の保守会社（property_unit_inspections.maintainer_id）。
--- 物件コードの書式揺れ（120410 / 120410-00）は property_reviewable と同じ規則で吸収する。
--- 会社を引数で受けるので、ログイン利用者からは呼ばせない（Edge Function の service_role だけ）
-CREATE OR REPLACE FUNCTION signage.vendor_serves_management_company(p_vendor_id uuid, p_company_id uuid)
- RETURNS boolean
+-- 物件コードが指す物件マスターの1行を決め、その行が自社（ログイン中の管理会社）の物件かを返す（書き込み系 mgmt_* の範囲判定）。
+-- 行の決め方は mgmt_add_building_vendor の保存先と同じ: 書式揺れ（120410 / 120410-00）を吸収した一致のうち、完全一致を優先する。
+-- property_reviewable（正規化した一致のどれかが自社なら真）と違い、実際に書く行そのものの管理会社で判定する
+-- （仮に 120410 が他社、120410-00 が自社のとき、'120410' で自社の判定を通して他社の行に書くことを防ぐ）
+CREATE OR REPLACE FUNCTION signage.mgmt_resolve_own_property_code(p_property_code text)
+ RETURNS text
  LANGUAGE sql
  STABLE SECURITY DEFINER
  SET search_path TO 'biz', 'signage', 'pg_temp'
 AS $function$
-  select p_vendor_id is not null and p_company_id is not null and (
-    exists (
-      select 1 from signage.signage_building_vendors bv
-      join signage.signage_master_properties s
-        on regexp_replace(s.property_code, '-00$', '') = regexp_replace(btrim(bv.property_code), '-00$', '')
-      join biz.properties b on b.signage_property_id = s.id
-      where bv.vendor_id = p_vendor_id and bv.status = 'active' and b.management_company_id = p_company_id)
-    or exists (
-      select 1 from biz.property_inspections pi
-      join biz.properties b on b.id = pi.property_id
-      where pi.maintainer_id = p_vendor_id and b.management_company_id = p_company_id)
-    or exists (
-      select 1 from biz.property_unit_inspections ui
-      join biz.property_units u on u.id = ui.unit_id
-      join biz.properties b on b.id = u.property_id
-      where ui.maintainer_id = p_vendor_id and b.management_company_id = p_company_id));
-$function$;
-
--- ログイン中の管理会社の物件を担当している保守会社か（ポリシーと画面の候補で使う）
-CREATE OR REPLACE FUNCTION signage.mgmt_vendor_in_scope(p_vendor_id uuid)
- RETURNS boolean
- LANGUAGE sql
- STABLE SECURITY DEFINER
- SET search_path TO 'signage', 'pg_temp'
-AS $function$
-  select signage.is_active_management()
-     and signage.vendor_serves_management_company(p_vendor_id, signage.current_management_company_id());
+  select t.property_code from (
+    select s.property_code, s.id from signage.signage_master_properties s
+     where regexp_replace(s.property_code, '-00$', '') = regexp_replace(btrim(p_property_code), '-00$', '')
+     order by (s.property_code = btrim(p_property_code)) desc, s.property_code
+     limit 1) t
+  join biz.properties b on b.signage_property_id = t.id
+  where signage.is_active_management()
+    and b.management_company_id = signage.current_management_company_id()
+  limit 1;
 $function$;
 
 -- ============================================================
@@ -103,12 +84,14 @@ DROP POLICY IF EXISTS "mgmt_select_settings" ON signage.signage_master_settings;
 CREATE POLICY "mgmt_select_settings" ON signage.signage_master_settings FOR SELECT TO authenticated
   USING (signage.is_active_management());
 
--- ユーザー: 自社の管理会社ユーザーと、自社物件を担当する保守会社のユーザー（権限『保守会社』= role 'user'）
+-- ユーザー: 自社の管理会社ユーザーだけ。
+-- 保守会社のユーザー（role 'user'）は出さない: 「自社物件を担当する保守会社」の根拠（紐付け・点検行の保守会社）は
+-- 管理会社自身が mgmt_add_building_vendor / mgmt_upsert_* で書けるため、範囲の根拠にならない（任意の保守会社を紐付けて
+-- そのユーザーのメールアドレス・状態を読めてしまう）。保守会社ユーザーの作成・管理は管理者だけ
 DROP POLICY IF EXISTS "mgmt_select_profiles" ON signage.signage_profiles;
 CREATE POLICY "mgmt_select_profiles" ON signage.signage_profiles FOR SELECT TO authenticated
-  USING (signage.is_active_management() AND (
-    (role = 'management' AND management_company_id = signage.current_management_company_id())
-    OR (role = 'user' AND vendor_id IS NOT NULL AND signage.mgmt_vendor_in_scope(vendor_id))));
+  USING (signage.is_active_management()
+    AND role = 'management' AND management_company_id = signage.current_management_company_id());
 
 -- 自社（管理会社）の id と名前（ユーザー管理の会社の列・作成の既定）
 CREATE OR REPLACE FUNCTION signage.mgmt_own_company()
@@ -121,17 +104,11 @@ AS $function$
   where signage.is_active_management() and c.id = signage.current_management_company_id();
 $function$;
 
--- 自社物件を担当する保守会社の id（ユーザー作成で選べる保守会社）
-CREATE OR REPLACE FUNCTION signage.mgmt_vendor_ids()
- RETURNS SETOF uuid
- LANGUAGE sql
- STABLE SECURITY DEFINER
- SET search_path TO 'signage', 'pg_temp'
-AS $function$
-  select v.id from signage.signage_master_vendors v
-  where signage.is_active_management()
-    and signage.vendor_serves_management_company(v.id, signage.current_management_company_id());
-$function$;
+-- 途中版にあった保守会社の範囲判定の関数を消す（範囲の根拠を管理会社が書けたため。上の mgmt_select_profiles 参照）。
+-- 本番には未適用。ローカルなど途中版を流した DB を同じ状態にそろえるため（無ければ何もしない）
+DROP FUNCTION IF EXISTS signage.mgmt_vendor_ids();
+DROP FUNCTION IF EXISTS signage.mgmt_vendor_in_scope(uuid);
+DROP FUNCTION IF EXISTS signage.vendor_serves_management_company(uuid, uuid);
 
 -- ============================================================
 -- 3. 紐付け（ビル追加の承認・却下、物件×保守会社の追加・解除）
@@ -151,7 +128,7 @@ BEGIN
     RAISE EXCEPTION '管理会社のアカウントでのみ使えます' USING ERRCODE = '42501';
   END IF;
   SELECT * INTO r FROM signage.signage_building_vendors WHERE id = p_id FOR UPDATE;
-  IF NOT FOUND OR NOT signage.property_reviewable(r.property_code) THEN
+  IF NOT FOUND OR signage.mgmt_resolve_own_property_code(r.property_code) IS NULL THEN
     RAISE EXCEPTION 'リクエストが見つかりません' USING ERRCODE = 'P0002';
   END IF;
   IF r.status IS DISTINCT FROM 'pending' THEN
@@ -181,15 +158,11 @@ BEGIN
   IF NOT signage.is_active_management() THEN
     RAISE EXCEPTION '管理会社のアカウントでのみ使えます' USING ERRCODE = '42501';
   END IF;
-  IF NOT signage.property_reviewable(p_property_code) THEN
-    RAISE EXCEPTION '自社が管理する物件ではありません' USING ERRCODE = '42501';
-  END IF;
-  -- マスターの書式（120410-00 など）で保存する（管理者の画面と同じく、物件マスターのコードで紐付ける）
-  SELECT s.property_code INTO v_code FROM signage.signage_master_properties s
-   WHERE regexp_replace(s.property_code, '-00$', '') = regexp_replace(btrim(p_property_code), '-00$', '')
-   ORDER BY (s.property_code = btrim(p_property_code)) DESC LIMIT 1;
+  -- 書く先の物件マスターの行を先に決め、その行の管理会社で判定する。マスターの書式（120410-00 など）で保存する
+  -- （管理者の画面と同じく、物件マスターのコードで紐付ける）
+  v_code := signage.mgmt_resolve_own_property_code(p_property_code);
   IF v_code IS NULL THEN
-    RAISE EXCEPTION '物件が見つかりません' USING ERRCODE = 'P0002';
+    RAISE EXCEPTION '自社が管理する物件ではありません' USING ERRCODE = '42501';
   END IF;
   IF NOT EXISTS (SELECT 1 FROM signage.signage_master_vendors WHERE id = p_vendor_id) THEN
     RAISE EXCEPTION '保守会社が見つかりません' USING ERRCODE = 'P0002';
@@ -227,7 +200,7 @@ BEGIN
     RAISE EXCEPTION '管理会社のアカウントでのみ使えます' USING ERRCODE = '42501';
   END IF;
   SELECT * INTO r FROM signage.signage_building_vendors WHERE id = p_id FOR UPDATE;
-  IF NOT FOUND OR NOT signage.property_reviewable(r.property_code) THEN
+  IF NOT FOUND OR signage.mgmt_resolve_own_property_code(r.property_code) IS NULL THEN
     RAISE EXCEPTION '紐付けが見つかりません' USING ERRCODE = 'P0002';
   END IF;
   UPDATE signage.signage_building_vendors SET status = 'deleted' WHERE id = p_id RETURNING * INTO r;
@@ -518,10 +491,8 @@ $function$;
 -- 5. 実行権限（anon から外す。会社を引数で受ける判定は service_role だけ）
 -- ============================================================
 REVOKE ALL ON FUNCTION signage.is_active_management() FROM PUBLIC, anon;
-REVOKE ALL ON FUNCTION signage.vendor_serves_management_company(uuid, uuid) FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION signage.mgmt_vendor_in_scope(uuid) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION signage.mgmt_resolve_own_property_code(text) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION signage.mgmt_own_company() FROM PUBLIC, anon;
-REVOKE ALL ON FUNCTION signage.mgmt_vendor_ids() FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION signage.mgmt_review_building_request(uuid, text) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION signage.mgmt_add_building_vendor(text, uuid) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION signage.mgmt_remove_building_vendor(uuid) FROM PUBLIC, anon;
@@ -534,11 +505,9 @@ REVOKE ALL ON FUNCTION signage.mgmt_unit_inspection_type_options() FROM PUBLIC, 
 REVOKE ALL ON FUNCTION signage.mgmt_upsert_unit_inspection(uuid, uuid, uuid, integer[], date) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION signage.mgmt_delete_unit_inspection(uuid) FROM PUBLIC, anon;
 
-GRANT EXECUTE ON FUNCTION signage.vendor_serves_management_company(uuid, uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION signage.is_active_management() TO authenticated;
-GRANT EXECUTE ON FUNCTION signage.mgmt_vendor_in_scope(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION signage.mgmt_resolve_own_property_code(text) TO authenticated;
 GRANT EXECUTE ON FUNCTION signage.mgmt_own_company() TO authenticated;
-GRANT EXECUTE ON FUNCTION signage.mgmt_vendor_ids() TO authenticated;
 GRANT EXECUTE ON FUNCTION signage.mgmt_review_building_request(uuid, text) TO authenticated;
 GRANT EXECUTE ON FUNCTION signage.mgmt_add_building_vendor(text, uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION signage.mgmt_remove_building_vendor(uuid) TO authenticated;
@@ -574,8 +543,6 @@ GRANT EXECUTE ON FUNCTION signage.mgmt_delete_unit_inspection(uuid) TO authentic
 -- DROP FUNCTION IF EXISTS signage.mgmt_remove_building_vendor(uuid);
 -- DROP FUNCTION IF EXISTS signage.mgmt_add_building_vendor(text, uuid);
 -- DROP FUNCTION IF EXISTS signage.mgmt_review_building_request(uuid, text);
--- DROP FUNCTION IF EXISTS signage.mgmt_vendor_ids();
 -- DROP FUNCTION IF EXISTS signage.mgmt_own_company();
--- DROP FUNCTION IF EXISTS signage.mgmt_vendor_in_scope(uuid);
--- DROP FUNCTION IF EXISTS signage.vendor_serves_management_company(uuid, uuid);
+-- DROP FUNCTION IF EXISTS signage.mgmt_resolve_own_property_code(text);
 -- DROP FUNCTION IF EXISTS signage.is_active_management();
