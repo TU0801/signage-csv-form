@@ -131,7 +131,8 @@ END;
 $function$;
 
 REVOKE ALL ON FUNCTION signage.approve_property_request(uuid, text, text) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION signage.approve_property_request(uuid, text, text) TO authenticated;
+-- 本番の今の approve_property_request(uuid, text) の ACL（authenticated と service_role に EXECUTE。後続課題の指示による。このコミットでは本番を読んでいない）と同じにする
+GRANT EXECUTE ON FUNCTION signage.approve_property_request(uuid, text, text) TO authenticated, service_role;
 
 -- ============================================================
 -- 戻し手順
