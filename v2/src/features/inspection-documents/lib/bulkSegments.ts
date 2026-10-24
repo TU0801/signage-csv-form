@@ -128,14 +128,29 @@ export function effectiveTargetMonth(target: BulkTarget, performedOn: string): s
   return target.targetMonth ?? (performedOn ? monthOf(performedOn) : null);
 }
 
-/** この点検・対象月の提出済みの版（置き換え済み・削除済みを除く） */
-export function existingReport(
+/**
+ * 提出するとこの区間が置き換える、提出済みの版（無ければ null）。DB の portal_register_report と同じ規則:
+ * 提出する保守会社は accountVendorId（ログイン中のアカウントの保守会社＝current_vendor_id()）、無ければ
+ * 同じ点検・対象月の最新の版の保守会社、それも無ければ点検行の保守会社。置き換えるのはその保守会社の版だけ
+ * （台ごとに別の保守会社が居る点検で、他社の提出は置き換えない）
+ */
+export function reportToReplace(
   reports: DbInspectionReport[],
   target: BulkTarget,
   performedOn: string,
+  accountVendorId: string | null,
 ): DbInspectionReport | null {
   const month = effectiveTargetMonth(target, performedOn);
-  return month ? latestReport(reports, target.inspection.inspection_id, month) : null;
+  if (!month) return null;
+  const latest = latestReport(reports, target.inspection.inspection_id, month);
+  if (!latest) return null;
+  const vendor = accountVendorId ?? latest.vendor_id ?? target.inspection.vendor_id;
+  if (latest.vendor_id === vendor) return latest;
+  return latestReport(
+    reports.filter((r) => r.vendor_id === vendor),
+    target.inspection.inspection_id,
+    month,
+  );
 }
 
 export interface SegmentErrors {

@@ -138,6 +138,8 @@ export function ReportUploadModal({
         onClose={onClose}
         title={isResubmit ? '報告書の再提出' : '報告書の提出'}
         dirty={dirty && !submitting}
+        // 送信の途中で閉じると、提出の結果（成功・失敗の知らせ）が閉じた後に届いてしまう
+        busy={submitting}
         footer={
           <>
             <Button variant="secondary" size="sm" onClick={onClose} disabled={submitting}>

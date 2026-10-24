@@ -26,7 +26,9 @@ export async function extractRange(
   userRotations: Record<number, number>,
 ): Promise<Uint8Array> {
   const { PDFDocument, degrees } = await import('pdf-lib');
-  const out = await PDFDocument.create();
+  // 作成日時・更新日時・Producer を書かない（既定では今の時刻が入り、同じ区間でも切り出すたびに中身＝SHA-256 が変わる。
+  // 提出済みの報告書と同じ内容かを content_hash で見比べるので、同じ区間は同じバイト列にする）
+  const out = await PDFDocument.create({ updateMetadata: false });
   const indices = Array.from({ length: range.end - range.start + 1 }, (_, i) => range.start + i);
   const pages = await out.copyPages(source, indices);
   pages.forEach((page, i) => {

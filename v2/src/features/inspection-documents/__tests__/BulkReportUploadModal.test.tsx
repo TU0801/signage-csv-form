@@ -8,6 +8,7 @@ const api = vi.hoisted(() => ({
   fetchPortalEntries: vi.fn(async () => [] as unknown[]),
   fetchInspectionReports: vi.fn(async () => [] as unknown[]),
   registerInspectionReport: vi.fn(),
+  sha256Hex: vi.fn(async () => 'hash-new'),
 }));
 vi.mock('@/lib/api/portal', () => api);
 vi.mock('@/lib/supabase', () => ({ supabase: {}, TABLES: {}, RPC: {} }));
@@ -35,6 +36,7 @@ beforeAll(() => {
 });
 beforeEach(() => {
   vi.clearAllMocks();
+  api.fetchInspectionReports.mockResolvedValue([]);
   api.fetchPortalInspections.mockResolvedValue([
     makeInspection({ inspection_id: 'i1', property_name: 'テスト第一マンション', inspection_months: [] }),
     makeInspection({ inspection_id: 'i2', property_name: 'テスト第二マンション', inspection_months: [] }),
@@ -122,7 +124,8 @@ describe('BulkReportUploadModal', () => {
     expect(cancel.defaultPrevented).toBe(true);
     fireEvent.mouseDown(dialog);
     fireEvent.click(dialog);
-    fireEvent.click(screen.getByRole('button', { name: '閉じる', hidden: true }));
+    // 先頭の × が外のモーダルのもの（後ろは中の確認ダイアログ）
+    fireEvent.click(within(dialog).getAllByRole('button', { name: '閉じる', hidden: true })[0]!);
     expect(onClose).not.toHaveBeenCalled();
 
     resolve(makeReport({ file_name: 'a.pdf' }));
@@ -151,5 +154,48 @@ describe('BulkReportUploadModal', () => {
     expect(screen.getByRole('button', { name: '1区間を提出する' })).toBeEnabled();
     fireEvent.change(screen.getByLabelText('区間1の実施日'), { target: { value: '2026-10-01' } });
     expect(screen.queryByText(/実施日が未来の日付です/)).toBeNull();
+  });
+
+  it('同じ点検・対象月に提出済みの報告書があれば、区間に置き換えると出し、送信前に件数を確かめる', async () => {
+    const live = makeReport({
+      property_inspection_id: 'i1',
+      target_month: '2026-10-01',
+      vendor_id: 'v1',
+      file_name: '20261001_テスト第一マンション_前の版.pdf',
+      content_hash: 'hash-old',
+    });
+    api.fetchInspectionReports.mockResolvedValue([live]);
+    api.registerInspectionReport.mockResolvedValue(makeReport({ file_name: 'a.pdf' }));
+    await setup();
+    fireEvent.change(screen.getByLabelText('実施日（全区間の既定）'), { target: { value: '2026-10-05' } });
+    pick(1, /テスト第一マンション/);
+    expect(
+      within(screen.getByTestId('bulk-segment-1')).getByText(/提出済みの報告書を置き換えます（20261001_テスト第一マンション_前の版\.pdf）/),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '1区間を提出する' }));
+    expect(await screen.findByText(/1件の区間は、同じ点検・対象月に提出済みの報告書があります/)).toBeInTheDocument();
+    expect(api.registerInspectionReport).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: '置き換えて提出する' }));
+    expect(await within(screen.getByTestId('bulk-segment-1')).findByText(/提出しました/)).toBeInTheDocument();
+    expect(api.registerInspectionReport).toHaveBeenCalledTimes(1);
+  });
+
+  it('切り出した区間が置き換える版と同じ内容（SHA-256 が同じ）なら送らず、結果にそう出す', async () => {
+    api.fetchInspectionReports.mockResolvedValue([
+      makeReport({ property_inspection_id: 'i1', target_month: '2026-10-01', vendor_id: 'v1', content_hash: 'hash-new' }),
+    ]);
+    await setup();
+    fireEvent.change(screen.getByLabelText('実施日（全区間の既定）'), { target: { value: '2026-10-05' } });
+    pick(1, /テスト第一マンション/);
+    fireEvent.click(screen.getByRole('button', { name: '1区間を提出する' }));
+    fireEvent.click(await screen.findByRole('button', { name: '置き換えて提出する' }));
+    expect(
+      await within(screen.getByTestId('bulk-segment-1')).findByText('同じ内容の報告書が提出済みです（送っていません）'),
+    ).toBeInTheDocument();
+    expect(api.registerInspectionReport).not.toHaveBeenCalled();
+    expect(toast).toHaveBeenCalledWith('同じ内容の報告書が提出済みのため、1件とも送っていません', 'info');
+    // 済みの区間なので、もう一度送るボタンは出ない
+    expect(screen.queryByRole('button', { name: /区間を提出する/ })).toBeNull();
   });
 });
