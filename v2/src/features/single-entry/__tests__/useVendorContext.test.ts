@@ -61,18 +61,21 @@ describe('管理者の保守会社選択（v1 onAdminVendorChange / adminVendorC
     act(() => result.current.selectAdminVendor(''));
     expect(result.current.visibleProperties).toHaveLength(3);
     expect(result.current.linkedIds.size).toBe(0);
-    // 未選択の管理者は v1 と同じく社名順の先頭の会社（v1 script.js:952 で #vendor = '0'）
-    expect(result.current.vendor?.vendor_name).toBe('A社');
+    // 未選択の管理者は保守会社なし（データを追加で「保守会社を選択してください」）。v1 は社名順の先頭の会社（script.js:952 の
+    // #vendor = '0'）だったが、ユーザー決定（2026-10-25）で v1 と意図して変えた
+    expect(result.current.vendor).toBeNull();
   });
 });
 
-describe('一般ユーザーの保守会社（v1 index.html:363 の #vendor = 0）', () => {
-  it('記録する保守会社は社名順の先頭、紐付けは自社で読む', async () => {
+// v1（index.html:363 の #vendor = 0）は一般ユーザーでも社名順の先頭の会社を記録していた。ユーザー決定（2026-10-25）で v1 と意図して変え、
+// 自社（profile.vendor_id）を記録する（CSV の受注先名・緊急連絡先にも出る）
+describe('一般ユーザーの保守会社', () => {
+  it('記録する保守会社も紐付けも自社', async () => {
     fetchLinked.mockResolvedValue(new Set(['b-only']));
     const { result } = renderHook(() =>
       useVendorContext({ isAdmin: false, profileVendorId: 'B', properties: PROPERTIES, vendors: VENDORS, onLinkedLoaded: vi.fn() }),
     );
-    expect(result.current.vendor?.vendor_name).toBe('A社');
+    expect(result.current.vendor?.vendor_name).toBe('B社');
     await waitFor(() => expect([...result.current.linkedIds]).toEqual(['b-only']));
     expect(fetchLinked).toHaveBeenCalledWith('B');
   });

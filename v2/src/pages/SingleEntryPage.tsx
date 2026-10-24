@@ -14,6 +14,8 @@ import { PosterType } from '@/lib/constants';
 import { insertEntries, type AppSettings } from '@/lib/api/single-entry';
 import { fetchPortalInspections } from '@/lib/api/portal';
 import type { MasterData } from '@/types/app';
+import type { PortalInspectionRow } from '@/types/portal';
+import { inspectionsOfVendor } from '@/features/inspection-portal/lib/inspectionLink';
 import { useAppSettings } from '@/features/single-entry/hooks/useAppSettings';
 import { useEntryForm } from '@/features/single-entry/hooks/useEntryForm';
 import { useVendorContext } from '@/features/single-entry/hooks/useVendorContext';
@@ -101,11 +103,31 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
     onLinkedLoaded,
   });
 
+  // 保守会社の点検行（物件を選んだときの点検工事案内の既定に使う。修正依頼1024 本番確認 ②）。申請時は改めて読み直して結び付ける。
+  // 読めなければ既定を入れないだけ（入力はできる）
+  const [portalInspections, setPortalInspections] = useState<PortalInspectionRow[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetchPortalInspections()
+      .then((rows) => {
+        if (!cancelled) setPortalInspections(rows);
+      })
+      .catch((err: unknown) => console.error('点検行の取得に失敗しました（点検工事案内の既定は入りません）:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const vendorInspections = useMemo(
+    () => inspectionsOfVendor(portalInspections, isAdmin, vendorCtx.linkVendorId),
+    [portalInspections, isAdmin, vendorCtx.linkVendorId],
+  );
+
   const form = useEntryForm({
     settings,
     properties: vendorCtx.visibleProperties,
     inspectionTypes,
     linkedIds: vendorCtx.linkedIds,
+    inspections: vendorInspections,
   });
   useEffect(() => {
     applyLinkedRef.current = form.applyLinked;
@@ -206,6 +228,7 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
       hasTemplateImage: (key) => templateUrlOf(key) !== null,
       settings,
       linkVendorId: vendorCtx.linkVendorId,
+      isAdmin,
     });
     if (!result.ok) {
       // 表示設定タブの項目の誤りは、そのタブを開いて欄を見せる
@@ -302,16 +325,16 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
       const inspections = fetched ?? [];
       const today = todayUtc();
       await insertEntries(
-        sending.map((e, i) =>
-          toInsertRow(
-            e,
-            urls[i] ?? null,
-            user.id,
-            settings,
-            today,
-            entryInspectionLink(e, inspections, isAdmin, vendorCtx.linkVendorId),
-          ),
-        ),
+        sending.map((e, i) => {
+          const link = entryInspectionLink(e, inspections, isAdmin, vendorCtx.linkVendorId);
+          // 点検予定に結び付いた申請は、その点検の保守会社（結び付けた会社）の社名・緊急連絡先で記録する（ユーザー決定 2026-10-25）。
+          // 結び付かなければ追加した時点の保守会社（保守会社のアカウントは自社、管理者は選んだ会社）のまま
+          const linked = link?.vendor_id ? vendors.find((v) => String(v.id) === String(link.vendor_id)) : undefined;
+          const recorded = linked
+            ? { ...e, vendorName: linked.vendor_name, emergencyContact: linked.emergency_contact || '' }
+            : e;
+          return toInsertRow(recorded, urls[i] ?? null, user.id, settings, today, link);
+        }),
       );
       uploaded = [];
       addToast(`${sending.length}件を申請しました${linkSkipped ? '（点検予定には結び付けていません）' : ''}`, 'success');

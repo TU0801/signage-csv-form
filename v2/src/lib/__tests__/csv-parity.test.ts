@@ -142,7 +142,7 @@ describe('CSV parity with v1 admin-export.js', () => {
     clickSpy.mockRestore();
   });
 
-  it('puts the same file names in the custom image ZIP as v1', async () => {
+  it('puts the same file names (except the extension, which follows the image) in the custom image ZIP as v1', async () => {
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
       .mockImplementation(async () => new Response(new Blob(['img'])));
@@ -178,7 +178,10 @@ describe('CSV parity with v1 admin-export.js', () => {
     const count = await v2DownloadCustomImages(csvEntries as DbEntry[]);
 
     expect(v1Files).toEqual([`${customImageBaseName(csvEntries[1]!)}.jpg`]); // draft の追加画像は除外
-    expect(zipLog.files).toEqual(v1Files);
+    // 拡張子だけは v1 と意図して違う: v1 は .jpg 固定で PNG の貼紙も .jpg になっていた。v2 は URL（無ければ中身）に合わせる
+    // （修正依頼1024 本番確認 ④）。拡張子を除いた名前（CSV の点検案内TPLNo と一致させる部分）と対象は v1 と同じ
+    expect(zipLog.files).toEqual([`${customImageBaseName(csvEntries[1]!)}.png`]);
+    expect(zipLog.files.map((f) => f.replace(/\.[^.]+$/, ''))).toEqual(v1Files.map((f) => f.replace(/\.[^.]+$/, '')));
     expect(zipLog.saved).toEqual([v1ZipName]);
     expect(count).toBe(1);
 

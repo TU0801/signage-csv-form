@@ -10,6 +10,7 @@ import {
   matchInspectionLink,
   type InspectionLink,
 } from '@/features/inspection-portal/lib/inspectionLink';
+import { normalizePropertyCode } from '@/features/inspection-portal/lib/schedule';
 import type { PortalInspectionRow } from '@/types/portal';
 
 /** 案内カテゴリの選択肢（v1 index.html #inspectionCategory。'' = 全て） */
@@ -204,6 +205,36 @@ export function applyInspectionType(
   };
 }
 
+/**
+ * 物件を選んだときの点検工事案内（修正依頼1024 本番確認 ②。一括入力の defaultInspectionType（B9）と同じ規則）。
+ * (a) その物件×保守会社の点検行の点検種別（点検種別マスターの並びで先頭）→ 無ければ (b) 保守会社に紐付けた点検種別の先頭。
+ * どちらも無ければ値はそのまま。選んだ種別が今のカテゴリの選択肢に無ければカテゴリを「全て」にする（欄が空に見えないように）。
+ * 物件コードは 120410 と 120410-00 を同じに見る（点検行への結び付けと同じ）。入れてよいか（空か自動で入った値か）は呼び出し側で決める。
+ * fallbackToLinked=false のときは (b) を使わない（自動で入った値を入れ替えるのは点検行があるときだけ。カテゴリで選び直した値を
+ * 紐付けの先頭で上書きしないため）
+ */
+export function applyPropertyInspectionDefault(
+  values: SingleEntryValues,
+  types: DbInspectionType[],
+  inspections: Pick<PortalInspectionRow, 'property_code' | 'inspection_type_label'>[],
+  linkedIds: ReadonlySet<string>,
+  fallbackToLinked = true,
+): SingleEntryValues {
+  if (!values.propertyCode) return values;
+  const code = normalizePropertyCode(String(values.propertyCode));
+  const labels = new Set(
+    inspections
+      .filter((i) => i.inspection_type_label && normalizePropertyCode(i.property_code) === code)
+      .map((i) => i.inspection_type_label),
+  );
+  const t =
+    types.find((x) => labels.has(x.inspection_name)) ??
+    (fallbackToLinked ? types.find((x) => linkedIds.has(x.id)) : undefined);
+  if (!t) return values;
+  const visible = filterInspectionTypes(types, values.category, linkedIds).some((x) => x.id === t.id);
+  return applyInspectionType({ ...values, category: visible ? values.category : '' }, t.id, types);
+}
+
 /** カテゴリを変えたとき（選び直してから点検種別の反映をやり直す） */
 // v1: js/script.js onCategoryChange
 export function applyCategoryChange(
@@ -280,6 +311,8 @@ export interface EntryContext {
   settings: AppSettings;
   /** 点検行に結び付けるときの保守会社（useVendorContext の linkVendorId） */
   linkVendorId?: string | null;
+  /** 管理者か（保守会社が無いときの知らせを分ける。省略時は管理者の文言） */
+  isAdmin?: boolean;
 }
 
 export type BuildEntryResult =
@@ -301,11 +334,21 @@ export function buildLocalEntry(values: SingleEntryValues, ctx: EntryContext): B
   }
   // v1 は「必須項目を入力してください」。ここで止まるのは物件だけなので欄の名前を出す
   if (!values.propertyCode) return { ok: false, message: '物件コードを選択してください' };
-  if (!ctx.vendor) return { ok: false, message: '保守会社を選択してください' };
+  if (!ctx.vendor) {
+    // 保守会社のアカウントには保守会社の選択欄が無いので、選ぶよう促さずに管理者への連絡を促す（修正依頼1024 本番確認 ③）
+    return {
+      ok: false,
+      message: ctx.isAdmin === false
+        ? 'アカウントに保守会社が設定されていません。管理者に連絡してください'
+        : '保守会社を選択してください',
+    };
+  }
 
   const inspection = ctx.inspectionTypes.find((t) => t.id === values.inspectionTypeId);
   if (isCustom) {
     if (!ctx.customImage) return { ok: false, message: '貼紙画像を選択してください' };
+    // 追加の貼紙でも点検工事案内は必須（点検行への結び付けに使う。選び忘れると点検予定に結び付かない。修正依頼1024 本番確認 ②）
+    if (!inspection) return { ok: false, message: '点検工事案内を選択してください' };
   } else {
     if (!inspection) return { ok: false, message: '点検工事案内を選択してください' };
     if (!ctx.hasTemplateImage(values.templateNo)) {
@@ -369,7 +412,7 @@ export function buildLocalEntry(values: SingleEntryValues, ctx: EntryContext): B
       posterType: values.posterType,
       customImage: isCustom ? ctx.customImage : null,
       linkVendorId: ctx.linkVendorId ?? null,
-      ...(isCustom ? { linkInspectionType: inspection?.inspection_name ?? '' } : {}),
+      ...(isCustom ? { linkInspectionType: inspection!.inspection_name } : {}),
     },
   };
 }
