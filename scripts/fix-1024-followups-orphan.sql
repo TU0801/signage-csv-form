@@ -30,6 +30,9 @@ SET lock_timeout = '5s';
 -- 末尾が「/storage/v1/object/public/poster-images/{name}」と一致するかで見る（クエリ ?… は外す）。
 -- ファイル名に _ が入る（{時刻}_{乱数}.png）ので LIKE（_ が任意の1文字になる）は使わない。
 -- 有効な利用者でなければ「参照されている」と返す（消させない側に倒す）。
+-- DELETE ポリシーから呼ぶので authenticated に EXECUTE が要る（ポリシーの式は呼んだ利用者の権限で動く）。
+-- そのため利用者が直接呼ぶこともできるが、自分の uid フォルダ以外の名前には常に「参照されている」と返し、
+-- 他人のファイルが申請から参照されているかを調べる手段にはしない。
 CREATE OR REPLACE FUNCTION signage.poster_object_referenced(p_name text)
  RETURNS boolean
  LANGUAGE sql
@@ -38,6 +41,7 @@ CREATE OR REPLACE FUNCTION signage.poster_object_referenced(p_name text)
 AS $function$
   select not signage.is_active_member()
       or p_name is null
+      or (storage.foldername(p_name))[1] is distinct from auth.uid()::text
       or exists (
         select 1
           from signage.signage_entries e

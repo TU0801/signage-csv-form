@@ -29,7 +29,11 @@ import { errorLabel, firstError } from '@/features/bulk-entry/utils/columns';
 import { formatInspectedOn, isApplyTarget, scheduleRowEntry, scheduleRowInput } from '@/features/bulk-entry/utils/scheduleRows';
 import { clearAutoSave } from '@/features/bulk-entry/utils/bulkAutoSave';
 import { getStoredTemplates, getVisibleTemplates, templateRows } from '@/features/bulk-entry/utils/bulkTemplates';
-import { discardUnheldRowImages, rowPosterImages } from '@/features/bulk-entry/utils/discardRowImages';
+import {
+  discardImagesDroppedBy,
+  discardUnheldRowImages,
+  rowPosterImages,
+} from '@/features/bulk-entry/utils/discardRowImages';
 import type { BulkEntryRow } from '@/features/bulk-entry/types';
 import { usePortalData } from '@/features/inspection-portal/hooks/usePortalData';
 import { reportEntryId } from '@/features/inspection-portal/lib/actions';
@@ -189,7 +193,8 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
   // 予定を表の行にする（読み込み・保守会社の切り替え・申請のあとに入れ直す）。点検種別の既定（B9）にも点検行を渡す
   useEffect(() => {
     if (!ready || !portal.loaded) return;
-    syncScheduleRows(scheduleItems.map((item) => scheduleRowInput(item, entryMemos)));
+    // 予定から外れた行（予定の変更など）が持っていた画像は片付ける
+    discardImagesDroppedBy(() => syncScheduleRows(scheduleItems.map((item) => scheduleRowInput(item, entryMemos))));
   }, [ready, portal.loaded, scheduleItems, entryMemos, syncScheduleRows]);
   useEffect(() => {
     setInspectionDefaults({

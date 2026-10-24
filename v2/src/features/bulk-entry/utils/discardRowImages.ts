@@ -25,3 +25,13 @@ export function discardUnheldRowImages(candidates: readonly string[]): void {
   const urls = notHeld(candidates, held);
   if (urls.length > 0) void discardOwnPosterImages(urls, userId);
 }
+
+/**
+ * 行を入れ替える処理（予定の入れ直し・保守会社の切り替え）を走らせ、そのあと表から消えた行の画像を片付ける。
+ * 残った行が持つ画像は discardUnheldRowImages が外すので、前の行の画像をそのまま候補に渡せばよい
+ */
+export function discardImagesDroppedBy(update: () => void): void {
+  const before = rowPosterImages(useBulkStore.getState().rows);
+  update();
+  discardUnheldRowImages(before);
+}
