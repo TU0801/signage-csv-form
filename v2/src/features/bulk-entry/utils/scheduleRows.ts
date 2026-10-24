@@ -34,11 +34,16 @@ export function scheduleRowInput(item: ScheduleItem): { meta: BulkScheduleMeta; 
   };
 }
 
-/** 入力済みで申請していない行（ログアウト・保守会社の切り替え・ページ離脱の確認に使う）。予定の行は点検開始日などを入れたものだけ */
-export function hasUnsentInput(row: Pick<BulkEntryRow, 'schedule' | 'startDate' | 'remarks' | 'memo'>): boolean {
+/**
+ * 入力済みで申請していない行（ログアウト・保守会社の切り替え・ページ離脱の確認に使う）。
+ * 予定の行は点検開始日・備考・メモ・詳細設定の連絡先・追加の貼紙を入れたものだけ（予定の行は自動保存されないので、離れると消える）
+ */
+export function hasUnsentInput(
+  row: Pick<BulkEntryRow, 'schedule' | 'startDate' | 'remarks' | 'memo' | 'posterType' | 'emergencyContact'>,
+): boolean {
   if (!row.schedule) return true;
   if (row.schedule.locked) return false;
-  return !!(row.startDate || row.remarks || row.memo);
+  return !!(row.startDate || row.remarks || row.memo || row.posterType === 'custom' || row.emergencyContact);
 }
 
 /**

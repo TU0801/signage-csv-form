@@ -165,6 +165,15 @@ describe('bulkStore (v1 js/bulk-table.js / bulk-modals.js の行操作)', () => 
     expect(hasUnsentInput(row)).toBe(false);
   });
 
+  it('予定の行で詳細設定（追加の貼紙・連絡先）だけを入れても未送信の入力として扱う（予定の行は自動保存されないため）', () => {
+    const meta = { key: 'i1:unscheduled', inspectionId: 'i1', targetMonth: null, locked: false, propertyName: '物件Z', terminalIds: [] };
+    s().syncScheduleRows([{ meta, row: { propertyCode: 'z9999A01', inspectionType: '消防設備点検' } }]);
+    const row = s().rows[0]!;
+    expect(hasUnsentInput(row)).toBe(false);
+    expect(hasUnsentInput({ ...row, posterType: 'custom' as const })).toBe(true);
+    expect(hasUnsentInput({ ...row, emergencyContact: '03-1111-2222' })).toBe(true);
+  });
+
   it('bulk apply overwrites only the given fields on the given rows and fills an empty end date', () => {
     s().addRow({ propertyCode: 'z0001A01', remarks: '残す', position: 3 });
     s().addRow({ propertyCode: '120442-00', endDate: '2026-12-31' });
