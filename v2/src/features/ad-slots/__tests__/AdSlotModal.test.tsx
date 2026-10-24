@@ -4,7 +4,11 @@ import type { DbAdSlot } from '@/types/database';
 
 const toast = vi.hoisted(() => ({ addToast: vi.fn() }));
 vi.mock('@/components/ui/Toast', () => ({ useToast: () => toast }));
-vi.mock('@/lib/supabase', () => ({ supabase: {}, TABLES: { adSlots: 'signage_ad_slots' } }));
+vi.mock('@/lib/supabase', () => ({
+  supabase: {},
+  TABLES: { adSlots: 'signage_ad_slots' },
+  SUPABASE_URL: 'http://127.0.0.1:55321',
+}));
 vi.mock('@/lib/storage', () => ({ uploadAdImage: vi.fn(), deleteStorageFile: vi.fn() }));
 // react-easy-crop は jsdom で寸法を測れないので、切り抜き範囲を決めた体の部品に置き換える
 vi.mock('react-easy-crop', () => ({

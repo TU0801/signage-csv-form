@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { configure, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { makeInspection } from '@/features/inspection-portal/__tests__/fixtures';
 import { makeReport } from './fixtures';
 
@@ -8,6 +8,7 @@ const api = vi.hoisted(() => ({
   fetchPortalEntries: vi.fn(async () => [] as unknown[]),
   fetchInspectionReports: vi.fn(async () => [] as unknown[]),
   registerInspectionReport: vi.fn(),
+  sha256Hex: vi.fn(async () => 'hash-new'),
 }));
 vi.mock('@/lib/api/portal', () => api);
 vi.mock('@/lib/supabase', () => ({ supabase: {}, TABLES: {}, RPC: {} }));
@@ -25,6 +26,9 @@ vi.mock('../lib/pdfSplit', () => split);
 
 import { BulkReportUploadModal } from '../components/BulkReportUploadModal';
 
+// PDF の読み込み・区間の描画が多く、並列で走らせると既定（findBy 1秒・テスト5秒）では足りないことがある
+configure({ asyncUtilTimeout: 5000 });
+
 beforeAll(() => {
   HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
     this.setAttribute('open', '');
@@ -35,6 +39,7 @@ beforeAll(() => {
 });
 beforeEach(() => {
   vi.clearAllMocks();
+  api.fetchInspectionReports.mockResolvedValue([]);
   api.fetchPortalInspections.mockResolvedValue([
     makeInspection({ inspection_id: 'i1', property_name: 'テスト第一マンション', inspection_months: [] }),
     makeInspection({ inspection_id: 'i2', property_name: 'テスト第二マンション', inspection_months: [] }),
@@ -60,7 +65,7 @@ const pick = (no: number, name: RegExp) => {
   fireEvent.change(select, { target: { value: option.value } });
 };
 
-describe('BulkReportUploadModal', () => {
+describe('BulkReportUploadModal', { timeout: 20000 }, () => {
   it('ページの間を押して区間を分け、同じ点検を2区間に割り当てると送らない', async () => {
     await setup();
     expect(screen.getAllByTestId(/^bulk-segment-/)).toHaveLength(1);
@@ -122,7 +127,8 @@ describe('BulkReportUploadModal', () => {
     expect(cancel.defaultPrevented).toBe(true);
     fireEvent.mouseDown(dialog);
     fireEvent.click(dialog);
-    fireEvent.click(screen.getByRole('button', { name: '閉じる', hidden: true }));
+    // 先頭の × が外のモーダルのもの（後ろは中の確認ダイアログ）
+    fireEvent.click(within(dialog).getAllByRole('button', { name: '閉じる', hidden: true })[0]!);
     expect(onClose).not.toHaveBeenCalled();
 
     resolve(makeReport({ file_name: 'a.pdf' }));
@@ -151,5 +157,77 @@ describe('BulkReportUploadModal', () => {
     expect(screen.getByRole('button', { name: '1区間を提出する' })).toBeEnabled();
     fireEvent.change(screen.getByLabelText('区間1の実施日'), { target: { value: '2026-10-01' } });
     expect(screen.queryByText(/実施日が未来の日付です/)).toBeNull();
+  });
+
+  it('同じ点検・対象月に提出済みの報告書があれば、区間に置き換えると出し、送信前に件数を確かめる', async () => {
+    const live = makeReport({
+      property_inspection_id: 'i1',
+      target_month: '2026-10-01',
+      vendor_id: 'v1',
+      file_name: '20261001_テスト第一マンション_前の版.pdf',
+      content_hash: 'hash-old',
+    });
+    api.fetchInspectionReports.mockResolvedValue([live]);
+    api.registerInspectionReport.mockResolvedValue(makeReport({ file_name: 'a.pdf' }));
+    await setup();
+    fireEvent.change(screen.getByLabelText('実施日（全区間の既定）'), { target: { value: '2026-10-05' } });
+    pick(1, /テスト第一マンション/);
+    expect(
+      within(screen.getByTestId('bulk-segment-1')).getByText(/提出済みの報告書を置き換えます（20261001_テスト第一マンション_前の版\.pdf）/),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '1区間を提出する' }));
+    expect(await screen.findByText(/1件の区間は、同じ点検・対象月に提出済みの報告書があります/)).toBeInTheDocument();
+    expect(api.registerInspectionReport).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: '置き換えて提出する' }));
+    expect(await within(screen.getByTestId('bulk-segment-1')).findByText(/提出しました/)).toBeInTheDocument();
+    expect(api.registerInspectionReport).toHaveBeenCalledTimes(1);
+  });
+
+  it('切り出した区間が置き換える版と同じ内容（SHA-256 が同じ）なら送らず、結果にそう出す', async () => {
+    api.fetchInspectionReports.mockResolvedValue([
+      makeReport({ property_inspection_id: 'i1', target_month: '2026-10-01', vendor_id: 'v1', content_hash: 'hash-new' }),
+    ]);
+    await setup();
+    fireEvent.change(screen.getByLabelText('実施日（全区間の既定）'), { target: { value: '2026-10-05' } });
+    pick(1, /テスト第一マンション/);
+    fireEvent.click(screen.getByRole('button', { name: '1区間を提出する' }));
+    fireEvent.click(await screen.findByRole('button', { name: '置き換えて提出する' }));
+    expect(
+      await within(screen.getByTestId('bulk-segment-1')).findByText('同じ内容の報告書が提出済みです（送っていません）'),
+    ).toBeInTheDocument();
+    expect(api.registerInspectionReport).not.toHaveBeenCalled();
+    expect(toast).toHaveBeenCalledWith('同じ内容の報告書が提出済みのため、1件とも送っていません', 'info');
+    // 済みの区間なので、もう一度送るボタンは出ない
+    expect(screen.queryByRole('button', { name: /区間を提出する/ })).toBeNull();
+  });
+
+  it('同じ内容の版が同じ点検の別の対象月に提出済みでも送らず、その月を結果に出す', async () => {
+    api.fetchInspectionReports.mockResolvedValue([
+      makeReport({ property_inspection_id: 'i1', target_month: '2026-05-01', vendor_id: 'v1', status: 'accepted', content_hash: 'hash-new' }),
+    ]);
+    await setup();
+    fireEvent.change(screen.getByLabelText('実施日（全区間の既定）'), { target: { value: '2026-10-05' } });
+    pick(1, /テスト第一マンション/);
+    // 10月分の版は無いので置き換えの確認は出ない
+    fireEvent.click(screen.getByRole('button', { name: '1区間を提出する' }));
+    expect(
+      await within(screen.getByTestId('bulk-segment-1')).findByText('同じ内容の報告書が提出済みです（2026年5月分・送っていません）'),
+    ).toBeInTheDocument();
+    expect(api.registerInspectionReport).not.toHaveBeenCalled();
+  });
+
+  it('同じ内容の版が差戻しなら、差戻しへの出し直しとして送る', async () => {
+    api.fetchInspectionReports.mockResolvedValue([
+      makeReport({ property_inspection_id: 'i1', target_month: '2026-10-01', vendor_id: 'v1', status: 'returned', content_hash: 'hash-new' }),
+    ]);
+    api.registerInspectionReport.mockResolvedValue(makeReport({ file_name: 'a.pdf' }));
+    await setup();
+    fireEvent.change(screen.getByLabelText('実施日（全区間の既定）'), { target: { value: '2026-10-05' } });
+    pick(1, /テスト第一マンション/);
+    fireEvent.click(screen.getByRole('button', { name: '1区間を提出する' }));
+    fireEvent.click(await screen.findByRole('button', { name: '置き換えて提出する' }));
+    expect(await within(screen.getByTestId('bulk-segment-1')).findByText(/提出しました/)).toBeInTheDocument();
+    expect(api.registerInspectionReport).toHaveBeenCalledTimes(1);
   });
 });

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
 import type { DbAdSlot } from '@/types/database';
+import { safePosterUrl } from '@/lib/posterUrl';
 import { adImageExtensionError, adImageFileError, adLinkUrlError, type AdSlotInput } from '../hooks/useAdSlots';
 import { sourceTypeFromUrl } from '../lib/adImage';
 import { AdImageCropper } from './AdImageCropper';
@@ -92,10 +93,12 @@ export function AdSlotModal({ slot, onClose, onSave, onClear }: AdSlotModalProps
     setCropSource(source);
   };
 
+  // 広告画像は poster-images/ads/ に置く。それ以外の URL は表示にも切り抜き直しにも使わない
+  const currentImageUrl = safePosterUrl(slot?.image_url);
   const recropCurrent = () => {
-    if (!slot?.image_url) return;
+    if (!currentImageUrl) return;
     setPickError(null);
-    setCropSource({ src: slot.image_url, type: sourceTypeFromUrl(slot.image_url) });
+    setCropSource({ src: currentImageUrl, type: sourceTypeFromUrl(currentImageUrl) });
   };
 
   const dirty =
@@ -182,8 +185,8 @@ export function AdSlotModal({ slot, onClose, onSave, onClear }: AdSlotModalProps
               <div className="space-y-1">
                 <p className="text-sm font-medium text-gray-700">現在の画像</p>
                 <div className={PREVIEW_BOX}>
-                  {slot?.image_url ? (
-                    <img src={slot.image_url} alt="" className="h-full w-full object-contain" />
+                  {currentImageUrl ? (
+                    <img src={currentImageUrl} alt="" className="h-full w-full object-contain" />
                   ) : (
                     <span className="text-sm text-gray-400">画像未設定</span>
                   )}
@@ -232,7 +235,7 @@ export function AdSlotModal({ slot, onClose, onSave, onClear }: AdSlotModalProps
                   className="block w-full text-sm"
                 />
                 <div className="flex flex-wrap gap-2">
-                  {slot?.image_url && (
+                  {currentImageUrl && (
                     <Button type="button" variant="secondary" size="sm" onClick={recropCurrent}>
                       現在の画像を切り抜き直す
                     </Button>

@@ -1,4 +1,5 @@
 import type { DbAdSlot } from '@/types/database';
+import { safePosterUrl } from '@/lib/posterUrl';
 
 interface AdSlotCardProps {
   slotIndex: number;
@@ -10,6 +11,8 @@ interface AdSlotCardProps {
 // v1: js/admin-masters-ads.js renderAdSlotsGrid の adCells
 export function AdSlotCard({ slotIndex, slot, onOpen }: AdSlotCardProps) {
   const isActive = !!slot?.is_active;
+  // 広告画像は poster-images/ads/ に置く。それ以外の URL は出さない
+  const imageUrl = safePosterUrl(slot?.image_url);
   return (
     <button
       type="button"
@@ -19,9 +22,7 @@ export function AdSlotCard({ slotIndex, slot, onOpen }: AdSlotCardProps) {
     >
       {/* ログイン画面のセル（PC で横:縦 ≒ 2:1）に合わせ、切らずに全体を出す（ログイン画面の AdSlotCell と同じ contain） */}
       <div className="relative flex aspect-[2/1] items-center justify-center overflow-hidden bg-slate-100">
-        {slot?.image_url && (
-          <img src={slot.image_url} alt="" className="h-full w-full object-contain" />
-        )}
+        {imageUrl && <img src={imageUrl} alt="" className="h-full w-full object-contain" />}
         <span className="absolute left-1.5 top-1.5 rounded-full bg-black/50 px-1.5 py-0.5 text-[0.65rem] font-bold text-white">
           {slotIndex}
         </span>

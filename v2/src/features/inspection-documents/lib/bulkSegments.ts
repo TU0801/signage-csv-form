@@ -128,14 +128,57 @@ export function effectiveTargetMonth(target: BulkTarget, performedOn: string): s
   return target.targetMonth ?? (performedOn ? monthOf(performedOn) : null);
 }
 
-/** この点検・対象月の提出済みの版（置き換え済み・削除済みを除く） */
-export function existingReport(
+/**
+ * 提出するとこの区間が置き換える、提出済みの版（無ければ null）。DB の portal_register_report と同じ規則:
+ * 提出する保守会社は accountVendorId（ログイン中のアカウントの保守会社＝current_vendor_id()）、無ければ
+ * 同じ点検・対象月の最新の版の保守会社、それも無ければ点検行の保守会社。置き換えるのはその保守会社の版だけ
+ * （台ごとに別の保守会社が居る点検で、他社の提出は置き換えない）
+ */
+export function reportToReplace(
   reports: DbInspectionReport[],
   target: BulkTarget,
   performedOn: string,
+  accountVendorId: string | null,
 ): DbInspectionReport | null {
   const month = effectiveTargetMonth(target, performedOn);
-  return month ? latestReport(reports, target.inspection.inspection_id, month) : null;
+  if (!month) return null;
+  const latest = latestReport(reports, target.inspection.inspection_id, month);
+  if (!latest) return null;
+  const vendor = accountVendorId ?? latest.vendor_id ?? target.inspection.vendor_id;
+  if (latest.vendor_id === vendor) return latest;
+  return latestReport(
+    reports.filter((r) => r.vendor_id === vendor),
+    target.inspection.inspection_id,
+    month,
+  );
+}
+
+/** 同じ点検に出ている、同じ内容（SHA-256 が同じ）の報告書（削除済みは数えない。新しい順）。1件ずつの提出と一括で共有する */
+export function identicalReports(
+  reports: DbInspectionReport[],
+  inspectionId: string,
+  contentHash: string,
+): DbInspectionReport[] {
+  return reports
+    .filter((r) => r.property_inspection_id === inspectionId && r.content_hash === contentHash && r.status !== 'deleted')
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
+/**
+ * 一括アップロードで送らずに済ませる、同じ内容の報告書（無ければ null）。同じ点検のどの対象月でも、
+ * 提出中か受領済みの版だけを数える（差戻しの版と同じ PDF を出し直すのは、差戻しへの返事なので送る）。
+ * 同じ対象月の版があればそれを優先する
+ */
+export function identicalLiveReport(
+  reports: DbInspectionReport[],
+  inspectionId: string,
+  targetMonth: string | null,
+  contentHash: string,
+): DbInspectionReport | null {
+  const live = identicalReports(reports, inspectionId, contentHash).filter(
+    (r) => r.status === 'submitted' || r.status === 'accepted',
+  );
+  return live.find((r) => r.target_month === targetMonth) ?? live[0] ?? null;
 }
 
 export interface SegmentErrors {
