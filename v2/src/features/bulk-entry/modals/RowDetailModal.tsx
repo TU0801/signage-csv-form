@@ -3,7 +3,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { useBulkStore } from '@/stores/bulkStore';
-import { cn } from '@/lib/utils';
+import { cn, todayUtc } from '@/lib/utils';
 import { POSTER_PNG_SIZE } from '@/lib/constants';
 import { preparePosterImage } from '@/lib/pdfToPng';
 import { uploadPosterImage } from '@/lib/storage';
@@ -146,8 +146,11 @@ function RowDetailForm({ row, masterData, onClose }: { row: BulkEntryRow; master
 
   // 畳んだときの要約は申請で保存される値で出す（一度も開かずに保存すると行の値のまま＝表示開始日が空なら申請日になる）
   const shownPeriod = periodShown
-    ? submittedDisplayPeriod({ displayStartDate, displayStartTime, displayEndDate, displayEndTime, endDate: row.endDate })
-    : submittedDisplayPeriod(row);
+    ? submittedDisplayPeriod(
+        { displayStartDate, displayStartTime, displayEndDate, displayEndTime, endDate: row.endDate, startDate: row.startDate },
+        todayUtc(),
+      )
+    : submittedDisplayPeriod(row, todayUtc());
   const periodSummary = `${shownPeriod.startDate || '申請日'}${shownPeriod.startTime ? ` ${shownPeriod.startTime}` : ''} 〜 ${
     shownPeriod.endDate || '点検終了日'
   }${shownPeriod.endTime ? ` ${shownPeriod.endTime}` : ''}`;

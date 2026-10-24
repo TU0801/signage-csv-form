@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hasCustomDisplayPeriod, hasRowDetail, rowDetailSummary, templateDisplayName } from '../utils/rowDetail';
+import { hasCustomDisplayPeriod, hasRowDetail, rowDetailSummary, submittedDisplayPeriod, templateDisplayName } from '../utils/rowDetail';
 import type { BulkEntryRow } from '../types';
 
 const row = (patch: Partial<BulkEntryRow>) =>
@@ -52,5 +52,17 @@ describe('詳細設定の判定（修正依頼1024 B18）', () => {
     const images = [{ image_key: 'Fire_Inspection', display_name: '消防設備点検' }];
     expect(templateDisplayName('fire_inspection', '消防設備点検（年2回）', images)).toBe('消防設備点検');
     expect(templateDisplayName('elevator', 'エレベーター定期点検', images)).toBe('エレベーター定期点検');
+  });
+});
+
+describe('申請で保存される表示期間（修正依頼1024 F11）', () => {
+  const past = { displayStartDate: '', displayStartTime: '', displayEndDate: '', displayEndTime: '', startDate: '2026-08-20', endDate: '2026-08-20' };
+  it('過ぎた予定を後から申請しても期間が逆にならない（表示開始日は点検開始日）', () => {
+    expect(submittedDisplayPeriod(past, '2026-10-24')).toMatchObject({ startDate: '2026-08-20', endDate: '2026-08-20' });
+    // 点検開始日が表示終了日より後なら表示終了日
+    expect(submittedDisplayPeriod({ ...past, displayEndDate: '2026-08-10' }, '2026-10-24').startDate).toBe('2026-08-10');
+  });
+  it('表示終了日が今日以降なら、表示開始日は今まで通り申請日（null）', () => {
+    expect(submittedDisplayPeriod({ ...past, endDate: '2026-10-30' }, '2026-10-24').startDate).toBeNull();
   });
 });

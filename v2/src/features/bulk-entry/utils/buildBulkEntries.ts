@@ -64,8 +64,8 @@ export function buildBulkEntries(
       const today = todayUtc();
       const link = inspectionLinkOf(row, links, currentVendor.id);
       const isCustom = row.posterType === 'custom';
-      // 詳細設定の畳んだ要約と同じ規則（B18）
-      const period = submittedDisplayPeriod(row);
+      // 詳細設定の畳んだ要約と同じ規則（B18）。過ぎた予定を申請しても表示期間が逆にならないよう today を渡す
+      const period = submittedDisplayPeriod(row, today);
 
       return {
         property_code: String(row.propertyCode),

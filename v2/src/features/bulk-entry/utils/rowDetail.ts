@@ -82,15 +82,24 @@ export function templateDisplayName(
 
 /**
  * 申請で保存される表示期間（buildBulkEntries と詳細設定の畳んだ要約の両方がこれを使う）。
- * startDate が null なら申請日（申請した日の日付）、endDate は表示終了日 → 点検終了日 → null
+ * startDate が null なら申請日（申請した日の日付）、endDate は表示終了日 → 点検終了日 → null。
+ * today を渡すと、表示開始日が空で表示終了日が today より前（点検月を過ぎた予定を後から申請した）のとき、
+ * 申請日を開始日にすると期間が逆になるので、点検開始日（表示終了日より後なら表示終了日）を開始日にする
  */
 export function submittedDisplayPeriod(
-  row: Pick<BulkEntryRow, 'displayStartDate' | 'displayStartTime' | 'displayEndDate' | 'displayEndTime' | 'endDate'>,
+  row: Pick<BulkEntryRow, 'displayStartDate' | 'displayStartTime' | 'displayEndDate' | 'displayEndTime' | 'endDate'> &
+    Partial<Pick<BulkEntryRow, 'startDate'>>,
+  today?: string,
 ): { startDate: string | null; startTime: string | null; endDate: string | null; endTime: string | null } {
+  const endDate = row.displayEndDate || row.endDate || null;
+  let startDate = row.displayStartDate || null;
+  if (!startDate && today && endDate && endDate < today) {
+    startDate = row.startDate && row.startDate <= endDate ? row.startDate : endDate;
+  }
   return {
-    startDate: row.displayStartDate || null,
+    startDate,
     startTime: row.displayStartTime || null,
-    endDate: row.displayEndDate || row.endDate || null,
+    endDate,
     endTime: row.displayEndTime || null,
   };
 }
