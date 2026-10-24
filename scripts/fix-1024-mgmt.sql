@@ -1,6 +1,9 @@
 -- 修正依頼1024 担当 mgmt: 管理会社メニュー（C2・C3）
 -- 2026-10-24 作成。本番へは未適用（適用はユーザー承認後）。ローカル DB（signage-v2-verify）で確かめた。
--- 適用方法: Management API で1文ずつ流す（BEGIN/COMMIT を付けない）。何度流しても同じ結果になる（冪等）。
+-- 適用方法: ファイル全体を1つのクエリとして流す（Management API なら1回の query に全文を入れる。psql なら psql -1 -f）。
+--   1つのクエリは暗黙の1トランザクションになるので、途中の1文が失敗しても半分だけ適用された状態にならない（全部戻る）。
+--   BEGIN/COMMIT は付けない。先頭の lock_timeout で、表のロックが取れないときは待ち続けずに失敗させる。
+-- 何度流しても同じ結果になる（冪等）。
 --
 -- すべて追加だけ。既存の関数・ポリシー・トリガーは変えない（管理者・保守会社の結果は従来と同じ）。
 -- 管理会社（role='management'）に、管理者メニューの一部（承認待ち・承認済み・紐付け管理・マスター管理・ユーザー管理）を
@@ -10,6 +13,8 @@
 --   - 申請の承認・差戻しは既存の portal_review_entry（管理会社の範囲を確かめ済み）をそのまま使う
 --   - ユーザー管理は自社の管理会社ユーザーだけ（作成・無効化・パスワード変更は Edge Function signage-admin-users が範囲を確かめて行う。保守会社ユーザーは管理者だけが扱う）
 -- 戻し手順は末尾。
+
+SET lock_timeout = '5s';
 
 -- ============================================================
 -- 1. 判定の補助関数
@@ -218,7 +223,7 @@ CREATE OR REPLACE FUNCTION signage.mgmt_inspections_all()
  RETURNS TABLE(property_code text, inspection_type_id uuid, vendor_id uuid, inspection_months integer[], remarks text, remarks2 text)
  LANGUAGE sql
  STABLE SECURITY DEFINER
- SET search_path TO 'biz', 'signage', 'public'
+ SET search_path TO 'biz', 'signage', 'public', 'pg_temp'
 AS $function$
   select s.property_code, pi.inspection_type_id, pi.maintainer_id,
          pi.inspection_months, coalesce(pi.remarks, ''), coalesce(pi.remarks2, '')
@@ -233,7 +238,7 @@ CREATE OR REPLACE FUNCTION signage.mgmt_inspections_for_property(p_property_code
  RETURNS TABLE(id uuid, property_code text, property_name text, inspection_type_id uuid, inspection_name text, template_no text, default_text text, maintainer_id uuid, maintainer_name text, emergency_contact text, inspection_months integer[], maintainer_equipment_code text, remarks text, remarks2 text)
  LANGUAGE sql
  STABLE SECURITY DEFINER
- SET search_path TO 'biz', 'signage', 'public'
+ SET search_path TO 'biz', 'signage', 'public', 'pg_temp'
 AS $function$
   select pi.id, s.property_code, b.name,
          pi.inspection_type_id, t.label, t.template_no, t.default_text,
@@ -253,7 +258,7 @@ CREATE OR REPLACE FUNCTION signage.mgmt_upsert_property_inspection(p_property_co
  RETURNS uuid
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'biz', 'signage', 'public'
+ SET search_path TO 'biz', 'signage', 'public', 'pg_temp'
 AS $function$
 declare
   v_property_id uuid;
@@ -341,7 +346,7 @@ CREATE OR REPLACE FUNCTION signage.mgmt_delete_property_inspection(p_id uuid)
  RETURNS void
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'biz', 'signage', 'public'
+ SET search_path TO 'biz', 'signage', 'public', 'pg_temp'
 AS $function$
 begin
   if not signage.is_active_management() then
@@ -361,7 +366,7 @@ CREATE OR REPLACE FUNCTION signage.mgmt_unit_inspections_all()
  RETURNS TABLE(property_code text, category_code text, category_label text, unit_id uuid, unit_sort integer, unit_code text, unit_location text, unit_remarks text, unit_remarks2 text, inspection_id uuid, inspection_type_id uuid, inspection_type_label text, vendor_id uuid, vendor_name text, inspection_months integer[], inspected_on date, legacy_remarks text, legacy_remarks2 text)
  LANGUAGE sql
  STABLE SECURITY DEFINER
- SET search_path TO 'biz', 'signage', 'public'
+ SET search_path TO 'biz', 'signage', 'public', 'pg_temp'
 AS $function$
   select s.property_code, u.category_code, c.label,
          u.id, u.sort, u.unit_code, u.location, u.remarks, u.remarks2,
@@ -386,7 +391,7 @@ CREATE OR REPLACE FUNCTION signage.mgmt_unit_inspection_type_options()
  RETURNS TABLE(category_code text, inspection_type_id uuid, inspection_type_label text, sort integer)
  LANGUAGE sql
  STABLE SECURITY DEFINER
- SET search_path TO 'biz', 'signage', 'public'
+ SET search_path TO 'biz', 'signage', 'public', 'pg_temp'
 AS $function$
   select t.equipment_category_code, t.id, t.label, t.sort
   from biz.inspection_types t
@@ -399,7 +404,7 @@ CREATE OR REPLACE FUNCTION signage.mgmt_upsert_unit_inspection(p_unit_id uuid, p
  RETURNS uuid
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'biz', 'signage', 'public'
+ SET search_path TO 'biz', 'signage', 'public', 'pg_temp'
 AS $function$
 declare
   v_property_id uuid;
@@ -459,7 +464,7 @@ CREATE OR REPLACE FUNCTION signage.mgmt_delete_unit_inspection(p_id uuid)
  RETURNS void
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'biz', 'signage', 'public'
+ SET search_path TO 'biz', 'signage', 'public', 'pg_temp'
 AS $function$
 declare
   v_property_id uuid;
