@@ -70,16 +70,10 @@ export function useEntryForm({
   // 点検工事案内が空なら、その物件の点検行の種別（無ければ紐付けの先頭）を入れる（一括入力 B9 と同じ規則）。
   // 自動で入った値は、その物件の点検行があるときだけその種別に入れ替える
   // 管理会社の分のライブラリの貼紙は、その管理会社の物件の申請でだけ使える（ユーザー決定3）。選んだときの物件で絞っているので、
-  // 物件を変えたら外して知らせる（全社共通・アップロードは残す）
-  const changeProperty = useCallback(
-    (code: string) => {
-      setValues((v) => {
-        const next = applyPropertyChange(v, code, properties);
-        if (v.inspectionTypeId && !autoTypeRef.current) return next;
-        // 空なら一括入力と同じ (a)→(b)。自動で入った値は物件の点検行があるときだけ入れ替える（紐付けの先頭で上書きしない）
-        return applyPropertyInspectionDefault(next, inspectionTypes, inspections, linkedIds, !v.inspectionTypeId);
-      });
-      if (code === values.propertyCode) return;
+  // 物件を変えたら外して知らせる（全社共通・アップロードは残す）。前回を複製で物件が変わるときも同じ
+  const dropCompanyLibraryPosters = useCallback(
+    (nextCode: string) => {
+      if (nextCode === values.propertyCode) return;
       const dropMain = !!customImage && !customImage.file && isCompanyLibraryPoster(customImage.dataUrl);
       const keptExtras = extraPosters.filter((x) => x.file || !isCompanyLibraryPoster(x.dataUrl));
       const dropped = (dropMain ? 1 : 0) + extraPosters.length - keptExtras.length;
@@ -91,7 +85,20 @@ export function useEntryForm({
           : null,
       );
     },
-    [properties, inspectionTypes, inspections, linkedIds, values.propertyCode, customImage, extraPosters],
+    [values.propertyCode, customImage, extraPosters],
+  );
+
+  const changeProperty = useCallback(
+    (code: string) => {
+      setValues((v) => {
+        const next = applyPropertyChange(v, code, properties);
+        if (v.inspectionTypeId && !autoTypeRef.current) return next;
+        // 空なら一括入力と同じ (a)→(b)。自動で入った値は物件の点検行があるときだけ入れ替える（紐付けの先頭で上書きしない）
+        return applyPropertyInspectionDefault(next, inspectionTypes, inspections, linkedIds, !v.inspectionTypeId);
+      });
+      dropCompanyLibraryPosters(code);
+    },
+    [properties, inspectionTypes, inspections, linkedIds, dropCompanyLibraryPosters],
   );
 
   // v1: js/script.js onCategoryChange
@@ -221,8 +228,9 @@ export function useEntryForm({
     (last: LocalEntry) => {
       autoTypeRef.current = false;
       setValues((v) => duplicateValues(v, last, { properties, inspectionTypes, linkedIds, settings }));
+      dropCompanyLibraryPosters(last.propertyCode || '');
     },
-    [properties, inspectionTypes, linkedIds, settings],
+    [properties, inspectionTypes, linkedIds, settings, dropCompanyLibraryPosters],
   );
 
   return {
