@@ -36,6 +36,8 @@ export const TABLES = {
   inspectionReports: 'signage_inspection_reports',
   /** 新規建物の申請（2026-10-24）。承認・却下は RPC だけ */
   propertyRequests: 'signage_property_requests',
+  /** 貼紙ライブラリ（文字を合成しない貼紙。修正依頼1025 D2。scripts/fix-1025-posters.sql） */
+  posterLibrary: 'signage_poster_library',
 } as const;
 
 /** signage スキーマの RPC（biz への窓口） */
@@ -90,6 +92,10 @@ export const RPC = {
   setPropertyInspectionInspectedOn: 'set_property_inspection_inspected_on',
   /** 使われていない貼紙画像の一覧（管理者だけ。修正依頼1024 後続 orphan。scripts/fix-1024-followups-orphan.sql） */
   orphanPosterImages: 'orphan_poster_images',
+  /** この物件の申請で選べる貼紙ライブラリ（全社共通＋物件の管理会社の分。修正依頼1025 D2） */
+  posterLibraryForProperty: 'poster_library_for_property',
+  /** ライブラリの画像が申請・ライブラリの行から使われているか（使われていなければ片付けてよい） */
+  posterLibraryObjectInUse: 'poster_library_object_in_use',
 } as const;
 
 /** Storage のバケット */

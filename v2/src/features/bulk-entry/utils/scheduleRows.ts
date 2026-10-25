@@ -52,11 +52,19 @@ export function scheduleRowInput(
  * 予定の行は点検開始日・備考・メモ・詳細設定の連絡先・追加の貼紙を入れたものだけ（予定の行は自動保存されないので、離れると消える）
  */
 export function hasUnsentInput(
-  row: Pick<BulkEntryRow, 'schedule' | 'startDate' | 'remarks' | 'memo' | 'posterType' | 'emergencyContact'>,
+  row: Pick<BulkEntryRow, 'schedule' | 'startDate' | 'remarks' | 'memo' | 'posterType' | 'emergencyContact'> &
+    Partial<Pick<BulkEntryRow, 'extraPosters'>>,
 ): boolean {
   if (!row.schedule) return true;
   if (row.schedule.locked) return false;
-  return !!(row.startDate || row.remarks || row.memo || row.posterType === 'custom' || row.emergencyContact);
+  return !!(
+    row.startDate ||
+    row.remarks ||
+    row.memo ||
+    row.posterType === 'custom' ||
+    row.emergencyContact ||
+    (row.extraPosters?.length ?? 0) > 0
+  );
 }
 
 /**

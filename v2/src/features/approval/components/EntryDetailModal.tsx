@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button';
 import type { DbEntry } from '@/types/database';
 import { normalizeTerminalId } from '@/lib/terminal';
 import { safePosterUrl } from '@/lib/posterUrl';
+import { extraPosterPosition, parseExtraPosters } from '@/lib/extraPosters';
 import {
   entryStatusLabel,
   formatJaDate,
@@ -63,6 +64,8 @@ export function EntryDetailModal({
 
   const isCustom = entry.poster_type === 'custom';
   const posterUrl = safePosterUrl(entry.poster_image);
+  // 2枚目以降の貼紙（修正依頼1025 D3）。CSV では枚数分の行になる
+  const extras = parseExtraPosters(entry.extra_posters);
 
   return (
     <Modal
@@ -138,6 +141,34 @@ export function EntryDetailModal({
               ) : (
                 <span className="text-gray-500">表示できない画像の URL です</span>
               )}
+            </DetailRow>
+          )}
+          {extras.length > 0 && (
+            <DetailRow label={`追加の貼紙（${extras.length}枚）`}>
+              <div className="flex flex-wrap gap-2" data-testid="extra-posters">
+                {extras.map((x, i) => {
+                  const url = safePosterUrl(x.image_url);
+                  return (
+                    <figure key={i} className="w-[110px] space-y-0.5">
+                      {url ? (
+                        <a href={url} target="_blank" rel="noopener noreferrer" title="別のタブで開く">
+                          <img
+                            src={url}
+                            alt={`${i + 2}枚目の貼紙`}
+                            className="max-h-[140px] max-w-[110px] rounded border border-gray-200 bg-white object-contain"
+                          />
+                        </a>
+                      ) : (
+                        <span className="text-xs text-gray-500">表示できない画像の URL です</span>
+                      )}
+                      <figcaption className="text-[11px] leading-tight text-gray-600">
+                        {i + 2}枚目・{x.source === 'library' ? 'ライブラリ' : 'アップロード'}・
+                        {posterPositionLabel(extraPosterPosition(x, entry.poster_position))}
+                      </figcaption>
+                    </figure>
+                  );
+                })}
+              </div>
             </DetailRow>
           )}
         </Section>

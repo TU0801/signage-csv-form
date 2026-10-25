@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { Input } from '@/components/ui/Input';
 import { TextArea } from '@/components/ui/TextArea';
 import { Select } from '@/components/ui/Select';
@@ -11,6 +11,9 @@ import type { AppSettings } from '@/lib/api/single-entry';
 import type { DbInspectionType, Terminal } from '@/types/database';
 import type { EntryFormApi } from '../hooks/useEntryForm';
 import { CATEGORY_OPTIONS, defaultNoticeText, noticeUsage, remarksUsage } from '../lib/entryLogic';
+import { customImageName } from '../types';
+import { LibraryPickerModal } from '@/features/poster-library/components/LibraryPickerModal';
+import { ExtraPostersEditor } from '@/features/poster-library/components/ExtraPostersEditor';
 
 interface EntryFormProps {
   form: EntryFormApi;
@@ -66,6 +69,7 @@ export function EntryForm({
   const { values, customImage } = form;
   const isCustom = values.posterType === PosterType.CUSTOM;
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [libraryOpen, setLibraryOpen] = useState(false);
 
   const terminalOptions = terminals.map((t) => ({
     value: t.terminal_id,
@@ -104,6 +108,18 @@ export function EntryForm({
       return;
     }
     if (prepared.notice) onImageNotice?.(prepared.notice);
+  };
+
+  // 2枚目以降の貼紙をアップロードで足す（PDF は1ページ目を PNG にする。1枚目と同じ）
+  const handleExtraFile = async (file: File) => {
+    try {
+      const prepared = await preparePosterImage(file);
+      const error = await form.addExtraUpload(prepared.file);
+      if (error) onImageError(error);
+      else if (prepared.notice) onImageNotice?.(prepared.notice);
+    } catch (e) {
+      onImageError(e instanceof Error ? e.message : '画像を選択できませんでした');
+    }
   };
 
   // v1: js/script.js clearCustomImage
@@ -223,25 +239,71 @@ export function EntryForm({
             {customImage ? (
               <div className="flex items-center gap-3 rounded-md border border-gray-200 p-2">
                 <img src={customImage.dataUrl} alt="プレビュー" className="max-h-32 rounded" />
-                <Button type="button" variant="danger" size="sm" onClick={handleClearImage}>
-                  削除
-                </Button>
+                <div className="min-w-0 space-y-1">
+                  <p className="truncate text-xs text-gray-600">
+                    {`${customImage.libraryId ? 'ライブラリ: ' : ''}${customImageName(customImage)}`}
+                  </p>
+                  <Button type="button" variant="danger" size="sm" onClick={handleClearImage}>
+                    削除
+                  </Button>
+                </div>
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full rounded-md border-2 border-dashed border-gray-300 p-4 text-center text-sm text-gray-600 hover:bg-gray-50"
-              >
-                クリックして画像を選択
-                <br />
-                <small>
-                  JPG, JPEG, PNG, PDF形式（5MB以下）。PDF は1ページ目を {POSTER_PNG_SIZE.width}×{POSTER_PNG_SIZE.height} の PNG に変換します
-                </small>
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex-1 rounded-md border-2 border-dashed border-gray-300 p-3 text-center text-sm text-gray-600 hover:bg-gray-50"
+                >
+                  クリックして画像を選択
+                  <br />
+                  <small>
+                    JPG, JPEG, PNG, PDF形式（5MB以下）。PDF は1ページ目を {POSTER_PNG_SIZE.width}×{POSTER_PNG_SIZE.height} の PNG に変換します
+                  </small>
+                </button>
+                {/* 文字を合成しない貼紙（騒音注意・駐車禁止など）を貼紙ライブラリから選ぶ（修正依頼1025 D2） */}
+                <button
+                  type="button"
+                  onClick={() => setLibraryOpen(true)}
+                  className="w-36 shrink-0 rounded-md border-2 border-dashed border-blue-300 p-3 text-center text-sm text-blue-700 hover:bg-blue-50"
+                >
+                  ライブラリから選ぶ
+                  <br />
+                  <small className="text-gray-500">騒音注意・駐車禁止など</small>
+                </button>
+              </div>
             )}
+            {libraryOpen && (
+<LibraryPickerModal
+              open
+              propertyCode={values.propertyCode}
+              onClose={() => setLibraryOpen(false)}
+              onSelect={(item) => {
+                setLibraryOpen(false);
+                form.selectLibraryImage(item);
+                if (fileInputRef.current) fileInputRef.current.value = '';
+              }}
+            />
+)}
           </div>
         )}
+
+        {/* 2枚目以降の貼紙（修正依頼1025 D3）。テンプレートの貼紙にも足せる。CSV では枚数分の行になる */}
+        <div className="sm:col-span-2">
+          <ExtraPostersEditor
+            items={form.extraPosters.map((x, i) => ({
+              key: `${i}:${x.dataUrl.slice(-24)}`,
+              url: x.dataUrl,
+              label: `${x.libraryId ? 'ライブラリ: ' : ''}${customImageName(x)}`,
+              position: x.position,
+            }))}
+            propertyCode={values.propertyCode}
+            onUpload={handleExtraFile}
+            onPickLibrary={form.addExtraLibrary}
+            onRemove={form.removeExtra}
+            onPositionChange={form.setExtraPosition}
+          />
+        </div>
 
         {/* 案内文（テンプレートのときだけ） */}
         {!isCustom && (

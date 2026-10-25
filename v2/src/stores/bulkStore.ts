@@ -32,6 +32,7 @@ export type BulkRowDetail = Pick<
   | 'emergencyContact'
   | 'posterType'
   | 'posterImage'
+  | 'extraPosters'
 >;
 
 /** 選択行への一括設定で上書きできる項目（入れた項目だけを渡す） */
@@ -176,6 +177,8 @@ export const useBulkStore = create<BulkState>((set, get) => {
       emergencyContact: data.emergencyContact || '',
       posterType: data.posterType === 'custom' ? 'custom' : 'template',
       posterImage: data.posterImage || '',
+      // 2枚目以降の貼紙（修正依頼1025 D3）。無ければ持たない（自動保存の JSON を v1 と同じ形に保つ）
+      extraPosters: data.extraPosters?.length ? data.extraPosters : undefined,
       position: data.position !== undefined ? data.position : 2,
       isValid: false,
       errors: [],
@@ -217,6 +220,7 @@ export const useBulkStore = create<BulkState>((set, get) => {
     emergencyContact: r.emergencyContact,
     posterType: r.posterType,
     posterImage: r.posterImage,
+    extraPosters: r.extraPosters,
     position: r.position,
   });
 
@@ -272,6 +276,7 @@ export const useBulkStore = create<BulkState>((set, get) => {
           emergencyContact: '',
           posterType: 'template',
           posterImage: '',
+          extraPosters: undefined,
           position: 2,
           isValid: false,
           errors: [],
@@ -310,6 +315,7 @@ export const useBulkStore = create<BulkState>((set, get) => {
                 emergencyContact: '',
                 posterType: 'template',
                 posterImage: '',
+                extraPosters: undefined,
                 position: 2,
               })
             : r,
@@ -396,6 +402,7 @@ export const useBulkStore = create<BulkState>((set, get) => {
         emergencyContact: '',
         posterType: 'template',
         posterImage: '',
+        extraPosters: undefined,
         position: 2,
         isValid: false,
         errors: [],

@@ -1,3 +1,5 @@
+import type { ExtraPoster } from '@/lib/extraPosters';
+
 /** signage_profiles テーブル */
 export interface DbProfile {
   id: string;
@@ -51,6 +53,8 @@ export interface DbEntry {
   reviewed_at?: string | null;
   /** 申請者のメモ（CSV に出さない。点検月の変更などの覚え書き）。scripts/fix-1024-core.sql */
   memo?: string | null;
+  /** 2枚目以降の貼紙（jsonb 配列。修正依頼1025 D3。scripts/fix-1025-posters.sql）。読むときは parseExtraPosters を通す */
+  extra_posters?: ExtraPoster[] | null;
   created_at: string | null;
   updated_at: string | null;
 }

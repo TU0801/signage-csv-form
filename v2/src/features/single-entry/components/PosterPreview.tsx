@@ -9,6 +9,8 @@ interface PosterPreviewProps {
   /** 追加（カスタム）貼紙のとき true */
   isCustom: boolean;
   customImageUrl: string | null;
+  /** 2枚目以降の貼紙（修正依頼1025 D3）。1枚目の下に枚数分並べる */
+  extraImageUrls?: readonly string[];
   noticeText: string;
   dateText: string;
   remarks: string;
@@ -16,7 +18,34 @@ interface PosterPreviewProps {
   emergencyContact: string;
 }
 
-const placeholderClass = 'flex h-48 items-center justify-center rounded-md bg-slate-50 text-xs text-gray-500';
+const NO_EXTRAS: readonly string[] = [];
+
+/** 2枚目以降の貼紙のサムネイル（1枚目の下） */
+function ExtraPreviews({ urls }: { urls: readonly string[] }) {
+  if (urls.length === 0) return null;
+  return (
+    <div className="mt-2 border-t border-gray-200 pt-1.5" data-testid="extra-poster-previews">
+      <p className="mb-1 text-xs font-medium text-gray-600">
+        追加の貼紙（{urls.length}枚。CSV では別の行）
+      </p>
+      <ul className="grid grid-cols-3 gap-1.5 sm:grid-cols-4">
+        {urls.map((url, i) => (
+          <li key={i} className="space-y-0.5 text-center">
+            <img
+              src={url}
+              alt={`${i + 2}枚目の貼紙`}
+              className="mx-auto max-h-40 w-auto max-w-full rounded border border-gray-200 object-contain"
+            />
+            <span className="text-[11px] text-gray-500">{i + 2}枚目</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+const placeholderClass =
+  'flex h-48 items-center justify-center rounded-md bg-slate-50 text-xs text-gray-500';
 
 /**
  * 張紙プレビュー。テンプレート画像に案内文・日付・備考・保守会社・電話番号を重ねる。
@@ -29,6 +58,7 @@ export function PosterPreview({
   templateNo,
   isCustom,
   customImageUrl,
+  extraImageUrls = NO_EXTRAS,
   noticeText,
   dateText,
   remarks,
@@ -46,8 +76,14 @@ export function PosterPreview({
     const parent = containerRef.current?.parentElement;
     if (!img || !parent) return;
     const cs = getComputedStyle(parent);
-    const innerWidth = parent.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-    const s = computePosterSize(img.naturalWidth, img.naturalHeight, innerWidth, window.innerHeight * 0.6);
+    const innerWidth =
+      parent.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const s = computePosterSize(
+      img.naturalWidth,
+      img.naturalHeight,
+      innerWidth,
+      window.innerHeight * 0.6,
+    );
     if (s) setSize({ url: img.getAttribute('src') ?? '', ...s });
   }, []);
 
@@ -57,7 +93,8 @@ export function PosterPreview({
     window.addEventListener('resize', fit);
     const parent = containerRef.current?.parentElement;
     // jsdom など ResizeObserver の無い環境では window の resize だけで測る
-    const ro = parent && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => fit()) : null;
+    const ro =
+      parent && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => fit()) : null;
     if (ro && parent) ro.observe(parent);
     return () => {
       window.removeEventListener('resize', fit);
@@ -66,38 +103,75 @@ export function PosterPreview({
   }, [fit, hasFrame]);
 
   if (isCustom) {
-    if (!customImageUrl) return <div className={placeholderClass}>画像を選択してください</div>;
     return (
-      // 縦長の画像でも切らない：枠の高さ（60vh）を超えないよう、画像の幅を縦横比から決める
-      <div className="se-poster-preview">
-        <img
-          src={customImageUrl}
-          alt="カスタム貼紙"
-          style={{ width: 'auto', maxWidth: '100%', maxHeight: '60vh', margin: '0 auto', objectFit: 'contain' }}
-        />
-      </div>
+      <>
+        {customImageUrl ? (
+          // 縦長の画像でも切らない：枠の高さ（60vh）を超えないよう、画像の幅を縦横比から決める
+          <div className="se-poster-preview">
+            <img
+              src={customImageUrl}
+              alt="カスタム貼紙"
+              style={{
+                width: 'auto',
+                maxWidth: '100%',
+                maxHeight: '60vh',
+                margin: '0 auto',
+                objectFit: 'contain',
+              }}
+            />
+          </div>
+        ) : (
+          <div className={placeholderClass}>画像を選択してください</div>
+        )}
+        <ExtraPreviews urls={extraImageUrls} />
+      </>
     );
   }
 
-  if (!templateImageUrl) return <div className={placeholderClass}>点検工事案内を選択</div>;
+  if (!templateImageUrl) {
+    return (
+      <>
+        <div className={placeholderClass}>点検工事案内を選択</div>
+        <ExtraPreviews urls={extraImageUrls} />
+      </>
+    );
+  }
 
   const fitted = size && size.url === templateImageUrl ? size : null;
   const style = fitted
-    ? ({ width: `${fitted.width}px`, height: `${fitted.height}px`, '--pw': fitted.width } as React.CSSProperties)
+    ? ({
+        width: `${fitted.width}px`,
+        height: `${fitted.height}px`,
+        '--pw': fitted.width,
+      } as React.CSSProperties)
     : undefined;
 
   return (
-    <div ref={containerRef} className="se-poster-preview" style={style} data-testid="poster-preview">
-      <img key={templateImageUrl} ref={imgRef} src={templateImageUrl} alt={templateNo} onLoad={fit} />
-      <div className="se-poster-overlay">
-        <div className="se-poster-notice-text">{noticeText}</div>
-        <div className="se-poster-date-text">{dateText}</div>
-        <div className="se-poster-remarks-text">{remarks}</div>
-        <div className="se-poster-vendor-text">
-          <span>{vendorName}</span>
-          <span>{emergencyContact}</span>
+    <>
+      <div
+        ref={containerRef}
+        className="se-poster-preview"
+        style={style}
+        data-testid="poster-preview"
+      >
+        <img
+          key={templateImageUrl}
+          ref={imgRef}
+          src={templateImageUrl}
+          alt={templateNo}
+          onLoad={fit}
+        />
+        <div className="se-poster-overlay">
+          <div className="se-poster-notice-text">{noticeText}</div>
+          <div className="se-poster-date-text">{dateText}</div>
+          <div className="se-poster-remarks-text">{remarks}</div>
+          <div className="se-poster-vendor-text">
+            <span>{vendorName}</span>
+            <span>{emergencyContact}</span>
+          </div>
         </div>
       </div>
-    </div>
+      <ExtraPreviews urls={extraImageUrls} />
+    </>
   );
 }

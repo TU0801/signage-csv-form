@@ -73,9 +73,35 @@ describe('追加登録された画像', () => {
     fireEvent.click(
       screen.getByRole('button', { name: '120409-00 追加画像 の画像をダウンロード' }),
     );
-    await waitFor(() => expect(zip.downloadCustomImage).toHaveBeenCalledWith(rows.value[0]));
+    await waitFor(() =>
+      expect(zip.downloadCustomImage).toHaveBeenCalledWith(rows.value[0], { url: SAFE, baseName: '120409-00_追加画像_ok' }),
+    );
     expect(
       screen.getByRole('button', { name: 'z0015A01 追加画像 の画像をダウンロード' }),
     ).toBeDisabled();
+  });
+
+  it('2枚目以降の貼紙（修正依頼1025 D3）も1枚ずつ行に出し、ファイル名は CSV と同じ _n を付ける。テンプレートの1枚目は出さない', async () => {
+    const extra = 'https://example.supabase.co/storage/v1/object/public/poster-images/library/common/b.png';
+    rows.value = [
+      entry({
+        id: 'abcdef1234',
+        poster_type: 'template',
+        poster_image: null,
+        inspection_type: '消防設備点検',
+        extra_posters: [{ image_url: extra, source: 'library', library_id: 'L1' }],
+      }),
+    ];
+    render(<CustomImagesList />);
+    expect(await screen.findByText('2枚目')).toBeInTheDocument();
+    expect(screen.getByText('120409-00_消防設備点検_abcdef12_2')).toBeInTheDocument();
+    expect(screen.getAllByRole('img')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: '120409-00 消防設備点検 の画像（2枚目）をダウンロード' }));
+    await waitFor(() =>
+      expect(zip.downloadCustomImage).toHaveBeenCalledWith(rows.value[0], {
+        url: extra,
+        baseName: '120409-00_消防設備点検_abcdef12_2',
+      }),
+    );
   });
 });

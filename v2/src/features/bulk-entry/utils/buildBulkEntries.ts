@@ -79,6 +79,8 @@ export function buildBulkEntries(
         poster_type: isCustom || row.showOnBoard === false ? 'custom' : 'template',
         poster_image: isCustom ? row.posterImage || null : null,
         poster_position: row.position !== undefined ? String(row.position) : '2',
+        // 2枚目以降の貼紙（修正依頼1025 D3）。無ければ送らない（DB の既定は []）
+        ...(row.extraPosters?.length ? { extra_posters: row.extraPosters } : {}),
         status: 'draft',
         // メモは CSV に出さない（申請の行にだけ残す）
         memo: row.memo || null,

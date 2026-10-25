@@ -25,6 +25,8 @@ export type BulkEntryInsert = Pick<
 > & {
   status: 'draft';
   memo?: string | null;
+  /** 2枚目以降の貼紙（修正依頼1025 D3）。無ければ送らない（DB の既定は []） */
+  extra_posters?: DbEntry['extra_posters'];
   /** 点検行に結び付いた申請だけ（修正依頼1024） */
   property_inspection_id?: string | null;
   vendor_id?: string | null;

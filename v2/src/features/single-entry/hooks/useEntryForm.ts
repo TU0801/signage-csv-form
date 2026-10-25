@@ -5,7 +5,9 @@ import type { AppSettings } from '@/lib/api/single-entry';
 import type { MasterProperty } from '@/types/app';
 import type { DbInspectionType } from '@/types/database';
 import type { PortalInspectionRow } from '@/types/portal';
-import type { CustomImage, LocalEntry, SingleEntryValues } from '../types';
+import type { CustomImage, LocalEntry, LocalExtraPoster, SingleEntryValues } from '../types';
+import type { PosterLibraryItem } from '@/lib/api/poster-library';
+import { MAX_EXTRA_POSTERS } from '@/lib/extraPosters';
 import {
   applyCategoryChange,
   applyEndDateChange,
@@ -50,6 +52,8 @@ export function useEntryForm({
 }: UseEntryFormArgs) {
   const [values, setValues] = useState<SingleEntryValues>(() => initialValues(settings, todayUtc()));
   const [customImage, setCustomImage] = useState<CustomImage | null>(null);
+  // 2枚目以降の貼紙（修正依頼1025 D3）。テンプレートの貼紙にも足せる
+  const [extraPosters, setExtraPosters] = useState<LocalExtraPoster[]>([]);
   // 点検工事案内が自動で入った値（未選択・紐付けの既定・カテゴリで選び直した値・物件の既定）か。手で選んだ値・編集や複製で
   // 読み込んだ値は false。物件を選んだときは、空か自動の値のときだけ物件の点検行の種別に入れ替える（修正依頼1024 本番確認 ②）
   const autoTypeRef = useRef(true);
@@ -138,12 +142,49 @@ export function useEntryForm({
   // v1: js/script.js clearCustomImage
   const clearImage = useCallback(() => setCustomImage(null), []);
 
+  /** 貼紙ライブラリの画像を1枚目の追加の貼紙にする（修正依頼1025 D2。アップロードしない） */
+  const selectLibraryImage = useCallback((item: PosterLibraryItem) => {
+    setCustomImage({ file: null, dataUrl: item.image_url, libraryId: item.id, name: item.display_name });
+  }, []);
+
+  /** 2枚目以降の貼紙をアップロードの画像で足す。形式・大きさがだめならメッセージを返す */
+  const addExtraUpload = useCallback(async (file: File): Promise<string | null> => {
+    try {
+      validateImageFile(file);
+    } catch (e) {
+      return e instanceof Error ? e.message : '画像を選択できませんでした';
+    }
+    const dataUrl = await readAsDataUrl(file);
+    setExtraPosters((prev) =>
+      prev.length >= MAX_EXTRA_POSTERS ? prev : [...prev, { file, dataUrl, name: file.name, position: null }],
+    );
+    return null;
+  }, []);
+
+  /** 2枚目以降の貼紙をライブラリの画像で足す */
+  const addExtraLibrary = useCallback((item: PosterLibraryItem) => {
+    setExtraPosters((prev) =>
+      prev.length >= MAX_EXTRA_POSTERS
+        ? prev
+        : [...prev, { file: null, dataUrl: item.image_url, libraryId: item.id, name: item.display_name, position: null }],
+    );
+  }, []);
+
+  const removeExtra = useCallback((index: number) => setExtraPosters((prev) => prev.filter((_, i) => i !== index)), []);
+
+  const setExtraPosition = useCallback(
+    (index: number, position: string | null) =>
+      setExtraPosters((prev) => prev.map((x, i) => (i === index ? { ...x, position } : x))),
+    [],
+  );
+
   /** クリア（カテゴリは残す。v1 clearForm と同じ） */
   // v1: js/script.js clearForm
   const clear = useCallback(() => {
     autoTypeRef.current = true;
     setValues((v) => ({ ...initialValues(settings, todayUtc()), category: v.category }));
     setCustomImage(null);
+    setExtraPosters([]);
   }, [settings]);
 
   // v1: js/script.js editEntry
@@ -152,6 +193,7 @@ export function useEntryForm({
       autoTypeRef.current = false;
       setValues((v) => valuesFromEntry(v, e, inspectionTypes, linkedIds));
       setCustomImage(e.customImage);
+      setExtraPosters(e.extraPosters ?? []);
     },
     [inspectionTypes, linkedIds],
   );
@@ -168,6 +210,7 @@ export function useEntryForm({
   return {
     values,
     customImage,
+    extraPosters,
     setField,
     changeProperty,
     changeCategory,
@@ -179,6 +222,11 @@ export function useEntryForm({
     resetProperty,
     selectImage,
     clearImage,
+    selectLibraryImage,
+    addExtraUpload,
+    addExtraLibrary,
+    removeExtra,
+    setExtraPosition,
     clear,
     loadEntry,
     duplicate,

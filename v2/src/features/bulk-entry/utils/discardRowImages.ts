@@ -4,9 +4,20 @@ import { notHeld } from '@/lib/posterPath';
 import { getStoredTemplates } from './bulkTemplates';
 import type { BulkEntryRow } from '../types';
 
-/** 行が持っている追加の貼紙画像（テンプレートの行は画像を使わない） */
-export function rowPosterImages(rows: readonly Pick<BulkEntryRow, 'posterType' | 'posterImage'>[]): string[] {
-  return rows.filter((r) => r.posterType === 'custom' && r.posterImage).map((r) => r.posterImage);
+/** 行が持っている追加の貼紙画像（テンプレートの行は1枚目の画像を使わない）と、2枚目以降の貼紙の画像（修正依頼1025 D3） */
+export function rowPosterImages(
+  rows: readonly (Pick<BulkEntryRow, 'posterType' | 'posterImage'> & Partial<Pick<BulkEntryRow, 'extraPosters'>>)[],
+): string[] {
+  return rows.flatMap((r) => [
+    ...(r.posterType === 'custom' && r.posterImage ? [r.posterImage] : []),
+    ...(r.extraPosters ?? []).map((x) => x.image_url),
+  ]);
+}
+
+/** 行がまだ持っている画像（1枚目と2枚目以降。片付けで外す側） */
+function heldImages(r: Partial<Pick<BulkEntryRow, 'posterImage' | 'extraPosters'>> | null | undefined): string[] {
+  if (!r) return [];
+  return [r.posterImage ?? '', ...(r.extraPosters ?? []).map((x) => x.image_url)];
 }
 
 /**
@@ -18,9 +29,9 @@ export function discardUnheldRowImages(candidates: readonly string[]): void {
   if (candidates.length === 0) return;
   const { rows, copiedRow, userId } = useBulkStore.getState();
   const held = [
-    ...rows.map((r) => r.posterImage),
-    copiedRow?.posterImage,
-    ...getStoredTemplates().flatMap((t) => t.rows.map((r) => r.posterImage)),
+    ...rows.flatMap((r) => heldImages(r)),
+    ...heldImages(copiedRow),
+    ...getStoredTemplates().flatMap((t) => t.rows.flatMap((r) => heldImages(r))),
   ];
   const urls = notHeld(candidates, held);
   if (urls.length > 0) void discardOwnPosterImages(urls, userId);

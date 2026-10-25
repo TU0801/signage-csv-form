@@ -41,7 +41,8 @@ import {
   terminalsOf,
   toInsertRow,
 } from '@/features/single-entry/lib/entryLogic';
-import type { LocalEntry } from '@/features/single-entry/types';
+import type { CustomImage, LocalEntry } from '@/features/single-entry/types';
+import type { ExtraPoster } from '@/lib/extraPosters';
 
 
 const EMPTY_ENTRIES: LocalEntry[] = [];
@@ -225,6 +226,7 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
       inspectionTypes,
       vendor: vendorCtx.vendor,
       customImage: form.customImage,
+      extraPosters: form.extraPosters,
       hasTemplateImage: (key) => templateUrlOf(key) !== null,
       settings,
       linkVendorId: vendorCtx.linkVendorId,
@@ -302,14 +304,32 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
     // 申請に至らなかったときに片付ける、この申請でアップロードした画像
     let uploaded: string[] = [];
     try {
+      // 1枚目の追加の貼紙と2枚目以降の貼紙（修正依頼1025 D3）をアップロードする。ライブラリの画像（file が無い）はその URL のまま
+      const toUrl = (img: CustomImage) =>
+        img.file ? uploadPosterImage(img.file, user.id) : Promise.resolve(img.dataUrl);
       const results = await Promise.allSettled(
-        sending.map((e) => {
-          if (e.posterType !== PosterType.CUSTOM || !e.customImage) return Promise.resolve(null);
-          return uploadPosterImage(e.customImage.file, user.id);
+        sending.map(async (e) => {
+          const main = e.posterType === PosterType.CUSTOM && e.customImage ? toUrl(e.customImage) : Promise.resolve(null);
+          const extras = (e.extraPosters ?? []).map(async (x): Promise<ExtraPoster> => ({
+            image_url: await toUrl(x),
+            source: x.file ? 'upload' : 'library',
+            ...(x.libraryId ? { library_id: x.libraryId } : {}),
+            ...(x.position ? { position: x.position } : {}),
+          }));
+          const settled = await Promise.allSettled([main, ...extras]);
+          // 途中で失敗しても、アップロードできた分は片付けの対象に入れる（ライブラリの URL は自分のフォルダではないので片付けで外れる）
+          for (const r of settled) {
+            if (r.status === 'fulfilled' && r.value) uploaded.push(typeof r.value === 'string' ? r.value : r.value.image_url);
+          }
+          const failedOne = settled.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+          if (failedOne) throw failedOne.reason;
+          return {
+            main: (settled[0] as PromiseFulfilledResult<string | null>).value,
+            extras: settled.slice(1).map((r) => (r as PromiseFulfilledResult<ExtraPoster>).value),
+          };
         }),
       );
-      const urls = results.map((r) => (r.status === 'fulfilled' ? r.value : null));
-      uploaded = urls.filter((u): u is string => !!u);
+      const posters = results.map((r) => (r.status === 'fulfilled' ? r.value : { main: null, extras: [] }));
       const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
       if (failed) {
         console.error('Image upload failed:', failed.reason);
@@ -333,7 +353,7 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
           const recorded = linked
             ? { ...e, vendorName: linked.vendor_name, emergencyContact: linked.emergency_contact || '' }
             : e;
-          return toInsertRow(recorded, urls[i] ?? null, user.id, settings, today, link);
+          return toInsertRow(recorded, posters[i]?.main ?? null, user.id, settings, today, link, posters[i]?.extras ?? []);
         }),
       );
       uploaded = [];
@@ -439,6 +459,7 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
                 templateNo={values.templateNo}
                 isCustom={isCustom}
                 customImageUrl={form.customImage?.dataUrl ?? null}
+                extraImageUrls={form.extraPosters.map((x) => x.dataUrl)}
                 noticeText={values.noticeText}
                 dateText={formatPosterDate(values.startDate, values.endDate)}
                 remarks={values.remarks}

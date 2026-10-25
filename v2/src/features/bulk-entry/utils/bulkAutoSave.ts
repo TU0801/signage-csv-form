@@ -50,6 +50,8 @@ export function writeAutoSave(userId: string | null, allRows: BulkEntryRow[], ro
         emergencyContact: r.emergencyContact,
         posterType: r.posterType,
         posterImage: r.posterImage,
+        // 2枚目以降の貼紙（修正依頼1025 D3）。無ければ入れない（v1 と同じ形の JSON）
+        extraPosters: r.extraPosters?.length ? r.extraPosters : undefined,
         position: r.position,
       })),
     };

@@ -58,7 +58,8 @@ export async function deleteStorageFile(path: string): Promise<void> {
 /**
  * 使われなくなった自分の貼紙画像を Storage から消す（差し替えた・テンプレートに戻した・行を消した・詳細設定をキャンセルしたとき）。
  * 消すのは自分の {userId}/ フォルダの画像で、どの申請（signage_entries.poster_image）からも参照されていないものだけ。
- * DB の DELETE ポリシーも同じ条件で守る（scripts/fix-1024-followups-orphan.sql）。
+ * DB の DELETE ポリシーも同じ条件で守る（scripts/fix-1024-followups-orphan.sql）。2枚目以降の貼紙（extra_posters）からの参照は
+ * ここでは見ず、DB 側（poster_object_referenced。scripts/fix-1025-posters.sql）で消せないようにしている。
  * 失敗してもログだけ残して投げない（画面の操作は止めない）
  */
 export async function discardOwnPosterImages(urls: readonly string[], userId: string | null | undefined): Promise<void> {

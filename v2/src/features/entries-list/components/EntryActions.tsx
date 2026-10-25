@@ -11,6 +11,7 @@ import {
 } from '@/lib/csv';
 import type { AdminEntryStatus } from '@/lib/api/admin-entries';
 import type { DbEntry } from '@/types/database';
+import { parseExtraPosters } from '@/lib/extraPosters';
 import type { EntriesFilters } from '../hooks/useEntriesFilters';
 import { bulkStatusLabel, filterExportEntries } from '../lib/entries';
 
@@ -92,9 +93,11 @@ export function EntryActions({
 
   // v1: js/admin-export.js downloadCustomImages（承認済みの追加画像すべて。ZIP 内は customImageBaseName + 画像に合わせた拡張子 imageExtension）
   const handleDownloadImages = useCallback(async () => {
-    const count = filterApprovedEntries(entries).filter(
-      (e) => e.poster_type === 'custom' && e.poster_image,
-    ).length;
+    // 2枚目以降の貼紙（修正依頼1025 D3）も1枚ずつ数える
+    const count = filterApprovedEntries(entries).reduce(
+      (n, e) => n + (e.poster_type === 'custom' && e.poster_image ? 1 : 0) + parseExtraPosters(e.extra_posters).length,
+      0,
+    );
     if (count === 0) {
       addToast('ダウンロード対象の追加画像がありません', 'info');
       return;
