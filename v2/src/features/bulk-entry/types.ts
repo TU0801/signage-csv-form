@@ -88,6 +88,13 @@ export interface BulkProperty {
   propertyName: string;
   terminalId: string;
   supplement: string;
+  /**
+   * 未承認の建物（建物追加の申請 id）。物件コードは仮のコード REQ-…・端末は無い（修正依頼1025 F2）。
+   * 申請に property_request_id として入り、建物の承認で正式な物件コードに付け替わる
+   */
+  propertyRequestId?: string;
+  /** 未承認の建物の管理会社（申請で選んだもの。管理会社フィルターに使う） */
+  managementCompanyId?: string;
 }
 
 /** v1: getAllMasterDataCamelCase の vendors */

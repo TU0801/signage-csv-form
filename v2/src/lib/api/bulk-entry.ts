@@ -31,6 +31,8 @@ export type BulkEntryInsert = Pick<
   property_inspection_id?: string | null;
   vendor_id?: string | null;
   target_month?: string | null;
+  /** 未承認の建物（建物追加の申請）の行だけ（修正依頼1025 F2） */
+  property_request_id?: string | null;
 };
 
 /** 設定（有効メンバーは読める。値は text） */

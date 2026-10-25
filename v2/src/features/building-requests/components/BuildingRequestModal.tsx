@@ -16,6 +16,7 @@ import {
   type InspectionTypeOption,
 } from '@/lib/api/property-requests';
 import type { DbPropertyRequest } from '@/types/database';
+import { isUsableRequest, PROVISIONAL_LABEL } from '../lib/provisional';
 import type { ManagementCompanyRow } from '@/types/portal';
 
 export interface BuildingRequestModalProps {
@@ -25,7 +26,10 @@ export interface BuildingRequestModalProps {
   vendorId: string | null;
   /** 既定の管理会社（管理会社フィルターの値） */
   managementCompanyId: string | null;
-  onSubmitted?: () => void;
+  /** 申請できた（点検登録フォームがその建物の行を足す。修正依頼1025 F2） */
+  onSubmitted?: (request: DbPropertyRequest) => void;
+  /** 申請できたときに、呼び出した画面が何をしたかの添え書き（既定は一括入力の行を足した旨） */
+  submittedNote?: string;
 }
 
 /** 申請の入力が足りているか。足りなければ欄ごとの日本語の理由 */
@@ -59,6 +63,19 @@ export const TERMINAL_NOTE =
 // 管理会社フィルターの「未設定」（single-entry の MANAGEMENT_COMPANY_NONE）などの id でない値は既定にしない
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * これまでの申請の状態。承認待ちは管理会社の審査済みと、先月以前の申請（点検登録フォームで使えない＝再申請が要る）を書き分ける
+ */
+export function requestStatusLabel(
+  h: Pick<DbPropertyRequest, 'status' | 'created_at' | 'mgmt_reviewed_at'>,
+  now: Date = new Date(),
+): string {
+  const base = PROPERTY_REQUEST_STATUS_LABEL[h.status];
+  if (h.status !== 'pending') return base;
+  if (!isUsableRequest(h, now)) return `${base}（先月以前の申請・再申請が必要）`;
+  return h.mgmt_reviewed_at ? `${base}（管理会社 審査済み）` : base;
+}
+
 /** 点検登録フォームに無い建物を申請する。管理者が承認すると業務システムに物件ができる */
 export function BuildingRequestModal({
   open,
@@ -66,6 +83,7 @@ export function BuildingRequestModal({
   vendorId,
   managementCompanyId,
   onSubmitted,
+  submittedNote = '（一括入力ではその行を足しました）',
 }: BuildingRequestModalProps) {
   const profile = useAuthStore((s) => s.profile);
   const isAdmin = profile?.role === 'admin';
@@ -208,7 +226,7 @@ export function BuildingRequestModal({
       });
       setSubmitted(row);
       addToast('建物追加を申請しました', 'success');
-      onSubmitted?.();
+      onSubmitted?.(row);
     } catch (err) {
       console.error('Failed to create property request:', err);
       const message = (err as { message?: string })?.message;
@@ -259,20 +277,25 @@ export function BuildingRequestModal({
           <p className="text-sm font-medium text-green-700">
             「{submitted.property_name}」の追加を申請しました。
           </p>
-          <p className="text-sm text-gray-700">
+          <p className="text-sm text-gray-700" data-testid="buildingRequestSubmittedNote">
+            今月中は、点検登録フォームの物件で「【{PROVISIONAL_LABEL}】{submitted.property_name}」を選んで、日付を入れて申請できます{submittedNote}。
+            掲示の申請は、建物が承認されるまで承認されません（承認されると正式な物件コードに付け替わります）。
+          </p>
+          <p className="text-xs text-gray-500">
+            今月中に承認されなかったときは、来月にもう一度建物追加を申請してください。
             {submitted.inspection_type_id
-              ? '承認されると点検登録フォームに行が出ます。'
+              ? '承認後は点検予定の行も出ます。'
               : '承認後は物件として選べます（点検予定の行は点検種別の登録後に出ます）。'}
           </p>
           <p className="text-xs text-gray-500">{TERMINAL_NOTE}</p>
           <p className="text-xs text-gray-500">
-            管理者が物件コードを決めて承認します。結果はこの画面の「これまでの申請」で確認できます。
+            管理会社が審査し（任意）、管理者が物件コードを決めて承認します。結果はこの画面の「これまでの申請」で確認できます。
           </p>
         </div>
       ) : (
         <div className="space-y-2">
           <p className="text-xs text-gray-600">
-            点検登録フォームの物件に無い建物を申請します。管理者が承認すると物件ができ、点検登録フォームに行が出ます。
+            点検登録フォームの物件に無い建物を申請します。申請した時点から今月中は、その建物の行に日付を入れて掲示を申請できます。管理者が承認すると物件ができます。
           </p>
           {loadError && <p className="text-xs text-red-600">{loadError}</p>}
           <div className="grid grid-cols-2 gap-x-3 gap-y-2">
@@ -390,7 +413,7 @@ export function BuildingRequestModal({
                     {companyName(h.management_company_id)}
                   </td>
                   <td className="whitespace-nowrap py-0.5 pr-2">
-                    {PROPERTY_REQUEST_STATUS_LABEL[h.status]}
+                    {requestStatusLabel(h)}
                   </td>
                   <td className="py-0.5 text-gray-700">
                     {h.status === 'approved'

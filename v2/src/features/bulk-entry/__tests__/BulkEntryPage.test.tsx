@@ -24,6 +24,11 @@ vi.mock('@/lib/api/bulk-entry', () => ({
   createBulkEntries: api.createBulkEntries,
 }));
 vi.mock('@/lib/supabase', () => ({ supabase: { auth: {} }, TABLES: {}, RPC: {} }));
+// 未承認の建物（建物追加の申請。修正依頼1025 F2）は無い
+vi.mock('@/lib/api/property-requests', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/api/property-requests')>()),
+  fetchVendorPropertyRequests: async () => [],
+}));
 // 点検の予定（portal_*）・完了連絡・管理会社の候補（修正依頼1024）
 const portalApi = vi.hoisted(() => ({
   fetchPortalInspections: vi.fn(),

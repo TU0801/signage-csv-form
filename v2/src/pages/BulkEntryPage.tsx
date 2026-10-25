@@ -26,7 +26,13 @@ import { parseExcelPaste } from '@/features/bulk-entry/utils/parseExcelPaste';
 import { bulkCsvFilename, generateBulkCsv } from '@/features/bulk-entry/utils/bulkCsv';
 import { buildBulkEntries } from '@/features/bulk-entry/utils/buildBulkEntries';
 import { errorLabel, firstError } from '@/features/bulk-entry/utils/columns';
-import { formatInspectedOn, isApplyTarget, scheduleRowEntry, scheduleRowInput } from '@/features/bulk-entry/utils/scheduleRows';
+import {
+  defaultInspectionType,
+  formatInspectedOn,
+  isApplyTarget,
+  scheduleRowEntry,
+  scheduleRowInput,
+} from '@/features/bulk-entry/utils/scheduleRows';
 import { clearAutoSave } from '@/features/bulk-entry/utils/bulkAutoSave';
 import { getStoredTemplates, getVisibleTemplates, templateRows } from '@/features/bulk-entry/utils/bulkTemplates';
 import {
@@ -57,6 +63,9 @@ import { ApplyModal, type ApplyTarget } from '@/features/inspection-portal/compo
 import { ReportUploadModal } from '@/features/inspection-documents/components/ReportUploadModal';
 import { BulkReportUploadModal } from '@/features/inspection-documents/components/BulkReportUploadModal';
 import { BuildingRequestModal } from '@/features/building-requests/components/BuildingRequestModal';
+import { useProvisionalBuildings } from '@/features/building-requests/hooks/useProvisionalBuildings';
+import { isProvisionalCode, provisionalCode } from '@/features/building-requests/lib/provisional';
+import type { DbPropertyRequest } from '@/types/database';
 import { ManagementCompanyFilter } from '@/features/single-entry/components/ManagementCompanySelect';
 import { useManagementCompanies } from '@/features/single-entry/hooks/useManagementCompanies';
 import { MANAGEMENT_COMPANY_NONE } from '@/features/single-entry/lib/entryLogic';
@@ -184,6 +193,24 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
   const [showBuildingRequest, setShowBuildingRequest] = useState(false);
   const [completingKey, setCompletingKey] = useState<string | null>(null);
 
+  // 未承認の建物（建物追加の申請。修正依頼1025 F2）: 申請した月の間は物件の候補に出し、申請まで送れる
+  const provisional = useProvisionalBuildings(currentVendor.id, ready);
+  // 申請した建物の行を『＋行を追加』と同じ手の行で足す（点検種別は申請のもの、無ければ保守会社の既定）。
+  // 管理者がモーダルで別の保守会社を選んだときは、いま入力している保守会社の行ではないので足さない
+  const handleBuildingRequested = useCallback(
+    (request: DbPropertyRequest) => {
+      if (!currentVendor.id || request.vendor_id !== currentVendor.id) return;
+      provisional.addRequest(request);
+      const { masterData, inspectionDefaults } = useBulkStore.getState();
+      const code = provisionalCode(request.id);
+      const label =
+        masterData.notices.find((n) => n.id && n.id === request.inspection_type_id)?.inspectionType ||
+        defaultInspectionType(code, [], inspectionDefaults.linkedIds, masterData.notices);
+      addRow({ propertyCode: code, inspectionType: label });
+    },
+    [currentVendor.id, provisional, addRow],
+  );
+
   // ---- 点検予定（選択中の保守会社の点検行 × 対象月） ----
   // 保守会社のアカウントは DB が担当の点検（台の保守会社を含む）に絞って返す。管理者は選んだ保守会社の点検だけ（未選択なら出さない）
   const vendorInspections = useMemo(
@@ -258,9 +285,11 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
     (row: BulkEntryRow): string | null | undefined => {
       if (row.schedule) return itemsByKey.get(row.schedule.key)?.inspection.management_company_id ?? null;
       if (!row.propertyCode) return undefined;
-      return managementIndex?.byCode.get(String(row.propertyCode)) ?? null;
+      const code = String(row.propertyCode);
+      if (isProvisionalCode(code)) return provisional.companyByCode.get(code) ?? null;
+      return managementIndex?.byCode.get(code) ?? null;
     },
-    [itemsByKey, managementIndex],
+    [itemsByKey, managementIndex, provisional.companyByCode],
   );
   const managementNames = useMemo(
     () => new Map((managementIndex?.companies ?? []).map((c) => [c.id, c.name])),
@@ -275,9 +304,10 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
     (code: string) => {
       if (!managementCompanyId || !managementIndex) return true;
       const want = managementCompanyId === MANAGEMENT_COMPANY_NONE ? null : managementCompanyId;
-      return (managementIndex.byCode.get(code) ?? null) === want;
+      const company = isProvisionalCode(code) ? provisional.companyByCode.get(code) : managementIndex.byCode.get(code);
+      return (company ?? null) === want;
     },
-    [managementCompanyId, managementIndex],
+    [managementCompanyId, managementIndex, provisional.companyByCode],
   );
   const propertyNameOf = useCallback(
     (row: BulkEntryRow) =>
@@ -453,7 +483,8 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
           };
         }
       }
-      const m = row.propertyCode ? managementIndex?.byCode.get(String(row.propertyCode)) : null;
+      // 未承認の建物は申請で選んだ管理会社（managementOf）
+      const m = managementOf(row);
       const linked = row.propertyCode ? inspectionOfManual(row) : undefined;
       const fullName = m ? (managementNames.get(m) ?? '') : '';
       return {
@@ -471,6 +502,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       inspectedOnById,
       actionsOf,
       managementIndex,
+      managementOf,
       inspectionOfManual,
       managementNames,
       managementLabel,
@@ -643,10 +675,13 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
     }
   };
 
+  // CSV の対象（未承認の建物の行は物件コードが仮なので出さない。建物の承認後に正式な物件コードで出る）
+  const csvTargets = () => applyTargets().filter((r) => !isProvisionalCode(r.propertyCode));
+
   // v1: js/bulk-data.js downloadCSV
   const handleDownloadCsv = () => {
     const { masterData, currentVendor: vendor, appSettings } = useBulkStore.getState();
-    const csv = generateBulkCsv(applyTargets(), masterData, vendor, appSettings);
+    const csv = generateBulkCsv(csvTargets(), masterData, vendor, appSettings);
     if (!csv) {
       addToast('ダウンロードするデータがありません', 'error');
       return;
@@ -658,7 +693,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
   // v1: js/bulk-data.js copyCSV（BOM なし）
   const handleCopyCsv = async () => {
     const { masterData, currentVendor: vendor, appSettings } = useBulkStore.getState();
-    const csv = generateBulkCsv(applyTargets(), masterData, vendor, appSettings);
+    const csv = generateBulkCsv(csvTargets(), masterData, vendor, appSettings);
     if (!csv) {
       addToast('コピーするデータがありません', 'error');
       return;
@@ -914,6 +949,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
         managementCompanyId={
           managementCompanyId && managementCompanyId !== MANAGEMENT_COMPANY_NONE ? managementCompanyId : null
         }
+        onSubmitted={handleBuildingRequested}
       />
       {confirmDialog}
     </div>

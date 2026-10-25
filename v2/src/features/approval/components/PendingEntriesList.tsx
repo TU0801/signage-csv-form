@@ -12,6 +12,8 @@ import { useEntryLookups } from '@/features/entries-list/hooks/useEntryLookups';
 import { NAME_COL } from '@/features/entries-list/lib/tableColumns';
 import { formatJaDate } from '@/features/entries-list/lib/entries';
 import type { DbEntry } from '@/types/database';
+import { fetchPropertyRequestsByIds } from '@/lib/api/property-requests';
+import { isProvisionalCode } from '@/features/building-requests/lib/provisional';
 import { PendingEntryRow } from './PendingEntryRow';
 import { EntryDetailModal } from './EntryDetailModal';
 import { usePendingEntries } from '../hooks/usePendingEntries';
@@ -58,6 +60,35 @@ export function PendingEntriesList() {
   useEffect(() => {
     fetchPendingEntries();
   }, [fetchPendingEntries]);
+
+  // 未承認の建物（建物追加の申請）の掲示の申請: 建物名を出し、建物が承認されるまで承認させない（修正依頼1025 F2）
+  const requestIds = useMemo(
+    () =>
+      [...new Set(entries.map((e) => e.property_request_id).filter((id): id is string => !!id))].sort().join(','),
+    [entries],
+  );
+  const [requestNames, setRequestNames] = useState<ReadonlyMap<string, string>>(() => new Map());
+  useEffect(() => {
+    if (!requestIds) return;
+    let cancelled = false;
+    fetchPropertyRequestsByIds(requestIds.split(',')).then(
+      (rows) => {
+        if (!cancelled) setRequestNames(new Map(rows.map((r) => [r.id, r.property_name])));
+      },
+      (err) => console.error('Failed to load property requests:', err),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [requestIds]);
+  /** 建物未承認の申請なら建物名（読めなければ空文字）、そうでなければ undefined */
+  const pendingBuildingOf = useCallback(
+    (entry: DbEntry): string | undefined =>
+      isProvisionalCode(entry.property_code)
+        ? (entry.property_request_id && requestNames.get(entry.property_request_id)) || ''
+        : undefined,
+    [requestNames],
+  );
 
   // 別のタブから戻ったら読み直す（詳細・編集・確認を開いている間は読み直さない）
   useRefetchOnVisible(
@@ -114,19 +145,28 @@ export function PendingEntriesList() {
     [rejectEntry, addToast],
   );
 
-  // v1: js/admin-pending.js approveSelected
+  // v1: js/admin-pending.js approveSelected。建物未承認の申請は承認できないので外す（1件でも混ざると一括の更新が全部失敗する）
   const handleBulkApprove = useCallback(async () => {
-    const ids = selected;
-    if (ids.length === 0) return;
+    const blocked = entries.filter((e) => selected.includes(e.id) && pendingBuildingOf(e) !== undefined).map((e) => e.id);
+    const ids = selected.filter((id) => !blocked.includes(id));
+    if (ids.length === 0) {
+      if (blocked.length > 0) addToast('建物未承認の申請は、建物が承認されるまで承認できません', 'error');
+      return;
+    }
     try {
       await approveBulk(ids);
-      setSelectedIds(new Set());
-      addToast(`${ids.length}件を承認しました`, 'success');
+      setSelectedIds(new Set(blocked));
+      addToast(
+        blocked.length > 0
+          ? `${ids.length}件を承認しました（建物未承認の${blocked.length}件は承認していません）`
+          : `${ids.length}件を承認しました`,
+        'success',
+      );
     } catch (err) {
       console.error('Failed to approve entries:', err);
       addToast(`承認に失敗しました: ${entryErrorReason(err)}`, 'error');
     }
-  }, [approveBulk, selected, addToast]);
+  }, [approveBulk, selected, entries, pendingBuildingOf, addToast]);
 
   // 選択を却下（1件ずつの却下と同じく削除）
   const handleBulkReject = useCallback(async () => {
@@ -318,6 +358,7 @@ export function PendingEntriesList() {
                       onViewDetail={setDetailEntry}
                       onEdit={isManagement ? undefined : setEditEntry}
                       onSendBack={setSendBackTarget}
+                      pendingBuildingName={pendingBuildingOf(entry)}
                     />
                   ))}
                 </tbody>
@@ -334,10 +375,14 @@ export function PendingEntriesList() {
         propertyNames={lookups.propertyNames}
         emailOf={lookups.emailOf}
         displayDefault={lookups.displayDefault}
-        onApprove={(e) => {
-          setDetailEntry(null);
-          setConfirm({ kind: 'approve', id: e.id });
-        }}
+        onApprove={
+          detailEntry && pendingBuildingOf(detailEntry) !== undefined
+            ? undefined
+            : (e) => {
+                setDetailEntry(null);
+                setConfirm({ kind: 'approve', id: e.id });
+              }
+        }
         onReject={
           isManagement
             ? undefined

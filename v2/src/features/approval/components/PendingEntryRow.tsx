@@ -22,6 +22,11 @@ interface PendingEntryRowProps {
   onEdit?: (entry: DbEntry) => void;
   /** 差戻し（管理会社） */
   onSendBack?: (entry: DbEntry) => void;
+  /**
+   * 未承認の建物（建物追加の申請）の掲示の申請なら、その建物名（読めなければ空文字）。
+   * 建物が承認されるまで承認できない（DB の guard_entry_property_request も止める。修正依頼1025 F2）
+   */
+  pendingBuildingName?: string;
 }
 
 const td = 'cell text-sm text-gray-900';
@@ -46,8 +51,10 @@ export function PendingEntryRow({
   onViewDetail,
   onEdit,
   onSendBack,
+  pendingBuildingName,
 }: PendingEntryRowProps) {
   const periodWarning = displayPeriodWarning(entry);
+  const buildingPending = pendingBuildingName !== undefined;
   return (
     <tr className="group border-b border-gray-100 hover:bg-gray-50">
       <td className={td}>
@@ -69,10 +76,20 @@ export function PendingEntryRow({
             </Badge>
           </span>
         )}
+        {buildingPending && (
+          <span
+            title="建物追加の申請が承認されていない建物です。建物の承認（承認待ち＞ビル追加）で物件コードが決まるまで承認できません"
+            data-testid="buildingPendingBadge"
+          >
+            <Badge variant="warning" className="ml-1 px-1 py-0 text-[10px]">
+              建物未承認
+            </Badge>
+          </span>
+        )}
       </td>
       <td className={td}>
-        <div className={NAME_CELL} title={propertyName || undefined}>
-          {propertyName || '-'}
+        <div className={NAME_CELL} title={(buildingPending ? pendingBuildingName : propertyName) || undefined}>
+          {(buildingPending ? pendingBuildingName : propertyName) || '-'}
         </div>
       </td>
       <td className={td}>
@@ -122,7 +139,13 @@ export function PendingEntryRow({
               編集
             </Button>
           )}
-          <Button size="sm" variant="success" onClick={() => onApprove(entry.id)}>
+          <Button
+            size="sm"
+            variant="success"
+            disabled={buildingPending}
+            title={buildingPending ? '建物が承認されるまで承認できません' : undefined}
+            onClick={() => onApprove(entry.id)}
+          >
             承認
           </Button>
           {onReject && (

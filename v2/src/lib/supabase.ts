@@ -69,6 +69,9 @@ export const RPC = {
   inspectionTypeOptionsForRequest: 'inspection_type_options_for_request',
   approvePropertyRequest: 'approve_property_request',
   rejectPropertyRequest: 'reject_property_request',
+  /** 建物追加の申請の管理会社の審査（任意）と、未承認の建物の掲示の申請の件数（修正依頼1025 D4・F2） */
+  mgmtReviewPropertyRequest: 'mgmt_review_property_request',
+  propertyRequestEntryCounts: 'property_request_entry_counts',
   /**
    * 管理会社メニュー（修正依頼1024 C2・C3）。管理会社のアカウントで、自社が管理する物件だけを読み書きする。
    * 戻り値の形は管理者用の同名（mgmt_ を外したもの）と同じ。scripts/fix-1024-mgmt.sql

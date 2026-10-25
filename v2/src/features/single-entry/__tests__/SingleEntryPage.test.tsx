@@ -73,6 +73,12 @@ vi.mock('@/lib/api/portal', async () => {
           ]),
   };
 });
+// 保守会社の建物追加の申請（未承認の建物を物件の候補に出す。修正依頼1025 D4・F2）
+const requestsApi = vi.hoisted(() => ({ rows: [] as Record<string, unknown>[] }));
+vi.mock('@/lib/api/property-requests', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api/property-requests')>();
+  return { ...actual, fetchVendorPropertyRequests: () => Promise.resolve(requestsApi.rows) };
+});
 vi.mock('@/lib/api/single-entry', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api/single-entry')>();
   return {
@@ -108,6 +114,7 @@ beforeEach(() => {
   isAdmin = false;
   portalApi.fail = false;
   portalApi.extra = [];
+  requestsApi.rows = [];
   insertEntries.mockReset();
   insertEntries.mockResolvedValue([]);
 });
@@ -494,5 +501,51 @@ describe('1件入力画面（貼紙ライブラリと2枚目以降の貼紙。�
         { image_url: LIB, source: 'library', library_id: 'lib-1', position: '0' },
       ],
     });
+  });
+});
+
+describe('1件入力画面（未承認の建物。修正依頼1025 D4・F2）', () => {
+  it('今月の承認待ちの建物追加の申請を物件の候補に出し、仮の物件コードと申請 id で、点検行に結び付けずに申請する', async () => {
+    requestsApi.rows = [
+      {
+        id: '14e060fd-0000-4000-8000-000000000001',
+        vendor_id: 'v-mine',
+        management_company_id: 'c-en',
+        property_name: '新築マンション',
+        address: null,
+        inspection_type_id: null,
+        inspection_months: [],
+        status: 'pending',
+        requested_by: 'u1',
+        reviewed_by: null,
+        reviewed_at: null,
+        reject_reason: null,
+        created_property_code: null,
+        created_terminal_id: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+    ];
+    render(
+      <ToastProvider>
+        <SingleEntryPage />
+      </ToastProvider>,
+    );
+    expect(await screen.findByRole('button', { name: '建物追加 申請' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('combobox', { name: '点検工事案内 *' })).toHaveValue('排水管清掃'));
+    pick('物件コード *', 'REQ-14e060fd');
+    fireEvent.click(screen.getByRole('button', { name: 'データを追加' }));
+    const table = await screen.findByRole('table');
+    expect(within(table).getByText('【建物未承認】新築マンション')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '申請する' }));
+    await waitFor(() => expect(insertEntries).toHaveBeenCalledTimes(1));
+    const row = (insertEntries.mock.calls[0]![0] as Record<string, unknown>[])[0]!;
+    expect(row).toMatchObject({
+      property_code: 'REQ-14e060fd',
+      property_request_id: '14e060fd-0000-4000-8000-000000000001',
+      terminal_id: '',
+      status: 'draft',
+    });
+    expect(row).not.toHaveProperty('property_inspection_id');
   });
 });
