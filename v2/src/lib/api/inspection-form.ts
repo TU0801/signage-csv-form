@@ -21,7 +21,7 @@ export async function fetchCompletions(): Promise<DbInspectionCompletion[]> {
   return (data ?? []) as DbInspectionCompletion[];
 }
 
-/** 完了連絡を記録する（点検の保守会社と管理者。同じ点検・対象月は1件） */
+/** 完了連絡を記録する（点検の保守会社と管理者。同じ点検・対象月は1件）。点検月以外の月は、毎月・申請不要の点検種別か、その月の申請があるときだけ */
 export async function markCompleted(inspectionId: string, targetMonth: string): Promise<DbInspectionCompletion> {
   const { data, error } = await supabase.rpc(RPC.portalMarkCompleted, {
     p_inspection_id: inspectionId,

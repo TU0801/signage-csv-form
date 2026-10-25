@@ -36,6 +36,8 @@ export const TABLES = {
   inspectionReports: 'signage_inspection_reports',
   /** 新規建物の申請（2026-10-24）。承認・却下は RPC だけ */
   propertyRequests: 'signage_property_requests',
+  /** 点検種別の印（修正依頼1025 H4/G4: 申請不要・毎月）。書くのは管理者だけ。scripts/fix-1025-form.sql */
+  inspectionTypeFlags: 'signage_inspection_type_flags',
 } as const;
 
 /** signage スキーマの RPC（biz への窓口） */
@@ -82,7 +84,8 @@ export const RPC = {
   /** 点検登録フォーム（2026-10-24）。scripts/fix-1024-core.sql */
   managementCompaniesScoped: 'management_companies_scoped',
   portalCompletions: 'portal_completions',
-  portalMarkCompleted: 'portal_mark_completed',
+  /** 完了連絡。毎月・申請不要の印と点検月以外の月の申請を通す版（修正依頼1025 form。scripts/fix-1025-form.sql）。旧 portal_mark_completed は使わない */
+  portalMarkCompleted: 'portal_mark_completed_any_month',
   portalUnmarkCompleted: 'portal_unmark_completed',
   portalInspectionDates: 'portal_inspection_dates',
   /** マスター管理の物件の検査月（管理者・管理会社は自社物件）。書き込みは upsert の戻り値の点検行 id で */
@@ -90,6 +93,9 @@ export const RPC = {
   setPropertyInspectionInspectedOn: 'set_property_inspection_inspected_on',
   /** 使われていない貼紙画像の一覧（管理者だけ。修正依頼1024 後続 orphan。scripts/fix-1024-followups-orphan.sql） */
   orphanPosterImages: 'orphan_poster_images',
+  /** 点検登録フォーム（修正依頼1025 form）。号機（台）と設備会社固有コード、管理会社の略称。scripts/fix-1025-form.sql */
+  portalInspectionUnits: 'portal_inspection_units',
+  managementCompanyShortNames: 'management_company_short_names',
 } as const;
 
 /** Storage のバケット */

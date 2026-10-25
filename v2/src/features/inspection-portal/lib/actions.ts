@@ -38,6 +38,24 @@ export function appliedEntry(item: Pick<ScheduleItem, 'entries'>): PortalEntryRo
 }
 
 /**
+ * 完了連絡を出せない理由（出せるなら null）。点検月以外の月の行（「全ての月」。D5）は、毎月・申請不要の印がある点検種別か、
+ * その点検 × 対象月の申請（承認待ち・承認済み・取込済み。property_inspection_id で結び付いたもの）があるときだけ。
+ * DB（portal_mark_completed_any_month）と同じ判定で、押しても断られるボタンを出さない
+ */
+export function completionBlockedReason(
+  item: Pick<ScheduleItem, 'offMonth' | 'reportOnly' | 'monthly' | 'entries' | 'inspection' | 'targetMonth'>,
+): string | null {
+  if (!item.offMonth || item.reportOnly || item.monthly) return null;
+  const applied = item.entries.some(
+    (e) =>
+      (e.status === 'draft' || e.status === 'ready' || e.status === 'exported') &&
+      e.property_inspection_id === item.inspection.inspection_id &&
+      e.target_month === item.targetMonth,
+  );
+  return applied ? null : '点検月以外の月は、その月の申請を出してから完了を連絡できます';
+}
+
+/**
  * 報告書の登録（portal_register_report の p_entry_id）に渡す申請 id。
  * DB は申請の property_inspection_id が点検行と一致しないと例外にするので、旧来の申請・1件入力の申請
  * （物件・点検種別・開始月の一致で予定に結び付けたもの。property_inspection_id が無い）は渡さない（null）。
@@ -48,12 +66,16 @@ export function reportEntryId(item: Pick<ScheduleItem, 'entries' | 'inspection'>
   return entry && entry.property_inspection_id === item.inspection.inspection_id ? entry.id : null;
 }
 
-export function rowActions(item: Pick<ScheduleItem, 'application' | 'entries'>, role: PortalRole): RowActions {
+export function rowActions(
+  item: Pick<ScheduleItem, 'application' | 'entries' | 'reportOnly'>,
+  role: PortalRole,
+): RowActions {
   // 状態を決めた申請（focusEntry）だけを操作の対象にする。別の申請（過去の月の承認済みなど）を差し戻さないように
   const focus = focusEntry(item.entries);
 
   let apply: RowActions['apply'] = null;
-  if (canSubmit(role)) {
+  // 申請不要（報告書のみ）の点検種別は新しい申請を出さない（修正依頼1025 H4/G4）
+  if (canSubmit(role) && !item.reportOnly) {
     if (item.application === 'not_applied') apply = { kind: 'new' };
     else if (item.application === 'sent_back' && focus) apply = { kind: 'resubmit', entry: focus };
   }

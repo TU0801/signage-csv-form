@@ -11,7 +11,7 @@ import { ReportUploadModal } from '@/features/inspection-documents/components/Re
 import { usePortalData } from '../hooks/usePortalData';
 import { reportEntryId, canSubmit, type PortalRole } from '../lib/actions';
 import { filterSchedule, filterUnscheduled, INITIAL_FILTERS, type PortalFilters } from '../lib/filters';
-import { buildSchedule, formatMonth, todayJst, unscheduledInspections, type ScheduleItem } from '../lib/schedule';
+import { buildSchedule, formatMonth, todayJst, typeFlagsMap, unscheduledInspections, type ScheduleItem } from '../lib/schedule';
 import { completionKeys, countStatuses, itemStatus } from '../lib/status';
 import { ApplyModal, type ApplyTarget } from './ApplyModal';
 import { CountBadges } from './CountBadges';
@@ -65,14 +65,16 @@ export function InspectionPortal() {
     !applyTarget && !reportTarget && !sendBackTarget && !detailTarget && !data.loading,
   );
 
+  // 点検種別の印（毎月・申請不要は超過にしない。修正依頼1025 H4/G4）
+  const flags = useMemo(() => typeFlagsMap(data.typeFlags), [data.typeFlags]);
   const schedule = useMemo(
-    () => buildSchedule(data.inspections, data.entries, data.reports, { today, monthsAhead: MONTHS_AHEAD }),
-    [data.inspections, data.entries, data.reports, today],
+    () => buildSchedule(data.inspections, data.entries, data.reports, { today, monthsAhead: MONTHS_AHEAD, flags }),
+    [data.inspections, data.entries, data.reports, today, flags],
   );
   // 点検月の無い点検（本番の大半）も件数バッジと申請状況の絞り込みに含める
   const unscheduledAll = useMemo(
-    () => buildUnscheduledItems(unscheduledInspections(data.inspections), data.entries, data.reports),
-    [data.inspections, data.entries, data.reports],
+    () => buildUnscheduledItems(unscheduledInspections(data.inspections, flags), data.entries, data.reports, flags),
+    [data.inspections, data.entries, data.reports, flags],
   );
   // ステータス（修正依頼1024 B14）。完了連絡を含めて決める
   const completed = useMemo(() => completionKeys(data.completions), [data.completions]);

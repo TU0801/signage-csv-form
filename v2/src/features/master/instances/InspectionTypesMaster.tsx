@@ -23,7 +23,8 @@ import type { MasterConfig } from '../types/masterConfig';
 import { matchesSearch, useMasterCRUD } from '../hooks/useMasterCRUD';
 import { MasterToolbar } from '../components/MasterToolbar';
 import { MasterDeleteConfirm } from '../components/MasterDeleteConfirm';
-import { InspectionTypeFormModal } from '../components/InspectionTypeFormModal';
+import { InspectionTypeFormModal, type InspectionTypeFlagsInput } from '../components/InspectionTypeFormModal';
+import { fetchInspectionTypeFlags, saveInspectionTypeFlags } from '@/lib/api/portal';
 import { categoryTabs, moveItem, NO_CATEGORY, sortOrderUpdates, swapItems, templateLabel } from '../lib/inspectionTypes';
 
 type InspectionTypeRecord = DbInspectionType & Record<string, unknown>;
@@ -78,6 +79,19 @@ export function InspectionTypesMaster() {
     rememberSearchAs: 'inspectionTypes',
   });
   const { categories, templateImages, optionsLoading } = useInspectionTypeOptions();
+  // 点検種別の印（申請不要・毎月。修正依頼1025 H4/G4）。読めなければ印なしとして出す（保存のときに失敗を知らせる）
+  const [flags, setFlags] = useState<ReadonlyMap<string, InspectionTypeFlagsInput>>(() => new Map());
+  const loadFlags = useCallback(async () => {
+    try {
+      const rows = await fetchInspectionTypeFlags();
+      setFlags(new Map(rows.map((r) => [r.inspection_type_id, { report_only: r.report_only, monthly: r.monthly }])));
+    } catch (err) {
+      console.error('点検種別の印の取得に失敗しました:', err);
+    }
+  }, []);
+  useEffect(() => {
+    void loadFlags();
+  }, [loadFlags]);
 
   const [formItem, setFormItem] = useState<DbInspectionType | null | undefined>(undefined);
   const [deleteTarget, setDeleteTarget] = useState<InspectionTypeRecord | null>(null);
@@ -112,23 +126,35 @@ export function InspectionTypesMaster() {
 
   // v1: js/admin-masters.js handleMasterFormSubmit（type === 'inspection'）
   const handleSubmit = useCallback(
-    async (input: InspectionTypeInput) => {
+    async (input: InspectionTypeInput, typeFlags: InspectionTypeFlagsInput, flagsChanged: boolean) => {
+      let id: string;
       try {
         if (formItem) {
-          await updateInspectionType(formItem.id, input);
-          addToast('点検種別を更新しました', 'success');
+          id = (await updateInspectionType(formItem.id, input)).id;
         } else {
-          await addInspectionType(input);
-          addToast('点検種別を追加しました', 'success');
+          id = (await addInspectionType(input)).id;
         }
       } catch (err) {
         console.error('Failed to save inspection type:', err);
         addToast('保存に失敗しました', 'error');
         throw err;
       }
+      // 印は別の表（signage_inspection_type_flags）。変えたときだけ書く。失敗したら点検種別は保存済みと分かるように知らせて開いたまま
+      if (flagsChanged) {
+        try {
+          await saveInspectionTypeFlags(id, typeFlags);
+          void loadFlags();
+        } catch (err) {
+          console.error('Failed to save inspection type flags:', err);
+          addToast('点検種別は保存しましたが、申請不要・毎月の設定を保存できませんでした', 'error');
+          void reload();
+          throw err;
+        }
+      }
+      addToast(formItem ? '点検種別を更新しました' : '点検種別を追加しました', 'success');
       void reload();
     },
-    [formItem, addToast, reload],
+    [formItem, addToast, reload, loadFlags],
   );
 
   // 使用中の点検種別は消させない（エントリーの inspection_type は点検種別名で持つ）
@@ -445,6 +471,7 @@ export function InspectionTypesMaster() {
           item={formItem}
           categories={categories}
           templateImages={templateImages}
+          flags={formItem ? flags.get(formItem.id) : undefined}
           onClose={() => setFormItem(undefined)}
           onSubmit={handleSubmit}
         />

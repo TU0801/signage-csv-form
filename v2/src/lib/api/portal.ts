@@ -1,11 +1,49 @@
 import { supabase, TABLES, RPC, BUCKETS } from '@/lib/supabase';
 import type {
   DbInspectionReport,
+  InspectionTypeFlagRow,
   ManagementCompanyRow,
+  ManagementCompanyShortNameRow,
   PortalEntryRow,
   PortalInspectionRow,
+  PortalUnitRow,
 } from '@/types/portal';
 import type { DbEntry } from '@/types/database';
+
+/** 範囲内の点検行の号機（台）と設備会社固有コード（修正依頼1025 H1〜H3） */
+export async function fetchPortalInspectionUnits(): Promise<PortalUnitRow[]> {
+  const { data, error } = await supabase.rpc(RPC.portalInspectionUnits);
+  if (error) throw error;
+  return (data ?? []) as PortalUnitRow[];
+}
+
+/** 点検種別の印（申請不要・毎月。修正依頼1025 H4/G4）。読めるのは管理者・保守会社・管理会社 */
+export async function fetchInspectionTypeFlags(): Promise<InspectionTypeFlagRow[]> {
+  const { data, error } = await supabase.from(TABLES.inspectionTypeFlags).select('inspection_type_id, report_only, monthly');
+  if (error) throw error;
+  return (data ?? []) as InspectionTypeFlagRow[];
+}
+
+/** 点検種別の印を保存する（管理者だけ。RLS が弾く）。両方 false でも行は残す（行が無いのと同じ意味） */
+export async function saveInspectionTypeFlags(
+  inspectionTypeId: string,
+  flags: { report_only: boolean; monthly: boolean },
+): Promise<void> {
+  const { error } = await supabase
+    .from(TABLES.inspectionTypeFlags)
+    .upsert(
+      { inspection_type_id: inspectionTypeId, report_only: flags.report_only, monthly: flags.monthly },
+      { onConflict: 'inspection_type_id' },
+    );
+  if (error) throw error;
+}
+
+/** 管理会社の略称（F5。範囲は management_companies_scoped と同じ＋管理会社アカウントの自社） */
+export async function fetchManagementCompanyShortNames(): Promise<ManagementCompanyShortNameRow[]> {
+  const { data, error } = await supabase.rpc(RPC.managementCompanyShortNames);
+  if (error) throw error;
+  return (data ?? []) as ManagementCompanyShortNameRow[];
+}
 
 /*
  * 点検ポータル（管理会社・保守会社の点検一覧／申請の承認・差戻し／点検報告書）の読み書き。

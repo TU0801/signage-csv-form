@@ -24,7 +24,8 @@ export function scheduleRowInput(
   memos?: ReadonlyMap<string, string>,
 ): { meta: BulkScheduleMeta; row: BulkRowInput } {
   const { inspection } = item;
-  const locked = !!item.targetMonth && item.application !== 'not_applied';
+  // 2台目以降の行と申請不要の点検は、この表から申請しない（入力欄を出さない。修正依頼1025 H3・H4/G4）
+  const locked = (!!item.targetMonth && item.application !== 'not_applied') || !!item.secondary || !!item.reportOnly;
   const entry = scheduleRowEntry(item);
   return {
     meta: {
@@ -34,6 +35,10 @@ export function scheduleRowInput(
       locked,
       propertyName: inspection.property_name,
       terminalIds: inspection.terminal_ids,
+      ...(item.unitCode ? { unitCode: item.unitCode } : {}),
+      ...(item.secondary ? { secondary: true } : {}),
+      ...(item.reportOnly ? { reportOnly: true } : {}),
+      ...(item.offMonth ? { offMonth: true } : {}),
     },
     row: {
       propertyCode: inspection.property_code,

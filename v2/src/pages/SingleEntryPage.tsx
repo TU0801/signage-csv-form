@@ -12,7 +12,8 @@ import { templateFileUrl } from '@/lib/templateStorage';
 import { cn, todayUtc } from '@/lib/utils';
 import { PosterType } from '@/lib/constants';
 import { insertEntries, type AppSettings } from '@/lib/api/single-entry';
-import { fetchPortalInspections } from '@/lib/api/portal';
+import { fetchInspectionTypeFlags, fetchPortalInspections } from '@/lib/api/portal';
+import { todayJst } from '@/features/inspection-portal/lib/schedule';
 import type { MasterData } from '@/types/app';
 import type { PortalInspectionRow } from '@/types/portal';
 import { inspectionsOfVendor } from '@/features/inspection-portal/lib/inspectionLink';
@@ -38,6 +39,8 @@ import {
   filterByManagementCompany,
   filterInspectionTypes,
   formatPosterDate,
+  inInspectionMonth,
+  inspectionMonthPropertyCodes,
   terminalsOf,
   toInsertRow,
 } from '@/features/single-entry/lib/entryLogic';
@@ -106,6 +109,8 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
   // 保守会社の点検行（物件を選んだときの点検工事案内の既定に使う。修正依頼1024 本番確認 ②）。申請時は改めて読み直して結び付ける。
   // 読めなければ既定を入れないだけ（入力はできる）
   const [portalInspections, setPortalInspections] = useState<PortalInspectionRow[]>([]);
+  // 毎月の点検種別（「点検月のみ」の候補に毎月入れる。修正依頼1025 D5・H4）。読めなければ印なし
+  const [monthlyTypeIds, setMonthlyTypeIds] = useState<ReadonlySet<string>>(() => new Set());
   useEffect(() => {
     let cancelled = false;
     fetchPortalInspections()
@@ -113,6 +118,14 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
         if (!cancelled) setPortalInspections(rows);
       })
       .catch((err: unknown) => console.error('点検行の取得に失敗しました（点検工事案内の既定は入りません）:', err));
+    void (async () => {
+      try {
+        const flags = await fetchInspectionTypeFlags();
+        if (!cancelled) setMonthlyTypeIds(new Set(flags.filter((f) => f.monthly).map((f) => f.inspection_type_id)));
+      } catch (err) {
+        console.error('点検種別の印の取得に失敗しました:', err);
+      }
+    })();
     return () => {
       cancelled = true;
     };
@@ -137,6 +150,17 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
   const submitted = useSubmittedEntries(user?.id ?? null);
 
   const [signageOnly, setSignageOnly] = useState(false);
+  // 点検月のみ（既定）／全て（修正依頼1025 D5）。点検月のみ: 今月が点検月の点検（点検月未登録・毎月を含む）がある物件だけ
+  const [inspectionMonthOnly, setInspectionMonthOnly] = useState(true);
+  const currentMonth = Number(todayJst().slice(5, 7));
+  // 保守会社の点検行が読めていない（0件）ときは絞らない（候補が空になって入力できなくなるのを防ぐ）
+  const monthCodes = useMemo(
+    () =>
+      vendorInspections.length > 0
+        ? inspectionMonthPropertyCodes(vendorInspections, currentMonth, monthlyTypeIds)
+        : null,
+    [vendorInspections, currentMonth, monthlyTypeIds],
+  );
   // 管理会社フィルター（'' = 全て。管理者と保守会社。B2）。保守会社・サイネージ設置物件のみと AND で効く。
   // 一括入力と同じ値を使う（切り替えても残す）
   const managementIndex = useManagementCompanies(true);
@@ -156,10 +180,11 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
   const submitting = useSingleEntryStore((s) => s.submitting);
   const setSubmitting = useSingleEntryStore((s) => s.setSubmitting);
 
-  const selectableProperties = useMemo(
-    () => filterByManagementCompany(vendorCtx.visibleProperties, managementIndex, managementCompanyId),
-    [vendorCtx.visibleProperties, managementIndex, managementCompanyId],
-  );
+  const selectableProperties = useMemo(() => {
+    const byCompany = filterByManagementCompany(vendorCtx.visibleProperties, managementIndex, managementCompanyId);
+    if (!inspectionMonthOnly || !monthCodes) return byCompany;
+    return byCompany.filter((p) => inInspectionMonth(monthCodes, p.property_code));
+  }, [vendorCtx.visibleProperties, managementIndex, managementCompanyId, inspectionMonthOnly, monthCodes]);
   const propertyOptions = useMemo(
     () => buildPropertyOptions(selectableProperties, signageOnly),
     [selectableProperties, signageOnly],
@@ -192,6 +217,14 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
     if (values.propertyCode && !next.some((o) => o.value === values.propertyCode)) form.resetProperty();
   };
 
+  // 点検月のみ／全て（D5）。点検月のみにして選択中の物件が外れたら、物件の選択を外す
+  const handleInspectionMonthOnlyChange = (only: boolean) => {
+    setInspectionMonthOnly(only);
+    if (only && monthCodes && values.propertyCode && !inInspectionMonth(monthCodes, values.propertyCode)) {
+      form.resetProperty();
+    }
+  };
+
   // 管理会社を切り替えて選択中の物件が外れたら、物件の選択を外す（サイネージ設置物件のみと同じ）
   const handleManagementCompanyChange = (companyId: string) => {
     setManagementCompanyId(companyId);
@@ -202,7 +235,10 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
   // 編集・複製で読み込む物件が管理会社・サイネージ設置物件のみの絞り込みの外なら、絞り込みを外す
   // （物件欄に物件名が出ずコードだけ残るのを防ぐ）
   const showPropertyInFilters = (propertyCode: string) => {
-    if (!selectableProperties.some((p) => p.property_code === propertyCode)) setManagementCompanyId('');
+    if (inspectionMonthOnly && monthCodes && !inInspectionMonth(monthCodes, propertyCode)) setInspectionMonthOnly(false);
+    if (!filterByManagementCompany(vendorCtx.visibleProperties, managementIndex, managementCompanyId).some((p) => p.property_code === propertyCode)) {
+      setManagementCompanyId('');
+    }
     if (signageOnly && !buildPropertyOptions(vendorCtx.visibleProperties, true).some((o) => o.value === propertyCode)) {
       setSignageOnly(false);
     }
@@ -400,6 +436,8 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
               onCancelEdit={handleClear}
               signageOnly={signageOnly}
               onSignageOnlyChange={handleSignageOnlyChange}
+              inspectionMonthOnly={inspectionMonthOnly}
+              onInspectionMonthOnlyChange={handleInspectionMonthOnlyChange}
               onAdd={handleAdd}
               onDuplicate={handleDuplicate}
               canDuplicate={localEntries.length > 0}

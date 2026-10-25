@@ -9,6 +9,7 @@ import { useBulkDragDrop } from '../hooks/useBulkDragDrop';
 import { defaultDisplayTime, terminalIdsFor, uniqueProperties } from '../utils/bulkMaster';
 import { COL, LAST_INPUT_COL } from '../utils/columns';
 import { hasRowDetail, rowDetailSummary } from '../utils/rowDetail';
+import { nextSort, orderRows, type SortColumn, type SortState } from '../utils/rowOrder';
 import { discardUnheldRowImages, rowPosterImages } from '../utils/discardRowImages';
 import { ContextMenu } from './ContextMenu';
 import { SearchableSelect } from './SearchableSelect';
@@ -26,6 +27,8 @@ export interface BulkRowInfo {
   months: string;
   /** 検査月（例 2026年4月）。無ければ '-' */
   inspectedOn: string;
+  /** 管理会社の正式名（managementName が略称のとき title に出す） */
+  managementFullName?: string;
   /** 報告書UP・完了連絡などの操作（点検予定の行で、保守会社・管理者のとき） */
   actions?: ReactNode;
 }
@@ -42,9 +45,14 @@ interface BulkTableProps {
   showManagement: boolean;
   /** 保守会社の列（管理者だけ） */
   showVendor: boolean;
+  /** 予定の行の並べ替え（修正依頼1025 F3。null = 並べ替えなし） */
+  sort?: SortState | null;
+  onSortChange?: (sort: SortState | null) => void;
 }
 
 const cellInputBase = 'block h-7 w-full rounded border px-2 py-0 text-sm focus:border-blue-500 focus:outline-none';
+/** 日付の入力欄（列を狭くしたぶん余白と文字を詰める。F6） */
+const dateInput = 'px-1 text-xs';
 const cellInput = (invalid = false) => cn(cellInputBase, invalid ? 'border-red-400' : 'border-gray-300');
 
 /** 読み取りの値（入力欄と同じ高さ） */
@@ -60,6 +68,44 @@ const stickyEdge = 'shadow-[inset_1px_0_0_#e5e7eb]';
 const REMARKS_HINT = '1行25文字×5行まで';
 /** 備考の入力例（B11。1行の入力欄なので2つの例を「/」で並べる） */
 export const REMARKS_PLACEHOLDER = '例: 10:00～12:00 / No2号機11:00～12:00';
+
+const SORT_LABEL: Record<SortColumn, string> = {
+  status: 'ステータス',
+  targetMonth: 'No（対象月）',
+  months: '点検月・検査月',
+};
+
+/** 並べ替えの見出し（押すたびに 昇順 → 降順 → 解除。修正依頼1025 F3） */
+function SortButton({
+  column,
+  sort,
+  onSortChange,
+  children,
+}: {
+  column: SortColumn;
+  sort: SortState | null;
+  onSortChange?: (sort: SortState | null) => void;
+  children: ReactNode;
+}) {
+  const active = sort?.column === column ? sort.dir : null;
+  if (!onSortChange) return <>{children}</>;
+  return (
+    <button
+      type="button"
+      onClick={() => onSortChange(nextSort(sort, column))}
+      className="inline-flex items-start gap-0.5 text-left font-medium hover:text-blue-700"
+      title="押すたびに 昇順 → 降順 → 解除（手で足した行は常に上）"
+      aria-label={`${SORT_LABEL[column]}で並べ替え${active === 'asc' ? '（昇順）' : active === 'desc' ? '（降順）' : ''}`}
+      data-sort={active ?? undefined}
+    >
+      <span>{children}</span>
+      <span className="flex flex-col text-[8px] leading-[8px]" aria-hidden>
+        <span className={active === 'asc' ? 'text-blue-700' : 'text-gray-300'}>▲</span>
+        <span className={active === 'desc' ? 'text-blue-700' : 'text-gray-300'}>▼</span>
+      </span>
+    </button>
+  );
+}
 
 function focusCell(tr: Element | null | undefined, col: number) {
   const el = tr?.querySelector<HTMLElement>(`[data-col="${col}"]`);
@@ -104,6 +150,8 @@ export function BulkTable({
   infoOf,
   showManagement,
   showVendor,
+  sort = null,
+  onSortChange,
 }: BulkTableProps) {
   const { addToast } = useToast();
   const rows = useBulkStore((s) => s.rows);
@@ -150,10 +198,16 @@ export function BulkTable({
   const remarksLimit = Number(appSettings.remarks_chars_per_line || 25);
   const displayTimeDefault = defaultDisplayTime(appSettings);
 
-  const visibleRows = rows.filter(isVisible);
+  // 手で足した行 → 予定の行（並べ替えは予定の行だけ）。修正依頼1025 F1・F3
+  const visibleRows = orderRows(rows, isVisible, infoOf, sort);
+  const storeIndex = new Map(rows.map((r, i) => [r.id, i]));
   const allSelected = visibleRows.length > 0 && visibleRows.every((r) => selectedIds.has(r.id));
   // No は表示中の行の通し番号（時期などで隠れた予定の行は数えない。申請時のエラーの「N行目」も同じ番号）
   const visibleNo = new Map(visibleRows.map((r, i) => [r.id, i + 1]));
+  let lastManualIndex = -1;
+  rows.forEach((r, i) => {
+    if (!r.schedule) lastManualIndex = i;
+  });
 
   // v1: js/bulk-table.js handleCellKeyDown
   const handleCellKeyDown = useCallback(
@@ -162,7 +216,15 @@ export function BulkTable({
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         if (col < LAST_INPUT_COL && focusAfter(tr, col)) return;
-        if (rowIndex === rows.length - 1) addRowWithCopy();
+        // 手で足した行の最後の行で Enter: 行を足す（新しい行は表の一番上。F1）。足した行の物件欄へ移る
+        if (rowIndex === lastManualIndex) {
+          addRowWithCopy();
+          setTimeout(() => {
+            const first = document.querySelector('tbody tr[data-row-id]');
+            first?.scrollIntoView?.({ block: 'nearest' });
+            focusCell(first, COL.property);
+          }, 0);
+        }
         return;
       }
       if (e.key === 'ArrowDown' && e.altKey) {
@@ -175,7 +237,7 @@ export function BulkTable({
         focusCell(tr?.previousElementSibling, col);
       }
     },
-    [rows.length, addRowWithCopy],
+    [lastManualIndex, addRowWithCopy],
   );
 
   // v1: js/bulk-modals.js handleContextMenuAction（点検予定の行には出さない）
@@ -250,24 +312,36 @@ export function BulkTable({
                 className="h-4 w-4 rounded border-gray-300"
               />
             </th>
-            {/* 並びは注記の配置どおり: ステータス・報告書UP・完了連絡 → No（対象月）→ 点検月・検査月 → 物件（F15） */}
-            <th className={cn(th, 'min-w-[7rem]')}>ステータス</th>
+            {/* 並びは注記の配置どおり: ステータス・報告書UP・完了連絡 → No（対象月）→ 点検月/検査月 → 物件（F15）。
+                ステータス・No・点検月/検査月は見出しの ▲▼ で予定の行を並べ替える（修正依頼1025 F3） */}
+            <th className={cn(th, 'min-w-[7rem]')}>
+              <SortButton column="status" sort={sort} onSortChange={onSortChange}>
+                ステータス
+              </SortButton>
+            </th>
             <th className={cn(th, 'min-w-[8.5rem]')}>報告書UP・完了連絡</th>
             <th className={cn(th, 'w-20 min-w-[5rem]')}>
-              No<div className="text-[10px] font-normal text-gray-400">対象月</div>
+              <SortButton column="targetMonth" sort={sort} onSortChange={onSortChange}>
+                No<div className="text-[10px] font-normal text-gray-400">対象月</div>
+              </SortButton>
             </th>
-            <th className={cn(th, 'min-w-[5rem]')}>点検月</th>
-            <th className={cn(th, 'min-w-[5.5rem]')}>検査月</th>
+            {/* 点検月と検査月は1列に上下2段（F4） */}
+            <th className={cn(th, 'min-w-[5.5rem]')}>
+              <SortButton column="months" sort={sort} onSortChange={onSortChange}>
+                点検月<div className="text-[10px] font-normal text-gray-400">検査月</div>
+              </SortButton>
+            </th>
             <th className={cn(th, 'min-w-[15rem]')}>
               物件<span className="text-red-500">*</span>
             </th>
-            {showManagement && <th className={cn(th, 'w-32 min-w-[7rem]')}>管理会社</th>}
+            {showManagement && <th className={cn(th, 'w-28 min-w-[6rem]')}>管理会社</th>}
             {showVendor && <th className={cn(th, 'w-32 min-w-[7rem]')}>保守会社</th>}
             <th className={cn(th, 'min-w-[12rem]')}>
               点検種別<span className="text-red-500">*</span>
             </th>
-            <th className={cn(th, 'w-36 min-w-[9rem]')}>点検開始日</th>
-            <th className={cn(th, 'w-36 min-w-[9rem]')}>点検終了日</th>
+            {/* 日付の列は狭く（F6。yyyy/mm/dd とカレンダーのボタンが入る幅） */}
+            <th className={cn(th, 'w-[7.5rem] min-w-[7.5rem]')}>点検開始日</th>
+            <th className={cn(th, 'w-[7.5rem] min-w-[7.5rem]')}>点検終了日</th>
             <th className={cn(th, 'min-w-[14rem]')}>備考（作業時間を記載下さい）</th>
             <th className={cn(th, 'min-w-[9rem]')} title="CSV には出ません（点検月の変更などの覚え書き）">
               メモ
@@ -277,10 +351,12 @@ export function BulkTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, index) => {
-            if (!isVisible(row)) return null;
+          {visibleRows.map((row) => {
+            const index = storeIndex.get(row.id) ?? -1;
             const schedule = row.schedule;
             const locked = !!schedule?.locked;
+            // ドラッグでの並べ替えは手で足した行だけ。見出しで並べ替えている間は止める
+            const draggable = !schedule && !sort;
             const info = infoOf(row);
             const terminalIds = schedule ? schedule.terminalIds : terminalIdsFor(masterData.properties, row.propertyCode);
             const propExists = !!schedule || (!!row.propertyCode && propertyCodes.has(String(row.propertyCode)));
@@ -297,11 +373,12 @@ export function BulkTable({
                 key={row.id}
                 data-row-id={row.id}
                 data-schedule={schedule ? (locked ? 'locked' : 'open') : undefined}
-                draggable={!schedule}
-                onDragStart={schedule ? undefined : handleDragStart(row.id)}
-                onDragOver={schedule ? undefined : handleDragOver(row.id)}
-                onDrop={schedule ? undefined : handleDrop(row.id)}
-                onDragEnd={schedule ? undefined : handleDragEnd}
+                data-unit={schedule?.secondary ? 'secondary' : undefined}
+                draggable={draggable}
+                onDragStart={draggable ? handleDragStart(row.id) : undefined}
+                onDragOver={draggable ? handleDragOver(row.id) : undefined}
+                onDrop={draggable ? handleDrop(row.id) : undefined}
+                onDragEnd={draggable ? handleDragEnd : undefined}
                 onContextMenu={(e) => {
                   if (schedule) return;
                   e.preventDefault();
@@ -309,7 +386,9 @@ export function BulkTable({
                 }}
                 className={cn(
                   'border-b align-top',
-                  locked && 'bg-gray-50',
+                  // 2台目以降の行は1台目の行と続けて見えるよう上の罫線を点線に（H1）
+                  schedule?.secondary && 'border-t [border-top-style:dashed]',
+                  locked && !schedule?.reportOnly && !schedule?.secondary && 'bg-gray-50',
                   info.status === 'overdue' && !selected && 'bg-red-50/60',
                   selected && 'bg-blue-50',
                   draggedRowId === row.id && 'opacity-50',
@@ -349,16 +428,26 @@ export function BulkTable({
                   )}
                 </td>
                 <td className="cell">
-                  <span className={cn(cellText, 'tabular-nums text-gray-700')}>{info.months || '－'}</span>
-                </td>
-                <td className="cell">
-                  <span className={cn(cellText, 'whitespace-nowrap tabular-nums text-gray-700')}>{info.inspectedOn}</span>
+                  <div className="px-1 py-1 text-xs leading-tight tabular-nums text-gray-700">
+                    <div data-testid="inspection-months">{info.months || '－'}</div>
+                    <div className="whitespace-nowrap text-[11px] text-gray-500" data-testid="inspected-on">
+                      {info.inspectedOn}
+                    </div>
+                  </div>
                 </td>
                 <td className="cell">
                   {schedule ? (
                     <div className="px-1 text-xs leading-tight" title={`${row.propertyCode} ${schedule.propertyName}`}>
                       <div className="text-gray-900">{schedule.propertyName}</div>
-                      <div className="text-[11px] text-gray-500">{row.propertyCode}</div>
+                      {/* 設備会社固有の No（号機。サイネージの台は端末番号）を出し、物件コードは小さく添える（修正依頼1025 H2） */}
+                      {schedule.unitCode && (
+                        <div className="text-[11px] font-semibold text-red-700" data-testid="unit-code">
+                          {schedule.unitCode}
+                        </div>
+                      )}
+                      {schedule.unitCode !== row.propertyCode && (
+                        <div className="text-[11px] text-gray-500">{row.propertyCode}</div>
+                      )}
                     </div>
                   ) : (
                     <>
@@ -398,7 +487,11 @@ export function BulkTable({
                 </td>
                 {showManagement && (
                   <td className="cell">
-                    <span className={cn(cellText, 'block max-w-[9rem] truncate text-gray-700')} title={info.managementName}>
+                    {/* 略称（未登録なら正式名）を折り返して出す（修正依頼1025 F5）。正式名は title */}
+                    <span
+                      className="block min-h-7 max-w-[7rem] whitespace-normal break-all px-1 py-1 text-xs leading-tight text-gray-700"
+                      title={info.managementFullName ?? info.managementName}
+                    >
                       {info.managementName || '－'}
                     </span>
                   </td>
@@ -439,7 +532,12 @@ export function BulkTable({
                   )}
                 </td>
                 <td className="cell">
-                  {locked ? (
+                  {schedule?.reportOnly ? (
+                    // 申請不要（報告書のみ）の点検は日付を入れない（修正依頼1025 H4/G4）
+                    <span className={cn(cellText, 'whitespace-nowrap text-gray-500')} title="申請不要（報告書UP・完了連絡だけ）">
+                      申請不要
+                    </span>
+                  ) : locked ? (
                     <span className={cn(cellText, 'tabular-nums')}>{formatDate(row.startDate) || '－'}</span>
                   ) : (
                     <input
@@ -450,12 +548,14 @@ export function BulkTable({
                       value={row.startDate}
                       onChange={(e) => changeStartDate(row.id, e.target.value)}
                       onKeyDown={(e) => handleCellKeyDown(e, index, COL.startDate)}
-                      className={cellInput()}
+                      className={cn(cellInput(), dateInput)}
                     />
                   )}
                 </td>
                 <td className="cell">
-                  {locked ? (
+                  {schedule?.reportOnly ? (
+                    <span className={cn(cellText, 'text-gray-400')}>－</span>
+                  ) : locked ? (
                     <span className={cn(cellText, 'tabular-nums')}>{formatDate(row.endDate) || '－'}</span>
                   ) : (
                     <input
@@ -466,7 +566,7 @@ export function BulkTable({
                       value={row.endDate}
                       onChange={(e) => updateRow(row.id, { endDate: e.target.value })}
                       onKeyDown={(e) => handleCellKeyDown(e, index, COL.endDate)}
-                      className={cellInput(hasError(row, '点検終了日'))}
+                      className={cn(cellInput(hasError(row, '点検終了日')), dateInput)}
                     />
                   )}
                 </td>
@@ -534,7 +634,15 @@ export function BulkTable({
                     type="button"
                     data-col={COL.detail}
                     disabled={locked}
-                    title={locked ? '申請済みの予定は詳細を変えられません' : `詳細設定\n${rowDetailSummary(row)}`}
+                    title={
+                      schedule?.secondary
+                        ? '2台目以降の行は1台目の行で申請します'
+                        : schedule?.reportOnly
+                          ? '申請不要（報告書のみ）の点検です'
+                          : locked
+                            ? '申請済みの予定は詳細を変えられません'
+                            : `詳細設定\n${rowDetailSummary(row)}`
+                    }
                     onClick={() => onOpenRowDetail(row.id)}
                     className={cn(
                       'inline-flex h-7 items-center whitespace-nowrap rounded border px-1.5 text-xs disabled:opacity-40',
