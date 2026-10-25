@@ -503,7 +503,6 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       today,
       inspectedOnById,
       actionsOf,
-      managementIndex,
       managementOf,
       inspectionOfManual,
       managementNames,
