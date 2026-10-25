@@ -28,6 +28,8 @@ export interface BuildingRequestModalProps {
   managementCompanyId: string | null;
   /** 申請できた（点検登録フォームがその建物の行を足す。修正依頼1025 F2） */
   onSubmitted?: (request: DbPropertyRequest) => void;
+  /** 申請できたときに、呼び出した画面が何をしたかの添え書き（既定は一括入力の行を足した旨） */
+  submittedNote?: string;
 }
 
 /** 申請の入力が足りているか。足りなければ欄ごとの日本語の理由 */
@@ -81,6 +83,7 @@ export function BuildingRequestModal({
   vendorId,
   managementCompanyId,
   onSubmitted,
+  submittedNote = '（一括入力ではその行を足しました）',
 }: BuildingRequestModalProps) {
   const profile = useAuthStore((s) => s.profile);
   const isAdmin = profile?.role === 'admin';
@@ -275,7 +278,7 @@ export function BuildingRequestModal({
             「{submitted.property_name}」の追加を申請しました。
           </p>
           <p className="text-sm text-gray-700" data-testid="buildingRequestSubmittedNote">
-            今月中は、点検登録フォームの物件で「【{PROVISIONAL_LABEL}】{submitted.property_name}」を選んで、日付を入れて申請できます（一括入力ではその行を足しました）。
+            今月中は、点検登録フォームの物件で「【{PROVISIONAL_LABEL}】{submitted.property_name}」を選んで、日付を入れて申請できます{submittedNote}。
             掲示の申請は、建物が承認されるまで承認されません（承認されると正式な物件コードに付け替わります）。
           </p>
           <p className="text-xs text-gray-500">

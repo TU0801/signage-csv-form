@@ -1,5 +1,6 @@
 import { todayJst } from '@/features/inspection-portal/lib/schedule';
 import type { DbPropertyRequest } from '@/types/database';
+import type { MasterProperty } from '@/types/app';
 
 /*
  * 未承認の建物（建物追加の申請）を点検登録フォームで使う（修正依頼1025 F2・D4）。
@@ -71,4 +72,9 @@ export function approvedCodeMap(
     }
   });
   return map;
+}
+
+/** 1件入力の物件の候補にする形（端末・点検行は無い。id は申請 id） */
+export function provisionalMasterProperty(b: ProvisionalBuilding): MasterProperty {
+  return { id: b.requestId, property_code: b.propertyCode, property_name: b.propertyName, terminals: [], inspections: [] };
 }

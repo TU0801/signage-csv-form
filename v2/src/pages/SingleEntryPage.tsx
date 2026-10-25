@@ -13,8 +13,19 @@ import { cn, todayUtc } from '@/lib/utils';
 import { PosterType } from '@/lib/constants';
 import { insertEntries, type AppSettings } from '@/lib/api/single-entry';
 import { fetchPortalInspections } from '@/lib/api/portal';
+import { fetchVendorPropertyRequests } from '@/lib/api/property-requests';
 import type { MasterData } from '@/types/app';
 import type { PortalInspectionRow } from '@/types/portal';
+import type { DbPropertyRequest } from '@/types/database';
+import { BuildingRequestModal } from '@/features/building-requests/components/BuildingRequestModal';
+import { useVendorPropertyRequests } from '@/features/building-requests/hooks/useVendorPropertyRequests';
+import {
+  approvedCodeMap,
+  isProvisionalCode,
+  provisionalBuildings,
+  provisionalCode,
+  provisionalMasterProperty,
+} from '@/features/building-requests/lib/provisional';
 import { inspectionsOfVendor } from '@/features/inspection-portal/lib/inspectionLink';
 import { useAppSettings } from '@/features/single-entry/hooks/useAppSettings';
 import { useEntryForm } from '@/features/single-entry/hooks/useEntryForm';
@@ -38,6 +49,7 @@ import {
   filterByManagementCompany,
   filterInspectionTypes,
   formatPosterDate,
+  MANAGEMENT_COMPANY_NONE,
   terminalsOf,
   toInsertRow,
 } from '@/features/single-entry/lib/entryLogic';
@@ -122,9 +134,20 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
     [portalInspections, isAdmin, vendorCtx.linkVendorId],
   );
 
+  // 未承認の建物（建物追加の申請。修正依頼1025 D4・F2）: 申請した月の間は物件の候補に出し、申請まで送れる（一括入力と同じ）。
+  // 申請は仮の物件コード REQ-… と property_request_id で入り、建物の承認で正式な物件コードに付け替わる
+  const buildingRequests = useVendorPropertyRequests(vendorCtx.linkVendorId);
+  const provisional = useMemo(() => provisionalBuildings(buildingRequests.requests), [buildingRequests.requests]);
+  const provisionalProperties = useMemo(() => provisional.map(provisionalMasterProperty), [provisional]);
+  const formProperties = useMemo(
+    () => (provisionalProperties.length ? [...vendorCtx.visibleProperties, ...provisionalProperties] : vendorCtx.visibleProperties),
+    [vendorCtx.visibleProperties, provisionalProperties],
+  );
+  const [showBuildingRequest, setShowBuildingRequest] = useState(false);
+
   const form = useEntryForm({
     settings,
-    properties: vendorCtx.visibleProperties,
+    properties: formProperties,
     inspectionTypes,
     linkedIds: vendorCtx.linkedIds,
     inspections: vendorInspections,
@@ -156,10 +179,20 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
   const submitting = useSingleEntryStore((s) => s.submitting);
   const setSubmitting = useSingleEntryStore((s) => s.setSubmitting);
 
-  const selectableProperties = useMemo(
-    () => filterByManagementCompany(vendorCtx.visibleProperties, managementIndex, managementCompanyId),
-    [vendorCtx.visibleProperties, managementIndex, managementCompanyId],
+  // 未承認の建物は申請で選んだ管理会社で絞る（業務システムの物件に無いので filterByManagementCompany では「未設定」に入ってしまう）
+  const selectableFor = useCallback(
+    (companyId: string) => {
+      const listed = filterByManagementCompany(vendorCtx.visibleProperties, managementIndex, companyId);
+      if (provisionalProperties.length === 0) return listed;
+      const want = companyId === MANAGEMENT_COMPANY_NONE ? null : companyId;
+      const extra = provisionalProperties.filter(
+        (_, i) => !companyId || !managementIndex || provisional[i]!.managementCompanyId === want,
+      );
+      return [...listed, ...extra];
+    },
+    [vendorCtx.visibleProperties, managementIndex, provisional, provisionalProperties],
   );
+  const selectableProperties = useMemo(() => selectableFor(managementCompanyId), [selectableFor, managementCompanyId]);
   const propertyOptions = useMemo(
     () => buildPropertyOptions(selectableProperties, signageOnly),
     [selectableProperties, signageOnly],
@@ -195,7 +228,7 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
   // 管理会社を切り替えて選択中の物件が外れたら、物件の選択を外す（サイネージ設置物件のみと同じ）
   const handleManagementCompanyChange = (companyId: string) => {
     setManagementCompanyId(companyId);
-    const next = filterByManagementCompany(vendorCtx.visibleProperties, managementIndex, companyId);
+    const next = selectableFor(companyId);
     if (values.propertyCode && !next.some((p) => p.property_code === values.propertyCode)) form.resetProperty();
   };
 
@@ -203,7 +236,7 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
   // （物件欄に物件名が出ずコードだけ残るのを防ぐ）
   const showPropertyInFilters = (propertyCode: string) => {
     if (!selectableProperties.some((p) => p.property_code === propertyCode)) setManagementCompanyId('');
-    if (signageOnly && !buildPropertyOptions(vendorCtx.visibleProperties, true).some((o) => o.value === propertyCode)) {
+    if (signageOnly && !buildPropertyOptions(formProperties, true).some((o) => o.value === propertyCode)) {
       setSignageOnly(false);
     }
   };
@@ -221,7 +254,7 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
   // v1: js/script.js addEntry
   const handleAdd = () => {
     const result = buildLocalEntry(values, {
-      properties: vendorCtx.visibleProperties,
+      properties: formProperties,
       inspectionTypes,
       vendor: vendorCtx.vendor,
       customImage: form.customImage,
@@ -323,9 +356,30 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
       });
       const linkSkipped = fetched === null;
       const inspections = fetched ?? [];
+      // 未承認の建物の行は、申請の時点の建物追加の申請で確かめる（その間に承認されていれば正式な物件コード・端末で申請する）
+      const requests: DbPropertyRequest[] =
+        sending.some((e) => isProvisionalCode(e.propertyCode)) && vendorCtx.linkVendorId
+          ? await fetchVendorPropertyRequests(vendorCtx.linkVendorId).catch((err: unknown) => {
+              console.error('建物追加の申請の取得に失敗しました:', err);
+              return buildingRequests.requests;
+            })
+          : [];
+      const approved = approvedCodeMap(requests);
       const today = todayUtc();
       await insertEntries(
-        sending.map((e, i) => {
+        sending.map((sent, i) => {
+          const to = isProvisionalCode(sent.propertyCode) ? approved.get(sent.propertyCode) : undefined;
+          const e = to ? { ...sent, propertyCode: to.propertyCode, terminalId: to.terminalId } : sent;
+          const requestId = isProvisionalCode(e.propertyCode)
+            ? requests.find((r) => provisionalCode(r.id) === e.propertyCode)?.id
+            : undefined;
+          if (isProvisionalCode(e.propertyCode) && !requestId) {
+            throw new Error(`「${e.propertyName}」の建物追加の申請が見つかりません。もう一度建物追加を申請してください`);
+          }
+          if (requestId) {
+            // 建物の承認前は点検行に結び付けない（DB の guard_entry_property_request も止める）。保守会社は DB が申請の保守会社にする
+            return { ...toInsertRow(e, urls[i] ?? null, user.id, settings, today, null), property_request_id: requestId };
+          }
           const link = entryInspectionLink(e, inspections, isAdmin, vendorCtx.linkVendorId);
           // 点検予定に結び付いた申請は、その点検の保守会社（結び付けた会社）の社名・緊急連絡先で記録する（ユーザー決定 2026-10-25）。
           // 結び付かなければ追加した時点の保守会社（保守会社のアカウントは自社、管理者は選んだ会社）のまま
@@ -348,6 +402,20 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
       void discardOwnPosterImages(uploaded, user.id);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // 建物追加を申請したら、その建物を物件に選んだ状態にする（絞り込みの外なら絞り込みを外す）。
+  // 管理者がモーダルで別の保守会社を選んだときは、いま入力している保守会社の建物ではないので選ばない
+  const handleBuildingRequested = (request: DbPropertyRequest) => {
+    if (!vendorCtx.linkVendorId || request.vendor_id !== vendorCtx.linkVendorId) return;
+    buildingRequests.addRequest(request);
+    if (managementCompanyId && managementCompanyId !== request.management_company_id) setManagementCompanyId('');
+    // 未承認の建物には端末が無い
+    if (signageOnly) setSignageOnly(false);
+    form.changeProperty(provisionalCode(request.id));
+    if (request.inspection_type_id && inspectionTypes.some((t) => t.id === request.inspection_type_id)) {
+      form.changeInspectionType(request.inspection_type_id);
     }
   };
 
@@ -383,9 +451,20 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
                 {editingId ? '掲示内容入力（編集中）' : '掲示内容入力'}
               </h2>
             </div>
-            <Button variant="secondary" size="sm" onClick={handleClear}>
-              クリア
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowBuildingRequest(true)}
+                title="担当する建物が一覧に無いときに追加を申請する"
+                className="border-green-300 text-green-700"
+              >
+                建物追加 申請
+              </Button>
+              <Button variant="secondary" size="sm" onClick={handleClear}>
+                クリア
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="p-0 tall:flex tall:min-h-0 tall:flex-1 tall:flex-col">
             <EntryForm
@@ -472,7 +551,7 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
           <EntryDataList
             entries={localEntries}
             submitted={submitted.entries}
-            properties={properties}
+            properties={provisionalProperties.length ? [...properties, ...provisionalProperties] : properties}
             editingId={editingId}
             showVendor={isAdmin}
             onEdit={handleEdit}
@@ -493,6 +572,16 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
         }
         confirmLabel="削除"
         variant="danger"
+      />
+      <BuildingRequestModal
+        open={showBuildingRequest}
+        onClose={() => setShowBuildingRequest(false)}
+        vendorId={vendorCtx.linkVendorId}
+        managementCompanyId={
+          managementCompanyId && managementCompanyId !== MANAGEMENT_COMPANY_NONE ? managementCompanyId : null
+        }
+        onSubmitted={handleBuildingRequested}
+        submittedNote="（1件入力ではその建物を物件に選びました）"
       />
     </div>
   );
