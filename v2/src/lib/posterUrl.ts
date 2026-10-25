@@ -19,3 +19,8 @@ export function safePosterUrl(url: string | null | undefined): string | null {
     return null;
   }
 }
+
+/** safePosterUrl が通す URL か（管理画面の CSV で、追加画像 ZIP に入らない2枚目以降の貼紙の行を出さないのに使う） */
+export function isServablePosterUrl(url: string): boolean {
+  return safePosterUrl(url) !== null;
+}

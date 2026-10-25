@@ -17,6 +17,7 @@ import { validateBulkRow } from '@/features/bulk-entry/utils/validateBulkRow';
 import { AUTO_SAVE_DELAY_MS, writeAutoSave } from '@/features/bulk-entry/utils/bulkAutoSave';
 import { defaultInspectionType } from '@/features/bulk-entry/utils/scheduleRows';
 import { followEndDate } from '@/lib/inspectionDates';
+import { isCompanyLibraryPoster } from '@/lib/extraPosters';
 import { todayUtc } from '@/lib/utils';
 
 /** 行の詳細設定モーダルで変える項目 */
@@ -32,6 +33,7 @@ export type BulkRowDetail = Pick<
   | 'emergencyContact'
   | 'posterType'
   | 'posterImage'
+  | 'extraPosters'
 >;
 
 /** 選択行への一括設定で上書きできる項目（入れた項目だけを渡す） */
@@ -104,7 +106,8 @@ export interface BulkState {
   removeRows: (ids: number[]) => void;
   /** 物件・端末・点検種別・点検終了日の変更（変更後に検証する） */
   updateRow: (id: number, patch: Partial<Pick<BulkEntryRow, 'terminalId' | 'inspectionType' | 'endDate'>>) => void;
-  changeProperty: (id: number, propertyCode: string) => void;
+  /** 物件を変える。外した管理会社のライブラリの貼紙の枚数を返す（物件が変わったときだけ。ユーザー決定3） */
+  changeProperty: (id: number, propertyCode: string) => number;
   changeStartDate: (id: number, startDate: string) => void;
   changeRemarks: (id: number, remarks: string) => void;
   changeMemo: (id: number, memo: string) => void;
@@ -176,6 +179,8 @@ export const useBulkStore = create<BulkState>((set, get) => {
       emergencyContact: data.emergencyContact || '',
       posterType: data.posterType === 'custom' ? 'custom' : 'template',
       posterImage: data.posterImage || '',
+      // 2枚目以降の貼紙（修正依頼1025 D3）。無ければ持たない（自動保存の JSON を v1 と同じ形に保つ）
+      extraPosters: data.extraPosters?.length ? data.extraPosters : undefined,
       position: data.position !== undefined ? data.position : 2,
       isValid: false,
       errors: [],
@@ -226,6 +231,7 @@ export const useBulkStore = create<BulkState>((set, get) => {
     emergencyContact: r.emergencyContact,
     posterType: r.posterType,
     posterImage: r.posterImage,
+    extraPosters: r.extraPosters,
     position: r.position,
   });
 
@@ -281,6 +287,7 @@ export const useBulkStore = create<BulkState>((set, get) => {
           emergencyContact: '',
           posterType: 'template',
           posterImage: '',
+          extraPosters: undefined,
           position: 2,
           isValid: false,
           errors: [],
@@ -320,6 +327,7 @@ export const useBulkStore = create<BulkState>((set, get) => {
                 emergencyContact: '',
                 posterType: 'template',
                 posterImage: '',
+                extraPosters: undefined,
                 position: 2,
               })
             : r,
@@ -410,6 +418,7 @@ export const useBulkStore = create<BulkState>((set, get) => {
         emergencyContact: '',
         posterType: 'template',
         posterImage: '',
+        extraPosters: undefined,
         position: 2,
         isValid: false,
         errors: [],
@@ -451,11 +460,22 @@ export const useBulkStore = create<BulkState>((set, get) => {
 
     // 画面で物件を変えたら最初の端末を選ぶ。v1: js/bulk-table.js propertySelect change → updateTerminals
     // 点検種別が空なら保守会社の点検種別を入れる（B9）
+    // 管理会社の分のライブラリの貼紙（1枚目・2枚目以降）は、その管理会社の物件の申請でだけ使える。選んだときの物件で絞って
+    // いるので、物件が変わったら外す（全社共通・アップロードは残す。1枚目を外すと「貼紙画像」のエラーで選び直しを促す）
     changeProperty: (id, propertyCode) => {
       const { masterData, inspectionDefaults } = get();
-      mapRow(id, (r) =>
-        validate({
+      let dropped = 0;
+      mapRow(id, (r) => {
+        const changed = r.propertyCode !== propertyCode;
+        const dropMain = changed && isCompanyLibraryPoster(r.posterImage);
+        const keptExtras = changed
+          ? (r.extraPosters ?? []).filter((x) => !isCompanyLibraryPoster(x.image_url))
+          : r.extraPosters;
+        dropped = (dropMain ? 1 : 0) + (r.extraPosters?.length ?? 0) - (keptExtras?.length ?? 0);
+        return validate({
           ...r,
+          ...(dropMain ? { posterImage: '' } : {}),
+          ...(changed ? { extraPosters: keptExtras?.length ? keptExtras : undefined } : {}),
           // 選び直したら取込時の物件名の手がかりは要らない
           pastedPropertyName: undefined,
           propertyCode,
@@ -470,9 +490,10 @@ export const useBulkStore = create<BulkState>((set, get) => {
                   masterData.notices,
                 )
               : ''),
-        }),
-      );
+        });
+      });
       get().triggerAutoSave();
+      return dropped;
     },
 
     // 点検終了日を開始日に合わせる（空・旧開始日と同じ・新開始日より前のとき。B10）。v1: js/bulk-table.js .start-date change（v1 は空のときだけ）

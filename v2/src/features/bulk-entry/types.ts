@@ -5,6 +5,7 @@
  */
 
 import type { DbTemplateImage } from '@/types/database';
+import type { ExtraPoster } from '@/lib/extraPosters';
 
 /** 一括入力の1行。v1: js/bulk-table.js addRow の row */
 export interface BulkEntryRow {
@@ -34,6 +35,11 @@ export interface BulkEntryRow {
   posterType: 'template' | 'custom';
   /** 追加の貼紙画像の公開 URL（poster-images に選んだ時点でアップロード済み。File は持たない） */
   posterImage: string;
+  /**
+   * 2枚目以降の貼紙（修正依頼1025 D3。アップロード済みの URL かライブラリの URL）。テンプレートの貼紙にも足せる。
+   * 申請で signage_entries.extra_posters に入り、CSV では枚数分の行になる。古い自動保存・テンプレートには無い
+   */
+  extraPosters?: ExtraPoster[];
   /** 貼紙表示位置（0〜4。貼り付けの8列目が数字でないと NaN になりうる＝v1 と同じ） */
   position: number;
   isValid: boolean;

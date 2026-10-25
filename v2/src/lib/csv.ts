@@ -1,4 +1,5 @@
 import { normalizeTerminalId } from './terminal';
+import { extraPosterPosition, parseExtraPosters } from './extraPosters';
 
 /**
  * CSV 28列ヘッダー（固定順序）
@@ -82,6 +83,8 @@ export interface CsvSourceEntry {
   poster_type?: string | null;
   poster_position?: string | null;
   poster_image?: string | null;
+  /** 2枚目以降の貼紙（修正依頼1025 D3。jsonb のまま受け取り parseExtraPosters で読む） */
+  extra_posters?: unknown;
 }
 
 /** 承認済み（ready/exported）だけに絞る */
@@ -101,6 +104,17 @@ export function customImageBaseName(
   return `${safe(entry.property_code)}_${safe(entry.inspection_type)}_${String(entry.id || '').slice(0, 8)}`;
 }
 
+/**
+ * 2枚目以降の貼紙のファイル名（拡張子なし）: customImageBaseName の後ろに _n（n は 2 から。index は extra_posters の添字）。
+ * 最初の1枚がテンプレートでも 2 から数える（申請ごと・枚数ごとに一意。ZIP 内のファイル名と CSV の点検案内TPLNo を揃える）
+ */
+export function extraPosterBaseName(
+  entry: Pick<CsvSourceEntry, 'property_code' | 'inspection_type' | 'id'>,
+  index: number,
+): string {
+  return `${customImageBaseName(entry)}_${index + 2}`;
+}
+
 /** CSVフィールドのエスケープ（カンマ・ダブルクォート・LF を含む場合だけクォート。v1 escapeCSVField） */
 function escapeCsvField(v: unknown): string {
   if (v == null) return '';
@@ -112,10 +126,13 @@ function escapeCsvField(v: unknown): string {
  * 本番CSV（管理画面の CSV 出力・コピー）を生成する。ステータスでは絞らないので呼び出し側で filterApprovedEntries を通す。
  * ダウンロードは downloadCsv（BOM付き）、コピーは BOM なしでそのまま渡す（v1 と同じ）
  * @param displayTimeDefault 設定 display_time_default（signage_master_settings.setting_value は text）
+ * @param extraPosterUrlOk 2枚目以降の貼紙の URL を出してよいか（画面は safePosterUrl。追加画像 ZIP（customImageFiles）が
+ *   入れない画像の行を CSV にも出さない＝CSV の点検案内TPLNo に ZIP のファイルが無い行を作らない）。省略すると全部出す
  */
 export function generateAdminCsv(
   data: CsvSourceEntry[],
   displayTimeDefault: string | number | null | undefined,
+  extraPosterUrlOk?: (url: string) => boolean,
 ): string {
   if (data.length === 0) return '';
 
@@ -181,6 +198,22 @@ export function generateAdminCsv(
     ];
 
     csvRows.push(values.map(escapeCsvField).join(','));
+
+    // 2枚目以降の貼紙（修正依頼1025 D3）: 同じ物件・端末・表示期間で、追加の貼紙と同じ形の行を枚数分足す
+    // 添字 i は ZIP のファイル名（extraPosterBaseName の _n）と同じ数え方のまま（飛ばした分は番号が空く）
+    parseExtraPosters(entry.extra_posters).forEach((extra, i) => {
+      if (extraPosterUrlOk && !extraPosterUrlOk(extra.image_url)) return;
+      const extraValues = [...values];
+      extraValues[5] = ''; // 点検工事案内
+      extraValues[7] = extraPosterBaseName(entry, i); // 点検案内TPLNo
+      extraValues[8] = ''; // 点検開始日
+      extraValues[9] = ''; // 点検完了日
+      extraValues[10] = ''; // 掲示備考
+      extraValues[11] = ''; // 掲示板用案内文
+      extraValues[12] = extraPosterPosition(extra, frameNo); // frame_No
+      extraValues[27] = '追加'; // 貼紙区分
+      csvRows.push(extraValues.map(escapeCsvField).join(','));
+    });
   });
 
   return csvRows.join('\n');

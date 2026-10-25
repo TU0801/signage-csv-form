@@ -38,6 +38,8 @@ export const TABLES = {
   propertyRequests: 'signage_property_requests',
   /** 点検種別の印（修正依頼1025 H4/G4: 申請不要・毎月）。書くのは管理者だけ。scripts/fix-1025-form.sql */
   inspectionTypeFlags: 'signage_inspection_type_flags',
+  /** 貼紙ライブラリ（文字を合成しない貼紙。修正依頼1025 D2。scripts/fix-1025-posters.sql） */
+  posterLibrary: 'signage_poster_library',
 } as const;
 
 /** signage スキーマの RPC（biz への窓口） */
@@ -98,6 +100,10 @@ export const RPC = {
   /** 点検登録フォーム（修正依頼1025 form）。号機（台）と設備会社固有コード、管理会社の略称。scripts/fix-1025-form.sql */
   portalInspectionUnits: 'portal_inspection_units',
   managementCompanyShortNames: 'management_company_short_names',
+  /** この物件の申請で選べる貼紙ライブラリ（全社共通＋物件の管理会社の分。修正依頼1025 D2） */
+  posterLibraryForProperty: 'poster_library_for_property',
+  /** ライブラリの画像が申請・ライブラリの行から使われているか（使われていなければ片付けてよい） */
+  posterLibraryObjectInUse: 'poster_library_object_in_use',
 } as const;
 
 /** Storage のバケット */

@@ -21,6 +21,7 @@ export function hasRowDetail(row: BulkEntryRow, defaultDisplayTime: number): boo
     row.noticeText ||
     row.emergencyContact ||
     row.posterType === 'custom' ||
+    (row.extraPosters?.length ?? 0) > 0 ||
     row.displayStartDate ||
     row.displayStartTime ||
     row.displayEndDate ||
@@ -48,6 +49,7 @@ export function rowDetailSummary(row: BulkEntryRow): string {
     : (POSITIONS.find((p) => p.value === String(row.position))?.label ?? String(row.position));
   const parts = [`表示期間: ${start}〜${end}`, `位置: ${position}`, `表示時間: ${row.displayTime}秒`];
   if (row.posterType === 'custom') parts.push(row.posterImage ? '貼紙: 追加' : '貼紙: 追加（画像未選択）');
+  if (row.extraPosters?.length) parts.push(`追加の貼紙: ${row.extraPosters.length}枚`);
   if (row.noticeText) parts.push('案内文あり');
   if (row.emergencyContact) parts.push(`連絡先: ${row.emergencyContact}`);
   return parts.join('・');

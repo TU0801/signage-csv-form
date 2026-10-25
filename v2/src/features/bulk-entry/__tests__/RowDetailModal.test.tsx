@@ -108,6 +108,8 @@ describe('RowDetailModal（修正依頼1024 B18）', () => {
     fireEvent.click(screen.getByRole('button', { name: /表示期間/ }));
     expect(screen.getByLabelText('表示開始日')).toHaveValue('2026-11-02');
     fireEvent.change(screen.getByLabelText('連絡先'), { target: { value: '03-1111-2222' } });
+    // 表示時間・貼紙表示位置は畳んである（修正依頼1025 F7）
+    fireEvent.click(screen.getByRole('button', { name: /表示時間・貼紙表示位置/ }));
     fireEvent.click(screen.getByRole('radio', { name: /④中央/ }));
     expect(screen.getByRole('radio', { name: /④中央/ })).toBeChecked();
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
@@ -195,5 +197,53 @@ describe('RowDetailModal（修正依頼1024 B18）', () => {
 
     expect(rowOf(id)).toMatchObject({ posterType: 'template', posterImage: '' });
     expect(io.discardOwnPosterImages).toHaveBeenCalledWith([IMG('old')], 'user-1');
+  });
+
+  it('表示時間・貼紙表示位置は既定なら畳み（▶で開く）、既定と違う値なら開いておく（修正依頼1025 F7）', () => {
+    setup();
+    const toggle = screen.getByRole('button', { name: /表示時間・貼紙表示位置/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('radio', { name: /②上中/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/②上中（既定で自動設定）/)).toBeInTheDocument();
+    fireEvent.click(toggle);
+    expect(screen.getByRole('radio', { name: /②上中/ })).toBeChecked();
+    cleanup();
+
+    const id = useBulkStore.getState().addRow({ propertyCode: 'z0001A01', position: 4 });
+    render(
+      <ToastProvider>
+        <RowDetailModal open rowId={id} onClose={() => {}} />
+      </ToastProvider>,
+    );
+    expect(screen.getByRole('button', { name: /表示時間・貼紙表示位置/ })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('radio', { name: /④中央/ })).toBeChecked();
+  });
+
+  it('テンプレートの貼紙に2枚目以降の貼紙を足して保存すると行と申請に入り、キャンセルならアップロードした分を片付ける（修正依頼1025 D3）', async () => {
+    const id = setup();
+    io.preparePosterImage.mockImplementation(async (f: File) => ({ file: f }));
+    io.uploadPosterImage.mockResolvedValueOnce(IMG('extra2'));
+    fireEvent.change(screen.getByLabelText('追加の貼紙の画像'), { target: { files: [new File(['x'], 'b.png', { type: 'image/png' })] } });
+    await waitFor(() => expect(screen.getByAltText('2枚目の貼紙')).toHaveAttribute('src', IMG('extra2')));
+    fireEvent.change(screen.getByLabelText('2枚目の表示位置'), { target: { value: '0' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+    expect(rowOf(id)).toMatchObject({
+      posterType: 'template',
+      extraPosters: [{ image_url: IMG('extra2'), source: 'upload', position: '0' }],
+    });
+    const s = useBulkStore.getState();
+    const [entry] = buildBulkEntries([rowOf(id)], s.masterData, s.currentVendor, s.appSettings);
+    expect(entry).toMatchObject({ poster_type: 'template', extra_posters: [{ image_url: IMG('extra2'), position: '0' }] });
+    cleanup();
+
+    // もう一度開いて足し、キャンセルすると、その分だけ片付ける（保存済みの2枚目は残る）
+    io.uploadPosterImage.mockResolvedValueOnce(IMG('extra3'));
+    render(<ClosingHarness rowId={id} />);
+    fireEvent.change(screen.getByLabelText('追加の貼紙の画像'), { target: { files: [new File(['x'], 'c.png', { type: 'image/png' })] } });
+    await waitFor(() => expect(screen.getByAltText('3枚目の貼紙')).toHaveAttribute('src', IMG('extra3')));
+    fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }));
+    expect(io.discardOwnPosterImages).toHaveBeenCalledWith([IMG('extra3')], 'user-1');
+    expect(rowOf(id).extraPosters).toHaveLength(1);
   });
 });

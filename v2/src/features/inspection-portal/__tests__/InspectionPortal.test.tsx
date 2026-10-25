@@ -15,6 +15,9 @@ vi.mock('@/lib/api/portal', () => portal);
 const form = vi.hoisted(() => ({ fetchCompletions: vi.fn(), fetchInspectionDates: vi.fn() }));
 vi.mock('@/lib/api/inspection-form', () => form);
 vi.mock('@/lib/supabase', () => ({ supabase: {}, TABLES: {}, RPC: {}, BUCKETS: {}, SUPABASE_URL: 'https://example.invalid' }));
+// 2枚目以降の貼紙（修正依頼1025 D3）は詳細を開いたときに行から読む
+const entryApi = vi.hoisted(() => ({ fetchEntryExtraPosters: vi.fn(async () => [] as unknown[]) }));
+vi.mock('../lib/entryApi', async (orig) => ({ ...(await orig<typeof import('../lib/entryApi')>()), ...entryApi }));
 const auth = vi.hoisted(() => ({
   value: { user: { id: 'u1' }, isAdmin: false, isManagement: false, vendorId: 'v1' as string | null },
 }));
@@ -134,12 +137,28 @@ describe('点検一覧（InspectionPortal）', () => {
         poster_image: 'https://example.invalid/storage/v1/object/public/poster-images/u1/poster.png',
       }),
     ]);
+    let resolveExtras: (v: unknown[]) => void = () => {};
+    entryApi.fetchEntryExtraPosters.mockImplementationOnce(() => new Promise((r) => (resolveExtras = r)));
     render(<InspectionPortal />);
     await screen.findByText('点検一覧');
     expect(screen.queryByRole('button', { name: '申請' })).toBeNull();
     expect(screen.queryByRole('button', { name: '報告書UP' })).toBeNull();
     expect(screen.queryByLabelText('管理会社')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '内容を確認して承認' }));
+    // 2枚目以降の貼紙を読み終えるまで承認できない（承認すると CSV に枚数分の行で出る）。読めたら全部出す
+    expect(entryApi.fetchEntryExtraPosters).toHaveBeenCalledWith('e1');
+    expect(screen.getByRole('button', { name: '承認' })).toBeDisabled();
+    resolveExtras([
+      { image_url: 'https://example.invalid/storage/v1/object/public/poster-images/library/common/a.png', source: 'library', library_id: 'L1' },
+      { image_url: 'https://evil.example/x.png', source: 'upload' },
+    ]);
+    expect(await screen.findByText('追加の貼紙（2枚）')).toBeInTheDocument();
+    expect(screen.getByAltText('2枚目の貼紙')).toHaveAttribute(
+      'src',
+      'https://example.invalid/storage/v1/object/public/poster-images/library/common/a.png',
+    );
+    expect(screen.queryByAltText('3枚目の貼紙')).toBeNull();
+    expect(screen.getByRole('button', { name: '承認' })).toBeEnabled();
     expect(screen.getByText('エレベーターが止まります')).toBeInTheDocument();
     expect(screen.getByText('掲示の備考')).toBeInTheDocument();
     expect(screen.getByText('2026/11/03 09:00〜2026/11/10 18:00')).toBeInTheDocument();
@@ -164,6 +183,7 @@ describe('点検一覧（InspectionPortal）', () => {
     expect(within(row).getByText('点検予定申請中')).toBeInTheDocument();
     expect(within(row).getByText(/2026年11月分/)).toBeInTheDocument();
     fireEvent.click(within(row).getByRole('button', { name: '内容を確認して承認' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: '承認' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: '承認' }));
     fireEvent.click(screen.getByRole('button', { name: '承認する' }));
     await waitFor(() => expect(portal.reviewEntry).toHaveBeenCalledWith('e-new', 'approve'));

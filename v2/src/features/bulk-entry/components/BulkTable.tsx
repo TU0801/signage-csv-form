@@ -457,7 +457,15 @@ export function BulkTable({
                         placeholder="-- 物件を選択 --"
                         showTitle
                         searchPlaceholder="物件名で検索..."
-                        onChange={(v) => changeProperty(row.id, v)}
+                        onChange={(v) => {
+                          const dropped = changeProperty(row.id, v);
+                          if (dropped > 0) {
+                            addToast(
+                              `物件を変えたため、管理会社の貼紙ライブラリから選んだ貼紙${dropped}枚を外しました（その管理会社の物件でだけ使えます）`,
+                              'info',
+                            );
+                          }
+                        }}
                         onPicked={() => focusNextOf(row.id, COL.property)}
                         dataCol={COL.property}
                         onKeyDown={(e) => handleCellKeyDown(e, index, COL.property)}

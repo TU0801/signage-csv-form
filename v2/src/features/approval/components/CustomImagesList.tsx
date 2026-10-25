@@ -5,7 +5,10 @@ import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
 import { useEntryLookups } from '@/features/entries-list/hooks/useEntryLookups';
 import { fetchCustomImageEntries } from '@/lib/api/custom-images';
+import { customImageBaseName } from '@/lib/csv';
+import { parseExtraPosters } from '@/lib/extraPosters';
 import { safePosterUrl } from '@/lib/posterUrl';
+import type { CustomImageFile } from '@/lib/zipDownload';
 import { cn } from '@/lib/utils';
 import type { DbEntry } from '@/types/database';
 import { useRefetchOnVisible } from '../hooks/useRefetchOnVisible';
@@ -34,6 +37,38 @@ export function entryPeriod(e: Pick<DbEntry, 'inspection_start' | 'inspection_en
   return e.inspection_end && e.inspection_end !== e.inspection_start
     ? `${formatDay(e.inspection_start)}〜${formatDay(e.inspection_end)}`
     : formatDay(e.inspection_start);
+}
+
+/** 一覧の1行（申請の追加画像1枚）。2枚目以降の貼紙（修正依頼1025 D3）も1枚ずつ行にする */
+interface ImageRow {
+  key: string;
+  entry: DbEntry;
+  /** 何枚目か（1 は申請の1枚目の貼紙） */
+  nth: number;
+  /** このプロジェクトの poster-images の URL（それ以外は null＝表示しない） */
+  url: string | null;
+  /** ZIP 内・個別 DL のファイル名（拡張子なし）＝ CSV の点検案内TPLNo */
+  baseName: string;
+}
+
+/** 申請を画像ごとの行にする（1枚目が追加の貼紙ならその画像、続けて2枚目以降の貼紙） */
+export function imageRowsOf(entries: DbEntry[]): ImageRow[] {
+  return entries.flatMap((e) => {
+    const rows: ImageRow[] = [];
+    if (e.poster_type === 'custom' && e.poster_image) {
+      rows.push({ key: `${e.id}:1`, entry: e, nth: 1, url: safePosterUrl(e.poster_image), baseName: customImageBaseName(e) });
+    }
+    parseExtraPosters(e.extra_posters).forEach((x, i) => {
+      rows.push({
+        key: `${e.id}:${i + 2}`,
+        entry: e,
+        nth: i + 2,
+        url: safePosterUrl(x.image_url),
+        baseName: `${customImageBaseName(e)}_${i + 2}`,
+      });
+    });
+    return rows;
+  });
 }
 
 /** 承認待ちの3つ目のタブ: 貼紙で「追加」を選んで登録された画像（状態は問わない。承認待ちが先頭） */
@@ -67,13 +102,17 @@ export function CustomImagesList({ onCount, canCleanup = false }: { onCount?: (n
   useRefetchOnVisible(load, !loading && downloading === null);
 
   // 画像の URL はこのプロジェクトの poster-images のものだけ扱う（保守会社が書ける値なので）
-  const downloadable = entries.filter((e) => safePosterUrl(e.poster_image));
+  const imageRows = imageRowsOf(entries);
+  const downloadable = entries.filter((e) => imageRows.some((r) => r.entry === e && r.url));
+  const downloadableCount = imageRows.filter((r) => r.url).length;
 
-  const downloadOne = async (entry: DbEntry) => {
-    setDownloading(entry.id);
+  const downloadOne = async (row: ImageRow) => {
+    if (!row.url) return;
+    setDownloading(row.key);
     try {
       const { downloadCustomImage } = await import('@/lib/zipDownload');
-      await downloadCustomImage(entry);
+      const file: CustomImageFile = { url: row.url, baseName: row.baseName };
+      await downloadCustomImage(row.entry, file);
     } catch (err) {
       console.error('Failed to download custom image:', err);
       addToast('画像のダウンロードに失敗しました', 'error');
@@ -87,7 +126,7 @@ export function CustomImagesList({ onCount, canCleanup = false }: { onCount?: (n
       addToast('ダウンロード対象の追加画像がありません', 'info');
       return;
     }
-    addToast(`${downloadable.length}件の画像をダウンロード中...`, 'info');
+    addToast(`${downloadableCount}件の画像をダウンロード中...`, 'info');
     setDownloading('all');
     try {
       const { downloadCustomImages } = await import('@/lib/zipDownload');
@@ -106,7 +145,7 @@ export function CustomImagesList({ onCount, canCleanup = false }: { onCount?: (n
       <CardHeader>
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-gray-900">
-            追加登録された画像 ({entries.length}件)
+            追加登録された画像 ({entries.length}件{imageRows.length !== entries.length ? `・${imageRows.length}枚` : ''})
           </h2>
           <div className="flex items-center gap-1">
             <Button size="sm" variant="ghost" onClick={() => void load()}>
@@ -128,7 +167,7 @@ export function CustomImagesList({ onCount, canCleanup = false }: { onCount?: (n
           </div>
         </div>
         <p className="mt-0.5 text-xs text-gray-500">
-          貼紙で「追加」を選んでアップロードされた画像です（状態は問いません。承認待ちを先頭に表示）。ZIP
+          貼紙で「追加」を選んだ画像と、2枚目以降に追加した貼紙です（状態は問いません。承認待ちを先頭に表示）。ZIP
           内のファイル名は CSV の点検案内TPLNo と同じです。
         </p>
       </CardHeader>
@@ -164,29 +203,35 @@ export function CustomImagesList({ onCount, canCleanup = false }: { onCount?: (n
                 </tr>
               </thead>
               <tbody>
-                {entries.map((e) => {
-                  const url = safePosterUrl(e.poster_image);
+                {imageRows.map((row) => {
+                  const { entry: e, url } = row;
                   const status = e.status ?? '';
                   return (
-                    <tr key={e.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <tr key={row.key} className="border-b border-gray-100 hover:bg-gray-50">
                       <td className="cell">
-                        {url ? (
-                          <a
-                            href={url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="画像を別のタブで開く"
-                          >
-                            <img
-                              src={url}
-                              alt={`${e.property_code} ${e.inspection_type} の追加画像`}
-                              loading="lazy"
-                              className="h-12 w-9 rounded border border-gray-200 bg-white object-contain"
-                            />
-                          </a>
-                        ) : (
-                          <span className="text-xs text-red-600">表示できない URL</span>
-                        )}
+                        <div className="flex items-center gap-1.5">
+                          {url ? (
+                            <a
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="画像を別のタブで開く"
+                            >
+                              <img
+                                src={url}
+                                alt={`${e.property_code} ${e.inspection_type} の追加画像`}
+                                loading="lazy"
+                                className="h-12 w-9 rounded border border-gray-200 bg-white object-contain"
+                              />
+                            </a>
+                          ) : (
+                            <span className="text-xs text-red-600">表示できない URL</span>
+                          )}
+                          <div className="text-[11px] leading-tight text-gray-500">
+                            {row.nth > 1 && <div className="font-medium text-blue-700">{row.nth}枚目</div>}
+                            <div className="max-w-[12rem] break-all">{row.baseName}</div>
+                          </div>
+                        </div>
                       </td>
                       <td className="cell text-sm">
                         <div className="whitespace-nowrap text-gray-500">{e.property_code}</div>
@@ -223,11 +268,11 @@ export function CustomImagesList({ onCount, canCleanup = false }: { onCount?: (n
                         <Button
                           size="sm"
                           variant="secondary"
-                          onClick={() => void downloadOne(e)}
+                          onClick={() => void downloadOne(row)}
                           disabled={!url || downloading !== null}
-                          aria-label={`${e.property_code} ${e.inspection_type} の画像をダウンロード`}
+                          aria-label={`${e.property_code} ${e.inspection_type} の画像${row.nth > 1 ? `（${row.nth}枚目）` : ''}をダウンロード`}
                         >
-                          {downloading === e.id ? 'DL中...' : 'DL'}
+                          {downloading === row.key ? 'DL中...' : 'DL'}
                         </Button>
                       </td>
                     </tr>

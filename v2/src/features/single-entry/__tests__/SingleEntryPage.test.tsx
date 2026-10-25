@@ -439,3 +439,60 @@ describe('1件入力画面（物件の候補: 点検月のみ／全て。修正�
     }
   });
 });
+
+// 貼紙ライブラリ（修正依頼1025 D2）。物件の管理会社の分と全社共通を返す RPC
+const libraryApi = vi.hoisted(() => ({ fetchLibraryForProperty: vi.fn() }));
+vi.mock('@/lib/api/poster-library', () => libraryApi);
+
+describe('1件入力画面（貼紙ライブラリと2枚目以降の貼紙。修正依頼1025 D2・D3）', () => {
+  const LIB = 'https://storage/poster-images/library/common/noise.png';
+
+  it('1枚目をライブラリから選び、2枚目以降にアップロードとライブラリの貼紙を足して申請すると extra_posters に入る', async () => {
+    libraryApi.fetchLibraryForProperty.mockResolvedValue([
+      { id: 'lib-1', display_name: '騒音注意', category: '注意', image_url: LIB, management_company_id: null, sort_order: 0 },
+    ]);
+    const png = new File(['png'], '二枚目.png', { type: 'image/png' });
+    pdfToPng.preparePosterImage.mockResolvedValue({ file: png });
+    storageApi.uploadPosterImage.mockReset().mockResolvedValue('https://storage/poster-images/u1/2_ab.png');
+    render(
+      <ToastProvider>
+        <SingleEntryPage />
+      </ToastProvider>,
+    );
+    await waitFor(() => expect(screen.getByRole('combobox', { name: '点検工事案内 *' })).toHaveValue('排水管清掃'));
+    pick('物件コード *', 'z0015A01');
+    fireEvent.click(screen.getByRole('radio', { name: '追加' }));
+
+    // 1枚目: ライブラリから（物件で絞った一覧から選ぶ）
+    fireEvent.click(screen.getByRole('button', { name: /ライブラリから選ぶ/ }));
+    await waitFor(() => expect(libraryApi.fetchLibraryForProperty).toHaveBeenCalledWith('z0015A01'));
+    fireEvent.click(await screen.findByTitle('注意 / 騒音注意'));
+    expect(screen.getByText('ライブラリ: 騒音注意')).toBeInTheDocument();
+
+    // 2枚目: アップロード、3枚目: ライブラリ（位置は全体）
+    fireEvent.change(screen.getByLabelText('追加の貼紙の画像'), { target: { files: [png] } });
+    expect(await screen.findByText('2枚目 二枚目.png')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '＋ライブラリから追加' }));
+    fireEvent.click(await screen.findByTitle('注意 / 騒音注意'));
+    fireEvent.change(await screen.findByLabelText('3枚目の表示位置'), { target: { value: '0' } });
+    // 右の貼紙プレビューに枚数分出る
+    expect(within(screen.getByTestId('extra-poster-previews')).getAllByRole('img')).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole('button', { name: 'データを追加' }));
+    await screen.findByRole('table');
+    fireEvent.click(screen.getByRole('button', { name: '申請する' }));
+    await waitFor(() => expect(insertEntries).toHaveBeenCalledTimes(1));
+    const row = (insertEntries.mock.calls[0]![0] as Record<string, unknown>[])[0]!;
+    // ライブラリの画像はアップロードしない（URL のまま）。アップロードは2枚目だけ
+    expect(storageApi.uploadPosterImage).toHaveBeenCalledTimes(1);
+    expect(row).toMatchObject({
+      poster_type: 'custom',
+      poster_image: LIB,
+      template_no: '騒音注意',
+      extra_posters: [
+        { image_url: 'https://storage/poster-images/u1/2_ab.png', source: 'upload' },
+        { image_url: LIB, source: 'library', library_id: 'lib-1', position: '0' },
+      ],
+    });
+  });
+});
