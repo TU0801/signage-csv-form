@@ -1,5 +1,6 @@
 import { supabase, TABLES } from '@/lib/supabase';
 import type { DbEntry } from '@/types/database';
+import { parseExtraPosters, type ExtraPoster } from '@/lib/extraPosters';
 import type { ResubmitPatch } from './applyForm';
 
 /*
@@ -12,6 +13,17 @@ export async function fetchEntryForEdit(id: string): Promise<DbEntry> {
   if (error) throw error;
   if (!data) throw new Error('この申請は読み込めません（ほかの方が作成した申請は、作成した方か管理者が修正します）');
   return data as DbEntry;
+}
+
+/**
+ * 申請の2枚目以降の貼紙（修正依頼1025 D3）。portal_entries は返さないので行から読む（管理会社は mgmt_select_entries で
+ * 自社の物件の申請を読める）。承認の前に全部の貼紙を見せるため。読めなければ throw
+ */
+export async function fetchEntryExtraPosters(id: string): Promise<ExtraPoster[]> {
+  const { data, error } = await supabase.from(TABLES.entries).select('extra_posters').eq('id', id).maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error('申請を読み込めませんでした');
+  return parseExtraPosters((data as { extra_posters?: unknown }).extra_posters);
 }
 
 /** 差戻し（pending）の行を直して申請済み（draft）へ戻す */

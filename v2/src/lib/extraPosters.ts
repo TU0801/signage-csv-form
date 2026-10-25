@@ -45,3 +45,22 @@ export function parseExtraPosters(value: unknown): ExtraPoster[] {
 export function extraPosterPosition(extra: Pick<ExtraPoster, 'position'>, entryPosition: string | null | undefined): string {
   return extra.position || entryPosition || '2';
 }
+
+/**
+ * 貼紙ライブラリの画像の持ち主（置き場所 poster-images/library/{common|<管理会社id>}/ から読む。DB の CHECK で置き場所と
+ * 範囲は一致している）。'common' は全社共通、それ以外は管理会社の id。ライブラリの画像でなければ null
+ */
+export function libraryPosterOwner(url: string | null | undefined): string | null {
+  const m = /\/storage\/v1\/object\/public\/poster-images\/library\/([^/?#]+)\//.exec(url ?? '');
+  return m ? m[1]! : null;
+}
+
+/**
+ * 物件を変えたときに外す貼紙か: 管理会社の分のライブラリの画像（その管理会社の物件の申請でだけ使える。ユーザー決定3）。
+ * 画面は物件の管理会社を持たないので、物件を変えたら管理会社の分は外して選び直してもらう（全社共通・アップロードは残す）。
+ * DB もトリガー guard_entry_posters で止める（scripts/fix-1025-posters.sql）
+ */
+export function isCompanyLibraryPoster(url: string | null | undefined): boolean {
+  const owner = libraryPosterOwner(url);
+  return owner !== null && owner !== 'common';
+}

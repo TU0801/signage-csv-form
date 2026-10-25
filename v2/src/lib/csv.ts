@@ -126,10 +126,13 @@ function escapeCsvField(v: unknown): string {
  * 本番CSV（管理画面の CSV 出力・コピー）を生成する。ステータスでは絞らないので呼び出し側で filterApprovedEntries を通す。
  * ダウンロードは downloadCsv（BOM付き）、コピーは BOM なしでそのまま渡す（v1 と同じ）
  * @param displayTimeDefault 設定 display_time_default（signage_master_settings.setting_value は text）
+ * @param extraPosterUrlOk 2枚目以降の貼紙の URL を出してよいか（画面は safePosterUrl。追加画像 ZIP（customImageFiles）が
+ *   入れない画像の行を CSV にも出さない＝CSV の点検案内TPLNo に ZIP のファイルが無い行を作らない）。省略すると全部出す
  */
 export function generateAdminCsv(
   data: CsvSourceEntry[],
   displayTimeDefault: string | number | null | undefined,
+  extraPosterUrlOk?: (url: string) => boolean,
 ): string {
   if (data.length === 0) return '';
 
@@ -197,7 +200,9 @@ export function generateAdminCsv(
     csvRows.push(values.map(escapeCsvField).join(','));
 
     // 2枚目以降の貼紙（修正依頼1025 D3）: 同じ物件・端末・表示期間で、追加の貼紙と同じ形の行を枚数分足す
+    // 添字 i は ZIP のファイル名（extraPosterBaseName の _n）と同じ数え方のまま（飛ばした分は番号が空く）
     parseExtraPosters(entry.extra_posters).forEach((extra, i) => {
+      if (extraPosterUrlOk && !extraPosterUrlOk(extra.image_url)) return;
       const extraValues = [...values];
       extraValues[5] = ''; // 点検工事案内
       extraValues[7] = extraPosterBaseName(entry, i); // 点検案内TPLNo

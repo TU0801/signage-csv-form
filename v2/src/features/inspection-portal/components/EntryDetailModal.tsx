@@ -1,10 +1,12 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
 import { normalizeTerminalId } from '@/lib/terminal';
 import { safePosterUrl } from '@/lib/posterUrl';
 import type { PortalEntryRow } from '@/types/portal';
+import type { ExtraPoster } from '@/lib/extraPosters';
+import { fetchEntryExtraPosters } from '../lib/entryApi';
 import { formatDate, todayJst } from '../lib/schedule';
 
 export interface EntryDetailTarget {
@@ -66,6 +68,35 @@ function TextBlock({ text }: { text: string | null }) {
   return <div className="whitespace-pre-line rounded border border-gray-200 bg-gray-50 px-2 py-1">{text}</div>;
 }
 
+type ExtrasState =
+  | { state: 'none' }
+  | { state: 'loading' }
+  | { state: 'error' }
+  | { state: 'loaded'; items: ExtraPoster[] };
+
+/** 開いている申請の2枚目以降の貼紙を読む（申請が変わったら読み直す。前の申請の結果は使わない） */
+function useEntryExtraPosters(id: string | null): ExtrasState {
+  const [result, setResult] = useState<{ id: string; items: ExtraPoster[] | null } | null>(null);
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    fetchEntryExtraPosters(id)
+      .then((items) => {
+        if (!cancelled) setResult({ id, items });
+      })
+      .catch((e: unknown) => {
+        console.error('追加の貼紙の取得に失敗しました:', e);
+        if (!cancelled) setResult({ id, items: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+  if (!id) return { state: 'none' };
+  if (result?.id !== id) return { state: 'loading' };
+  return result.items ? { state: 'loaded', items: result.items } : { state: 'error' };
+}
+
 /**
  * 申請の中身（掲示される内容）。承認した本文はそのまま長谷工向け CSV でサイネージへ出るので、
  * 管理会社が承認・差戻しの前にここで確かめる。承認は確認を挟む（取り消すには差戻しが要るため）
@@ -74,6 +105,9 @@ export function EntryDetailModal({ target, busy, onClose, onApprove, onSendBack 
   const [confirming, setConfirming] = useState(false);
   const entry = target?.entry ?? null;
   const posterUrl = safePosterUrl(entry?.poster_image);
+  // 2枚目以降の貼紙（修正依頼1025 D3）。承認すると CSV に枚数分の行で出るので、読めるまで（読めなければ）承認させない
+  const extras = useEntryExtraPosters(entry?.id ?? null);
+  const extrasReady = extras.state === 'loaded';
   const canApprove = entry?.status === 'draft';
   const canSendBack = entry?.status === 'draft' || entry?.status === 'ready';
   // 差戻しの理由は差し戻された行に残り、再申請（draft）しても消えない（DB のトリガーが保つ）
@@ -104,7 +138,13 @@ export function EntryDetailModal({ target, busy, onClose, onApprove, onSendBack 
               </Button>
             )}
             {canApprove && (
-              <Button variant="success" size="sm" disabled={busy} onClick={() => setConfirming(true)}>
+              <Button
+                variant="success"
+                size="sm"
+                disabled={busy || !extrasReady}
+                title={extrasReady ? undefined : '追加の貼紙を確かめてから承認できます'}
+                onClick={() => setConfirming(true)}
+              >
                 承認
               </Button>
             )}
@@ -136,6 +176,39 @@ export function EntryDetailModal({ target, busy, onClose, onApprove, onSendBack 
                   ) : (
                     <span className="text-gray-500">（画像の URL が不正なため表示しません）</span>
                   )}
+                </Row>
+              )}
+              {extras.state === 'loading' && <Row label="追加の貼紙">読み込み中…</Row>}
+              {extras.state === 'error' && (
+                <Row label="追加の貼紙">
+                  <span className="text-red-600">追加の貼紙を読み込めませんでした（承認するには画面を開き直してください）</span>
+                </Row>
+              )}
+              {extras.state === 'loaded' && extras.items.length > 0 && (
+                <Row label={`追加の貼紙（${extras.items.length}枚）`}>
+                  <div className="flex flex-wrap gap-2" data-testid="portal-extra-posters">
+                    {extras.items.map((x, i) => {
+                      const url = safePosterUrl(x.image_url);
+                      return (
+                        <figure key={i} className="w-[96px] space-y-0.5">
+                          {url ? (
+                            <a href={url} target="_blank" rel="noopener noreferrer" title="別のタブで開く">
+                              <img
+                                src={url}
+                                alt={`${i + 2}枚目の貼紙`}
+                                className="max-h-32 max-w-[96px] rounded border border-gray-200 object-contain"
+                              />
+                            </a>
+                          ) : (
+                            <span className="text-gray-500">（画像の URL が不正なため表示しません）</span>
+                          )}
+                          <figcaption className="text-[11px] leading-tight text-gray-600">
+                            {i + 2}枚目・{x.source === 'library' ? 'ライブラリ' : 'アップロード'}
+                          </figcaption>
+                        </figure>
+                      );
+                    })}
+                  </div>
                 </Row>
               )}
               <Row label="案内文">

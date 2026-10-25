@@ -10,6 +10,7 @@ const csv = vi.hoisted(() => ({
 vi.mock('@/lib/csv', async (orig) => ({ ...(await orig<typeof import('@/lib/csv')>()), ...csv }));
 const zip = vi.hoisted(() => ({ downloadCustomImages: vi.fn(async () => 1) }));
 vi.mock('@/lib/zipDownload', () => zip);
+vi.mock('@/lib/supabase', () => ({ SUPABASE_URL: 'https://example.test', supabase: {}, TABLES: {}, RPC: {} }));
 vi.mock('@/components/ui/Toast', () => ({ useToast: () => ({ addToast: vi.fn() }) }));
 // jsdom には <dialog> の showModal/close が無いので、確認ダイアログは描画しない
 vi.mock('@/components/ui/ConfirmDialog', () => ({ ConfirmDialog: () => null }));
@@ -37,7 +38,7 @@ describe('EntryActions (v1 admin-export.js exportCSV / downloadCustomImages)', (
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'CSV' }));
-    expect(csv.generateAdminCsv).toHaveBeenCalledWith(loaded, undefined);
+    expect(csv.generateAdminCsv).toHaveBeenCalledWith(loaded, undefined, expect.any(Function));
 
     fireEvent.click(screen.getByRole('button', { name: '追加登録された画像ダウンロード' }));
     await waitFor(() => expect(zip.downloadCustomImages).toHaveBeenCalledWith(loaded));

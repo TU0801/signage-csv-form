@@ -6,6 +6,7 @@ vi.mock('@/lib/supabase', () => ({ SUPABASE_URL: 'https://example.supabase.co', 
 import { CSV_HEADERS, generateAdminCsv } from '../csv';
 import { customImageFiles } from '../customImageFiles';
 import { parseExtraPosters } from '../extraPosters';
+import { isServablePosterUrl } from '../posterUrl';
 
 const URL_OF = (p: string) => `https://example.supabase.co/storage/v1/object/public/poster-images/${p}`;
 
@@ -71,6 +72,23 @@ describe('2枚目以降の貼紙（修正依頼1025 D3）', () => {
     expect(rows[2]).toMatchObject({ 点検案内TPLNo: '2010_エレベーター定期点検_abcdef12_3', frame_No: '0', 貼紙区分: '追加' });
     // 追加の貼紙が無い行は今までどおり1行
     expect(rowsOf(generateAdminCsv([base], '10'))).toHaveLength(1);
+  });
+
+  it('管理画面の CSV は、追加画像 ZIP に入らない URL（よそのサイト）の2枚目以降の貼紙の行を出さない（番号は ZIP と同じ数え方）', () => {
+    const csv = generateAdminCsv(
+      [
+        {
+          ...base,
+          extra_posters: [
+            { image_url: 'https://evil.example/storage/v1/object/public/poster-images/u1/x.png', source: 'upload' },
+            { image_url: URL_OF('u1/b.png'), source: 'upload' },
+          ],
+        },
+      ],
+      '10',
+      isServablePosterUrl,
+    );
+    expect(rowsOf(csv).map((r) => r.点検案内TPLNo)).toEqual(['1', '2010_エレベーター定期点検_abcdef12_3']);
   });
 
   it('追加画像の ZIP のファイルは1枚目の追加画像と2枚目以降で、名前は CSV の点検案内TPLNo と同じ。よそのURL・形の合わない要素は外す', () => {

@@ -7,7 +7,7 @@ import type { DbInspectionType } from '@/types/database';
 import type { PortalInspectionRow } from '@/types/portal';
 import type { CustomImage, LocalEntry, LocalExtraPoster, SingleEntryValues } from '../types';
 import type { PosterLibraryItem } from '@/lib/api/poster-library';
-import { MAX_EXTRA_POSTERS } from '@/lib/extraPosters';
+import { MAX_EXTRA_POSTERS, isCompanyLibraryPoster } from '@/lib/extraPosters';
 import {
   applyCategoryChange,
   applyEndDateChange,
@@ -57,6 +57,8 @@ export function useEntryForm({
   // 点検工事案内が自動で入った値（未選択・紐付けの既定・カテゴリで選び直した値・物件の既定）か。手で選んだ値・編集や複製で
   // 読み込んだ値は false。物件を選んだときは、空か自動の値のときだけ物件の点検行の種別に入れ替える（修正依頼1024 本番確認 ②）
   const autoTypeRef = useRef(true);
+  // 物件を変えて外した貼紙の知らせ（管理会社の分のライブラリの貼紙。ユーザー決定3）
+  const [posterNotice, setPosterNotice] = useState<string | null>(null);
 
   const setField = useCallback(
     <K extends keyof SingleEntryValues>(key: K, value: SingleEntryValues[K]) =>
@@ -67,15 +69,29 @@ export function useEntryForm({
   // v1: js/script.js onPropertyChange
   // 点検工事案内が空なら、その物件の点検行の種別（無ければ紐付けの先頭）を入れる（一括入力 B9 と同じ規則）。
   // 自動で入った値は、その物件の点検行があるときだけその種別に入れ替える
+  // 管理会社の分のライブラリの貼紙は、その管理会社の物件の申請でだけ使える（ユーザー決定3）。選んだときの物件で絞っているので、
+  // 物件を変えたら外して知らせる（全社共通・アップロードは残す）
   const changeProperty = useCallback(
-    (code: string) =>
+    (code: string) => {
       setValues((v) => {
         const next = applyPropertyChange(v, code, properties);
         if (v.inspectionTypeId && !autoTypeRef.current) return next;
         // 空なら一括入力と同じ (a)→(b)。自動で入った値は物件の点検行があるときだけ入れ替える（紐付けの先頭で上書きしない）
         return applyPropertyInspectionDefault(next, inspectionTypes, inspections, linkedIds, !v.inspectionTypeId);
-      }),
-    [properties, inspectionTypes, inspections, linkedIds],
+      });
+      if (code === values.propertyCode) return;
+      const dropMain = !!customImage && !customImage.file && isCompanyLibraryPoster(customImage.dataUrl);
+      const keptExtras = extraPosters.filter((x) => x.file || !isCompanyLibraryPoster(x.dataUrl));
+      const dropped = (dropMain ? 1 : 0) + extraPosters.length - keptExtras.length;
+      if (dropMain) setCustomImage(null);
+      if (keptExtras.length !== extraPosters.length) setExtraPosters(keptExtras);
+      setPosterNotice(
+        dropped > 0
+          ? `物件を変えたため、管理会社の貼紙ライブラリから選んだ貼紙${dropped}枚を外しました（その管理会社の物件でだけ使えます。必要なら選び直してください）`
+          : null,
+      );
+    },
+    [properties, inspectionTypes, inspections, linkedIds, values.propertyCode, customImage, extraPosters],
   );
 
   // v1: js/script.js onCategoryChange
@@ -185,6 +201,7 @@ export function useEntryForm({
     setValues((v) => ({ ...initialValues(settings, todayUtc()), category: v.category }));
     setCustomImage(null);
     setExtraPosters([]);
+    setPosterNotice(null);
   }, [settings]);
 
   // v1: js/script.js editEntry
@@ -194,6 +211,7 @@ export function useEntryForm({
       setValues((v) => valuesFromEntry(v, e, inspectionTypes, linkedIds));
       setCustomImage(e.customImage);
       setExtraPosters(e.extraPosters ?? []);
+      setPosterNotice(null);
     },
     [inspectionTypes, linkedIds],
   );
@@ -211,6 +229,7 @@ export function useEntryForm({
     values,
     customImage,
     extraPosters,
+    posterNotice,
     setField,
     changeProperty,
     changeCategory,

@@ -12,6 +12,7 @@ import {
 import type { AdminEntryStatus } from '@/lib/api/admin-entries';
 import type { DbEntry } from '@/types/database';
 import { parseExtraPosters } from '@/lib/extraPosters';
+import { isServablePosterUrl } from '@/lib/posterUrl';
 import type { EntriesFilters } from '../hooks/useEntriesFilters';
 import { bulkStatusLabel, filterExportEntries } from '../lib/entries';
 
@@ -50,7 +51,7 @@ export function EntryActions({
 
   // v1: js/admin-export.js exportCSV
   const handleExportCsv = useCallback(() => {
-    const csv = generateAdminCsv(filterExportEntries(entries, filters), displayTimeDefault);
+    const csv = generateAdminCsv(filterExportEntries(entries, filters), displayTimeDefault, isServablePosterUrl);
     if (!csv) {
       addToast('エクスポートするデータがありません', 'error');
       return;
@@ -62,7 +63,7 @@ export function EntryActions({
 
   // v1: js/admin-export.js copyCSV
   const handleCopyCsv = useCallback(async () => {
-    const csv = generateAdminCsv(filterExportEntries(entries, filters), displayTimeDefault);
+    const csv = generateAdminCsv(filterExportEntries(entries, filters), displayTimeDefault, isServablePosterUrl);
     if (!csv) {
       addToast('コピーするデータがありません', 'error');
       return;

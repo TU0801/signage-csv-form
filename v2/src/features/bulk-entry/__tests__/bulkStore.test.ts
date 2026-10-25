@@ -74,6 +74,31 @@ describe('bulkStore (v1 js/bulk-table.js / bulk-modals.js の行操作)', () => 
     expect(s().rows[0]).toMatchObject({ startDate: '2026-12-01', endDate: '2026-12-01' });
   });
 
+  it('物件を変えると管理会社の分のライブラリの貼紙（1枚目・2枚目以降）を外し、全社共通とアップロードは残す（ユーザー決定3）', () => {
+    const lib = (p: string) => `https://x.supabase.co/storage/v1/object/public/poster-images/library/${p}`;
+    const company = lib('c0000000-0000-4000-8000-000000000009/a.png');
+    const common = lib('common/c.png');
+    const upload = 'https://x.supabase.co/storage/v1/object/public/poster-images/user-1/u.png';
+    s().addRow({
+      propertyCode: 'z0001A01',
+      inspectionType: '消防設備点検',
+      posterType: 'custom',
+      posterImage: company,
+      extraPosters: [
+        { image_url: company, source: 'library', library_id: 'L9' },
+        { image_url: common, source: 'library', library_id: 'LC' },
+        { image_url: upload, source: 'upload' },
+      ],
+    });
+    const id = s().rows[0]!.id;
+    // 同じ物件を選び直しただけなら外さない
+    expect(s().changeProperty(id, 'z0001A01')).toBe(0);
+    expect(s().rows[0]!.extraPosters).toHaveLength(3);
+    expect(s().changeProperty(id, '120442-00')).toBe(2);
+    expect(s().rows[0]).toMatchObject({ posterImage: '', isValid: false, errors: ['貼紙画像'] });
+    expect(s().rows[0]!.extraPosters!.map((x) => x.image_url)).toEqual([common, upload]);
+  });
+
   it('a property without terminals stays a terminal error (v1 behaviour, reported as a v1 bug candidate)', () => {
     s().setMasterData({
       ...master,

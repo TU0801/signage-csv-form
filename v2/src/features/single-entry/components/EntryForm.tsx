@@ -288,6 +288,12 @@ export function EntryForm({
           </div>
         )}
 
+        {form.posterNotice && (
+          <p role="status" className="text-xs text-amber-700 sm:col-span-2">
+            {form.posterNotice}
+          </p>
+        )}
+
         {/* 2枚目以降の貼紙（修正依頼1025 D3）。テンプレートの貼紙にも足せる。CSV では枚数分の行になる */}
         <div className="sm:col-span-2">
           <ExtraPostersEditor
