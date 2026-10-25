@@ -17,7 +17,7 @@
 --     管理者は審査の有無にかかわらず承認・却下できる。
 --   - 未承認の建物を使えるのは申請した月（日本時間）の間だけ。翌月以降は再申請が要る（注記「次回以降は承認がなければ再度申請」）。
 --     差戻しの申請し直しも同じ（先月以前の建物追加の申請に結び付いた掲示は、月が替わると申請し直せない。取り下げて出し直す）。
---   - 仮のコードの掲示は、どの状態でも承認・取込済みにできず、仮のコードのまま建物追加の申請との結び付きを外せない。
+--   - 仮のコードの掲示は、どの状態でも承認・取込済みにできず、仮のコードのまま建物追加の申請との結び付きを外せず、別の申請へ付け替えられない。
 
 SET lock_timeout = '5s';
 
@@ -85,6 +85,13 @@ BEGIN
   IF NEW.property_code ~* '^REQ-' AND NEW.status IN ('ready', 'exported') THEN
     RAISE EXCEPTION '建物追加の申請が承認されるまで、この建物の掲示は承認できません' USING ERRCODE = '42501';
   END IF;
+  -- 仮のコードの掲示は、別の建物追加の申請へ付け替えさせない（付け替えは承認の関数が正式な物件コードにするときだけ。
+  -- 承認の関数は property_request_id を変えない）。申請の行が消えたとき（外部キーの ON DELETE SET NULL）だけは通す
+  IF TG_OP = 'UPDATE' AND OLD.property_request_id IS NOT NULL
+     AND NEW.property_request_id IS DISTINCT FROM OLD.property_request_id AND NEW.property_code ~* '^REQ-'
+     AND EXISTS (SELECT 1 FROM signage.signage_property_requests WHERE id = OLD.property_request_id) THEN
+    RAISE EXCEPTION '建物の承認前は、建物追加の申請との結び付きを外せません' USING ERRCODE = '22023';
+  END IF;
 
   IF NEW.property_request_id IS NULL THEN
     -- 仮のコードは建物追加の申請からだけ（申請 id 無しで REQ- を名乗らせない）
@@ -92,11 +99,7 @@ BEGIN
       RAISE EXCEPTION '「REQ-」で始まる物件コードは建物追加の申請からだけ使えます' USING ERRCODE = '22023';
     END IF;
     -- 仮のコードのまま建物追加の申請との結び付きを外させない（外すと承認での付け替えも却下での片付けも届かず、行が残り続ける）。
-    -- 申請の行が消えたとき（外部キーの ON DELETE SET NULL）だけは通す
-    IF TG_OP = 'UPDATE' AND OLD.property_request_id IS NOT NULL AND NEW.property_code ~* '^REQ-'
-       AND EXISTS (SELECT 1 FROM signage.signage_property_requests WHERE id = OLD.property_request_id) THEN
-      RAISE EXCEPTION '建物の承認前は、建物追加の申請との結び付きを外せません' USING ERRCODE = '22023';
-    END IF;
+    -- 上の付け替えの確かめが止める
     RETURN NEW;
   END IF;
 
