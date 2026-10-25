@@ -11,12 +11,27 @@ const api = vi.hoisted(() => ({
   sha256Hex: vi.fn(async () => 'hash-new'),
 }));
 vi.mock('@/lib/api/portal', () => api);
+const ocrApi = vi.hoisted(() => ({
+  fetchAiOcrStatus: vi.fn(async () => ({ configured: false, message: 'AI-OCR は未設定です（管理者に連絡）' })),
+  fetchCorrectionDictionary: vi.fn(async () => [] as unknown[]),
+  recordCorrections: vi.fn(async () => {}),
+  readWithAiOcr: vi.fn(),
+  bytesToBase64: vi.fn(() => ''),
+  registerPropertyFile: vi.fn(),
+}));
+vi.mock('@/lib/api/property-files', () => ocrApi);
+const pageTexts = vi.hoisted(() => ({ value: [] as string[] }));
 vi.mock('@/lib/supabase', () => ({ supabase: {}, TABLES: {}, RPC: {} }));
 const toast = vi.hoisted(() => vi.fn());
 vi.mock('@/components/ui/Toast', () => ({ useToast: () => ({ addToast: toast }) }));
 // jsdom には canvas の描画が無いので、pdfjs の描画は差し替える（回転・切り出しは pdfSplit のテストで本物を確かめる）
 vi.mock('../lib/pdfPages', () => ({
-  openPdfPages: vi.fn(async () => ({ pageCount: 4, render: vi.fn(async () => {}), destroy: vi.fn() })),
+  openPdfPages: vi.fn(async () => ({
+    pageCount: 4,
+    render: vi.fn(async () => {}),
+    pageTexts: vi.fn(async () => pageTexts.value),
+    destroy: vi.fn(),
+  })),
 }));
 const split = vi.hoisted(() => ({
   loadSourcePdf: vi.fn(async () => ({})),
@@ -25,6 +40,8 @@ const split = vi.hoisted(() => ({
 vi.mock('../lib/pdfSplit', () => split);
 
 import { BulkReportUploadModal } from '../components/BulkReportUploadModal';
+import { todayJst } from '@/features/inspection-portal/lib/schedule';
+import { lastDayOfPreviousMonth } from '../lib/aiOcr';
 
 // PDF の読み込み・区間の描画が多く、並列で走らせると既定（findBy 1秒・テスト5秒）では足りないことがある
 configure({ asyncUtilTimeout: 5000 });
@@ -39,6 +56,7 @@ beforeAll(() => {
 });
 beforeEach(() => {
   vi.clearAllMocks();
+  pageTexts.value = [];
   api.fetchInspectionReports.mockResolvedValue([]);
   api.fetchPortalInspections.mockResolvedValue([
     makeInspection({ inspection_id: 'i1', property_name: 'テスト第一マンション', inspection_months: [] }),
@@ -236,5 +254,45 @@ describe('BulkReportUploadModal', { timeout: 20000 }, () => {
     fireEvent.click(await screen.findByRole('button', { name: '置き換えて提出する' }));
     expect(await within(screen.getByTestId('bulk-segment-1')).findByText(/提出しました/)).toBeInTheDocument();
     expect(api.registerInspectionReport).toHaveBeenCalledTimes(1);
+  });
+
+  it('実施日の既定は今日で、『先月末』で先月の末日を入れられる（修正依頼1025 G3）', async () => {
+    await setup();
+    const input = screen.getByLabelText('実施日（全区間の既定）') as HTMLInputElement;
+    expect(input.value).toBe(todayJst());
+    fireEvent.click(screen.getByRole('button', { name: '先月末' }));
+    expect(input.value).toBe(lastDayOfPreviousMonth(todayJst()));
+    fireEvent.click(screen.getByRole('button', { name: '今日' }));
+    expect(input.value).toBe(todayJst());
+  });
+
+  it('AI-OCR が未設定なら、チェックボックスを無効にして理由を出す', async () => {
+    await setup();
+    expect(screen.getByRole('checkbox', { name: 'AI-OCRで判定' })).toBeDisabled();
+    expect(await screen.findByText('AI-OCR は未設定です（管理者に連絡）')).toBeInTheDocument();
+  });
+
+  it('文字情報から読み取ると、建物が変わるページで区切り、区間の点検と実施日を入れる（AI は呼ばない）', async () => {
+    api.fetchPortalInspections.mockResolvedValue([
+      makeInspection({ inspection_id: 'i1', property_code: '900001-00', property_name: 'テスト第一マンション', inspection_months: [] }),
+      makeInspection({ inspection_id: 'i2', property_code: '900002-00', property_name: 'テスト第二マンション', inspection_months: [] }),
+    ]);
+    api.registerInspectionReport.mockResolvedValue(makeReport({ file_name: 'a.pdf' }));
+    pageTexts.value = [
+      'エレベーター定期点検報告書 テスト第一マンション 点検日 2026年10月5日',
+      '（続き）',
+      'エレベーター定期点検報告書 テスト第二マンション 点検日 2026年10月6日',
+      '（続き）',
+    ];
+    await setup();
+    fireEvent.click(screen.getByRole('button', { name: '文字情報から読み取る（AI なし）' }));
+    expect(await screen.findByTestId('ocr-summary')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByTestId(/^bulk-segment-/)).toHaveLength(2));
+    const select1 = screen.getByRole('combobox', { name: '区間1の点検' }) as HTMLSelectElement;
+    const select2 = screen.getByRole('combobox', { name: '区間2の点検' }) as HTMLSelectElement;
+    expect(select1.selectedOptions[0]?.textContent).toMatch(/テスト第一マンション/);
+    expect(select2.selectedOptions[0]?.textContent).toMatch(/テスト第二マンション/);
+    expect((screen.getByLabelText('実施日（全区間の既定）') as HTMLInputElement).value).toBe('2026-10-05');
+    expect(ocrApi.readWithAiOcr).not.toHaveBeenCalled();
   });
 });
