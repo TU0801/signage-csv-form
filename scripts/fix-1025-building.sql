@@ -80,6 +80,10 @@ BEGIN
     IF NEW.property_code ~* '^REQ-' AND (TG_OP = 'INSERT' OR NEW.property_code IS DISTINCT FROM OLD.property_code) THEN
       RAISE EXCEPTION '「REQ-」で始まる物件コードは建物追加の申請からだけ使えます' USING ERRCODE = '22023';
     END IF;
+    -- 申請の行が消えて結び付きが外れた（ON DELETE SET NULL）仮のコードの行も承認させない（CSV に出さない）
+    IF NEW.property_code ~* '^REQ-' AND NEW.status IN ('ready', 'exported') THEN
+      RAISE EXCEPTION '建物追加の申請が承認されるまで、この建物の掲示は承認できません' USING ERRCODE = '42501';
+    END IF;
     RETURN NEW;
   END IF;
 
