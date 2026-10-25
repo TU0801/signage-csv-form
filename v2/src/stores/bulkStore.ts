@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type {
   BulkEntryRow,
   BulkMasterData,
+  BulkProperty,
   BulkRowInput,
   BulkScheduleMeta,
   BulkSettings,
@@ -18,6 +19,7 @@ import { AUTO_SAVE_DELAY_MS, writeAutoSave } from '@/features/bulk-entry/utils/b
 import { defaultInspectionType } from '@/features/bulk-entry/utils/scheduleRows';
 import { followEndDate } from '@/lib/inspectionDates';
 import { todayUtc } from '@/lib/utils';
+import type { ProvisionalBuilding } from '@/features/building-requests/lib/provisional';
 
 /** 行の詳細設定モーダルで変える項目 */
 export type BulkRowDetail = Pick<
@@ -92,6 +94,15 @@ export interface BulkState {
    * 戻さないと同じ申請をもう一度出せてしまい、未送信の入力として離脱の確認も出続ける
    */
   clearScheduleInputs: (ids: number[]) => void;
+  /**
+   * 未承認の建物（建物追加の申請。修正依頼1025 F2）を物件の候補に入れ直し、手の行を検証し直す。
+   * approved（仮のコード → 承認後の物件コード・端末）に当たる手の行は承認後の物件に付け替える（自動保存から戻した行）。
+   * 変わらなければ何もしない
+   */
+  setProvisionalBuildings: (
+    buildings: ProvisionalBuilding[],
+    approved?: ReadonlyMap<string, { propertyCode: string; terminalId: string }>,
+  ) => void;
 
   addRow: (data?: BulkRowInput) => number;
   addRowWithCopy: () => void;
@@ -144,7 +155,11 @@ export const useBulkStore = create<BulkState>((set, get) => {
       const errors = validateBulkRow(row, own, appSettings, []).filter((e) => e !== '端末');
       return { ...row, errors, isValid: errors.length === 0 };
     }
-    const errors = validateBulkRow(row, masterData.properties, appSettings, masterData.notices);
+    let errors = validateBulkRow(row, masterData.properties, appSettings, masterData.notices);
+    // 未承認の建物には端末が無い（承認後に業務システムで端末が付く。点検予定の行の端末なしと同じ扱い）
+    if (masterData.properties.some((p) => p.propertyRequestId && p.propertyCode === String(row.propertyCode))) {
+      errors = errors.filter((e) => e !== '端末');
+    }
     return { ...row, errors, isValid: errors.length === 0 };
   };
 
@@ -315,6 +330,45 @@ export const useBulkStore = create<BulkState>((set, get) => {
             : r,
         ),
       }));
+    },
+
+    setProvisionalBuildings: (buildings, approved = new Map()) => {
+      const { masterData, rows } = get();
+      const current = masterData.properties.filter((p) => p.propertyRequestId);
+      const sameCandidates =
+        current.length === buildings.length &&
+        buildings.every((b) =>
+          current.some(
+            (p) => p.propertyCode === b.propertyCode && p.propertyName === b.propertyName && p.managementCompanyId === b.managementCompanyId,
+          ),
+        );
+      const remap = rows.some((r) => !r.schedule && approved.has(String(r.propertyCode)));
+      if (sameCandidates && !remap) return;
+      const extra: BulkProperty[] = buildings.map((b) => ({
+        propertyCode: b.propertyCode,
+        propertyName: b.propertyName,
+        terminalId: '',
+        supplement: '',
+        propertyRequestId: b.requestId,
+        managementCompanyId: b.managementCompanyId,
+      }));
+      const properties = [...masterData.properties.filter((p) => !p.propertyRequestId), ...extra];
+      set({ masterData: { ...masterData, properties } });
+      // 候補が変わった手の行（仮のコード・付け替えた行）だけ検証し直す
+      const touched = new Set([...current.map((p) => p.propertyCode), ...extra.map((p) => p.propertyCode), ...approved.keys()]);
+      set((s) => ({
+        rows: s.rows.map((r) => {
+          if (r.schedule || !touched.has(String(r.propertyCode))) return r;
+          const to = approved.get(String(r.propertyCode));
+          if (!to) return validate(r);
+          return validate({
+            ...r,
+            propertyCode: to.propertyCode,
+            terminalId: resolveTerminal(properties, to.propertyCode, to.terminalId, true) || to.terminalId,
+          });
+        }),
+      }));
+      if (remap) get().triggerAutoSave();
     },
 
     // v1: js/bulk-table.js addRow

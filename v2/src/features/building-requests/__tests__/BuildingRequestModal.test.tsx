@@ -120,9 +120,11 @@ describe('BuildingRequestModal（保守会社アカウント）', () => {
       inspectionTypeId: 't1',
       inspectionMonths: [4],
     });
-    expect(
-      await screen.findByText('承認されると点検登録フォームに行が出ます。'),
-    ).toBeInTheDocument();
+    // 申請した時点で、その建物を点検登録フォームで使える旨を出す（修正依頼1025 F2）
+    expect(await screen.findByTestId('buildingRequestSubmittedNote')).toHaveTextContent(
+      '「【建物未承認】新築マンション」を選んで、日付を入れて申請できます',
+    );
+    expect(screen.getByText(/承認後は点検予定の行も出ます/)).toBeInTheDocument();
   });
 });
 
@@ -171,11 +173,9 @@ describe('BuildingRequestModal（管理者・点検種別を指定しない）',
       ),
     );
     expect(
-      await screen.findByText(
-        '承認後は物件として選べます（点検予定の行は点検種別の登録後に出ます）。',
-      ),
+      await screen.findByText(/承認後は物件として選べます（点検予定の行は点検種別の登録後に出ます）。/),
     ).toBeInTheDocument();
-    expect(screen.queryByText('承認されると点検登録フォームに行が出ます。')).toBeNull();
+    expect(screen.queryByText(/承認後は点検予定の行も出ます/)).toBeNull();
   });
 });
 

@@ -7,12 +7,15 @@ import { Spinner } from '@/components/ui/Spinner';
 import { TextArea } from '@/components/ui/TextArea';
 import { useToast } from '@/components/ui/Toast';
 import { useAdminCountsStore } from '@/stores/adminCountsStore';
+import { useAuthStore } from '@/stores/authStore';
 import { fetchMasterInspectionTypes, fetchMasterVendors } from '@/lib/api/masterData';
 import { fetchProfileEmails } from '@/features/relationships/api';
 import {
   approvePropertyRequest,
   fetchManagementCompaniesForRequest,
   fetchPendingPropertyRequests,
+  fetchPropertyRequestEntryCounts,
+  mgmtReviewPropertyRequest,
   rejectPropertyRequest,
 } from '@/lib/api/property-requests';
 import type { DbPropertyRequest } from '@/types/database';
@@ -23,6 +26,22 @@ export interface PropertyRequestRow extends DbPropertyRequest {
   managementCompanyName: string;
   inspectionTypeName: string;
   requesterEmail: string;
+  /** 建物の承認前に出された掲示の申請（承認待ち・差戻し中）の件数。承認で付け替わり、却下で消える */
+  entryCount: number;
+}
+
+/** 読めなければ空で続ける（管理会社のアカウントは保守会社・利用者などの名前の一部を読めない） */
+function orEmpty<T>(promise: Promise<T>, empty: T): Promise<T> {
+  return promise.catch((err) => {
+    console.error('Failed to load property request lookups:', err);
+    return empty;
+  });
+}
+
+/** 管理会社の審査の表示（任意。審査済み＝承認推奨） */
+export function mgmtReviewLabel(r: Pick<DbPropertyRequest, 'mgmt_reviewed_at' | 'mgmt_comment'>): string {
+  if (!r.mgmt_reviewed_at) return '未審査';
+  return `審査済み（承認推奨）${r.mgmt_comment ? `: ${r.mgmt_comment}` : ''}`;
 }
 
 /** 物件コードの形（DB の approve_property_request と同じ。本番の物件コードはすべてこの形） */
@@ -37,9 +56,18 @@ function rpcMessage(err: unknown, fallback: string): string {
   return message && /[ぁ-んァ-ン一-龥]/.test(message) ? message : fallback;
 }
 
-/** 承認待ちの「ビル追加」タブの下段: 新規建物の申請（管理者だけ）。承認時に物件コードを入れる・却下は理由を入れる */
+/**
+ * 承認待ちの「ビル追加」タブの下段: 新規建物の申請。
+ * 管理者: 承認時に物件コードを入れる・却下は理由を入れる（管理会社の審査の有無にかかわらず）。
+ * 管理会社: 自社が管理会社の申請を「審査済み（承認推奨）」か差戻し（却下）にできる（任意。修正依頼1025 D4）
+ */
 export function PropertyRequestsList() {
   const { addToast } = useToast();
+  const isManagement = useAuthStore((s) => s.profile?.role === 'management');
+  const [reviewTarget, setReviewTarget] = useState<{
+    row: PropertyRequestRow;
+    action: 'recommend' | 'reject';
+  } | null>(null);
   const [rows, setRows] = useState<PropertyRequestRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,11 +83,12 @@ export function PropertyRequestsList() {
       const requesterIds = [
         ...new Set(requests.map((r) => r.requested_by).filter((id): id is string => !!id)),
       ];
-      const [vendors, companies, types, emails] = await Promise.all([
-        fetchMasterVendors(),
-        fetchManagementCompaniesForRequest(),
-        fetchMasterInspectionTypes(),
-        fetchProfileEmails(requesterIds),
+      const [vendors, companies, types, emails, counts] = await Promise.all([
+        orEmpty(fetchMasterVendors(), []),
+        orEmpty(fetchManagementCompaniesForRequest(), []),
+        orEmpty(fetchMasterInspectionTypes(), []),
+        orEmpty(fetchProfileEmails(requesterIds), new Map<string, string>()),
+        orEmpty(fetchPropertyRequestEntryCounts(requests.map((r) => r.id)), new Map<string, number>()),
       ]);
       const vendorMap = new Map(vendors.map((v) => [v.id, v.vendor_name]));
       const companyMap = new Map(companies.map((c) => [c.id, c.name]));
@@ -71,6 +100,7 @@ export function PropertyRequestsList() {
           managementCompanyName: companyMap.get(r.management_company_id) ?? '-',
           inspectionTypeName: (r.inspection_type_id && typeMap.get(r.inspection_type_id)) || '-',
           requesterEmail: (r.requested_by && emails.get(r.requested_by)) || '-',
+          entryCount: counts.get(r.id) ?? 0,
         })),
       );
     } catch (err) {
@@ -84,7 +114,21 @@ export function PropertyRequestsList() {
   useEffect(() => {
     void load();
   }, [load]);
-  useRefetchOnVisible(load, !loading && !approveTarget && !rejectTarget);
+  useRefetchOnVisible(load, !loading && !approveTarget && !rejectTarget && !reviewTarget);
+
+  const review = async (comment: string) => {
+    if (!reviewTarget) return;
+    const { row, action } = reviewTarget;
+    await mgmtReviewPropertyRequest(row.id, action, comment);
+    addToast(
+      action === 'recommend'
+        ? `「${row.property_name}」を審査済み（承認推奨）にしました`
+        : `「${row.property_name}」の申請を差し戻しました`,
+      'success',
+    );
+    setReviewTarget(null);
+    await load();
+  };
 
   const approve = async (code: string, terminalId: string | null) => {
     if (!approveTarget) return;
@@ -114,9 +158,15 @@ export function PropertyRequestsList() {
             更新
           </Button>
         </div>
-        <p className="mt-0.5 text-xs text-gray-500">
-          点検登録フォームに無い建物の追加申請です。承認すると業務システムに物件・担当保守会社・点検（点検種別と点検月）ができます。
-        </p>
+        {isManagement ? (
+          <p className="mt-0.5 text-xs text-gray-500">
+            自社が管理会社として選ばれた建物の追加申請です。審査は任意です。「審査済み」にすると管理者に承認を勧めます。「差戻し」は申請を却下し、その建物の承認前の掲示の申請も削除します。物件コードは管理者が決めて承認します。
+          </p>
+        ) : (
+          <p className="mt-0.5 text-xs text-gray-500">
+            点検登録フォームに無い建物の追加申請です。承認すると業務システムに物件・担当保守会社・点検（点検種別と点検月）ができ、この建物の掲示の申請が物件コードに付け替わります。管理会社の審査は任意です（審査が無くても承認できます）。
+          </p>
+        )}
       </CardHeader>
       <CardContent className="p-0">
         {loading && rows.length === 0 ? (
@@ -145,6 +195,8 @@ export function PropertyRequestsList() {
                   <th className="cell-head font-medium text-gray-500">保守会社</th>
                   <th className="cell-head font-medium text-gray-500">点検種別</th>
                   <th className="cell-head font-medium text-gray-500">点検月</th>
+                  <th className="cell-head font-medium text-gray-500">管理会社の審査</th>
+                  <th className="cell-head font-medium text-gray-500">掲示の申請</th>
                   <th className="cell-head font-medium text-gray-500">申請者</th>
                   <th className="cell-head font-medium text-gray-500">申請日時</th>
                   <th className="cell-head sticky right-0 bg-gray-50 font-medium text-gray-500 shadow-[inset_1px_0_0_var(--color-gray-200)]">
@@ -163,6 +215,15 @@ export function PropertyRequestsList() {
                     <td className="cell whitespace-nowrap text-sm text-gray-700">
                       {r.inspection_months.length > 0 ? r.inspection_months.join(',') : '-'}
                     </td>
+                    <td
+                      className={`cell text-sm ${r.mgmt_reviewed_at ? 'text-green-700' : 'text-gray-400'}`}
+                      data-testid="propertyRequestMgmtReview"
+                    >
+                      {mgmtReviewLabel(r)}
+                    </td>
+                    <td className="cell whitespace-nowrap text-sm text-gray-700" data-testid="propertyRequestEntryCount">
+                      {r.entryCount > 0 ? `${r.entryCount}件（建物未承認）` : '-'}
+                    </td>
                     <td className="cell whitespace-nowrap text-sm text-gray-500">
                       {r.requesterEmail}
                     </td>
@@ -170,14 +231,30 @@ export function PropertyRequestsList() {
                       {new Date(r.created_at).toLocaleString('ja-JP')}
                     </td>
                     <td className="cell sticky right-0 bg-white shadow-[inset_1px_0_0_var(--color-gray-200)] group-hover:bg-gray-50">
-                      <div className="-my-0.5 flex items-center gap-1">
-                        <Button size="sm" variant="success" onClick={() => setApproveTarget(r)}>
-                          承認
-                        </Button>
-                        <Button size="sm" variant="danger" onClick={() => setRejectTarget(r)}>
-                          却下
-                        </Button>
-                      </div>
+                      {isManagement ? (
+                        <div className="-my-0.5 flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="success"
+                            disabled={!!r.mgmt_reviewed_at}
+                            onClick={() => setReviewTarget({ row: r, action: 'recommend' })}
+                          >
+                            {r.mgmt_reviewed_at ? '審査済み' : '審査済みにする'}
+                          </Button>
+                          <Button size="sm" variant="danger" onClick={() => setReviewTarget({ row: r, action: 'reject' })}>
+                            差戻し
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="-my-0.5 flex items-center gap-1">
+                          <Button size="sm" variant="success" onClick={() => setApproveTarget(r)}>
+                            承認
+                          </Button>
+                          <Button size="sm" variant="danger" onClick={() => setRejectTarget(r)}>
+                            却下
+                          </Button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -195,6 +272,12 @@ export function PropertyRequestsList() {
         target={rejectTarget}
         onClose={() => setRejectTarget(null)}
         onConfirm={reject}
+      />
+      <MgmtReviewDialog
+        target={reviewTarget?.row ?? null}
+        action={reviewTarget?.action ?? 'recommend'}
+        onClose={() => setReviewTarget(null)}
+        onConfirm={review}
       />
     </Card>
   );
@@ -327,6 +410,8 @@ export function ApproveDialog({ target, onClose, onConfirm }: ApproveDialogProps
               ? `点検「${target.inspectionTypeName}」（点検月 ${target.inspection_months.join(',') || '未登録'}）も登録します。`
               : '点検種別の指定が無いので、点検は登録しません（マスター管理で追加できます）。'}
             物件コードは後から変えられません。
+            {target.entryCount > 0 &&
+              `この建物の掲示の申請${target.entryCount}件（建物未承認）は、この物件コード・端末に付け替わり、承認できるようになります。`}
           </p>
           {terminalId ? (
             <p className="text-xs text-gray-600" data-testid="propertyRequestTerminalNote">
@@ -396,6 +481,73 @@ export function RejectDialog({ target, onClose, onConfirm }: DialogProps) {
           />
           <p className="text-xs text-gray-400">
             理由は申請者の「建物追加 申請」画面に表示されます。
+            {target.entryCount > 0 &&
+              `この建物の掲示の申請${target.entryCount}件（建物未承認）は削除されます。`}
+          </p>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+interface MgmtReviewDialogProps extends DialogProps {
+  action: 'recommend' | 'reject';
+}
+
+/** 管理会社の審査: 審査済み（承認推奨。コメント任意）／差戻し（却下。理由必須） */
+export function MgmtReviewDialog({ target, action, onClose, onConfirm }: MgmtReviewDialogProps) {
+  const { value, setValue, error, setError, sending, setSending } = useDialogValue(target);
+  const reject = action === 'reject';
+  const submit = async () => {
+    if (reject && !value.trim()) {
+      setError('差戻しの理由を入力してください');
+      return;
+    }
+    setSending(true);
+    try {
+      await onConfirm(value.trim());
+    } catch (err) {
+      setError(rpcMessage(err, reject ? '差戻しに失敗しました' : '審査に失敗しました'));
+    } finally {
+      setSending(false);
+    }
+  };
+  return (
+    <Modal
+      open={!!target}
+      onClose={onClose}
+      title={reject ? '新規建物の申請の差戻し' : '新規建物の申請の審査'}
+      dirty={value.trim() !== ''}
+      footer={
+        <>
+          <Button variant="secondary" size="sm" onClick={onClose} disabled={sending}>
+            キャンセル
+          </Button>
+          <Button variant={reject ? 'danger' : 'success'} size="sm" onClick={submit} disabled={sending}>
+            {reject ? '差し戻す' : '審査済みにする'}
+          </Button>
+        </>
+      }
+    >
+      {target && (
+        <div className="space-y-2">
+          <p className="text-xs text-gray-600">{subject(target)}</p>
+          <TextArea
+            id="propertyRequestMgmtComment"
+            label={reject ? '差戻しの理由 *' : 'コメント（任意）'}
+            rows={3}
+            maxLength={500}
+            value={value}
+            error={error || undefined}
+            onChange={(e) => {
+              setValue(e.target.value);
+              if (error) setError('');
+            }}
+          />
+          <p className="text-xs text-gray-400">
+            {reject
+              ? `申請は却下になり、理由は申請者の「建物追加 申請」画面に表示されます。${target.entryCount > 0 ? `この建物の掲示の申請${target.entryCount}件（建物未承認）は削除されます。` : ''}`
+              : '管理者に承認を勧めます。物件コードは管理者が決めて承認します。'}
           </p>
         </div>
       )}
