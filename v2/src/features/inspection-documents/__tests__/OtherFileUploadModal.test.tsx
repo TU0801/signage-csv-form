@@ -36,7 +36,7 @@ describe('OtherFileUploadModal', () => {
     api.registerPropertyFile.mockResolvedValue({ id: 'f1' });
     const onUploaded = vi.fn();
     render(<OtherFileUploadModal open onClose={vi.fn()} properties={properties} onUploaded={onUploaded} />);
-    fireEvent.click(screen.getByRole('button', { name: '件を登録する' }));
+    fireEvent.click(screen.getByRole('button', { name: '登録する' }));
     expect(await screen.findByText('区分を選んでください')).toBeInTheDocument();
     expect(screen.getByText('建物を選んでください', { selector: 'p' })).toBeInTheDocument();
     expect(screen.getByText('ファイルを追加してください')).toBeInTheDocument();

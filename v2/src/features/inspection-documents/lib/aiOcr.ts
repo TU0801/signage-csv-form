@@ -365,6 +365,20 @@ export function matchInspectionType(read: string, labels: string[]): string | nu
   return best && bestScore >= INSPECTION_TYPE_MIN && !tie ? best : null;
 }
 
+/** ページの文字に出てくる点検種別名（最長のもの。同じ長さで別の名前が並べば選ばない） */
+export function matchInspectionTypeInText(pageText: string, labels: string[]): string | null {
+  const hay = nameCore(pageText);
+  if (!hay) return null;
+  const hits = [...new Set(labels.filter(Boolean))].filter((l) => {
+    const lc = nameCore(l);
+    return lc.length >= 2 && hay.includes(lc);
+  });
+  if (hits.length === 0) return null;
+  const longest = Math.max(...hits.map((l) => nameCore(l).length));
+  const top = hits.filter((l) => nameCore(l).length === longest);
+  return top.length === 1 ? (top[0] ?? null) : null;
+}
+
 // ---------------------------------------------------------------------------
 // 書類の種類 → その他ファイルの区分
 // ---------------------------------------------------------------------------
@@ -583,7 +597,9 @@ export function postProcessOcr(raw: AiOcrRaw, ctx: OcrContext): OcrSuggestion {
       buildingRead,
       property: resolveProperty(buildingRead, pageTexts[i - 1] ?? '', ctx),
       inspectionTypeRead: typeRead,
-      inspectionType: resolveInspectionType(typeRead, ctx),
+      // 読めなければページの文字に出てくる点検種別名（文字情報だけで読むとき）
+      inspectionType:
+        resolveInspectionType(typeRead, ctx) ?? matchInspectionTypeInText(pageTexts[i - 1] ?? '', ctx.inspectionTypes),
       performedOn: isoDateOrNull(p?.performed_on ?? '') ?? null,
     });
   }

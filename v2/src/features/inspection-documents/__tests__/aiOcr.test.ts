@@ -124,6 +124,7 @@ describe('aiOcr 区間への割り当て', () => {
     expect(s.targetMonth).toBe('2026-10-01');
     expect(s.documentType).toBe('警備報告書');
     expect(s.vendor?.id).toBe('v2');
+    expect(s.pages[0]?.inspectionType).toBe('警備報告');
     const breaks = suggestBreaks(s.pages, 3);
     expect([...breaks]).toEqual([2]);
     const picks = suggestSegmentTargets(

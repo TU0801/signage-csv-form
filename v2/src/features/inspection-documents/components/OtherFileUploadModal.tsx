@@ -225,7 +225,7 @@ function OtherFileUploadDialog({
           </Button>
           {!allDone && (
             <Button size="sm" onClick={() => void handleSubmit()} disabled={submitting}>
-              {submitting ? '送信中…' : `${files.length || ''}件を登録する`}
+              {submitting ? '送信中…' : files.length > 0 ? `${files.length}件を登録する` : '登録する'}
             </Button>
           )}
         </>
