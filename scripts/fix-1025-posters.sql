@@ -12,9 +12,9 @@
 --   3. RPC signage.poster_library_for_property(物件コード): その物件の申請で選べるライブラリ（全社共通＋物件の管理会社の分）。
 --      保守会社は担当する物件のときだけ、その管理会社の分も返す
 --   4. Storage poster-images/library/{common|<管理会社id>}/ の登録・更新・削除ポリシー（新しい名前で足す。既存は変えない）
---   7. 申請の貼紙の確かめ（トリガー signage.guard_entry_posters）: extra_posters の要素の形、アップロードの画像は申請者のフォルダ、
---      ライブラリの貼紙（extra_posters と、poster_image が library/ の画像）は物件の管理会社の分か全社共通だけ
---      1枚目の URL は signage.poster_url_normalized() で書き方（%xx・'/./'・'//'）を揃えてから見る（修正依頼1025 検証 N3）
+--   7. 申請の貼紙の確かめ（トリガー signage.guard_entry_posters）: extra_posters の要素の形と、貼紙の URL（1枚目・2枚目以降）を
+--      許可リストとの完全一致で見る（申請者のフォルダのアップロード・物件の管理会社の分か全社共通のライブラリ。修正依頼1025 検証 N3）。
+--      書き方を揃える（正規化する）のはやめた。前の版の signage.poster_url_normalized() は消す
 --      ライブラリのファイル名は英数字で始まる名前だけ（CSV の点検案内TPLNo に数式を入れさせない。検証 S3）
 --   0. signage.poster_public_base(): JWT の iss（https://<ref>.supabase.co/auth/v1）からこのプロジェクトの URL を出す。
 --      ライブラリの行・申請の貼紙の URL のホストをこれと突き合わせる
@@ -390,62 +390,50 @@ GRANT EXECUTE ON FUNCTION signage.poster_object_referenced(text) TO authenticate
 GRANT EXECUTE ON FUNCTION signage.orphan_poster_images() TO authenticated, service_role;
 
 -- ============================================================
--- 7. 申請の貼紙の確かめ（2枚目以降の extra_posters と、1枚目がライブラリの画像のときの poster_image）
+-- 7. 申請の貼紙の確かめ（1枚目の poster_image と、2枚目以降の extra_posters）
 -- ============================================================
 -- 管理会社の貼紙は、その管理会社の物件の申請でだけ使える（ユーザー決定3）。画面は物件を選んだ時点のライブラリから選ぶので、
 -- 選んだ後に物件を変える・一括入力で行を写すなどで他社の物件の申請に入るのを、ここで止める。
---   形: 要素はオブジェクトで、source は upload か library、position は '0'〜'4' か無し、image_url は文字列。
---   upload: image_url は poster-images/{申請者 user_id}/ の公開 URL（ホストは poster_public_base と突き合わせる）。
---   library: library_id のライブラリの行が有効で、image_url がその行の image_url と同じで、行が全社共通か物件の管理会社の分。
---   poster_image が poster-images/library/ の画像なら、同じく有効で範囲内のライブラリの行の image_url と同じであること。
---   物件の管理会社は、申請の物件コードと一致する物件行（書式の揺れを吸収しない。1024 の方針「書き込みは正確な物件行で判定」）。
---   物件行が無い（建物追加の仮のコード REQ-・旧書式の物件コード）なら全社共通だけ。
+-- URL は書き方を揃えず（正規化しない）、決まった形との完全一致だけ通す（許可リスト。修正依頼1025 N3）。
+-- '%2F'・'%5C'・'\'・タブ・改行・'/./'・'//'・符号化の重ね・大文字のホスト・別のホストなど、ブラウザや Storage が同じ場所と
+-- 読むかもしれない別の書き方は、どれも許可リストに無いので止まる。
+--   (a) NULL・空（poster_image だけ。テンプレートの申請は NULL）
+--   (b) 本人のアップロード: poster_public_base() || '/storage/v1/object/public/poster-images/' || 行の user_id || '/' || ファイル名
+--       ファイル名は [A-Za-z0-9._-] だけ（'/'・'\'・'%'・制御文字を含まない）で、'.' だけの名前ではない。
+--       画面（v2 lib/storage.ts・v1 js/supabase/storage.js）が付ける名前は {時刻}_{英数字6}.png|jpg なので、これに収まる。
+--       user_id は行の値（管理者が他の方の申請を直すときも、申請した方のフォルダ）。poster_public_base() が出せない（JWT の iss が
+--       Auth の URL の形でない）ときは (b) を通さない
+--   (c) ライブラリ: 有効なライブラリの行の image_url と完全に同じで、行が全社共通か物件の管理会社の分
+--       （poster_library_for_property と同じ範囲。物件の管理会社は申請の物件コードと一致する物件行で見る）
+--   (d) poster_image だけ: 同じ物件コードの別の追加貼紙の申請の poster_image と完全に同じで、その値がその申請の (b) の形
+--       （点検一覧で、他の方の差戻しの追加貼紙を新しい申請として出す経路。inspection-portal ApplyModal）
+--   extra_posters の要素の形: オブジェクトで、source は upload か library、position は '0'〜'4' か無し、image_url は文字列。
+--     upload は (b)、library は library_id の行で (c)。
+--   物件行が無い（建物追加の仮のコード REQ-・旧書式の物件コード）なら、ライブラリは全社共通だけ。
 -- 確かめるのは INSERT と、貼紙・物件コードが変わった UPDATE だけ（承認・差戻し・取込などの状態の変更では見ない）。
--- UPDATE で前から入っていた要素は、物件コードが変わったときに範囲だけ確かめ直す（無効になったライブラリでも、建物の承認の
--- 付け替えを止めない）。JWT の無い経路（管理 SQL）は対象外
--- URL の書き方を揃える（修正依頼1025 N3）: %xx を復号し、スキーム・ホストより後の '/./' と連続する '/' を1つにする。
--- '/./library/' や '/%6Cibrary/' と書いて、下のライブラリの範囲の確かめを抜けさせない。復号できない（UTF-8 でない）なら null
-CREATE OR REPLACE FUNCTION signage.poster_url_normalized(p_url text)
- RETURNS text
- LANGUAGE plpgsql
+-- UPDATE で前から入っていた値（poster_image が変わらない・extra_posters の前からの要素）は、入ったときに確かめ済みなので、
+-- 物件コードが変わったときにライブラリの範囲だけ確かめ直す（無効になったライブラリでも、建物の承認の付け替えを止めない）。
+-- JWT の無い経路（管理 SQL）は対象外
+DROP FUNCTION IF EXISTS signage.poster_url_normalized(text);
+
+-- (b) の判定。p_base が null なら通さない
+CREATE OR REPLACE FUNCTION signage.poster_is_own_upload(p_url text, p_user_id uuid, p_base text)
+ RETURNS boolean
+ LANGUAGE sql
  IMMUTABLE
  SET search_path TO 'pg_catalog', 'pg_temp'
 AS $function$
-DECLARE
-  v text := p_url;
-  v_prev text;
-  v_head text;
-  i int := 0;
-BEGIN
-  IF v IS NULL THEN
-    RETURN NULL;
-  END IF;
-  -- 二重に符号化した書き方（%256C）も揃うよう、変わらなくなるまで（最大3回）復号する
-  LOOP
-    v_prev := v;
-    SELECT convert_from(
-             coalesce(string_agg(
-               CASE WHEN t.m[1] ~ '^%[0-9A-Fa-f]{2}$' THEN decode(substr(t.m[1], 2), 'hex') ELSE convert_to(t.m[1], 'UTF8') END,
-               ''::bytea ORDER BY t.ord), ''::bytea),
-             'UTF8')
-      INTO v
-      FROM regexp_matches(v, '(%[0-9A-Fa-f]{2}|[^%]+|%)', 'g') WITH ORDINALITY AS t(m, ord);
-    i := i + 1;
-    EXIT WHEN v = v_prev OR i >= 3;
-  END LOOP;
-  v_head := coalesce(substring(v FROM '^[A-Za-z][A-Za-z0-9+.-]*://[^/?#]*'), '');
-  v := substr(v, length(v_head) + 1);
-  LOOP
-    v_prev := v;
-    v := regexp_replace(regexp_replace(v, '/\.(/|$)', '/', 'g'), '/{2,}', '/', 'g');
-    EXIT WHEN v = v_prev;
-  END LOOP;
-  RETURN v_head || v;
-EXCEPTION WHEN character_not_in_repertoire OR untranslatable_character OR invalid_parameter_value THEN
-  RETURN NULL;
-END;
+  select coalesce(
+           p_url is not null and p_user_id is not null and p_base is not null
+           and left(p_url, length(p_base || '/storage/v1/object/public/poster-images/' || p_user_id::text || '/'))
+               = p_base || '/storage/v1/object/public/poster-images/' || p_user_id::text || '/'
+           and substr(p_url, length(p_base || '/storage/v1/object/public/poster-images/' || p_user_id::text || '/') + 1)
+               ~ '^[A-Za-z0-9._-]+$'
+           and substr(p_url, length(p_base || '/storage/v1/object/public/poster-images/' || p_user_id::text || '/') + 1)
+               !~ '^\.+$',
+           false);
 $function$;
-REVOKE ALL ON FUNCTION signage.poster_url_normalized(text) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION signage.poster_is_own_upload(text, uuid, text) FROM PUBLIC, anon, authenticated;
 
 CREATE OR REPLACE FUNCTION signage.guard_entry_posters()
  RETURNS trigger
@@ -454,14 +442,12 @@ CREATE OR REPLACE FUNCTION signage.guard_entry_posters()
  SET search_path TO 'biz', 'signage', 'pg_temp'
 AS $function$
 DECLARE
-  c_prefix constant text := '/storage/v1/object/public/poster-images/';
   v_base text := signage.poster_public_base();
   v_code_changed boolean;
   v_is_new boolean;
   v_company uuid;
   x jsonb;
   v_url text;
-  v_path text;
   v_lib signage.signage_poster_library;
 BEGIN
   IF auth.uid() IS NULL THEN
@@ -493,13 +479,7 @@ BEGIN
     v_url := x ->> 'image_url';
     IF x ->> 'source' = 'upload' THEN
       CONTINUE WHEN NOT v_is_new;
-      v_path := CASE
-        WHEN v_base IS NOT NULL THEN
-          CASE WHEN left(v_url, length(v_base || c_prefix)) = v_base || c_prefix THEN substr(v_url, length(v_base || c_prefix) + 1) END
-        ELSE substring(v_url FROM '^https?://[^/?#]+/storage/v1/object/public/poster-images/(.*)$')
-      END;
-      IF v_path IS NULL OR position('..' in v_path) > 0
-         OR v_path !~ ('^' || NEW.user_id::text || '/[^/?#]+$') THEN
+      IF NOT signage.poster_is_own_upload(v_url, NEW.user_id, v_base) THEN
         RAISE EXCEPTION '追加の貼紙の画像は、申請する方がアップロードした画像だけ使えます' USING ERRCODE = '42501';
       END IF;
     ELSE
@@ -516,24 +496,45 @@ BEGIN
     END IF;
   END LOOP;
 
-  -- 1枚目がライブラリの画像（poster-images/library/ の公開 URL。ホストによらず見る）。書き方の揺れ（%xx・'/./'・'//'）を
-  -- 揃えてから見る。揃えられない・'..' を含む URL は、ライブラリの画像かどうか決められないので、ライブラリの画像と同じに扱う
-  -- （ライブラリの行の image_url と完全に同じでなければ止まる）
-  v_url := signage.poster_url_normalized(NEW.poster_image);
-  IF NEW.poster_image IS NOT NULL
-     AND (v_url IS NULL OR v_url ~ '/\.\.(/|$)' OR v_url ~ '/storage/v1/object/public/poster-images/library/')
-     AND (TG_OP = 'INSERT' OR v_code_changed OR NEW.poster_image IS DISTINCT FROM OLD.poster_image) THEN
-    v_is_new := TG_OP = 'INSERT' OR NEW.poster_image IS DISTINCT FROM OLD.poster_image;
-    IF NOT EXISTS (
-      SELECT 1 FROM signage.signage_poster_library l
-       WHERE l.image_url = NEW.poster_image
-         AND (l.is_active OR NOT v_is_new)
-         AND (l.management_company_id IS NULL OR l.management_company_id = v_company)) THEN
-      RAISE EXCEPTION '管理会社の貼紙は、その管理会社の物件の申請でだけ使えます（またはライブラリの登録が変わりました）'
-        USING ERRCODE = '42501';
-    END IF;
+  -- 1枚目
+  v_url := NEW.poster_image;
+  IF coalesce(v_url, '') = '' THEN
+    RETURN NEW;                                                          -- (a)
   END IF;
-  RETURN NEW;
+  v_is_new := TG_OP = 'INSERT' OR v_url IS DISTINCT FROM OLD.poster_image;
+  IF NOT v_is_new THEN
+    -- 前から入っていた値で、物件コードだけ変わった。ライブラリの画像なら範囲だけ確かめ直す
+    IF EXISTS (SELECT 1 FROM signage.signage_poster_library l WHERE l.image_url = v_url)
+       AND NOT EXISTS (
+         SELECT 1 FROM signage.signage_poster_library l
+          WHERE l.image_url = v_url
+            AND (l.management_company_id IS NULL OR l.management_company_id = v_company)) THEN
+      RAISE EXCEPTION '管理会社の貼紙は、その管理会社の物件の申請でだけ使えます' USING ERRCODE = '42501';
+    END IF;
+    RETURN NEW;
+  END IF;
+  IF signage.poster_is_own_upload(v_url, NEW.user_id, v_base) THEN
+    RETURN NEW;                                                          -- (b)
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM signage.signage_poster_library l
+     WHERE l.image_url = v_url
+       AND l.is_active
+       AND (l.management_company_id IS NULL OR l.management_company_id = v_company)) THEN
+    RETURN NEW;                                                          -- (c)
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM signage.signage_poster_library l WHERE l.image_url = v_url)
+     AND EXISTS (
+       SELECT 1 FROM signage.signage_entries e
+        WHERE e.poster_image = v_url
+          AND e.property_code = NEW.property_code
+          AND e.poster_type = 'custom'
+          AND e.id IS DISTINCT FROM NEW.id
+          AND signage.poster_is_own_upload(e.poster_image, e.user_id, v_base)) THEN
+    RETURN NEW;                                                          -- (d)
+  END IF;
+  RAISE EXCEPTION '1枚目の貼紙の画像は、申請する方がアップロードした画像か、この物件で使える貼紙ライブラリの貼紙だけ使えます'
+    USING ERRCODE = '42501';
 END;
 $function$;
 REVOKE ALL ON FUNCTION signage.guard_entry_posters() FROM PUBLIC, anon, authenticated;
@@ -546,7 +547,7 @@ CREATE TRIGGER guard_entry_posters BEFORE INSERT OR UPDATE ON signage.signage_en
 -- ============================================================
 -- DROP TRIGGER IF EXISTS guard_entry_posters ON signage.signage_entries;
 -- DROP FUNCTION IF EXISTS signage.guard_entry_posters();
--- DROP FUNCTION IF EXISTS signage.poster_url_normalized(text);
+-- DROP FUNCTION IF EXISTS signage.poster_is_own_upload(text, uuid, text);
 -- DROP POLICY IF EXISTS "poster-images library select" ON storage.objects;
 -- DROP POLICY IF EXISTS "poster-images library insert" ON storage.objects;
 -- DROP POLICY IF EXISTS "poster-images library delete" ON storage.objects;
