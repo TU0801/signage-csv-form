@@ -10,6 +10,8 @@ import {
   toggleBreak,
   validateSegments,
 } from '../lib/bulkSegments';
+import { typeFlagsMap } from '@/features/inspection-portal/lib/schedule';
+import { buildUnitIndex } from '@/features/inspection-portal/lib/units';
 
 describe('buildSegments / toggleBreak', () => {
   it('区切りの位置でページを区間に分け、同じ位置をもう一度押すと区切りが外れる', () => {
@@ -44,6 +46,22 @@ describe('buildTargets', () => {
     expect(targets[0]).toMatchObject({ targetMonth: '2026-09-01', entryId: 'e9', group: '2026年9月' });
     expect(targets[0]!.label).toContain('2026年9月');
     expect(targets[1]).toMatchObject({ targetMonth: null, entryId: null, group: UNSCHEDULED_GROUP });
+  });
+
+  it('毎月の点検種別は毎月の選択肢を出し、台が2台以上の点検は1つの選択肢に台の No を添える（修正依頼1025 G4・H1）', () => {
+    const inspections = [
+      // 点検月未登録でも毎月の印があれば予定（毎月）に出る
+      makeInspection({ inspection_id: 'i1', inspection_type_id: 't-remote', inspection_months: [], schedule_from: '2026-09-01' }),
+      makeInspection({ inspection_id: 'i2', inspection_months: [10], schedule_from: '2026-09-01' }),
+    ];
+    const flags = typeFlagsMap([{ inspection_type_id: 't-remote', report_only: true, monthly: true }]);
+    const units = buildUnitIndex([
+      { inspection_id: 'i2', unit_id: 'u1', unit_code: 'No1', unit_sort: 0, maintainer_id: 'v1', inspection_months: [], inspected_on: null, equipment_code: null },
+      { inspection_id: 'i2', unit_id: 'u2', unit_code: 'No2', unit_sort: 1, maintainer_id: 'v1', inspection_months: [], inspected_on: null, equipment_code: null },
+    ]);
+    const targets = buildTargets(inspections, [], [], 'v1', '2026-10-24', 1, { flags, units });
+    expect(targets.map((t) => t.key)).toEqual(['i1:2026-11-01', 'i1:2026-10-01', 'i2:2026-10-01', 'i1:2026-09-01']);
+    expect(targets.find((t) => t.key === 'i2:2026-10-01')!.label).toContain('（No1・No2）');
   });
 });
 

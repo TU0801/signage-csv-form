@@ -6,17 +6,20 @@ import type { DbEntry } from '@/types/database';
  * 読むのは signage_entries を直接（管理者は RLS で全件読める）。管理会社に開くときは範囲つきの読み方に差し替える。
  */
 
+/**
+ * 追加画像のある申請: 1枚目が追加の貼紙（画像あり）か、2枚目以降の貼紙（extra_posters）がある申請（修正依頼1025 D3）
+ */
+const HAS_CUSTOM_IMAGE = 'and(poster_type.eq.custom,poster_image.not.is.null,poster_image.neq.),extra_posters.neq.[]';
+
 /** 状態の並び（承認待ち＝申請済みを先頭に） */
 const STATUS_ORDER: Record<string, number> = { draft: 0, pending: 1, ready: 2, exported: 3 };
 
-/** 追加画像（poster_type='custom' かつ画像あり）の申請。状態は問わない（signage_entries に削除済みの状態は無い）。承認待ちを先頭、次に新しい順 */
+/** 追加画像（poster_type='custom' かつ画像あり、または2枚目以降の貼紙あり）の申請。状態は問わない（signage_entries に削除済みの状態は無い）。承認待ちを先頭、次に新しい順 */
 export async function fetchCustomImageEntries(): Promise<DbEntry[]> {
   const { data, error } = await supabase
     .from(TABLES.entries)
     .select('*')
-    .eq('poster_type', 'custom')
-    .not('poster_image', 'is', null)
-    .neq('poster_image', '')
+    .or(HAS_CUSTOM_IMAGE)
     .order('created_at', { ascending: false });
   if (error) throw error;
   return sortCustomImageEntries((data ?? []) as DbEntry[]);
@@ -36,9 +39,7 @@ export async function countCustomImageEntries(): Promise<number> {
   const { count, error } = await supabase
     .from(TABLES.entries)
     .select('id', { count: 'exact', head: true })
-    .eq('poster_type', 'custom')
-    .not('poster_image', 'is', null)
-    .neq('poster_image', '');
+    .or(HAS_CUSTOM_IMAGE);
   if (error) throw error;
   return count ?? 0;
 }

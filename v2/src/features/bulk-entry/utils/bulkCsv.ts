@@ -1,4 +1,5 @@
 import { CSV_HEADERS } from '@/lib/csv';
+import { extraPosterPosition } from '@/lib/extraPosters';
 import { todayUtc } from '@/lib/utils';
 import { submittedDisplayPeriod } from './rowDetail';
 import type { BulkEntryRow, BulkMasterData, BulkSettings, BulkVendorSelection } from '../types';
@@ -95,6 +96,21 @@ export function generateBulkCsv(
     ];
 
     csvRows.push(values.map(escapeCsvField).join(','));
+
+    // 2枚目以降の貼紙（修正依頼1025 D3）: 同じ物件・端末・表示期間で、追加の貼紙と同じ形の行を枚数分足す
+    // （申請前で ID が無いので点検案内TPLNo は画像のファイル名。申請後の管理画面の CSV は extraPosterBaseName）
+    (row.extraPosters ?? []).forEach((extra) => {
+      const extraValues = [...values];
+      extraValues[5] = ''; // 点検工事案内
+      extraValues[7] = posterImageBaseName(extra.image_url); // 点検案内TPLNo
+      extraValues[8] = ''; // 点検開始日
+      extraValues[9] = ''; // 点検完了日
+      extraValues[10] = ''; // 掲示備考
+      extraValues[11] = ''; // 掲示板用案内文
+      extraValues[12] = extraPosterPosition(extra, positionValue); // frame_No
+      extraValues[27] = '追加'; // 貼紙区分
+      csvRows.push(extraValues.map(escapeCsvField).join(','));
+    });
   });
 
   return csvRows.join('\n');

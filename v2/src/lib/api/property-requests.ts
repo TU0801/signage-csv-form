@@ -49,7 +49,61 @@ export async function fetchMyPropertyRequests(userId: string): Promise<DbPropert
   return (data ?? []) as DbPropertyRequest[];
 }
 
-/** 承認待ちの申請（管理者。RLS で管理者以外は自分の分しか返らない） */
+/**
+ * 保守会社の建物追加の申請（新しい順・直近50件）。点検登録フォームに未承認の建物の行を出す・自動保存の行を承認後の物件コードに付け替えるため。
+ * 同じ保守会社の人と管理者が読める（RLS property_requests_vendor_select。scripts/fix-1025-building.sql）
+ */
+export async function fetchVendorPropertyRequests(vendorId: string): Promise<DbPropertyRequest[]> {
+  const { data, error } = await supabase
+    .from(TABLES.propertyRequests)
+    .select('*')
+    .eq('vendor_id', vendorId)
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (error) throw error;
+  return (data ?? []) as DbPropertyRequest[];
+}
+
+/** id を指定して読む（承認待ちの掲示の申請に、未承認の建物の名前と状態を出すため。読めない分は返らない） */
+export async function fetchPropertyRequestsByIds(ids: string[]): Promise<DbPropertyRequest[]> {
+  if (ids.length === 0) return [];
+  const { data, error } = await supabase.from(TABLES.propertyRequests).select('*').in('id', ids);
+  if (error) throw error;
+  return (data ?? []) as DbPropertyRequest[];
+}
+
+/**
+ * 管理会社の審査（任意）。recommend＝審査済み（承認推奨。管理者が物件コードを入れて承認する）/
+ * reject＝差戻し（申請を却下にし、その建物の承認前の掲示の申請は消える。理由必須）
+ */
+export async function mgmtReviewPropertyRequest(
+  id: string,
+  action: 'recommend' | 'reject',
+  comment: string,
+): Promise<DbPropertyRequest> {
+  const { data, error } = await supabase.rpc(RPC.mgmtReviewPropertyRequest, {
+    p_id: id,
+    p_action: action,
+    p_comment: comment.trim() || null,
+  });
+  if (error) throw error;
+  return data as DbPropertyRequest;
+}
+
+/** 申請ごとの、建物の承認前に出された掲示の申請（承認待ち・差戻し中）の件数。中身は返さない */
+export async function fetchPropertyRequestEntryCounts(ids: string[]): Promise<Map<string, number>> {
+  if (ids.length === 0) return new Map();
+  const { data, error } = await supabase.rpc(RPC.propertyRequestEntryCounts, { p_ids: ids });
+  if (error) throw error;
+  return new Map(
+    ((data ?? []) as { property_request_id: string; entry_count: number }[]).map((r) => [
+      r.property_request_id,
+      r.entry_count,
+    ]),
+  );
+}
+
+/** 承認待ちの申請（管理者は全部・管理会社は自社が管理会社の分。RLS で保守会社は自社の分しか返らない） */
 export async function fetchPendingPropertyRequests(): Promise<DbPropertyRequest[]> {
   const { data, error } = await supabase
     .from(TABLES.propertyRequests)

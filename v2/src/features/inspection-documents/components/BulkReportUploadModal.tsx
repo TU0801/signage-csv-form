@@ -4,13 +4,15 @@ import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
-import { cn } from '@/lib/utils';
+import { cn, normalizeSearch } from '@/lib/utils';
 import { fetchInspectionReports, registerInspectionReport, sha256Hex } from '@/lib/api/portal';
+import { recordCorrections } from '@/lib/api/property-files';
 import { useAuth } from '@/hooks/useAuth';
 import type { DbInspectionReport } from '@/types/portal';
 import { entryErrorReason } from '@/lib/api/admin-entries';
 import { usePortalData } from '@/features/inspection-portal/hooks/usePortalData';
-import { formatMonth, todayJst } from '@/features/inspection-portal/lib/schedule';
+import { formatMonth, todayJst, typeFlagsMap } from '@/features/inspection-portal/lib/schedule';
+import { buildUnitIndex } from '@/features/inspection-portal/lib/units';
 import { buildReportFileName } from '../lib/fileName';
 import { formatBytes } from '../lib/documents';
 import { validateReportFile } from '../lib/upload';
@@ -31,6 +33,21 @@ import {
   type Segment,
   type SegmentInput,
 } from '../lib/bulkSegments';
+import {
+  correctionRecord,
+  lastDayOfPreviousMonth,
+  suggestedDefaultPerformedOn,
+  postProcessOcr,
+  suggestBreaks,
+  suggestSegmentTargets,
+  type CorrectionRecord,
+  type OcrSuggestion,
+} from '../lib/aiOcr';
+import { propertyCandidatesOf, vendorCandidatesOf } from '../lib/propertyFiles';
+import { readPdfForOcr } from '../lib/runOcr';
+import { useAiOcr } from '../hooks/useAiOcr';
+import { AiOcrControls, OcrSummary, type OcrState } from './AiOcrControls';
+import { OtherFileUploadModal } from './OtherFileUploadModal';
 
 export interface BulkReportUploadModalProps {
   open: boolean;
@@ -47,7 +64,10 @@ export function BulkReportUploadModal(props: BulkReportUploadModalProps) {
   return <BulkReportUploadDialog {...props} />;
 }
 
-const THUMB_WIDTH = 120;
+/** サムネイルの幅（修正依頼1025 G1: モーダルの最大幅で1行に4枚ほど） */
+const THUMB_WIDTH = 240;
+/** 高精細の画面でぼやけないよう、描く解像度は画面の倍率（2 まで）を掛ける */
+const thumbScale = () => Math.min(2, Math.max(1, typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1));
 
 /** 区間の見分けに使う色（区間番号の順にくり返す） */
 const SEGMENT_COLORS = [
@@ -94,6 +114,13 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
   const accountVendor = useAuth().vendorId ?? null;
   const today = todayJst();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const ai = useAiOcr();
+  /** ☑ AI-OCRで判定（既定 OFF） */
+  const [useAi, setUseAi] = useState(false);
+  const [ocr, setOcr] = useState<OcrState>({ state: 'idle' });
+  /** 区間の点検の選択肢の絞り込み（AI-OCR で読んだ対象月を入れる。人が書き換えられる） */
+  const [targetFilter, setTargetFilter] = useState('');
+  const [otherOpen, setOtherOpen] = useState(false);
 
   const [pdf, setPdf] = useState<LoadedPdf | null>(null);
   const [opening, setOpening] = useState(false);
@@ -101,7 +128,8 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
   const [rotations, setRotations] = useState<Record<number, number>>({});
   const [breaks, setBreaks] = useState<Set<number>>(new Set());
   const [inputs, setInputs] = useState<Record<number, SegmentInput>>({});
-  const [defaultPerformedOn, setDefaultPerformedOn] = useState('');
+  // 実施日の既定は今日（修正依頼1025 G3。先月分の報告書は『先月末』ボタンで先月の末日にする）
+  const [defaultPerformedOn, setDefaultPerformedOn] = useState(today);
   const [touched, setTouched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [results, setResults] = useState<Record<number, SegmentResult>>({});
@@ -131,9 +159,14 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
   // 閉じたら pdfjs の文書を片付ける
   useEffect(() => () => pdf?.pages.destroy(), [pdf]);
 
+  // 毎月・申請不要の点検種別と号機（修正依頼1025 form G4・H1）も選択肢に反映する
+  const targetOptions = useMemo(
+    () => ({ flags: typeFlagsMap(data.typeFlags), units: buildUnitIndex(data.units) }),
+    [data.typeFlags, data.units],
+  );
   const targets = useMemo(
-    () => buildTargets(data.inspections, data.entries, data.reports, vendorId, today),
-    [data.inspections, data.entries, data.reports, vendorId, today],
+    () => buildTargets(data.inspections, data.entries, data.reports, vendorId, today, undefined, targetOptions),
+    [data.inspections, data.entries, data.reports, vendorId, today, targetOptions],
   );
   const targetMap = useMemo(() => new Map(targets.map((t) => [t.key, t])), [targets]);
   const groups = useMemo(() => {
@@ -141,6 +174,20 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
     for (const t of targets) m.set(t.group, [...(m.get(t.group) ?? []), t]);
     return [...m.entries()];
   }, [targets]);
+  const filterQuery = normalizeSearch(targetFilter);
+  const filteredGroups = useMemo(() => {
+    if (!filterQuery) return groups;
+    return groups
+      .map(([g, items]) => [g, items.filter((t) => normalizeSearch(`${g} ${t.label}`).includes(filterQuery))] as [string, BulkTarget[]])
+      .filter(([, items]) => items.length > 0);
+  }, [groups, filterQuery]);
+  const filteredCount = filteredGroups.reduce((n, [, items]) => n + items.length, 0);
+  const propertyCandidates = useMemo(() => propertyCandidatesOf(data.inspections), [data.inspections]);
+  const vendorCandidates = useMemo(() => vendorCandidatesOf(data.inspections), [data.inspections]);
+  const inspectionTypeLabels = useMemo(
+    () => [...new Set(data.inspections.map((i) => i.inspection_type_label ?? '').filter(Boolean))],
+    [data.inspections],
+  );
 
   const pageCount = pdf?.pages.pageCount ?? 0;
   const segments = useMemo(() => buildSegments(pageCount, breaks), [pageCount, breaks]);
@@ -176,6 +223,8 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
       sourceRef.current = null;
       resetPrepared();
       setTouched(false);
+      setOcr({ state: 'idle' });
+      if (useAi && ai.configured) void runOcr({ file: picked, pages, bytes: buf }, true, new Set());
     } catch (err) {
       console.error('PDF open failed:', err);
       setFileError(
@@ -183,6 +232,56 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
       );
     } finally {
       setOpening(false);
+    }
+  };
+
+  /**
+   * 読み取った結果を初期値にする: 建物が変わるページで区切り（区切りをまだ入れていないとき）、区間ごとに
+   * 物件・点検種別・対象月で点検が1つに決まれば選ぶ（選んである区間は変えない）。実施日が読めたら全区間の既定に入れる（読めず対象月が先月なら先月末）
+   */
+  const applyOcr = (suggestion: OcrSuggestion, current: LoadedPdf, currentBreaks: ReadonlySet<number>) => {
+    const count = current.pages.pageCount;
+    let nextBreaks = currentBreaks;
+    if (currentBreaks.size === 0 && !locked) {
+      const suggested = suggestBreaks(suggestion.pages, count);
+      if (suggested.size > 0) {
+        nextBreaks = suggested;
+        setBreaks(suggested);
+      }
+    }
+    const segs = buildSegments(count, nextBreaks);
+    const picks = suggestSegmentTargets(segs, suggestion, targets);
+    setInputs((prev) => {
+      const next = { ...prev };
+      for (const [start, key] of Object.entries(picks)) {
+        const cur = next[Number(start)] ?? EMPTY_INPUT;
+        if (!cur.targetKey) next[Number(start)] = { ...cur, targetKey: key };
+      }
+      return next;
+    });
+    // 実施日が読めたらその日、読めず対象月が先月なら先月末（修正依頼1025 G3）
+    const performedDefault = suggestedDefaultPerformedOn(suggestion, today);
+    if (performedDefault) setDefaultPerformedOn(performedDefault);
+    if (suggestion.targetMonth) setTargetFilter(formatMonth(suggestion.targetMonth));
+  };
+
+  const runOcr = async (current: LoadedPdf, withAi: boolean, currentBreaks: ReadonlySet<number>) => {
+    setOcr({ state: 'running', useAi: withAi });
+    try {
+      // pdf-lib の切り出し元は写しを渡す（元の bytes は区間の切り出しで使う）
+      const read = await readPdfForOcr(current.pages, current.bytes.slice(), withAi);
+      const suggestion = postProcessOcr(read.raw, {
+        properties: propertyCandidates,
+        vendors: vendorCandidates,
+        inspectionTypes: inspectionTypeLabels,
+        dictionary: ai.dictionary,
+        pageTexts: read.pageTexts,
+      });
+      setOcr({ state: 'done', suggestion, mode: read.mode, pages: read.pages });
+      applyOcr(suggestion, current, currentBreaks);
+    } catch (err) {
+      console.error('OCR failed:', err);
+      setOcr({ state: 'error', message: entryErrorReason(err) });
     }
   };
 
@@ -313,6 +412,7 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
     let ok = 0;
     let skipped = 0;
     let failed = 0;
+    const okSegments: Segment[] = [];
     // 区間ごとに順に登録する。途中で失敗しても残りを続け、結果は区間ごとに出す
     for (const seg of targetsToSend) {
       setResults((prev) => ({ ...prev, [seg.start]: { state: 'running' } }));
@@ -349,6 +449,7 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
           note: input.note.trim() || null,
         });
         ok += 1;
+        okSegments.push(seg);
         setResults((prev) => ({ ...prev, [seg.start]: { state: 'ok', fileName: report.file_name } }));
       } catch (err) {
         failed += 1;
@@ -357,11 +458,30 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
       }
     }
     setSubmitting(false);
-    if (ok > 0) onUploaded?.();
+    if (ok > 0) {
+      onUploaded?.();
+      if (ocr.state === 'done') void recordCorrections(ocrCorrections(ocr.suggestion, okSegments));
+    }
     const skippedNote = skipped > 0 ? `（${skipped}件は同じ内容の報告書が提出済みのため送っていません）` : '';
     if (failed === 0 && ok === 0) addToast(`同じ内容の報告書が提出済みのため、${skipped}件とも送っていません`, 'info');
     else if (failed === 0) addToast(`${ok}件の報告書を提出しました${skippedNote}`, 'success');
     else addToast(`${ok}件を提出し、${failed}件は失敗しました${skippedNote}（失敗した区間は直して再送できます）`, 'warning');
+  };
+
+  /** 自己改善: 区間のページで読んだ建物名・点検種別と、人が選んだ点検の物件・点検種別を記録する */
+  const ocrCorrections = (suggestion: OcrSuggestion, sent: Segment[]): CorrectionRecord[] => {
+    const records: (CorrectionRecord | null)[] = [];
+    for (const seg of sent) {
+      const target = targetMap.get((inputs[seg.start] ?? EMPTY_INPUT).targetKey);
+      if (!target) continue;
+      for (const p of suggestion.pages.filter((pg) => pg.page - 1 >= seg.start && pg.page - 1 <= seg.end)) {
+        records.push(correctionRecord('property', p.buildingRead, p.property?.code ?? null, target.inspection.property_code));
+        records.push(
+          correctionRecord('inspection_type', p.inspectionTypeRead, p.inspectionType, target.inspection.inspection_type_label),
+        );
+      }
+    }
+    return records.filter((r): r is CorrectionRecord => !!r);
   };
 
   const dirty = !!pdf && !allDone;
@@ -431,19 +551,58 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
               PDF を開いています…
             </span>
           )}
-          <label className="ml-auto flex items-center gap-1 text-xs text-gray-600">
-            実施日（全区間の既定）
-            <input
-              type="date"
-              aria-label="実施日（全区間の既定）"
-              className="rounded border border-gray-300 px-1.5 py-0.5 text-xs"
-              value={defaultPerformedOn}
-              max="9999-12-31"
-              onChange={(e) => setDefaultPerformedOn(e.target.value)}
+          <Button variant="secondary" size="sm" className="text-xs" onClick={() => setOtherOpen(true)} disabled={submitting}>
+            その他ファイルアップロード
+          </Button>
+          <div className="ml-auto flex items-center gap-1 text-xs text-gray-600">
+            <label className="flex items-center gap-1">
+              実施日（全区間の既定）
+              <input
+                type="date"
+                aria-label="実施日（全区間の既定）"
+                className="rounded border border-gray-300 px-1.5 py-0.5 text-xs"
+                value={defaultPerformedOn}
+                max="9999-12-31"
+                onChange={(e) => setDefaultPerformedOn(e.target.value)}
+                disabled={submitting}
+              />
+            </label>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="px-1.5 text-xs"
+              onClick={() => setDefaultPerformedOn(today)}
               disabled={submitting}
-            />
-          </label>
+              title="今日の日付を入れる"
+            >
+              今日
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="px-1.5 text-xs"
+              onClick={() => setDefaultPerformedOn(lastDayOfPreviousMonth(today))}
+              disabled={submitting}
+              title="先月の末日を入れる（先月分の報告書）"
+            >
+              先月末
+            </Button>
+          </div>
         </div>
+        <AiOcrControls
+          enabled={useAi}
+          onToggle={(checked) => {
+            setUseAi(checked);
+            if (checked && pdf) void runOcr(pdf, true, breaks);
+          }}
+          configured={ai.configured}
+          checking={ai.checking}
+          message={ai.message}
+          onReadLocal={pdf ? () => void runOcr(pdf, false, breaks) : undefined}
+          disabled={submitting || locked}
+          ocr={ocr}
+        />
+        <OcrSummary ocr={ocr} />
         {fileError && (
           <p role="alert" className="text-xs text-red-600">
             {fileError}
@@ -464,7 +623,7 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
               ページの間の縦の帯をクリックすると区切りを入れる／外すができます。
               {locked && '（提出済みの区間があるため、区切りと回転は変えられません）'}
             </p>
-            <div className="flex max-h-[45vh] flex-wrap items-stretch gap-y-2 overflow-y-auto rounded border border-gray-200 bg-gray-50 p-2">
+            <div className="flex max-h-[60vh] flex-wrap items-stretch gap-y-2 overflow-y-auto rounded border border-gray-200 bg-gray-50 p-2">
               {Array.from({ length: pageCount }, (_, page) => {
                 const seg = segmentOfPage(page);
                 return (
@@ -488,7 +647,7 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
                           );
                         }}
                         className={cn(
-                          'mx-0.5 w-3 rounded-sm',
+                          'mx-0.5 w-4 rounded-sm',
                           breaks.has(page)
                             ? 'bg-red-500 hover:bg-red-400'
                             : 'bg-transparent hover:bg-blue-200 disabled:hover:bg-transparent',
@@ -508,6 +667,28 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
               })}
             </div>
 
+            <div className="flex flex-wrap items-center gap-1 text-xs text-gray-600">
+              <label className="flex items-center gap-1">
+                点検の絞り込み
+                <input
+                  type="search"
+                  aria-label="点検の絞り込み"
+                  placeholder="物件名・月（例 2026年10月）"
+                  className="w-64 rounded border border-gray-300 px-1.5 py-0.5 text-xs"
+                  value={targetFilter}
+                  onChange={(e) => setTargetFilter(e.target.value)}
+                  disabled={submitting}
+                />
+              </label>
+              {filterQuery && (
+                <>
+                  <span>{filteredCount}件に絞り込み中（選んである点検は残します）</span>
+                  <Button variant="ghost" size="sm" className="px-1.5 text-xs" onClick={() => setTargetFilter('')}>
+                    解除
+                  </Button>
+                </>
+              )}
+            </div>
             <table className="w-full table-fixed border-collapse text-xs">
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50 text-left text-gray-600">
@@ -527,7 +708,7 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
                     input={inputs[seg.start] ?? EMPTY_INPUT}
                     defaultPerformedOn={defaultPerformedOn}
                     today={today}
-                    groups={groups}
+                    groups={filteredGroups}
                     target={targetMap.get((inputs[seg.start] ?? EMPTY_INPUT).targetKey) ?? null}
                     reports={data.reports}
                     contentHash={hashes[segKey(seg)] ?? null}
@@ -543,6 +724,14 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
           </>
         )}
       </div>
+      <OtherFileUploadModal
+        open={otherOpen}
+        onClose={() => setOtherOpen(false)}
+        properties={propertyCandidates}
+        vendors={vendorCandidates}
+        inspectionTypes={inspectionTypeLabels}
+        onUploaded={onUploaded}
+      />
       {/* 中に入れた確認ダイアログの cancel / close は外のモーダルが無視する（components/ui/Modal） */}
       <ConfirmDialog
         open={!!confirmReplace}
@@ -575,7 +764,7 @@ function PageThumb({ pages, page, rotation, segmentNo, onRotate, disabled }: Pag
     if (!canvas) return;
     let cancelled = false;
     pages
-      .render(page, rotation, canvas, THUMB_WIDTH, () => cancelled)
+      .render(page, rotation, canvas, Math.round(THUMB_WIDTH * thumbScale()), () => cancelled)
       .then(() => {
         if (!cancelled) setFailed(false);
       })
@@ -591,11 +780,16 @@ function PageThumb({ pages, page, rotation, segmentNo, onRotate, disabled }: Pag
 
   return (
     <figure
-      className={cn('flex w-[132px] flex-col items-center gap-0.5 rounded border-2 p-1', colorOf(segmentNo))}
+      className={cn('flex w-[252px] flex-col items-center gap-0.5 rounded border-2 p-1', colorOf(segmentNo))}
       data-testid={`bulk-page-${page + 1}`}
     >
-      <div className="flex min-h-24 flex-1 items-center justify-center bg-white">
-        <canvas ref={canvasRef} aria-label={`${page + 1}ページ目`} className="block max-w-full shadow-sm" />
+      <div className="flex min-h-48 flex-1 items-center justify-center bg-white">
+        <canvas
+          ref={canvasRef}
+          aria-label={`${page + 1}ページ目`}
+          className="block h-auto max-w-full shadow-sm"
+          style={{ width: THUMB_WIDTH }}
+        />
         {failed && <span className="text-[10px] text-red-600">表示できません</span>}
       </div>
       <figcaption className="flex w-full items-center justify-between text-[11px]">

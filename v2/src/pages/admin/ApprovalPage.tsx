@@ -65,6 +65,7 @@ export function ApprovalPage() {
   }, []);
   const current = tab ?? 'data';
   const isAdmin = useAuthStore((s) => s.profile?.role === 'admin');
+  const isManagement = useAuthStore((s) => s.profile?.role === 'management');
   return (
     <div className="space-y-3">
       <h1 className="text-base font-bold text-gray-900">承認待ち</h1>
@@ -89,8 +90,8 @@ export function ApprovalPage() {
       {current === 'buildings' && (
         <div className="space-y-3">
           <BuildingRequestsList />
-          {/* 新規建物の申請の承認は管理者だけ（業務システムに物件を作るため） */}
-          {isAdmin && <PropertyRequestsList />}
+          {/* 新規建物の申請: 承認は管理者だけ（業務システムに物件を作るため）。管理会社は自社分の審査（任意。修正依頼1025 D4） */}
+          {(isAdmin || isManagement) && <PropertyRequestsList />}
         </div>
       )}
       {/* 使われていない画像の整理（Storage の削除）は管理者だけ */}

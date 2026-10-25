@@ -63,6 +63,7 @@ const portalApi = vi.hoisted(() => ({ fail: false, extra: [] as Record<string, u
 vi.mock('@/lib/api/portal', async () => {
   const { makeInspection } = await import('@/features/inspection-portal/__tests__/fixtures');
   return {
+    fetchInspectionTypeFlags: () => Promise.resolve([]),
     fetchPortalInspections: () =>
       portalApi.fail
         ? Promise.reject(new Error('portal failed'))
@@ -71,6 +72,12 @@ vi.mock('@/lib/api/portal', async () => {
             ...portalApi.extra.map((over) => makeInspection(over)),
           ]),
   };
+});
+// 保守会社の建物追加の申請（未承認の建物を物件の候補に出す。修正依頼1025 D4・F2）
+const requestsApi = vi.hoisted(() => ({ rows: [] as Record<string, unknown>[] }));
+vi.mock('@/lib/api/property-requests', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api/property-requests')>();
+  return { ...actual, fetchVendorPropertyRequests: () => Promise.resolve(requestsApi.rows) };
 });
 vi.mock('@/lib/api/single-entry', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api/single-entry')>();
@@ -82,6 +89,11 @@ vi.mock('@/lib/api/single-entry', async (importOriginal) => {
     insertEntries: (...args: unknown[]) => insertEntries(...args),
   };
 });
+
+/** 物件の候補を「全て」にする（既定は点検月のみ。修正依頼1025 D5） */
+function showAllProperties() {
+  fireEvent.change(screen.getByLabelText('物件の候補'), { target: { value: 'all' } });
+}
 
 /** 検索つきの選択欄で、コードで絞って先頭の候補を選ぶ */
 function pick(name: string, query: string) {
@@ -102,6 +114,7 @@ beforeEach(() => {
   isAdmin = false;
   portalApi.fail = false;
   portalApi.extra = [];
+  requestsApi.rows = [];
   insertEntries.mockReset();
   insertEntries.mockResolvedValue([]);
 });
@@ -203,6 +216,7 @@ describe('1件入力画面（管理者の管理会社フィルター）', () => 
       fireEvent.click(screen.getByRole('combobox', { name: '物件コード *' }));
       expect(screen.getByRole('listbox')).toBeInTheDocument();
     });
+    showAllProperties();
     pick('物件コード *', '120273-00');
     pick('点検工事案内 *', '排水管');
     fireEvent.click(screen.getByRole('button', { name: 'データを追加' }));
@@ -371,6 +385,7 @@ describe('1件入力画面（物件を選んだときの点検工事案内。修
     fireEvent.change(screen.getByLabelText('案内カテゴリ'), { target: { value: '点検' } });
     expect(typeBox()).toHaveValue('エレベーター定期点検');
     // 120273-00 には点検行が無い
+    showAllProperties();
     pick('物件コード *', '120273-00');
     expect(typeBox()).toHaveValue('エレベーター定期点検');
     expect(screen.getByLabelText('案内カテゴリ')).toHaveValue('点検');
@@ -386,6 +401,7 @@ describe('1件入力画面（記録する保守会社。修正依頼1024 本番�
     );
     await waitFor(() => expect(screen.getByRole('combobox', { name: '点検工事案内 *' })).toHaveValue('排水管清掃'));
     // 120273-00 には点検行が無いので結び付かない
+    showAllProperties();
     pick('物件コード *', '120273-00');
     fireEvent.click(screen.getByRole('button', { name: 'データを追加' }));
     await screen.findByRole('table');
@@ -394,5 +410,162 @@ describe('1件入力画面（記録する保守会社。修正依頼1024 本番�
     const row = (insertEntries.mock.calls[0]![0] as Record<string, unknown>[])[0]!;
     expect(row).not.toHaveProperty('property_inspection_id');
     expect(row).toMatchObject({ vendor_name: '三菱電機ﾋﾞﾙｿﾘｭｰｼｮﾝｽﾞ㈱', emergency_contact: '0120-000-000' });
+  });
+});
+
+describe('1件入力画面（物件の候補: 点検月のみ／全て。修正依頼1025 D5）', () => {
+  it('既定は今月が点検月の点検（点検月未登録を含む）がある物件だけ。「全て」で全物件', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-20T03:00:00Z'));
+    try {
+      portalApi.extra = [
+        { inspection_id: 'i-oct', property_code: '120273-00', inspection_type_label: '外壁工事', vendor_id: 'v-mine', inspection_months: [4, 10] },
+        { inspection_id: 'i-nov', property_code: '2010', inspection_type_label: '外壁工事', vendor_id: 'v-mine', inspection_months: [5, 11] },
+      ];
+      render(
+        <ToastProvider>
+          <SingleEntryPage />
+        </ToastProvider>,
+      );
+      const propertyInput = await screen.findByRole('combobox', { name: '物件コード *' });
+      const codes = () => {
+        fireEvent.click(propertyInput);
+        const list = within(screen.getByRole('listbox'))
+          .getAllByRole('option')
+          .map((o) => o.textContent?.split(' ')[0]);
+        fireEvent.keyDown(propertyInput, { key: 'Escape' });
+        return list;
+      };
+      expect(screen.getByLabelText('物件の候補')).toHaveValue('month');
+      // 10月が点検月の 120273-00 と、点検月未登録の z0015A01。11月だけの 2010 は出さない
+      await waitFor(() => expect(codes()).toEqual(['120273-00', 'z0015A01']));
+      showAllProperties();
+      expect(codes()).toEqual(['2010', '120273-00', 'z0015A01']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+// 貼紙ライブラリ（修正依頼1025 D2）。物件の管理会社の分と全社共通を返す RPC
+const libraryApi = vi.hoisted(() => ({ fetchLibraryForProperty: vi.fn() }));
+vi.mock('@/lib/api/poster-library', () => libraryApi);
+
+describe('1件入力画面（貼紙ライブラリと2枚目以降の貼紙。修正依頼1025 D2・D3）', () => {
+  const LIB = 'https://storage/poster-images/library/common/noise.png';
+
+  it('1枚目をライブラリから選び、2枚目以降にアップロードとライブラリの貼紙を足して申請すると extra_posters に入る', async () => {
+    libraryApi.fetchLibraryForProperty.mockResolvedValue([
+      { id: 'lib-1', display_name: '騒音注意', category: '注意', image_url: LIB, management_company_id: null, sort_order: 0 },
+    ]);
+    const png = new File(['png'], '二枚目.png', { type: 'image/png' });
+    pdfToPng.preparePosterImage.mockResolvedValue({ file: png });
+    storageApi.uploadPosterImage.mockReset().mockResolvedValue('https://storage/poster-images/u1/2_ab.png');
+    render(
+      <ToastProvider>
+        <SingleEntryPage />
+      </ToastProvider>,
+    );
+    await waitFor(() => expect(screen.getByRole('combobox', { name: '点検工事案内 *' })).toHaveValue('排水管清掃'));
+    pick('物件コード *', 'z0015A01');
+    fireEvent.click(screen.getByRole('radio', { name: '追加' }));
+
+    // 1枚目: ライブラリから（物件で絞った一覧から選ぶ）
+    fireEvent.click(screen.getByRole('button', { name: /ライブラリから選ぶ/ }));
+    await waitFor(() => expect(libraryApi.fetchLibraryForProperty).toHaveBeenCalledWith('z0015A01'));
+    fireEvent.click(await screen.findByTitle('注意 / 騒音注意'));
+    expect(screen.getByText('ライブラリ: 騒音注意')).toBeInTheDocument();
+
+    // 2枚目: アップロード、3枚目: ライブラリ（位置は全体）
+    fireEvent.change(screen.getByLabelText('追加の貼紙の画像'), { target: { files: [png] } });
+    expect(await screen.findByText('2枚目 二枚目.png')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '＋ライブラリから追加' }));
+    fireEvent.click(await screen.findByTitle('注意 / 騒音注意'));
+    fireEvent.change(await screen.findByLabelText('3枚目の表示位置'), { target: { value: '0' } });
+    // 右の貼紙プレビューに枚数分出る
+    expect(within(screen.getByTestId('extra-poster-previews')).getAllByRole('img')).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole('button', { name: 'データを追加' }));
+    await screen.findByRole('table');
+    fireEvent.click(screen.getByRole('button', { name: '申請する' }));
+    await waitFor(() => expect(insertEntries).toHaveBeenCalledTimes(1));
+    const row = (insertEntries.mock.calls[0]![0] as Record<string, unknown>[])[0]!;
+    // ライブラリの画像はアップロードしない（URL のまま）。アップロードは2枚目だけ
+    expect(storageApi.uploadPosterImage).toHaveBeenCalledTimes(1);
+    expect(row).toMatchObject({
+      poster_type: 'custom',
+      poster_image: LIB,
+      template_no: '騒音注意',
+      extra_posters: [
+        { image_url: 'https://storage/poster-images/u1/2_ab.png', source: 'upload' },
+        { image_url: LIB, source: 'library', library_id: 'lib-1', position: '0' },
+      ],
+    });
+  });
+
+  it('同じライブラリの貼紙を2回選んでも、2枚目以降には1枚だけ入る（DB は同じ要素の重複を断る）', async () => {
+    libraryApi.fetchLibraryForProperty.mockResolvedValue([
+      { id: 'lib-1', display_name: '騒音注意', category: '注意', image_url: LIB, management_company_id: null, sort_order: 0 },
+    ]);
+    render(
+      <ToastProvider>
+        <SingleEntryPage />
+      </ToastProvider>,
+    );
+    await waitFor(() => expect(screen.getByRole('combobox', { name: '点検工事案内 *' })).toHaveValue('排水管清掃'));
+    pick('物件コード *', 'z0015A01');
+    fireEvent.click(screen.getByRole('button', { name: '＋ライブラリから追加' }));
+    fireEvent.click(await screen.findByTitle('注意 / 騒音注意'));
+    fireEvent.click(screen.getByRole('button', { name: '＋ライブラリから追加' }));
+    fireEvent.click(await screen.findByTitle('注意 / 騒音注意'));
+    await waitFor(() =>
+      expect(within(screen.getByTestId('extra-poster-previews')).getAllByRole('img')).toHaveLength(1),
+    );
+  });
+});
+
+describe('1件入力画面（未承認の建物。修正依頼1025 D4・F2）', () => {
+  it('今月の承認待ちの建物追加の申請を物件の候補に出し、仮の物件コードと申請 id で、点検行に結び付けずに申請する', async () => {
+    requestsApi.rows = [
+      {
+        id: '14e060fd-0000-4000-8000-000000000001',
+        vendor_id: 'v-mine',
+        management_company_id: 'c-en',
+        property_name: '新築マンション',
+        address: null,
+        inspection_type_id: null,
+        inspection_months: [],
+        status: 'pending',
+        requested_by: 'u1',
+        reviewed_by: null,
+        reviewed_at: null,
+        reject_reason: null,
+        created_property_code: null,
+        created_terminal_id: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+    ];
+    render(
+      <ToastProvider>
+        <SingleEntryPage />
+      </ToastProvider>,
+    );
+    expect(await screen.findByRole('button', { name: '建物追加 申請' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('combobox', { name: '点検工事案内 *' })).toHaveValue('排水管清掃'));
+    pick('物件コード *', 'REQ-14e060fd');
+    fireEvent.click(screen.getByRole('button', { name: 'データを追加' }));
+    const table = await screen.findByRole('table');
+    expect(within(table).getByText('【建物未承認】新築マンション')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '申請する' }));
+    await waitFor(() => expect(insertEntries).toHaveBeenCalledTimes(1));
+    const row = (insertEntries.mock.calls[0]![0] as Record<string, unknown>[])[0]!;
+    expect(row).toMatchObject({
+      property_code: 'REQ-14e060fd',
+      property_request_id: '14e060fd-0000-4000-8000-000000000001',
+      terminal_id: '',
+      status: 'draft',
+    });
+    expect(row).not.toHaveProperty('property_inspection_id');
   });
 });

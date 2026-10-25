@@ -7,6 +7,7 @@ import {
 import { syncBuildingVendorsFromEquipment } from '@/lib/api/relationships';
 import type { DbProfile, Terminal } from '@/types/database';
 import type { PropertyInspection, PropertyUnit, UnitInspection, UnitInspectionTypeOption } from '@/types/app';
+import type { RpcMasterPropertyManagementCompanyRow } from '@/types/rpc';
 
 /** 一覧の端末欄（先頭4台の端末ID、5台以上は「...」、末尾に台数） */
 // v1: js/admin-masters.js renderProperties（terminalDisplay）
@@ -58,34 +59,81 @@ export function unitsChanged(before: PropertyUnit[], after: PropertyUnit[]): boo
   return JSON.stringify(before) !== JSON.stringify(after);
 }
 
+/** 一覧の設備の1行（保守会社の列に1行ずつ並べる） */
+export interface EquipmentRow {
+  key: string;
+  inspectionTypeId: string;
+  /** 台ごとの保守の行は点検種別名を持つ。物件単位の点検は undefined（呼ぶ側が点検種別マスターから引く） */
+  inspectionTypeLabel?: string;
+  /** 台ごとの保守の行は台の No（業務システムの台コード。無ければ同じ大分類の中の並びで No1…）。物件単位の点検は null */
+  unitLabel: string | null;
+  vendorId: string | null;
+}
+
 /**
- * 一覧の補足列：設備の数・台の数・担当している保守会社（設備情報と台ごとの保守から、出てきた順）。
- * 設備の数は編集モーダルの「設備情報」の表と揃える（台ごとに管理している種別の集計行は数えない）
+ * 一覧の補足列：設備の行・設備の数・台の数（修正依頼1025 E2）。
+ * 設備は「点検行。ただし台ごとに管理している種別は台ごとの保守の行で展開」で数える
+ * （台ごとに管理している種別の集計行は数えない。保守の無い台は行にしない）。保守会社の列はこの行の数だけ並ぶ（同じ保守会社でも重ねない）
  */
 export function propertyListSummary(
   p: { inspections?: PropertyInspection[]; units?: PropertyUnit[] },
   unitTypeOptions: UnitInspectionTypeOption[] = [],
 ): {
+  equipment: EquipmentRow[];
   equipmentCount: number;
   unitCount: number;
-  vendorIds: string[];
 } {
   const inspections = p.inspections ?? [];
   const units = p.units ?? [];
   const managed = unitManagedTypeIds(units, unitTypeOptions);
-  const equipment = inspections.filter((i) => !managed.has(i.inspection_type_id));
-  const ids = [
-    ...inspections.map((i) => i.vendor_id),
-    ...units.flatMap((u) => u.inspections.map((i) => i.vendor_id)),
-  ].filter((id): id is string => !!id);
-  return { equipmentCount: equipment.length, unitCount: units.length, vendorIds: [...new Set(ids)] };
+  const equipment: EquipmentRow[] = inspections
+    .filter((i) => !managed.has(i.inspection_type_id))
+    .map((i, idx) => ({
+      key: `p${idx}`,
+      inspectionTypeId: i.inspection_type_id,
+      unitLabel: null,
+      vendorId: i.vendor_id || null,
+    }));
+  const seqByCategory = new Map<string, number>();
+  units.forEach((u, uIdx) => {
+    const seq = (seqByCategory.get(u.category_code) ?? 0) + 1;
+    seqByCategory.set(u.category_code, seq);
+    const label = u.unit_code?.trim() || `No${seq}`;
+    (u.inspections ?? []).forEach((i, iIdx) =>
+      equipment.push({
+        key: `u${uIdx}-${iIdx}`,
+        inspectionTypeId: i.inspection_type_id,
+        inspectionTypeLabel: i.inspection_type_label || undefined,
+        unitLabel: label,
+        vendorId: i.vendor_id || null,
+      }),
+    );
+  });
+  return { equipment, equipmentCount: equipment.length, unitCount: units.length };
 }
 
-/** 保守会社の欄（先頭2社、3社目からは「他n社」） */
-export function vendorSummary(names: string[]): string {
-  if (names.length === 0) return '-';
-  const head = names.slice(0, 2).join('、');
-  return names.length > 2 ? `${head} 他${names.length - 2}社` : head;
+/** 物件の管理会社（一覧の列と絞り込み。1025 E1）。label は略称、無ければ正式名 */
+export interface PropertyManagementCompany {
+  id: string;
+  label: string;
+  name: string;
+}
+
+/** RPC master_property_management_companies の行を 物件コード → 管理会社 にする（未設定の物件は入れない） */
+export function managementCompanyMap(
+  rows: RpcMasterPropertyManagementCompanyRow[],
+): Map<string, PropertyManagementCompany> {
+  const map = new Map<string, PropertyManagementCompany>();
+  rows.forEach((r) => {
+    if (!r.management_company_id) return;
+    const name = r.management_company_name ?? '';
+    map.set(r.property_code, {
+      id: r.management_company_id,
+      name,
+      label: r.management_company_short_name || name || '（名前なし）',
+    });
+  });
+  return map;
 }
 
 /** 台に新しく足す保守の行（点検種別は未選択） */

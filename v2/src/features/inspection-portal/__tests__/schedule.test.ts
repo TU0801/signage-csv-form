@@ -156,6 +156,22 @@ describe('buildSchedule', () => {
     expect(may.report?.id).toBe('cur');
     expect(items.filter((i) => i.report?.status === 'returned')).toHaveLength(1);
   });
+
+  it('点検月以外の月の申請・報告書は「点検月のみ」（allMonths なし）でも行に出し、超過にしない', () => {
+    const items = buildSchedule(
+      [inspection()],
+      [entry({ id: 'off', target_month: '2026-09-01', inspection_start: '2026-09-10' })],
+      [report({ id: 'offr', target_month: '2026-12-01', status: 'submitted' })],
+      { today: '2026-10-21' },
+    );
+    const sep = items.find((i) => i.targetMonth === '2026-09-01')!;
+    expect(sep.offMonth).toBe(true);
+    expect(sep.application).toBe('applied');
+    expect(sep.overdueUnapplied).toBe(false);
+    expect(items.find((i) => i.targetMonth === '2026-12-01')?.report?.id).toBe('offr');
+    // 申請も報告書も無い点検月以外の月は出さない
+    expect(items.some((i) => i.targetMonth === '2026-10-01')).toBe(false);
+  });
 });
 
 describe('applicationState', () => {

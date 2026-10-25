@@ -1,6 +1,9 @@
 import type { DbEntry } from '@/types/database';
 import { APPROVED_STATUSES, customImageBaseName, filterApprovedEntries } from './csv';
+import { customImageFiles, type CustomImageFile } from './customImageFiles';
 import { safePosterUrl } from './posterUrl';
+
+export { customImageFiles, type CustomImageFile };
 
 /**
  * 追加画像のファイル名の拡張子（png / jpg）。URL の拡張子に合わせ、URL に無ければ中身の先頭バイトで見分ける。
@@ -30,13 +33,10 @@ export async function downloadCustomImages(
       : statuses === APPROVED_STATUSES
         ? filterApprovedEntries(entries)
         : entries.filter((e) => statuses.includes(e.status));
-  // このプロジェクトの poster-images の URL だけを取りに行く（画面の一覧・個別 DL と同じ safePosterUrl の判定）
-  const customEntries = targets.flatMap((e) => {
-    const url = e.poster_type === 'custom' ? safePosterUrl(e.poster_image) : null;
-    return url ? [{ entry: e, url }] : [];
-  });
+  // このプロジェクトの poster-images の URL だけを取りに行く（画面の一覧・個別 DL と同じ safePosterUrl の判定）。2枚目以降の貼紙も入れる
+  const files = targets.flatMap((e) => customImageFiles(e));
 
-  if (customEntries.length === 0) {
+  if (files.length === 0) {
     return 0;
   }
 
@@ -48,10 +48,10 @@ export async function downloadCustomImages(
   const zip = new JSZip();
 
   const results = await Promise.allSettled(
-    customEntries.map(async ({ entry, url }) => {
+    files.map(async ({ url, baseName }) => {
       const response = await fetch(url);
       const blob = await response.blob();
-      const filename = `${customImageBaseName(entry)}.${await imageExtension(url, blob)}`;
+      const filename = `${baseName}.${await imageExtension(url, blob)}`;
       return { filename, blob };
     }),
   );
@@ -65,18 +65,24 @@ export async function downloadCustomImages(
   const content = await zip.generateAsync({ type: 'blob' });
   saveAs(content, `custom_images_${new Date().toISOString().slice(0, 10)}.zip`);
 
-  return customEntries.length;
+  return files.length;
 }
 
-/** 追加画像を1件ダウンロードする（ファイル名は ZIP の中と同じ。承認待ちの「追加登録された画像」の個別 DL） */
-export async function downloadCustomImage(entry: DbEntry): Promise<void> {
-  const url = safePosterUrl(entry.poster_image);
-  if (!url) throw new Error(entry.poster_image ? '表示できない画像の URL です' : '追加画像がありません');
+/**
+ * 追加画像を1件ダウンロードする（ファイル名は ZIP の中と同じ。承認待ちの「追加登録された画像」の個別 DL）。
+ * file を渡すとその1枚（2枚目以降の貼紙）、渡さなければ1枚目の追加画像
+ */
+export async function downloadCustomImage(entry: DbEntry, file?: CustomImageFile): Promise<void> {
+  const target = file ?? (() => {
+    const url = safePosterUrl(entry.poster_image);
+    if (!url) throw new Error(entry.poster_image ? '表示できない画像の URL です' : '追加画像がありません');
+    return { url, baseName: customImageBaseName(entry) };
+  })();
   const [{ saveAs }, response] = await Promise.all([
     import('file-saver'),
-    fetch(url),
+    fetch(target.url),
   ]);
   if (!response.ok) throw new Error(`画像を取得できませんでした（${response.status}）`);
   const blob = await response.blob();
-  saveAs(blob, `${customImageBaseName(entry)}.${await imageExtension(url, blob)}`);
+  saveAs(blob, `${target.baseName}.${await imageExtension(target.url, blob)}`);
 }

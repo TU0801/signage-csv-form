@@ -51,7 +51,11 @@ export function buildBulkEntries(
       const vendor = masterData.vendors.find((v) => v.vendorName === currentVendor.name);
       const inspection = masterData.notices.find((i) => i.inspectionType === row.inspectionType);
       const today = todayUtc();
-      const link = inspectionLinkOf(row, links, currentVendor.id);
+      // 未承認の建物（建物追加の申請。修正依頼1025 F2）は点検行に結び付けず、申請 id を入れる（建物の承認で付け替わる）
+      const requestId = masterData.properties.find(
+        (p) => p.propertyRequestId && String(p.propertyCode) === String(row.propertyCode),
+      )?.propertyRequestId;
+      const link = requestId ? null : inspectionLinkOf(row, links, currentVendor.id);
       const isCustom = row.posterType === 'custom';
       // 詳細設定の畳んだ要約と同じ規則（B18）。過ぎた予定を申請しても表示期間が逆にならないよう today を渡す
       const period = submittedDisplayPeriod(row, today);
@@ -79,10 +83,13 @@ export function buildBulkEntries(
         poster_type: isCustom || row.showOnBoard === false ? 'custom' : 'template',
         poster_image: isCustom ? row.posterImage || null : null,
         poster_position: row.position !== undefined ? String(row.position) : '2',
+        // 2枚目以降の貼紙（修正依頼1025 D3）。無ければ送らない（DB の既定は []）
+        ...(row.extraPosters?.length ? { extra_posters: row.extraPosters } : {}),
         status: 'draft',
         // メモは CSV に出さない（申請の行にだけ残す）
         memo: row.memo || null,
         ...(link ?? {}),
+        ...(requestId ? { property_request_id: requestId } : {}),
       };
     });
 }

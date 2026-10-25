@@ -103,3 +103,71 @@ export interface ManagementCompanyRow {
   id: string;
   name: string;
 }
+
+/**
+ * RPC portal_inspection_units の1行（修正依頼1025 H1〜H3）。範囲内の点検行の台（biz.property_unit_inspections があるもの）。
+ * 台の無い点検行で設備会社固有コードがあるものは unit_id null の1行（equipment_code だけ）
+ */
+export interface PortalUnitRow {
+  inspection_id: string;
+  unit_id: string | null;
+  /** 設備会社固有の No（No1 など。サイネージの台は端末番号）。未登録は null */
+  unit_code: string | null;
+  unit_sort: number | null;
+  /** 台の保守会社 */
+  maintainer_id: string | null;
+  inspection_months: number[];
+  inspected_on: string | null;
+  /** 点検行の設備会社固有コード（biz.property_inspections.maintainer_equipment_code） */
+  equipment_code: string | null;
+}
+
+/** signage_inspection_type_flags の1行（修正依頼1025 H4/G4）。行が無い点検種別はどちらも false */
+export interface InspectionTypeFlagRow {
+  inspection_type_id: string;
+  /** 申請不要（報告書のみ）。予定行に申請の欄を出さず、報告書UP・完了連絡だけ */
+  report_only: boolean;
+  /** 点検月『毎月』。毎月の予定行を出す */
+  monthly: boolean;
+}
+
+/** RPC management_company_short_names の1行（F5）。short_name は未登録なら null */
+export interface ManagementCompanyShortNameRow {
+  id: string;
+  name: string;
+  short_name: string | null;
+}
+
+/** その他ファイルの区分（signage_property_files.category） */
+export const PROPERTY_FILE_CATEGORY_VALUES = ['estimate', 'invoice', 'contract', 'building_info', 'proposal', 'photo', 'other'] as const;
+export type PropertyFileCategory = (typeof PROPERTY_FILE_CATEGORY_VALUES)[number];
+
+export function isPropertyFileCategory(value: unknown): value is PropertyFileCategory {
+  return typeof value === 'string' && (PROPERTY_FILE_CATEGORY_VALUES as readonly string[]).includes(value);
+}
+
+/** signage_property_files の1行（修正依頼1025 G2。scripts/fix-1025-reports.sql） */
+export interface DbPropertyFile {
+  id: string;
+  property_id: string | null;
+  property_code: string;
+  property_name: string;
+  category: PropertyFileCategory;
+  category_note: string | null;
+  doc_date: string | null;
+  file_name: string;
+  original_name: string | null;
+  storage_path: string;
+  mime_type: string;
+  size_bytes: number | null;
+  content_hash: string | null;
+  uploaded_by: string;
+  vendor_id: string | null;
+  vendor_name: string | null;
+  management_company_id: string | null;
+  note: string | null;
+  ocr_result: unknown;
+  status: 'active' | 'deleted';
+  created_at: string;
+  updated_at: string;
+}

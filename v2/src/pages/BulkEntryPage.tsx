@@ -26,7 +26,13 @@ import { parseExcelPaste } from '@/features/bulk-entry/utils/parseExcelPaste';
 import { bulkCsvFilename, generateBulkCsv } from '@/features/bulk-entry/utils/bulkCsv';
 import { buildBulkEntries } from '@/features/bulk-entry/utils/buildBulkEntries';
 import { errorLabel, firstError } from '@/features/bulk-entry/utils/columns';
-import { formatInspectedOn, isApplyTarget, scheduleRowEntry, scheduleRowInput } from '@/features/bulk-entry/utils/scheduleRows';
+import {
+  defaultInspectionType,
+  formatInspectedOn,
+  isApplyTarget,
+  scheduleRowEntry,
+  scheduleRowInput,
+} from '@/features/bulk-entry/utils/scheduleRows';
 import { clearAutoSave } from '@/features/bulk-entry/utils/bulkAutoSave';
 import { getStoredTemplates, getVisibleTemplates, templateRows } from '@/features/bulk-entry/utils/bulkTemplates';
 import {
@@ -37,22 +43,30 @@ import {
 import type { BulkEntryRow } from '@/features/bulk-entry/types';
 import { usePortalData } from '@/features/inspection-portal/hooks/usePortalData';
 import { inspectionsOfVendor } from '@/features/inspection-portal/lib/inspectionLink';
-import { reportEntryId } from '@/features/inspection-portal/lib/actions';
+import { completionBlockedReason, reportEntryId } from '@/features/inspection-portal/lib/actions';
 import { matchTiming, TIMING_OPTIONS, type TimingFilter } from '@/features/inspection-portal/lib/filters';
 import {
   buildSchedule,
   focusEntry,
   formatMonth,
   todayJst,
+  typeFlagsMap,
   unscheduledInspections,
   type ScheduleItem,
 } from '@/features/inspection-portal/lib/schedule';
+import { buildUnitIndex, expandByUnits } from '@/features/inspection-portal/lib/units';
+import { useManagementShortNames } from '@/features/inspection-portal/hooks/useManagementShortNames';
+import { orderRows, type SortState } from '@/features/bulk-entry/utils/rowOrder';
 import { completionKey, completionKeys, completionMonth, itemStatus } from '@/features/inspection-portal/lib/status';
 import { buildUnscheduledItems } from '@/features/inspection-portal/components/UnscheduledTable';
 import { ApplyModal, type ApplyTarget } from '@/features/inspection-portal/components/ApplyModal';
 import { ReportUploadModal } from '@/features/inspection-documents/components/ReportUploadModal';
 import { BulkReportUploadModal } from '@/features/inspection-documents/components/BulkReportUploadModal';
+import { OtherFileUploadModal } from '@/features/inspection-documents/components/OtherFileUploadModal';
 import { BuildingRequestModal } from '@/features/building-requests/components/BuildingRequestModal';
+import { useProvisionalBuildings } from '@/features/building-requests/hooks/useProvisionalBuildings';
+import { isProvisionalCode, provisionalCode } from '@/features/building-requests/lib/provisional';
+import type { DbPropertyRequest } from '@/types/database';
 import { ManagementCompanyFilter } from '@/features/single-entry/components/ManagementCompanySelect';
 import { useManagementCompanies } from '@/features/single-entry/hooks/useManagementCompanies';
 import { MANAGEMENT_COMPANY_NONE } from '@/features/single-entry/lib/entryLogic';
@@ -156,7 +170,13 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
   const managementCompanyId = useInspectionFormStore((s) => s.managementCompanyId);
   const setManagementCompanyId = useInspectionFormStore((s) => s.setManagementCompanyId);
   const [timing, setTiming] = useState<TimingFilter>('default');
+  // 点検月のみ（既定）／全ての月（点検月以外の月にも予定の行を出す。修正依頼1025 D5）
+  const [allMonths, setAllMonths] = useState(false);
   const [search, setSearch] = useState('');
+  // 予定の行の並べ替え（F3。表示だけ）
+  const [sort, setSort] = useState<SortState | null>(null);
+  // 管理会社の略称（F5）
+  const shortNames = useManagementShortNames();
 
   // 管理者が保守会社を選ばないと保守会社名が空で登録できない（DB で弾かれる）ので、申請の前に止めて案内する
   const saveBlockedReason = isAdmin && !currentVendor.id ? 'ヘッダーで保守会社を選んでください' : undefined;
@@ -171,8 +191,30 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
   const [applyTarget, setApplyTarget] = useState<ApplyTarget | null>(null);
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
   const [showBulkReport, setShowBulkReport] = useState(false);
+  const [showOtherFile, setShowOtherFile] = useState(false);
   const [showBuildingRequest, setShowBuildingRequest] = useState(false);
   const [completingKey, setCompletingKey] = useState<string | null>(null);
+
+  // 未承認の建物（建物追加の申請。修正依頼1025 F2）: 申請した月の間は物件の候補に出し、申請まで送れる
+  const provisional = useProvisionalBuildings(currentVendor.id, ready);
+  // 申請した建物の行を『＋行を追加』と同じ手の行で足す（点検種別は申請のもの、無ければ保守会社の既定）。
+  // 管理者がモーダルで別の保守会社を選んだときは、いま入力している保守会社の行ではないので足さない
+  const tableRef = useRef<HTMLDivElement>(null);
+  const handleBuildingRequested = useCallback(
+    (request: DbPropertyRequest) => {
+      if (!currentVendor.id || request.vendor_id !== currentVendor.id) return;
+      provisional.addRequest(request);
+      const { masterData, inspectionDefaults } = useBulkStore.getState();
+      const code = provisionalCode(request.id);
+      const label =
+        masterData.notices.find((n) => n.id && n.id === request.inspection_type_id)?.inspectionType ||
+        defaultInspectionType(code, [], inspectionDefaults.linkedIds, masterData.notices);
+      // 『＋行を追加』と同じく表の一番上に入れ、表を上へ戻す（F1）
+      addRow({ propertyCode: code, inspectionType: label }, true);
+      setTimeout(() => tableRef.current?.scrollTo?.({ top: 0 }), 0);
+    },
+    [currentVendor.id, provisional, addRow],
+  );
 
   // ---- 点検予定（選択中の保守会社の点検行 × 対象月） ----
   // 保守会社のアカウントは DB が担当の点検（台の保守会社を含む）に絞って返す。管理者は選んだ保守会社の点検だけ（未選択なら出さない）
@@ -181,11 +223,28 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
     [portal.inspections, isAdmin, currentVendor.id],
   );
 
+  // 点検種別の印（申請不要・毎月。H4/G4）と号機（台。H1〜H3）
+  const flags = useMemo(() => typeFlagsMap(portal.typeFlags), [portal.typeFlags]);
+  const unitIndex = useMemo(() => buildUnitIndex(portal.units), [portal.units]);
+  // 台を絞る保守会社（保守会社のアカウントは自社、管理者は選んだ保守会社）
+  const unitVendorId = isAdmin ? currentVendor.id : (profileVendorId ?? null);
+
   const scheduleItems = useMemo<ScheduleItem[]>(() => {
-    const scheduled = buildSchedule(vendorInspections, portal.entries, portal.reports, { today, monthsAhead: MONTHS_AHEAD });
-    const unscheduled = buildUnscheduledItems(unscheduledInspections(vendorInspections), portal.entries, portal.reports);
-    return [...scheduled, ...unscheduled];
-  }, [vendorInspections, portal.entries, portal.reports, today]);
+    const scheduled = buildSchedule(vendorInspections, portal.entries, portal.reports, {
+      today,
+      monthsAhead: MONTHS_AHEAD,
+      flags,
+      allMonths,
+    });
+    const unscheduled = buildUnscheduledItems(
+      unscheduledInspections(vendorInspections, flags),
+      portal.entries,
+      portal.reports,
+      flags,
+    );
+    // 台が2台以上の点検は台ごとの行に分ける（申請・報告書UP・完了連絡は1台目の行だけ）
+    return expandByUnits([...scheduled, ...unscheduled], unitIndex, unitVendorId);
+  }, [vendorInspections, portal.entries, portal.reports, today, flags, allMonths, unitIndex, unitVendorId]);
   const itemsByKey = useMemo(() => new Map(scheduleItems.map((i) => [i.key, i])), [scheduleItems]);
   const completed = useMemo(() => completionKeys(portal.completions), [portal.completions]);
   const inspectedOnById = useMemo(
@@ -195,7 +254,8 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
 
   // 申請済みの予定の行に出すメモ（B12。portal_entries はメモを返さないので、読み取りの行の申請だけ別に読む）
   const lockedEntryIds = useMemo(
-    () => [...new Set(scheduleItems.map((i) => scheduleRowEntry(i)?.id).filter((id): id is string => !!id))].sort().join(','),
+    () =>
+      [...new Set(scheduleItems.map((i) => scheduleRowEntry(i)?.id).filter((id): id is string => !!id))].sort().join(','),
     [scheduleItems],
   );
   const [entryMemos, setEntryMemos] = useState<ReadonlyMap<string, string>>(() => new Map());
@@ -230,21 +290,29 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
     (row: BulkEntryRow): string | null | undefined => {
       if (row.schedule) return itemsByKey.get(row.schedule.key)?.inspection.management_company_id ?? null;
       if (!row.propertyCode) return undefined;
-      return managementIndex?.byCode.get(String(row.propertyCode)) ?? null;
+      const code = String(row.propertyCode);
+      if (isProvisionalCode(code)) return provisional.companyByCode.get(code) ?? null;
+      return managementIndex?.byCode.get(code) ?? null;
     },
-    [itemsByKey, managementIndex],
+    [itemsByKey, managementIndex, provisional.companyByCode],
   );
   const managementNames = useMemo(
     () => new Map((managementIndex?.companies ?? []).map((c) => [c.id, c.name])),
     [managementIndex],
   );
+  // 管理会社の列に出す名前（略称。未登録・読めなければ正式名。F5）
+  const managementLabel = useCallback(
+    (id: string | null | undefined, fullName: string) => (id ? (shortNames.get(id) ?? fullName) : fullName),
+    [shortNames],
+  );
   const propertyAllowed = useCallback(
     (code: string) => {
       if (!managementCompanyId || !managementIndex) return true;
       const want = managementCompanyId === MANAGEMENT_COMPANY_NONE ? null : managementCompanyId;
-      return (managementIndex.byCode.get(code) ?? null) === want;
+      const company = isProvisionalCode(code) ? provisional.companyByCode.get(code) : managementIndex.byCode.get(code);
+      return (company ?? null) === want;
     },
-    [managementCompanyId, managementIndex],
+    [managementCompanyId, managementIndex, provisional.companyByCode],
   );
   const propertyNameOf = useCallback(
     (row: BulkEntryRow) =>
@@ -258,6 +326,9 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
     (row: BulkEntryRow) => {
       if (row.schedule) {
         const item = itemsByKey.get(row.schedule.key);
+        // 画面に戻った直後（点検の予定の読み込み中）は、前に入れた予定の行を時期で絞れず印も無いので出さない。
+        // 読み込めたら予定の行は入れ直される。読み込みに失敗したときは前の行を出したまま（修正依頼1025 N6）
+        if (!item && !portal.loaded && !portal.error) return false;
         // 時期は点検一覧と同じ（既定は 超過＋今月＋今後3か月。過去の月は超過〔未申請〕だけ）。過去の月の報告書UP・完了連絡は「すべて」で出す
         if (item && item.targetMonth && !matchTiming(item, timing, today)) return false;
         if (item && !item.targetMonth && timing === 'overdue') return false;
@@ -274,7 +345,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       }
       return true;
     },
-    [itemsByKey, timing, today, managementCompanyId, managementIndex, managementOf, search, propertyNameOf],
+    [itemsByKey, portal.loaded, portal.error, timing, today, managementCompanyId, managementIndex, managementOf, search, propertyNameOf],
   );
 
   // 選択中の保守会社の点検行（手で足した行を点検行に結び付ける・点検月を出すため）
@@ -340,6 +411,10 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       const accepted = item.report?.status === 'accepted';
       const sentBack = item.application === 'sent_back' ? focusEntry(item.entries) : null;
       const busy = !!key && completingKey === key;
+      // 点検月以外の月の行は、その月の申請があるときだけ完了連絡できる（D5。毎月・申請不要の点検種別は月を問わない）
+      const blocked = completionBlockedReason(item);
+      // 2台目以降の行は報告書UP・完了連絡を出さない（1台目の行で扱う。修正依頼1025 H3）
+      if (item.secondary) return null;
       return (
         <div className="flex flex-wrap gap-1">
           <button
@@ -365,9 +440,12 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
               <button
                 type="button"
                 className={cn(smallBtn, 'border-green-400 bg-green-50 text-green-800 hover:bg-green-100')}
-                disabled={busy || !month}
-                onClick={() => month && void toggleCompletion(item, month, false)}
-                title={month ? '点検の完了を連絡する（報告書が無くても点検完了になります）' : '申請してから完了を連絡できます（対象月が決まらないため）'}
+                disabled={busy || !month || !!blocked}
+                onClick={() => month && !blocked && void toggleCompletion(item, month, false)}
+                title={
+                  blocked ??
+                  (month ? '点検の完了を連絡する（報告書が無くても点検完了になります）' : '申請してから完了を連絡できます（対象月が決まらないため）')
+                }
               >
                 完了連絡
               </button>
@@ -398,27 +476,46 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
           const status = itemStatus(item, completed, today);
           const sentBack = item.application === 'sent_back' ? focusEntry(item.entries)?.review_comment : null;
           const reason = status === 'report_returned' ? item.report?.review_comment : status === 'sent_back' ? sentBack : null;
+          const fullName = item.inspection.management_company_name ?? '';
+          // 点検月は点検行の値（台ごとの行も同じ。行は点検行の点検月から作るので、台の点検月を出すと行の月と食い違う）。
+          // 検査月は台の値（未登録なら点検行の値）。毎月の点検種別は「毎月」（H4）
           return {
             status,
-            reason: reason ?? null,
-            managementName: item.inspection.management_company_name ?? '',
+            reason: item.secondary ? null : (reason ?? null),
+            managementName: managementLabel(item.inspection.management_company_id, fullName),
+            managementFullName: fullName,
             vendorName: item.inspection.vendor_name ?? '',
-            months: item.inspection.inspection_months.join(','),
-            inspectedOn: formatInspectedOn(inspectedOnById.get(item.inspection.inspection_id)),
-            actions: actionsOf(item),
+            months: item.monthly ? '毎月' : item.inspection.inspection_months.join(','),
+            inspectedOn: formatInspectedOn(item.unit?.inspected_on ?? inspectedOnById.get(item.inspection.inspection_id)),
+            actions: item.secondary ? undefined : actionsOf(item),
           };
         }
       }
-      const m = row.propertyCode ? managementIndex?.byCode.get(String(row.propertyCode)) : null;
+      // 未承認の建物は申請で選んだ管理会社（managementOf）
+      const m = managementOf(row);
       const linked = row.propertyCode ? inspectionOfManual(row) : undefined;
+      const fullName = m ? (managementNames.get(m) ?? '') : '';
       return {
-        managementName: m ? (managementNames.get(m) ?? '') : '',
+        managementName: managementLabel(m, fullName),
+        managementFullName: fullName,
         vendorName: currentVendor.name ?? '',
-        months: linked ? linked.inspection_months.join(',') : '',
+        months: linked ? (flags.get(linked.inspection_type_id)?.monthly ? '毎月' : linked.inspection_months.join(',')) : '',
         inspectedOn: formatInspectedOn(linked ? inspectedOnById.get(linked.inspection_id) : null),
       };
     },
-    [itemsByKey, completed, today, inspectedOnById, actionsOf, managementIndex, inspectionOfManual, managementNames, currentVendor.name],
+    [
+      itemsByKey,
+      completed,
+      today,
+      inspectedOnById,
+      actionsOf,
+      managementOf,
+      inspectionOfManual,
+      managementNames,
+      managementLabel,
+      flags,
+      currentVendor.name,
+    ],
   );
 
   // 一括設定は今見えている選択行（申請済みの予定を除く）だけに入れる（隠れた行を黙って上書きしない）
@@ -443,6 +540,16 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
     return getVisibleTemplates(currentVendor.id);
   }, [currentVendor.id, templatesVersion]);
   const refreshTemplates = useCallback(() => setTemplatesVersion((v) => v + 1), []);
+
+  // 「＋行を追加」: 新しい行は表の一番上（F1）。表を上へ戻して物件欄へ移る
+  const handleAddRow = useCallback(() => {
+    addRowWithCopy();
+    setTimeout(() => {
+      tableRef.current?.scrollTo?.({ top: 0 });
+      const first = tableRef.current?.querySelector('tbody tr[data-row-id]');
+      first?.querySelector<HTMLElement>('[data-col]')?.focus();
+    }, 0);
+  }, [addRowWithCopy]);
 
   // v1: js/bulk-table.js duplicateSelectedRows（並びは duplicateRows が表の順に揃える。予定の行を複製すると手の行になる）
   const handleDuplicate = useCallback(() => {
@@ -537,8 +644,8 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
     const errorRows = targets.filter((r) => !r.isValid);
     if (errorRows.length > 0) {
       const first = firstError(errorRows)!;
-      // 表の No と同じ（表示中の行の通し番号）
-      const rowNo = all.filter(isVisible).findIndex((r) => r.id === first.rowId) + 1;
+      // 表の No と同じ（表示中の行を表の並び〔手で足した行 → 予定の行・並べ替え〕にした通し番号）
+      const rowNo = orderRows(all, isVisible, infoOf, sort).findIndex((r) => r.id === first.rowId) + 1;
       showSaveError(
         `入力にエラーがある行が${errorRows.length}件あります。直してから申請してください\n${rowNo}行目: ${errorLabel(first.message)}`,
         first.rowId,
@@ -574,10 +681,13 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
     }
   };
 
+  // CSV の対象（未承認の建物の行は物件コードが仮なので出さない。建物の承認後に正式な物件コードで出る）
+  const csvTargets = () => applyTargets().filter((r) => !isProvisionalCode(r.propertyCode));
+
   // v1: js/bulk-data.js downloadCSV
   const handleDownloadCsv = () => {
     const { masterData, currentVendor: vendor, appSettings } = useBulkStore.getState();
-    const csv = generateBulkCsv(applyTargets(), masterData, vendor, appSettings);
+    const csv = generateBulkCsv(csvTargets(), masterData, vendor, appSettings);
     if (!csv) {
       addToast('ダウンロードするデータがありません', 'error');
       return;
@@ -589,7 +699,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
   // v1: js/bulk-data.js copyCSV（BOM なし）
   const handleCopyCsv = async () => {
     const { masterData, currentVendor: vendor, appSettings } = useBulkStore.getState();
-    const csv = generateBulkCsv(applyTargets(), masterData, vendor, appSettings);
+    const csv = generateBulkCsv(csvTargets(), masterData, vendor, appSettings);
     if (!csv) {
       addToast('コピーするデータがありません', 'error');
       return;
@@ -610,7 +720,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
     const handler = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === 'Enter') {
         e.preventDefault();
-        addRowWithCopy();
+        handleAddRow();
       }
       if (e.ctrlKey && e.key === 'd') {
         e.preventDefault();
@@ -624,10 +734,20 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [ready, addRowWithCopy, handleDuplicate, handleDeleteSelected]);
+  }, [ready, handleAddRow, handleDuplicate, handleDeleteSelected]);
 
   const filters = (
     <>
+      <select
+        aria-label="表示する月"
+        value={allMonths ? 'all' : 'inspection'}
+        onChange={(e) => setAllMonths(e.target.value === 'all')}
+        className="h-7 rounded border border-gray-300 bg-white px-1.5 text-xs"
+        title="点検月のみ: 点検月の予定だけ出す（既定）／全ての月: 点検月以外の月にも予定の行を出し、点検月以外の訪問も申請できる"
+      >
+        <option value="inspection">点検月のみ</option>
+        <option value="all">全ての月</option>
+      </select>
       <select
         aria-label="時期"
         value={timing}
@@ -697,12 +817,13 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
           leading={modeSwitch}
           filters={filters}
           templates={templates}
-          onAddRow={addRowWithCopy}
+          onAddRow={handleAddRow}
           onDuplicate={handleDuplicate}
           onDeleteSelected={() => void handleDeleteSelected()}
           onOpenBulkApply={() => setShowBulkApply(true)}
           onOpenPaste={() => setShowPaste(true)}
           onOpenBulkReport={() => setShowBulkReport(true)}
+          onOpenOtherFile={() => setShowOtherFile(true)}
           onOpenBuildingRequest={() => setShowBuildingRequest(true)}
           onApplyTemplate={(id) => void handleApplyTemplate(id)}
           onOpenSaveTemplate={() => setShowSaveTemplate(true)}
@@ -726,6 +847,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
             12.5rem は main の上下の余白・ツールバー（狭い幅で 2 行に折り返したとき）・申請の行のぶん。
             tall のときは Card の残りの高さをすべて使う（max-h と min-h は外す） */}
         <div
+          ref={tableRef}
           className="max-h-[calc(100dvh-var(--header-h)-12.5rem)] min-h-[12rem] overflow-auto tall:max-h-none tall:min-h-0 tall:flex-1"
           data-testid="bulk-table-container"
         >
@@ -749,7 +871,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
             <div className="flex flex-col items-center justify-center gap-2 p-8 text-center">
               <h3 className="font-semibold text-gray-700">データがありません</h3>
               <p className="text-sm text-gray-500">「行を追加」または「Excelから取込」で入力を開始してください</p>
-              <Button onClick={addRowWithCopy} disabled={!ready}>
+              <Button onClick={handleAddRow} disabled={!ready}>
                 行を追加して始める
               </Button>
             </div>
@@ -762,6 +884,8 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
               infoOf={infoOf}
               showManagement
               showVendor={isAdmin}
+              sort={sort}
+              onSortChange={setSort}
             />
           )}
         </div>
@@ -825,6 +949,8 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
         vendorId={currentVendor.id}
         onUploaded={() => void portal.refetch()}
       />
+      {/* 建物の選択肢は、モーダルが DB の「置ける建物」を読む（修正依頼1025 G2） */}
+      <OtherFileUploadModal open={showOtherFile} onClose={() => setShowOtherFile(false)} />
       <BuildingRequestModal
         open={showBuildingRequest}
         onClose={() => setShowBuildingRequest(false)}
@@ -832,6 +958,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
         managementCompanyId={
           managementCompanyId && managementCompanyId !== MANAGEMENT_COMPANY_NONE ? managementCompanyId : null
         }
+        onSubmitted={handleBuildingRequested}
       />
       {confirmDialog}
     </div>

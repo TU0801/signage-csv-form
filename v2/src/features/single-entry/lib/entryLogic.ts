@@ -4,7 +4,8 @@ import type { MasterProperty } from '@/types/app';
 import type { DbInspectionType, DbVendor, Terminal } from '@/types/database';
 import type { RpcPropertyManagementCompanyRow } from '@/types/rpc';
 import { followEndDate } from '@/lib/inspectionDates';
-import type { CustomImage, LocalEntry, SingleEntryValues } from '../types';
+import { customImageName, type CustomImage, type LocalEntry, type LocalExtraPoster, type SingleEntryValues } from '../types';
+import type { ExtraPoster } from '@/lib/extraPosters';
 import {
   inspectionsOfVendor,
   matchInspectionLink,
@@ -86,6 +87,30 @@ export function buildPropertyOptions(
     options.push(withTerminal ? { value: p.property_code, label } : { value: p.property_code, label, hint: NO_TERMINAL_HINT });
   });
   return options;
+}
+
+/**
+ * 「点検月のみ」（修正依頼1025 D5。既定）で物件の候補に残す物件コード。保守会社の点検行のうち、
+ * 点検月にその月（今月）を含むもの・点検月が未登録のもの・毎月の点検種別のものがある物件。
+ * 物件コードの書式の揺れ（120410 と 120410-00）は吸収する（normalizePropertyCode と同じ）
+ */
+export function inspectionMonthPropertyCodes(
+  inspections: { property_code: string; inspection_type_id: string; inspection_months: number[] }[],
+  month: number,
+  monthlyTypeIds: ReadonlySet<string> = new Set(),
+): Set<string> {
+  const codes = new Set<string>();
+  inspections.forEach((i) => {
+    if (i.inspection_months.length === 0 || i.inspection_months.includes(month) || monthlyTypeIds.has(i.inspection_type_id)) {
+      codes.add(i.property_code.trim().replace(/-00$/, ''));
+    }
+  });
+  return codes;
+}
+
+/** 物件が「点検月のみ」の候補に入るか（inspectionMonthPropertyCodes の結果で判定） */
+export function inInspectionMonth(codes: ReadonlySet<string>, propertyCode: string): boolean {
+  return codes.has(propertyCode.trim().replace(/-00$/, ''));
 }
 
 /** 管理会社フィルターの「未設定」の値（'' = 全て、それ以外は会社 ID） */
@@ -307,6 +332,8 @@ export interface EntryContext {
   inspectionTypes: DbInspectionType[];
   vendor: Pick<DbVendor, 'vendor_name' | 'emergency_contact'> | null;
   customImage: CustomImage | null;
+  /** 2枚目以降の貼紙（修正依頼1025 D3） */
+  extraPosters?: LocalExtraPoster[];
   hasTemplateImage: (templateNo: string) => boolean;
   settings: AppSettings;
   /** 点検行に結び付けるときの保守会社（useVendorContext の linkVendorId） */
@@ -397,7 +424,7 @@ export function buildLocalEntry(values: SingleEntryValues, ctx: EntryContext): B
       vendorName: ctx.vendor.vendor_name,
       emergencyContact: ctx.vendor.emergency_contact || '',
       inspectionType: isCustom ? '追加画像' : inspection!.inspection_name,
-      templateNo: isCustom ? ctx.customImage!.file.name : values.templateNo,
+      templateNo: isCustom ? customImageName(ctx.customImage!) : values.templateNo,
       startDate: values.startDate,
       endDate: values.endDate,
       remarks: values.remarks,
@@ -411,6 +438,7 @@ export function buildLocalEntry(values: SingleEntryValues, ctx: EntryContext): B
       displayTime,
       posterType: values.posterType,
       customImage: isCustom ? ctx.customImage : null,
+      extraPosters: ctx.extraPosters ?? [],
       linkVendorId: ctx.linkVendorId ?? null,
       ...(isCustom ? { linkInspectionType: inspection!.inspection_name } : {}),
     },
@@ -510,6 +538,7 @@ export function toInsertRow(
   settings: AppSettings,
   today: string,
   link: InspectionLink | null = null,
+  extraPosters: ExtraPoster[] = [],
 ): EntryInsertRow {
   return {
     user_id: userId,
@@ -534,6 +563,8 @@ export function toInsertRow(
     poster_image: posterImageUrl,
     poster_position: String(e.frameNo ?? DEFAULT_FRAME_NO),
     status: EntryStatus.DRAFT,
+    // 2枚目以降の貼紙（修正依頼1025 D3。画像は先にアップロードして URL にしたもの）。無ければ送らない（DB の既定は []）
+    ...(extraPosters.length > 0 ? { extra_posters: extraPosters } : {}),
     // 保守会社の点検行に一致したときだけ（entryInspectionLink）。一致しなければ今までどおり入れない
     ...(link ?? {}),
   };

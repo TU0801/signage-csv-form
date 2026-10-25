@@ -24,11 +24,20 @@ vi.mock('@/lib/api/bulk-entry', () => ({
   createBulkEntries: api.createBulkEntries,
 }));
 vi.mock('@/lib/supabase', () => ({ supabase: { auth: {} }, TABLES: {}, RPC: {} }));
+// 未承認の建物（建物追加の申請。修正依頼1025 F2）は無い
+vi.mock('@/lib/api/property-requests', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/api/property-requests')>()),
+  fetchVendorPropertyRequests: async () => [],
+}));
 // 点検の予定（portal_*）・完了連絡・管理会社の候補（修正依頼1024）
 const portalApi = vi.hoisted(() => ({
   fetchPortalInspections: vi.fn(),
   fetchPortalEntries: vi.fn(),
   fetchInspectionReports: vi.fn(),
+  // 号機・点検種別の印・管理会社の略称（修正依頼1025 form）
+  fetchPortalInspectionUnits: vi.fn(),
+  fetchInspectionTypeFlags: vi.fn(),
+  fetchManagementCompanyShortNames: vi.fn(),
 }));
 vi.mock('@/lib/api/portal', () => portalApi);
 const formApi = vi.hoisted(() => ({
@@ -126,6 +135,9 @@ describe('BulkEntryPage (v1 js/bulk.js init / adminVendorSelect)', () => {
     portalApi.fetchPortalInspections.mockResolvedValue([]);
     portalApi.fetchPortalEntries.mockResolvedValue([]);
     portalApi.fetchInspectionReports.mockResolvedValue([]);
+    portalApi.fetchPortalInspectionUnits.mockResolvedValue([]);
+    portalApi.fetchInspectionTypeFlags.mockResolvedValue([]);
+    portalApi.fetchManagementCompanyShortNames.mockResolvedValue([]);
     formApi.fetchCompletions.mockResolvedValue([]);
     formApi.fetchInspectionDates.mockResolvedValue([]);
     formApi.fetchScopedManagementCompanies.mockResolvedValue([]);
@@ -231,12 +243,11 @@ describe('BulkEntryPage (v1 js/bulk.js init / adminVendorSelect)', () => {
     // 表示フィルター・状態の列は無い（B7）
     expect(screen.queryByRole('columnheader', { name: '状態' })).toBeNull();
     expect(screen.queryByRole('columnheader', { name: '端末' })).toBeNull();
-    // 列の並びは注記の配置どおり（ステータス・報告書UP・完了連絡 → No（対象月）→ 点検月・検査月 → 物件。F15）
+    // 列の並びは注記の配置どおり（ステータス・報告書UP・完了連絡 → No（対象月）→ 点検月/検査月 → 物件。F15）。
+    // 点検月と検査月は1列に上下2段（修正依頼1025 F4）
     const heads = screen.getAllByRole('columnheader').map((h) => h.textContent ?? '');
     const at = (label: string) => heads.findIndex((h) => h.startsWith(label));
-    expect([at('ステータス'), at('報告書UP'), at('No'), at('点検月'), at('検査月'), at('物件')]).toEqual(
-      [1, 2, 3, 4, 5, 6],
-    );
+    expect([at('ステータス'), at('報告書UP'), at('No'), at('点検月検査月'), at('物件')]).toEqual([1, 2, 3, 4, 5]);
 
     fireEvent.click(screen.getByRole('button', { name: '↑ 申請する' }));
     expect(await screen.findByText(/入力にエラーがある行が1件あります/)).toBeInTheDocument();
@@ -355,6 +366,23 @@ describe('BulkEntryPage (v1 js/bulk.js init / adminVendorSelect)', () => {
       });
     });
 
+    it('画面に戻った直後、点検の予定を読み込むまでは前の予定の行を出さない（時期で絞れないため。修正依頼1025 N6）', async () => {
+      const first = renderPage();
+      await waitFor(() => expect(screen.getAllByTestId('target-month')).toHaveLength(2));
+      first.unmount();
+      let release: (rows: unknown[]) => void = () => {};
+      portalApi.fetchPortalInspections.mockReturnValueOnce(new Promise((r) => (release = r)));
+      renderPage();
+      await waitFor(() => expect(useBulkStore.getState().sessionLoaded).toBe(true));
+      // 店（bulkStore）には前の予定の行（時期で隠していた過去の月を含む）が残っている
+      expect(useBulkStore.getState().rows.filter((r) => r.schedule).length).toBeGreaterThan(2);
+      expect(screen.queryAllByTestId('target-month')).toHaveLength(0);
+      await act(async () =>
+        release([makeInspection({ property_code: 'z0001A01', property_name: '物件A', inspection_type_label: '消防設備点検', vendor_id: 'v1' })]),
+      );
+      await waitFor(() => expect(screen.getAllByTestId('target-month')).toHaveLength(2));
+    });
+
     it('時期の既定は点検一覧と同じ（申請済みの過去の月は出さず、「すべて」で出す。B13）', async () => {
       portalApi.fetchPortalEntries.mockResolvedValue([
         makeEntry({ property_code: 'z0001A01', inspection_type: '消防設備点検', target_month: '2026-05-01', inspection_start: '2026-05-10', status: 'ready' }),
@@ -393,6 +421,95 @@ describe('BulkEntryPage (v1 js/bulk.js init / adminVendorSelect)', () => {
       // 申請の対象が無くなるので申請ボタンは押せない
       expect(screen.getByRole('button', { name: '↑ 申請する' })).toBeDisabled();
       expect(api.createBulkEntries).toHaveBeenCalledTimes(1);
+    });
+
+    it('「全ての月」で点検月以外の月にも行を出し、その月を対象月として申請できる（超過にはしない。修正依頼1025 D5）', async () => {
+      api.createBulkEntries.mockResolvedValue([]);
+      renderPage();
+      await waitFor(() => expect(screen.getAllByTestId('target-month')).toHaveLength(2));
+      expect(screen.getByRole('combobox', { name: '表示する月' })).toHaveValue('inspection');
+      fireEvent.change(screen.getByRole('combobox', { name: '表示する月' }), { target: { value: 'all' } });
+      // 今月（10月）から今後3か月（既定の時期）: 10・11・12・1月。点検月以外の過去の月（6〜9月）は出さない
+      await waitFor(() =>
+        expect(screen.getAllByTestId('target-month').map((el) => el.textContent)).toEqual([
+          '2026年5月',
+          '2026年10月',
+          '2026年11月',
+          '2026年12月',
+          '2027年1月',
+        ]),
+      );
+      const dec = rowOf('2026年12月');
+      expect(within(dec).getByText('未申請')).toBeInTheDocument();
+      fireEvent.change(within(dec).getByLabelText('点検開始日'), { target: { value: '2026-12-03' } });
+      fireEvent.click(screen.getByRole('button', { name: '↑ 申請する' }));
+      await waitFor(() => expect(api.createBulkEntries).toHaveBeenCalledTimes(1));
+      expect((api.createBulkEntries.mock.calls[0]![0] as Record<string, unknown>[])[0]).toMatchObject({
+        property_inspection_id: 'i1',
+        target_month: '2026-12-01',
+        inspection_start: '2026-12-03',
+      });
+    });
+
+    it('台が2台の点検は台ごとに行を出し、No を物件の下に出す。報告書UP・完了連絡は1台目の行だけ（修正依頼1025 H1〜H3）', async () => {
+      portalApi.fetchPortalInspectionUnits.mockResolvedValue([
+        { inspection_id: 'i1', unit_id: 'u1', unit_code: 'No1', unit_sort: 0, maintainer_id: 'v1', inspection_months: [], inspected_on: null, equipment_code: null },
+        { inspection_id: 'i1', unit_id: 'u2', unit_code: 'No2', unit_sort: 1, maintainer_id: 'v1', inspection_months: [], inspected_on: null, equipment_code: null },
+      ]);
+      renderPage();
+      await waitFor(() => expect(screen.getAllByTestId('target-month')).toHaveLength(4));
+      const novRows = screen.getAllByTestId('target-month').filter((el) => el.textContent === '2026年11月').map((el) => el.closest('tr')!);
+      expect(novRows.map((tr) => within(tr).getByTestId('unit-code').textContent)).toEqual(['No1', 'No2']);
+      // ステータスは1台目と同じ
+      expect(within(novRows[0]!).getByText('未申請')).toBeInTheDocument();
+      expect(within(novRows[1]!).getByText('未申請')).toBeInTheDocument();
+      // 1台目の行だけ報告書UP・完了連絡・日付の入力がある
+      expect(within(novRows[0]!).getByRole('button', { name: '報告書UP' })).toBeInTheDocument();
+      expect(within(novRows[1]!).queryByRole('button', { name: '報告書UP' })).toBeNull();
+      expect(within(novRows[1]!).queryByRole('button', { name: '完了連絡' })).toBeNull();
+      expect(within(novRows[1]!).queryByLabelText('点検開始日')).toBeNull();
+      // 2台目の行は1台目の直後
+      expect(novRows[1]!.previousElementSibling).toBe(novRows[0]);
+    });
+
+    it('申請不要・毎月の点検種別は毎月の行を出し、申請の欄を出さず、超過にしない（修正依頼1025 H4/G4）', async () => {
+      portalApi.fetchInspectionTypeFlags.mockResolvedValue([{ inspection_type_id: 't1', report_only: true, monthly: true }]);
+      renderPage();
+      // 4月登録 → 4〜1月の毎月（既定の時期: 過去は超過だけなので出さず、今月から今後3か月）
+      await waitFor(() =>
+        expect(screen.getAllByTestId('target-month').map((el) => el.textContent)).toEqual([
+          '2026年10月',
+          '2026年11月',
+          '2026年12月',
+          '2027年1月',
+        ]),
+      );
+      const oct = rowOf('2026年10月');
+      expect(within(oct).getByTestId('inspection-months')).toHaveTextContent('毎月');
+      expect(within(oct).getByText('申請不要')).toBeInTheDocument();
+      expect(within(oct).queryByLabelText('点検開始日')).toBeNull();
+      expect(within(oct).getByRole('button', { name: '報告書UP' })).toBeInTheDocument();
+      expect(screen.queryByText('点検月超過')).toBeNull();
+      // 過去の月（すべて）は報告書が無ければ「報告書未提出」
+      fireEvent.change(screen.getByRole('combobox', { name: '時期' }), { target: { value: 'all' } });
+      await waitFor(() => expect(within(rowOf('2026年5月')).getByText('報告書未提出')).toBeInTheDocument());
+      expect(screen.queryByText('点検月超過')).toBeNull();
+    });
+
+    it('ステータス・No（対象月）の見出しで予定の行を並べ替え、管理会社は略称で出す（修正依頼1025 F3・F5）', async () => {
+      portalApi.fetchManagementCompanyShortNames.mockResolvedValue([{ id: 'm1', name: 'テスト管理', short_name: 'ﾃｽﾄ管' }]);
+      renderPage();
+      await waitFor(() => expect(screen.getAllByTestId('target-month')).toHaveLength(2));
+      const months = () => screen.getAllByTestId('target-month').map((el) => el.textContent);
+      expect(months()).toEqual(['2026年5月', '2026年11月']);
+      fireEvent.click(screen.getByLabelText(/^No（対象月）で並べ替え/));
+      fireEvent.click(screen.getByLabelText(/^No（対象月）で並べ替え（昇順）/));
+      expect(months()).toEqual(['2026年11月', '2026年5月']);
+      // ステータス昇順: 超過（5月）が先
+      fireEvent.click(screen.getByLabelText(/^ステータスで並べ替え/));
+      expect(months()).toEqual(['2026年5月', '2026年11月']);
+      await waitFor(() => expect(within(rowOf('2026年11月')).getByText('ﾃｽﾄ管')).toBeInTheDocument());
+      expect(within(rowOf('2026年11月')).getByTitle('テスト管理')).toBeInTheDocument();
     });
 
     it('完了連絡は確認のうえ記録し、記録があれば点検完了と出す', async () => {

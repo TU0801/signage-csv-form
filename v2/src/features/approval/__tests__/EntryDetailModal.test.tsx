@@ -61,4 +61,32 @@ describe('承認画面の詳細（管理者）', () => {
     expect(screen.queryByAltText('貼紙画像')).not.toBeInTheDocument();
     expect(screen.getByText('表示できない画像の URL です')).toBeInTheDocument();
   });
+
+  it('2枚目以降の貼紙（修正依頼1025 D3）を全部出し、出どころと位置を添える', () => {
+    HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
+      this.open = true;
+    };
+    const lib = 'https://example.supabase.co/storage/v1/object/public/poster-images/library/common/n.png';
+    const up = 'https://example.supabase.co/storage/v1/object/public/poster-images/u1/b.png';
+    render(
+      <EntryDetailModal
+        entry={{
+          ...entry,
+          extra_posters: [
+            { image_url: lib, source: 'library', library_id: 'L1' },
+            { image_url: up, source: 'upload', position: '0' },
+          ],
+        }}
+        onClose={() => {}}
+        propertyNames={new Map()}
+        emailOf={() => ''}
+        displayDefault={6}
+      />,
+    );
+    expect(screen.getByText('追加の貼紙（2枚）')).toBeInTheDocument();
+    expect(screen.getByAltText('2枚目の貼紙')).toHaveAttribute('src', lib);
+    expect(screen.getByAltText('3枚目の貼紙')).toHaveAttribute('src', up);
+    expect(screen.getByText(/2枚目・ライブラリ・/)).toBeInTheDocument();
+    expect(screen.getByText(/3枚目・アップロード・/)).toHaveTextContent('全体');
+  });
 });

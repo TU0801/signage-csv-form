@@ -129,6 +129,7 @@ export type EntryInsertRow = Pick<
   | 'property_inspection_id'
   | 'vendor_id'
   | 'target_month'
+  | 'extra_posters'
 >;
 
 /** まとめて1回の INSERT で申請する（全件成功か全件失敗。v1 と同じ） */

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { InspectionTypeFormModal } from '../components/InspectionTypeFormModal';
 import type { DbInspectionType } from '@/types/database';
 
@@ -32,5 +32,33 @@ describe('点検種別モーダルのプレビュー（v1 admin-masters.js updat
     );
     const img = screen.getByRole('img', { hidden: true });
     expect(img).toHaveAttribute('src', 'https://storage/templates/elevator_inspection.png');
+  });
+});
+
+describe('点検種別モーダルの申請不要・毎月（修正依頼1025 H4/G4）', () => {
+  it('今の印を出し、変えたら保存で印と変更ありを渡す', async () => {
+    const onSubmit = vi.fn(async () => {});
+    render(
+      <InspectionTypeFormModal
+        item={item}
+        categories={[]}
+        templateImages={[]}
+        flags={{ report_only: true, monthly: false }}
+        onClose={vi.fn()}
+        onSubmit={onSubmit}
+      />,
+    );
+    const reportOnly = screen.getByRole('checkbox', { name: /申請不要（報告書のみ）/, hidden: true });
+    const monthly = screen.getByRole('checkbox', { name: /^毎月/, hidden: true });
+    expect(reportOnly).toBeChecked();
+    expect(monthly).not.toBeChecked();
+    fireEvent.click(monthly);
+    fireEvent.click(screen.getByRole('button', { name: '保存', hidden: true }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ inspection_name: 'エレベーター点検' }),
+      { report_only: true, monthly: true },
+      true,
+    );
   });
 });

@@ -5,6 +5,7 @@
  */
 
 import type { DbTemplateImage } from '@/types/database';
+import type { ExtraPoster } from '@/lib/extraPosters';
 
 /** 一括入力の1行。v1: js/bulk-table.js addRow の row */
 export interface BulkEntryRow {
@@ -34,6 +35,11 @@ export interface BulkEntryRow {
   posterType: 'template' | 'custom';
   /** 追加の貼紙画像の公開 URL（poster-images に選んだ時点でアップロード済み。File は持たない） */
   posterImage: string;
+  /**
+   * 2枚目以降の貼紙（修正依頼1025 D3。アップロード済みの URL かライブラリの URL）。テンプレートの貼紙にも足せる。
+   * 申請で signage_entries.extra_posters に入り、CSV では枚数分の行になる。古い自動保存・テンプレートには無い
+   */
+  extraPosters?: ExtraPoster[];
   /** 貼紙表示位置（0〜4。貼り付けの8列目が数字でないと NaN になりうる＝v1 と同じ） */
   position: number;
   isValid: boolean;
@@ -63,6 +69,14 @@ export interface BulkScheduleMeta {
   propertyName: string;
   /** 物件の端末 ID（0台の物件も申請できる＝点検一覧の申請と同じ） */
   terminalIds: string[];
+  /** 物件の下に出す設備会社固有の No（台の unit_code・点検行の設備会社固有コード。修正依頼1025 H2）。無ければ物件コードだけ */
+  unitCode?: string | null;
+  /** 2台目以降の行（H1・H3）。表示だけ（locked）。申請・報告書UP・完了連絡は1台目の行 */
+  secondary?: boolean;
+  /** 申請不要（報告書のみ）の点検（H4/G4）。申請の欄を出さない（locked） */
+  reportOnly?: boolean;
+  /** 点検月以外の月の行（D5「全ての月」） */
+  offMonth?: boolean;
 }
 
 /** 行を作るときに渡す値（v1 addRow の data） */
@@ -74,6 +88,13 @@ export interface BulkProperty {
   propertyName: string;
   terminalId: string;
   supplement: string;
+  /**
+   * 未承認の建物（建物追加の申請 id）。物件コードは仮のコード REQ-…・端末は無い（修正依頼1025 F2）。
+   * 申請に property_request_id として入り、建物の承認で正式な物件コードに付け替わる
+   */
+  propertyRequestId?: string;
+  /** 未承認の建物の管理会社（申請で選んだもの。管理会社フィルターに使う） */
+  managementCompanyId?: string;
 }
 
 /** v1: getAllMasterDataCamelCase の vendors */

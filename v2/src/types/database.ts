@@ -1,3 +1,5 @@
+import type { ExtraPoster } from '@/lib/extraPosters';
+
 /** signage_profiles テーブル */
 export interface DbProfile {
   id: string;
@@ -51,6 +53,13 @@ export interface DbEntry {
   reviewed_at?: string | null;
   /** 申請者のメモ（CSV に出さない。点検月の変更などの覚え書き）。scripts/fix-1024-core.sql */
   memo?: string | null;
+  /** 2枚目以降の貼紙（jsonb 配列。修正依頼1025 D3。scripts/fix-1025-posters.sql）。読むときは parseExtraPosters を通す */
+  extra_posters?: ExtraPoster[] | null;
+  /**
+   * 未承認の建物（建物追加の申請）の掲示の申請。property_code は仮のコード REQ-<申請 id の先頭8文字>。
+   * 建物が承認されるまで承認（ready）できない。承認で正式な物件コードに付け替わる（scripts/fix-1025-building.sql）
+   */
+  property_request_id?: string | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -186,6 +195,10 @@ export interface DbPropertyRequest {
   created_property_code: string | null;
   /** 承認時に管理者が入れた端末番号（無ければ null＝端末未設置。scripts/fix-1024-followups-terminal.sql） */
   created_terminal_id: string | null;
+  /** 管理会社の審査（任意）。審査済み（承認推奨）・差戻しで入る（scripts/fix-1025-building.sql） */
+  mgmt_reviewed_by?: string | null;
+  mgmt_reviewed_at?: string | null;
+  mgmt_comment?: string | null;
   created_at: string;
   updated_at: string;
 }

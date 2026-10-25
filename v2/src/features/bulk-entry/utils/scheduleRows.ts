@@ -24,8 +24,10 @@ export function scheduleRowInput(
   memos?: ReadonlyMap<string, string>,
 ): { meta: BulkScheduleMeta; row: BulkRowInput } {
   const { inspection } = item;
-  const locked = !!item.targetMonth && item.application !== 'not_applied';
-  const entry = scheduleRowEntry(item);
+  // 2台目以降の行と申請不要の点検は、この表から申請しない（入力欄を出さない。修正依頼1025 H3・H4/G4）
+  const locked = (!!item.targetMonth && item.application !== 'not_applied') || !!item.secondary || !!item.reportOnly;
+  // 2台目以降の行は表示だけ（日付・備考・メモは空。ステータスは meta で1台目と同じ。修正依頼1025 決定4）
+  const entry = item.secondary ? null : scheduleRowEntry(item);
   return {
     meta: {
       key: item.key,
@@ -34,6 +36,10 @@ export function scheduleRowInput(
       locked,
       propertyName: inspection.property_name,
       terminalIds: inspection.terminal_ids,
+      ...(item.unitCode ? { unitCode: item.unitCode } : {}),
+      ...(item.secondary ? { secondary: true } : {}),
+      ...(item.reportOnly ? { reportOnly: true } : {}),
+      ...(item.offMonth ? { offMonth: true } : {}),
     },
     row: {
       propertyCode: inspection.property_code,
@@ -52,11 +58,19 @@ export function scheduleRowInput(
  * 予定の行は点検開始日・備考・メモ・詳細設定の連絡先・追加の貼紙を入れたものだけ（予定の行は自動保存されないので、離れると消える）
  */
 export function hasUnsentInput(
-  row: Pick<BulkEntryRow, 'schedule' | 'startDate' | 'remarks' | 'memo' | 'posterType' | 'emergencyContact'>,
+  row: Pick<BulkEntryRow, 'schedule' | 'startDate' | 'remarks' | 'memo' | 'posterType' | 'emergencyContact'> &
+    Partial<Pick<BulkEntryRow, 'extraPosters'>>,
 ): boolean {
   if (!row.schedule) return true;
   if (row.schedule.locked) return false;
-  return !!(row.startDate || row.remarks || row.memo || row.posterType === 'custom' || row.emergencyContact);
+  return !!(
+    row.startDate ||
+    row.remarks ||
+    row.memo ||
+    row.posterType === 'custom' ||
+    row.emergencyContact ||
+    (row.extraPosters?.length ?? 0) > 0
+  );
 }
 
 /**

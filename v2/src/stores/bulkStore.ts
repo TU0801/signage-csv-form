@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type {
   BulkEntryRow,
   BulkMasterData,
+  BulkProperty,
   BulkRowInput,
   BulkScheduleMeta,
   BulkSettings,
@@ -17,7 +18,9 @@ import { validateBulkRow } from '@/features/bulk-entry/utils/validateBulkRow';
 import { AUTO_SAVE_DELAY_MS, writeAutoSave } from '@/features/bulk-entry/utils/bulkAutoSave';
 import { defaultInspectionType } from '@/features/bulk-entry/utils/scheduleRows';
 import { followEndDate } from '@/lib/inspectionDates';
+import { isCompanyLibraryPoster } from '@/lib/extraPosters';
 import { todayUtc } from '@/lib/utils';
+import type { ProvisionalBuilding } from '@/features/building-requests/lib/provisional';
 
 /** 行の詳細設定モーダルで変える項目 */
 export type BulkRowDetail = Pick<
@@ -32,6 +35,7 @@ export type BulkRowDetail = Pick<
   | 'emergencyContact'
   | 'posterType'
   | 'posterImage'
+  | 'extraPosters'
 >;
 
 /** 選択行への一括設定で上書きできる項目（入れた項目だけを渡す） */
@@ -92,8 +96,18 @@ export interface BulkState {
    * 戻さないと同じ申請をもう一度出せてしまい、未送信の入力として離脱の確認も出続ける
    */
   clearScheduleInputs: (ids: number[]) => void;
+  /**
+   * 未承認の建物（建物追加の申請。修正依頼1025 F2）を物件の候補に入れ直し、手の行を検証し直す。
+   * approved（仮のコード → 承認後の物件コード・端末）に当たる手の行は承認後の物件に付け替える（自動保存から戻した行）。
+   * 変わらなければ何もしない
+   */
+  setProvisionalBuildings: (
+    buildings: ProvisionalBuilding[],
+    approved?: ReadonlyMap<string, { propertyCode: string; terminalId: string }>,
+  ) => void;
 
-  addRow: (data?: BulkRowInput) => number;
+  /** top: 表の一番上に入れる（既定は末尾） */
+  addRow: (data?: BulkRowInput, top?: boolean) => number;
   addRowWithCopy: () => void;
   duplicateRows: (ids: number[]) => void;
   /** 行が無ければ false */
@@ -104,7 +118,8 @@ export interface BulkState {
   removeRows: (ids: number[]) => void;
   /** 物件・端末・点検種別・点検終了日の変更（変更後に検証する） */
   updateRow: (id: number, patch: Partial<Pick<BulkEntryRow, 'terminalId' | 'inspectionType' | 'endDate'>>) => void;
-  changeProperty: (id: number, propertyCode: string) => void;
+  /** 物件を変える。外した管理会社のライブラリの貼紙の枚数を返す（物件が変わったときだけ。ユーザー決定3） */
+  changeProperty: (id: number, propertyCode: string) => number;
   changeStartDate: (id: number, startDate: string) => void;
   changeRemarks: (id: number, remarks: string) => void;
   changeMemo: (id: number, memo: string) => void;
@@ -144,7 +159,11 @@ export const useBulkStore = create<BulkState>((set, get) => {
       const errors = validateBulkRow(row, own, appSettings, []).filter((e) => e !== '端末');
       return { ...row, errors, isValid: errors.length === 0 };
     }
-    const errors = validateBulkRow(row, masterData.properties, appSettings, masterData.notices);
+    let errors = validateBulkRow(row, masterData.properties, appSettings, masterData.notices);
+    // 未承認の建物には端末が無い（承認後に業務システムで端末が付く。点検予定の行の端末なしと同じ扱い）
+    if (masterData.properties.some((p) => p.propertyRequestId && p.propertyCode === String(row.propertyCode))) {
+      errors = errors.filter((e) => e !== '端末');
+    }
     return { ...row, errors, isValid: errors.length === 0 };
   };
 
@@ -176,6 +195,8 @@ export const useBulkStore = create<BulkState>((set, get) => {
       emergencyContact: data.emergencyContact || '',
       posterType: data.posterType === 'custom' ? 'custom' : 'template',
       posterImage: data.posterImage || '',
+      // 2枚目以降の貼紙（修正依頼1025 D3）。無ければ持たない（自動保存の JSON を v1 と同じ形に保つ）
+      extraPosters: data.extraPosters?.length ? data.extraPosters : undefined,
       position: data.position !== undefined ? data.position : 2,
       isValid: false,
       errors: [],
@@ -188,10 +209,19 @@ export const useBulkStore = create<BulkState>((set, get) => {
     return validate(row);
   };
 
-  const appendRows = (inputs: BulkRowInput[]) => {
+  /**
+   * 手で足した行を入れる。手で足した行は表の上（予定の行の上）にまとめて置く（修正依頼1025 F1）。
+   * atTop なら一番上（「＋行を追加」）、それ以外は手で足した行の最後（予定の行の直前）
+   */
+  const appendRows = (inputs: BulkRowInput[], atTop = false) => {
     let counter = get().rowIdCounter;
     const newRows = inputs.map((data) => buildRow(++counter, data));
-    set((s) => ({ rows: [...s.rows, ...newRows], rowIdCounter: counter }));
+    set((s) => {
+      if (atTop) return { rows: [...newRows, ...s.rows], rowIdCounter: counter };
+      const firstSchedule = s.rows.findIndex((r) => r.schedule);
+      const at = firstSchedule === -1 ? s.rows.length : firstSchedule;
+      return { rows: [...s.rows.slice(0, at), ...newRows, ...s.rows.slice(at)], rowIdCounter: counter };
+    });
     return newRows;
   };
 
@@ -217,6 +247,7 @@ export const useBulkStore = create<BulkState>((set, get) => {
     emergencyContact: r.emergencyContact,
     posterType: r.posterType,
     posterImage: r.posterImage,
+    extraPosters: r.extraPosters,
     position: r.position,
   });
 
@@ -272,6 +303,7 @@ export const useBulkStore = create<BulkState>((set, get) => {
           emergencyContact: '',
           posterType: 'template',
           posterImage: '',
+          extraPosters: undefined,
           position: 2,
           isValid: false,
           errors: [],
@@ -279,7 +311,8 @@ export const useBulkStore = create<BulkState>((set, get) => {
         };
         return validate(built);
       });
-      const nextRows = [...scheduleRows, ...manual];
+      // 手で足した行を上、予定の行をその下に（修正依頼1025 F1: 「＋行を追加」の行が表の一番上に来る）
+      const nextRows = [...manual, ...scheduleRows];
       const ids = new Set(nextRows.map((r) => r.id));
       set((s) => ({
         rows: nextRows,
@@ -310,6 +343,7 @@ export const useBulkStore = create<BulkState>((set, get) => {
                 emergencyContact: '',
                 posterType: 'template',
                 posterImage: '',
+                extraPosters: undefined,
                 position: 2,
               })
             : r,
@@ -317,24 +351,67 @@ export const useBulkStore = create<BulkState>((set, get) => {
       }));
     },
 
+    setProvisionalBuildings: (buildings, approved = new Map()) => {
+      const { masterData, rows } = get();
+      const current = masterData.properties.filter((p) => p.propertyRequestId);
+      const sameCandidates =
+        current.length === buildings.length &&
+        buildings.every((b) =>
+          current.some(
+            (p) => p.propertyCode === b.propertyCode && p.propertyName === b.propertyName && p.managementCompanyId === b.managementCompanyId,
+          ),
+        );
+      const remap = rows.some((r) => !r.schedule && approved.has(String(r.propertyCode)));
+      if (sameCandidates && !remap) return;
+      const extra: BulkProperty[] = buildings.map((b) => ({
+        propertyCode: b.propertyCode,
+        propertyName: b.propertyName,
+        terminalId: '',
+        supplement: '',
+        propertyRequestId: b.requestId,
+        managementCompanyId: b.managementCompanyId,
+      }));
+      const properties = [...masterData.properties.filter((p) => !p.propertyRequestId), ...extra];
+      set({ masterData: { ...masterData, properties } });
+      // 候補が変わった手の行（仮のコード・付け替えた行）だけ検証し直す
+      const touched = new Set([...current.map((p) => p.propertyCode), ...extra.map((p) => p.propertyCode), ...approved.keys()]);
+      set((s) => ({
+        rows: s.rows.map((r) => {
+          if (r.schedule || !touched.has(String(r.propertyCode))) return r;
+          const to = approved.get(String(r.propertyCode));
+          if (!to) return validate(r);
+          return validate({
+            ...r,
+            propertyCode: to.propertyCode,
+            terminalId: resolveTerminal(properties, to.propertyCode, to.terminalId, true) || to.terminalId,
+          });
+        }),
+      }));
+      if (remap) get().triggerAutoSave();
+    },
+
     // v1: js/bulk-table.js addRow
-    addRow: (data = {}) => {
-      const [row] = appendRows([data]);
+    addRow: (data = {}, top = false) => {
+      const [row] = appendRows([data], top);
       get().triggerAutoSave();
       return row!.id;
     },
 
-    // 最後の行の物件・端末・点検種別・点検日・表示時間・位置を引き継ぐ（備考は空）。v1: js/bulk-table.js addRowWithCopy
+    // 直前に足した行（手で足した行の一番上）の物件・端末・点検種別・点検日・表示時間・位置を引き継ぐ（備考は空）。
+    // 新しい行は表の一番上に入れる（修正依頼1025 F1。v1 は最後の行を写して末尾に足す）。v1: js/bulk-table.js addRowWithCopy
     // 点検予定の行は写さない（手で足した行が無ければ空の行）
     addRowWithCopy: () => {
-      const { rows, addRow } = get();
-      const manual = rows.filter((r) => !r.schedule);
-      const last = manual[manual.length - 1];
+      const { rows } = get();
+      const last = rows.find((r) => !r.schedule);
+      const addTop = (data: BulkRowInput) => {
+        appendRows([data], true);
+        get().triggerAutoSave();
+      };
       if (!last) {
-        addRow({});
+        addTop({});
         return;
       }
-      addRow({
+      addTop({
         propertyCode: last.propertyCode,
         terminalId: last.terminalId,
         vendorName: last.vendorName,
@@ -396,6 +473,7 @@ export const useBulkStore = create<BulkState>((set, get) => {
         emergencyContact: '',
         posterType: 'template',
         posterImage: '',
+        extraPosters: undefined,
         position: 2,
         isValid: false,
         errors: [],
@@ -437,11 +515,22 @@ export const useBulkStore = create<BulkState>((set, get) => {
 
     // 画面で物件を変えたら最初の端末を選ぶ。v1: js/bulk-table.js propertySelect change → updateTerminals
     // 点検種別が空なら保守会社の点検種別を入れる（B9）
+    // 管理会社の分のライブラリの貼紙（1枚目・2枚目以降）は、その管理会社の物件の申請でだけ使える。選んだときの物件で絞って
+    // いるので、物件が変わったら外す（全社共通・アップロードは残す。1枚目を外すと「貼紙画像」のエラーで選び直しを促す）
     changeProperty: (id, propertyCode) => {
       const { masterData, inspectionDefaults } = get();
-      mapRow(id, (r) =>
-        validate({
+      let dropped = 0;
+      mapRow(id, (r) => {
+        const changed = r.propertyCode !== propertyCode;
+        const dropMain = changed && isCompanyLibraryPoster(r.posterImage);
+        const keptExtras = changed
+          ? (r.extraPosters ?? []).filter((x) => !isCompanyLibraryPoster(x.image_url))
+          : r.extraPosters;
+        dropped = (dropMain ? 1 : 0) + (r.extraPosters?.length ?? 0) - (keptExtras?.length ?? 0);
+        return validate({
           ...r,
+          ...(dropMain ? { posterImage: '' } : {}),
+          ...(changed ? { extraPosters: keptExtras?.length ? keptExtras : undefined } : {}),
           // 選び直したら取込時の物件名の手がかりは要らない
           pastedPropertyName: undefined,
           propertyCode,
@@ -456,9 +545,10 @@ export const useBulkStore = create<BulkState>((set, get) => {
                   masterData.notices,
                 )
               : ''),
-        }),
-      );
+        });
+      });
       get().triggerAutoSave();
+      return dropped;
     },
 
     // 点検終了日を開始日に合わせる（空・旧開始日と同じ・新開始日より前のとき。B10）。v1: js/bulk-table.js .start-date change（v1 は空のときだけ）

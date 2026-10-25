@@ -6,6 +6,7 @@ import { VendorsMaster } from '@/features/master/instances/VendorsMaster';
 import { InspectionTypesMaster } from '@/features/master/instances/InspectionTypesMaster';
 import { CategoriesMaster } from '@/features/master/instances/CategoriesMaster';
 import { SettingsContent } from '@/features/settings/components/SettingsContent';
+import { PosterLibraryMaster } from '@/features/poster-library/components/PosterLibraryMaster';
 
 // v1: admin.html #tab-master の data-master（物件・保守会社・点検種別・カテゴリ・設定）
 // テンプレート画像（v1.34.0 で業務システムへ移管）と設備管理（signage_building_equipment は廃止表）のタブは無い
@@ -16,6 +17,8 @@ const tabs = [
   { key: 'vendors', label: '保守会社', component: VendorsMaster, management: true },
   { key: 'inspectionTypes', label: '点検種別', component: InspectionTypesMaster, management: false },
   { key: 'categories', label: 'カテゴリ', component: CategoriesMaster, management: false },
+  // 文字を合成しない貼紙（修正依頼1025 D2）。管理会社は自社分を登録できる
+  { key: 'posterLibrary', label: '貼紙ライブラリ', component: PosterLibraryMaster, management: true },
   { key: 'settings', label: '設定', component: SettingsContent, management: false },
 ] as const;
 

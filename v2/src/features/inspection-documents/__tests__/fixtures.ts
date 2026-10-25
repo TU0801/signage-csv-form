@@ -1,4 +1,4 @@
-import type { DbInspectionReport } from '@/types/portal';
+import type { DbInspectionReport, DbPropertyFile } from '@/types/portal';
 
 /** テスト用の報告書（実在の物件名・社名は使わない） */
 export function makeReport(overrides: Partial<DbInspectionReport> = {}): DbInspectionReport {
@@ -32,6 +32,35 @@ export function makeReport(overrides: Partial<DbInspectionReport> = {}): DbInspe
     retention_until: null,
     created_at: '2026-10-05T01:00:00Z',
     updated_at: '2026-10-05T01:00:00Z',
+    ...overrides,
+  };
+}
+
+/** テスト用のその他ファイル（修正依頼1025 G2） */
+export function makePropertyFile(overrides: Partial<DbPropertyFile> = {}): DbPropertyFile {
+  return {
+    id: 'f1',
+    property_id: 'p1',
+    property_code: '100001',
+    property_name: 'テスト第一ビル',
+    category: 'estimate',
+    category_note: null,
+    doc_date: '2026-10-20',
+    file_name: '見積書_エレベーター改修.pdf',
+    original_name: '見積書_エレベーター改修.pdf',
+    storage_path: '100001/u2.pdf',
+    mime_type: 'application/pdf',
+    size_bytes: 2048,
+    content_hash: 'h9',
+    uploaded_by: 'u1',
+    vendor_id: 'v1',
+    vendor_name: 'テスト保守',
+    management_company_id: 'm1',
+    note: null,
+    ocr_result: null,
+    status: 'active',
+    created_at: '2026-10-20T01:00:00Z',
+    updated_at: '2026-10-20T01:00:00Z',
     ...overrides,
   };
 }

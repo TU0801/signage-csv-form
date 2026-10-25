@@ -13,7 +13,10 @@ import { PosterPreview } from '@/features/single-entry/components/PosterPreview'
 import { resolveTemplateImageUrl } from '@/features/single-entry/lib/templateImages';
 import { formatPosterDate } from '@/features/single-entry/lib/entryLogic';
 import { formatMonth } from '@/features/inspection-portal/lib/schedule';
-import { rowDetailDiscards } from '@/lib/posterPath';
+import { notHeld } from '@/lib/posterPath';
+import type { ExtraPoster } from '@/lib/extraPosters';
+import { LibraryPickerModal } from '@/features/poster-library/components/LibraryPickerModal';
+import { ExtraPostersEditor } from '@/features/poster-library/components/ExtraPostersEditor';
 import { discardUnheldRowImages } from '../utils/discardRowImages';
 import { POSITIONS, hasCustomDisplayPeriod, submittedDisplayPeriod, templateDisplayName } from '../utils/rowDetail';
 import type { BulkEntryRow, BulkMasterData } from '../types';
@@ -67,6 +70,7 @@ function RowDetailForm({ row, masterData, onClose }: { row: BulkEntryRow; master
   const currentVendor = useBulkStore((s) => s.currentVendor);
   const userId = useBulkStore((s) => s.userId);
   const displayTimeMax = Number(useBulkStore((s) => s.appSettings.display_time_max) || 30);
+  const displayTimeDefault = Number(useBulkStore((s) => s.appSettings.display_time_default) || 6);
   const uid = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -81,27 +85,29 @@ function RowDetailForm({ row, masterData, onClose }: { row: BulkEntryRow; master
   const [contact, setContact] = useState(row.emergencyContact || vendorContact);
   const [posterType, setPosterType] = useState<'template' | 'custom'>(row.posterType === 'custom' ? 'custom' : 'template');
   const [posterImage, setPosterImage] = useState(row.posterImage || '');
+  // 2枚目以降の貼紙（修正依頼1025 D3）。選んだ時点でアップロードして URL を持つ（1枚目と同じ）
+  const [extraPosters, setExtraPosters] = useState<ExtraPoster[]>(() => row.extraPosters ?? []);
   const [uploading, setUploading] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
   // 開いている間にアップロードした画像と、保存したときに行に残す画像。閉じたとき（保存・キャンセル・×・Escape）に、
-  // 行に残らない画像を片付ける（閉じ方によらずフォームが外れるときに1回だけ）
+  // 行に残らない画像を片付ける（閉じ方によらずフォームが外れるときに1回だけ）。2枚目以降の貼紙も同じ
   const uploadedRef = useRef<string[]>([]);
-  const keptRef = useRef<string | null>(null);
+  const keptRef = useRef<string[] | null>(null);
   const closedRef = useRef(false);
   const originalImage = row.posterImage || '';
+  const originalExtrasKey = (row.extraPosters ?? []).map((x) => x.image_url).join('\n');
   useEffect(() => {
     closedRef.current = false;
+    const originals = [originalImage, ...(originalExtrasKey ? originalExtrasKey.split('\n') : [])];
     return () => {
       closedRef.current = true;
-      const discards = rowDetailDiscards({
-        original: originalImage,
-        uploaded: uploadedRef.current,
-        kept: keptRef.current ?? originalImage,
-      });
+      // キャンセル（× ・Escape を含む）なら開いたときの画像が残る（＝アップロードした分だけ消える）
+      const discards = notHeld([...uploadedRef.current, ...originals], keptRef.current ?? originals);
       uploadedRef.current = [];
       keptRef.current = null;
       discardUnheldRowImages(discards);
     };
-  }, [originalImage]);
+  }, [originalImage, originalExtrasKey]);
 
   // 表示期間は既定（空・点検期間のまま）なら畳む。開いたら空の欄に点検期間を入れる（旧モーダルと同じ既定）
   const [periodOpen, setPeriodOpen] = useState(() => hasCustomDisplayPeriod(row));
@@ -116,6 +122,10 @@ function RowDetailForm({ row, masterData, onClose }: { row: BulkEntryRow; master
     const v = row.position !== undefined ? String(row.position) : '2';
     return POSITIONS.some((p) => p.value === v) ? v : '2';
   });
+  // 表示時間と貼紙表示位置は既定で自動設定される項目なので畳む（修正依頼1025 F7）。既定と違う値なら開いておく
+  const [layoutOpen, setLayoutOpen] = useState(
+    () => position !== '2' || (!!row.displayTime && row.displayTime !== displayTimeDefault),
+  );
 
   const isCustom = posterType === 'custom';
 
@@ -124,11 +134,9 @@ function RowDetailForm({ row, masterData, onClose }: { row: BulkEntryRow; master
     setPeriodShown(true);
   };
 
-  // 選んだ時点で poster-images にアップロードして URL を持つ（自動保存に File を入れないため）。PDF は1ページ目を PNG にする
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const input = e.target;
-    const file = input.files?.[0];
-    if (!file) return;
+  // 選んだ時点で poster-images にアップロードして URL を持つ（自動保存に File を入れないため）。PDF は1ページ目を PNG にする。
+  // アップロードできたら URL を返す（閉じられた・失敗したら null）
+  const uploadFile = async (file: File): Promise<string | null> => {
     setUploading(true);
     try {
       const prepared = await preparePosterImage(file);
@@ -137,17 +145,31 @@ function RowDetailForm({ row, masterData, onClose }: { row: BulkEntryRow; master
       // アップロード中に閉じられたら、行には入らないのでその場で片付ける
       if (closedRef.current) {
         discardUnheldRowImages([url]);
-        return;
+        return null;
       }
       uploadedRef.current.push(url);
-      setPosterImage(url);
       if (prepared.notice) addToast(prepared.notice, 'info');
+      return url;
     } catch (err) {
       addToast(err instanceof Error ? err.message : '画像を選択できませんでした', 'error');
+      return null;
     } finally {
       setUploading(false);
-      input.value = '';
     }
+  };
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.target;
+    const file = input.files?.[0];
+    if (!file) return;
+    const url = await uploadFile(file);
+    input.value = '';
+    if (url) setPosterImage(url);
+  };
+
+  const handleExtraFile = async (file: File) => {
+    const url = await uploadFile(file);
+    if (url) setExtraPosters((prev) => [...prev, { image_url: url, source: 'upload' }]);
   };
 
   const handleApply = () => {
@@ -155,13 +177,14 @@ function RowDetailForm({ row, masterData, onClose }: { row: BulkEntryRow; master
       addToast('追加の貼紙画像を選択してください', 'error');
       return;
     }
-    keptRef.current = isCustom ? posterImage : '';
+    keptRef.current = [isCustom ? posterImage : '', ...extraPosters.map((x) => x.image_url)];
     applyRowDetail(row.id, {
       noticeText,
       // 保守会社マスターと同じなら持たない（マスターの変更に追従させる）
       emergencyContact: contact.trim() === vendorContact ? '' : contact.trim(),
       posterType,
       posterImage: isCustom ? posterImage : '',
+      extraPosters: extraPosters.length > 0 ? extraPosters : undefined,
       // 表示期間を一度も開かなければ行の値のまま（開いただけで点検期間が入り「詳細✓」になるのを避ける）
       displayStartDate: periodShown ? displayStartDate : row.displayStartDate,
       displayStartTime: periodShown ? displayStartTime : row.displayStartTime,
@@ -290,22 +313,71 @@ function RowDetailForm({ row, masterData, onClose }: { row: BulkEntryRow; master
                     </Button>
                   </div>
                 ) : (
-                  <button
-                    type="button"
-                    disabled={uploading}
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-full rounded-md border-2 border-dashed border-gray-300 p-3 text-center text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-60"
-                  >
-                    {uploading ? '変換・アップロード中…' : 'クリックして画像を選択'}
-                    <br />
-                    <small>
-                      JPG, PNG, PDF形式（5MB以下）。PDF は1ページ目を {POSTER_PNG_SIZE.width}×{POSTER_PNG_SIZE.height} の PNG に変換します
-                    </small>
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={uploading}
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex-1 rounded-md border-2 border-dashed border-gray-300 p-3 text-center text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+                    >
+                      {uploading ? '変換・アップロード中…' : 'クリックして画像を選択'}
+                      <br />
+                      <small>
+                        JPG, PNG, PDF形式（5MB以下）。PDF は1ページ目を {POSTER_PNG_SIZE.width}×{POSTER_PNG_SIZE.height} の PNG に変換します
+                      </small>
+                    </button>
+                    {/* 文字を合成しない貼紙を貼紙ライブラリから選ぶ（修正依頼1025 D2） */}
+                    <button
+                      type="button"
+                      disabled={uploading}
+                      onClick={() => setLibraryOpen(true)}
+                      className="w-36 shrink-0 rounded-md border-2 border-dashed border-blue-300 p-3 text-center text-sm text-blue-700 hover:bg-blue-50 disabled:opacity-60"
+                    >
+                      ライブラリから選ぶ
+                      <br />
+                      <small className="text-gray-500">騒音注意・駐車禁止など</small>
+                    </button>
+                  </div>
                 )}
+                {libraryOpen && (
+<LibraryPickerModal
+                  open
+                  propertyCode={row.propertyCode}
+                  onClose={() => setLibraryOpen(false)}
+                  onSelect={(item) => {
+                    setLibraryOpen(false);
+                    setPosterImage(item.image_url);
+                  }}
+                />
+)}
               </div>
             )}
           </fieldset>
+
+          {/* 2枚目以降の貼紙（修正依頼1025 D3）。テンプレートの貼紙にも足せる。CSV では枚数分の行になる */}
+          <ExtraPostersEditor
+            items={extraPosters.map((x, i) => ({
+              key: `${i}:${x.image_url}`,
+              url: safePosterUrl(x.image_url),
+              label: x.source === 'library' ? 'ライブラリ' : 'アップロード',
+              position: x.position ?? null,
+            }))}
+            propertyCode={row.propertyCode}
+            busy={uploading}
+            onUpload={handleExtraFile}
+            onPickLibrary={(item) =>
+              // 同じライブラリの貼紙は1回だけ（DB も同じ要素の重複を断る）
+              setExtraPosters((prev) =>
+                prev.some((x) => x.source === 'library' && x.library_id === item.id)
+                  ? prev
+                  : [...prev, { image_url: item.image_url, source: 'library', library_id: item.id }],
+              )
+            }
+            onRemove={(index) => setExtraPosters((prev) => prev.filter((_, i) => i !== index))}
+            onPositionChange={(index, pos) =>
+              setExtraPosters((prev) => prev.map((x, i) => (i === index ? withPosition(x, pos) : x)))
+            }
+          />
         </div>
 
         <aside className="min-w-0 space-y-1" aria-label="貼紙のプレビュー">
@@ -341,6 +413,24 @@ function RowDetailForm({ row, masterData, onClose }: { row: BulkEntryRow; master
               </p>
             </>
           )}
+          {/* 2枚目以降の貼紙（修正依頼1025 D3）を枚数分 */}
+          {extraPosters.length > 0 && (
+            <div className="space-y-1 border-t border-gray-200 pt-1" data-testid="extra-poster-previews">
+              <p className="text-xs font-medium text-gray-600">追加の貼紙（{extraPosters.length}枚）</p>
+              <ul className="grid grid-cols-2 gap-1">
+                {extraPosters.map((x, i) => (
+                  <li key={`${i}:${x.image_url}`} className="text-center">
+                    <img
+                      src={safePosterUrl(x.image_url) ?? undefined}
+                      alt={`${i + 2}枚目の貼紙`}
+                      className="mx-auto max-h-32 w-auto max-w-full rounded border border-gray-200 object-contain"
+                    />
+                    <span className="text-[11px] text-gray-500">{i + 2}枚目</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </aside>
       </div>
 
@@ -359,17 +449,6 @@ function RowDetailForm({ row, masterData, onClose }: { row: BulkEntryRow; master
             </button>
             {!periodOpen && <span className="ml-2 text-xs text-gray-500">{periodSummary}</span>}
           </div>
-          <label className="flex items-center gap-1.5 text-sm text-gray-700">
-            <span>表示時間（秒）</span>
-            <input
-              type="number"
-              min={1}
-              max={displayTimeMax}
-              value={displayTime}
-              onChange={(e) => setDisplayTime(e.target.value)}
-              className={`${fieldBase} w-20`}
-            />
-          </label>
         </div>
         {periodOpen && (
           <div id={`${uid}-period`} className="space-y-1">
@@ -418,7 +497,42 @@ function RowDetailForm({ row, masterData, onClose }: { row: BulkEntryRow; master
         )}
       </section>
 
-      <PositionPicker name={`${uid}-position`} value={position} onChange={setPosition} />
+      {/* 表示時間と貼紙表示位置は既定で自動設定される項目なので、通常は畳む（▶で開く。修正依頼1025 F7） */}
+      <section className="space-y-1.5">
+        <div className="min-w-0">
+          <button
+            type="button"
+            aria-expanded={layoutOpen}
+            aria-controls={`${uid}-layout`}
+            onClick={() => setLayoutOpen((o) => !o)}
+            className="inline-flex items-center gap-1 text-sm font-semibold text-gray-800 hover:text-blue-700"
+          >
+            <span aria-hidden="true">{layoutOpen ? '▼' : '▶'}</span>
+            表示時間・貼紙表示位置
+          </button>
+          {!layoutOpen && (
+            <span className="ml-2 text-xs text-gray-500">
+              {displayTime || displayTimeDefault}秒・{POSITION_LABEL[position] ?? position}（既定で自動設定）
+            </span>
+          )}
+        </div>
+        {layoutOpen && (
+          <div id={`${uid}-layout`} className="space-y-2">
+            <label className="flex items-center gap-1.5 text-sm text-gray-700">
+              <span>表示時間（秒）</span>
+              <input
+                type="number"
+                min={1}
+                max={displayTimeMax}
+                value={displayTime}
+                onChange={(e) => setDisplayTime(e.target.value)}
+                className={`${fieldBase} w-20`}
+              />
+            </label>
+            <PositionPicker name={`${uid}-position`} value={position} onChange={setPosition} />
+          </div>
+        )}
+      </section>
 
       <div className="flex justify-end gap-3">
         <Button variant="secondary" onClick={onClose}>
@@ -430,6 +544,14 @@ function RowDetailForm({ row, masterData, onClose }: { row: BulkEntryRow; master
       </div>
     </div>
   );
+}
+
+/** 追加の貼紙の位置を変える（null は1枚目と同じ＝position を持たない） */
+function withPosition(x: ExtraPoster, position: string | null): ExtraPoster {
+  const next: ExtraPoster = { image_url: x.image_url, source: x.source };
+  if (x.library_id) next.library_id = x.library_id;
+  if (position) next.position = position;
+  return next;
 }
 
 const POSITION_LABEL = Object.fromEntries(POSITIONS.map((p) => [p.value, p.label]));
