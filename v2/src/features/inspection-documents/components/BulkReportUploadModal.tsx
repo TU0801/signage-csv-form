@@ -35,6 +35,7 @@ import {
 import {
   correctionRecord,
   lastDayOfPreviousMonth,
+  suggestedDefaultPerformedOn,
   postProcessOcr,
   suggestBreaks,
   suggestSegmentTargets,
@@ -230,7 +231,7 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
 
   /**
    * 読み取った結果を初期値にする: 建物が変わるページで区切り（区切りをまだ入れていないとき）、区間ごとに
-   * 物件・点検種別・対象月で点検が1つに決まれば選ぶ（選んである区間は変えない）。実施日が読めたら全区間の既定に入れる
+   * 物件・点検種別・対象月で点検が1つに決まれば選ぶ（選んである区間は変えない）。実施日が読めたら全区間の既定に入れる（読めず対象月が先月なら先月末）
    */
   const applyOcr = (suggestion: OcrSuggestion, current: LoadedPdf, currentBreaks: ReadonlySet<number>) => {
     const count = current.pages.pageCount;
@@ -252,7 +253,9 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
       }
       return next;
     });
-    if (suggestion.performedOn) setDefaultPerformedOn(suggestion.performedOn);
+    // 実施日が読めたらその日、読めず対象月が先月なら先月末（修正依頼1025 G3）
+    const performedDefault = suggestedDefaultPerformedOn(suggestion, today);
+    if (performedDefault) setDefaultPerformedOn(performedDefault);
     if (suggestion.targetMonth) setTargetFilter(formatMonth(suggestion.targetMonth));
   };
 

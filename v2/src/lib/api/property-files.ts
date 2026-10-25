@@ -20,6 +20,16 @@ export async function fetchPropertyFiles(): Promise<DbPropertyFile[]> {
   return (data ?? []) as DbPropertyFile[];
 }
 
+/** その他ファイルを置ける建物（管理者は全件・保守会社は自社の点検がある物件・管理会社は点検行の無いものを含む自社物件） */
+export async function fetchPropertyFileTargets(): Promise<{ code: string; name: string }[]> {
+  const { data, error } = await supabase.rpc(RPC.portalPropertyFileTargets);
+  if (error) throw error;
+  return ((data ?? []) as { property_code: string; property_name: string }[]).map((r) => ({
+    code: r.property_code,
+    name: r.property_name,
+  }));
+}
+
 export interface RegisterPropertyFileInput {
   propertyCode: string;
   category: PropertyFileCategory;

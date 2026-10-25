@@ -19,6 +19,8 @@ interface BulkToolbarProps {
   onOpenPaste: () => void;
   /** 報告書一括アップロード（保守会社・管理者。出さないときは undefined） */
   onOpenBulkReport?: () => void;
+  /** その他ファイルアップロード（見積書・請求書など。修正依頼1025 G2。出さないときは undefined） */
+  onOpenOtherFile?: () => void;
   /** 建物追加の申請 */
   onOpenBuildingRequest?: () => void;
   onApplyTemplate: (id: string) => void;
@@ -42,6 +44,7 @@ export function BulkToolbar({
   onOpenBulkApply,
   onOpenPaste,
   onOpenBulkReport,
+  onOpenOtherFile,
   onOpenBuildingRequest,
   onApplyTemplate,
   onOpenSaveTemplate,
@@ -93,6 +96,18 @@ export function BulkToolbar({
               className="border-blue-300 text-blue-700"
             >
               報告書一括アップロード
+            </Button>
+          )}
+          {onOpenOtherFile && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={onOpenOtherFile}
+              disabled={disabled}
+              title="見積書・請求書・契約書・建物関連情報・提案書・写真などを建物ごとに登録する"
+              className="border-blue-300 text-blue-700"
+            >
+              その他ファイルアップロード
             </Button>
           )}
           {onOpenBuildingRequest && (

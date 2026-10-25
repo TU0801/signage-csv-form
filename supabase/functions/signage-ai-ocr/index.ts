@@ -8,7 +8,9 @@
 // 足りない（スキャン画像の PDF）なら先頭 MAX_PDF_PAGES ページだけを切り出した PDF を mode=pdf で送る。画像（JPG/PNG）は mode=image。
 //
 // 費用の守り: ページ数・文字数の上限、1日の呼び出し件数の上限（全体と1人あたり。日本時間の0時で区切る）、再試行は最大1回
-// （SDK の maxRetries=1）。呼び出しは signage_ocr_usage（件数の数え上げ）と signage_audit_logs（監査）に記録する。
+// （SDK の maxRetries=1）。上限の確認と枠の予約は、モデルを呼ぶ前に RPC ocr_reserve_usage で原子的に行う（同時に送られても
+// 上限を超えて呼ばない。失敗した呼び出しも予約の行が残るので数に入る）。呼んだ後でその行にトークン数と結果を書き、
+// signage_audit_logs（監査）にも記録する。
 //
 // デプロイ（人が行う。scripts/fix-1025-reports.sql を先に適用しておく）:
 //   1. supabase secrets set ANTHROPIC_API_KEY=sk-ant-... --project-ref pdouwmjyswswfmzpfjzf
@@ -110,14 +112,6 @@ function json(body: unknown, status = 200) {
   });
 }
 
-/** 日本時間の今日の0時（UTC の ISO 文字列） */
-function startOfTodayJst(): string {
-  const now = new Date();
-  const jst = new Date(now.getTime() + 9 * 3600 * 1000);
-  const midnightJst = Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), jst.getUTCDate()) - 9 * 3600 * 1000;
-  return new Date(midnightJst).toISOString();
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'POST のみ対応しています' }, 405);
@@ -195,37 +189,36 @@ Deno.serve(async (req) => {
     return json({ error: '読み取り方（mode）を指定してください' }, 400);
   }
 
-  // ---- 1日の上限（日本時間の0時から） ----
-  const since = startOfTodayJst();
-  const [{ count: totalToday, error: totalError }, { count: mineToday, error: mineError }] = await Promise.all([
-    admin.from('signage_ocr_usage').select('id', { count: 'exact', head: true }).gte('created_at', since),
-    admin.from('signage_ocr_usage').select('id', { count: 'exact', head: true }).gte('created_at', since).eq('user_id', caller.id),
-  ]);
-  if (totalError || mineError) {
-    return json({ error: `呼び出し回数の確認に失敗しました: ${(totalError ?? mineError)?.message}` }, 500);
+  // ---- 1日の上限（日本時間の0時から）。モデルを呼ぶ前に枠を予約する ----
+  const { data: usageId, error: reserveError } = await admin.rpc('ocr_reserve_usage', {
+    p_user_id: caller.id,
+    p_mode: mode,
+    p_pages: pageCount,
+    p_limit_total: DAILY_LIMIT,
+    p_limit_user: DAILY_LIMIT_PER_USER,
+  });
+  if (reserveError) {
+    return json({ error: `呼び出し回数の確認に失敗しました: ${reserveError.message}` }, 500);
   }
-  if ((totalToday ?? 0) >= DAILY_LIMIT || (mineToday ?? 0) >= DAILY_LIMIT_PER_USER) {
+  if (usageId === null || usageId === undefined) {
     return json({ error: '今日の AI-OCR の上限に達しました（明日またお試しください）', code: 'daily_limit' }, 429);
   }
 
   const record = async (ok: boolean, usage: { input_tokens?: number; output_tokens?: number } | null, error: string | null) => {
     const row = {
-      user_id: caller.id,
-      mode,
-      pages: pageCount,
       input_tokens: usage?.input_tokens ?? null,
       output_tokens: usage?.output_tokens ?? null,
       ok,
       error,
     };
-    const { error: usageError } = await admin.from('signage_ocr_usage').insert(row);
-    if (usageError) console.error('ocr usage insert failed:', usageError.message);
+    const { error: usageError } = await admin.from('signage_ocr_usage').update(row).eq('id', usageId);
+    if (usageError) console.error('ocr usage update failed:', usageError.message);
     const { error: auditError } = await admin.from('signage_audit_logs').insert({
       table_name: 'ai_ocr',
       operation: 'AI_OCR',
       record_id: null,
       user_id: caller.id,
-      new_data: { ...row, model: MODEL },
+      new_data: { usage_id: usageId, user_id: caller.id, mode, pages: pageCount, ...row, model: MODEL },
     });
     if (auditError) console.error('audit log insert failed:', auditError.message);
   };

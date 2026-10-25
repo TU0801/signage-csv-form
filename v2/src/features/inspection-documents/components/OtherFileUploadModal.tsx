@@ -26,13 +26,17 @@ import {
 import { openPdfPages } from '../lib/pdfPages';
 import { readImageForOcr, readPdfForOcr, type OcrReadResult } from '../lib/runOcr';
 import { useAiOcr } from '../hooks/useAiOcr';
+import { usePropertyFileTargets } from '../hooks/usePropertyFileTargets';
 import { AiOcrControls, OcrSummary, type OcrState } from './AiOcrControls';
 
 export interface OtherFileUploadModalProps {
   open: boolean;
   onClose: () => void;
-  /** 選べる建物（範囲内の点検の物件）。保守会社は自社の点検がある物件、管理会社は自社物件、管理者は全件 */
-  properties: PropertyCandidate[];
+  /**
+   * 選べる建物の追加の候補（範囲内の点検の物件）。開いたときに DB の「置ける建物」（保守会社は自社の点検がある物件、
+   * 管理会社は点検行の無いものを含む自社物件、管理者は全件）も読んで合わせる
+   */
+  properties?: PropertyCandidate[];
   /** AI-OCR の会社名の照合に使う保守会社 */
   vendors?: VendorCandidate[];
   /** AI-OCR の点検種別の照合に使う点検種別名 */
@@ -50,9 +54,11 @@ export function OtherFileUploadModal(props: OtherFileUploadModalProps) {
 
 type FileResult = { state: 'running' } | { state: 'ok' } | { state: 'error'; message: string };
 
+const NO_PROPERTIES: PropertyCandidate[] = [];
+
 function OtherFileUploadDialog({
   onClose,
-  properties,
+  properties: propertyHints = NO_PROPERTIES,
   vendors = [],
   inspectionTypes = [],
   defaultPropertyCode,
@@ -60,6 +66,7 @@ function OtherFileUploadDialog({
 }: OtherFileUploadModalProps) {
   const { addToast } = useToast();
   const ai = useAiOcr();
+  const properties = usePropertyFileTargets(propertyHints);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [category, setCategory] = useState<PropertyFileCategory | ''>('');
   const [categoryNote, setCategoryNote] = useState('');
@@ -306,7 +313,7 @@ function OtherFileUploadDialog({
             </div>
             {touched && errors.property && <p className="mt-0.5 text-[11px] text-red-600">{errors.property}</p>}
             {properties.length === 0 && (
-              <p className="mt-0.5 text-[11px] text-amber-800">選べる建物がありません（担当の点検が登録されていません）。</p>
+              <p className="mt-0.5 text-[11px] text-amber-800">選べる建物がありません（担当の点検・管理する建物が登録されていません）。</p>
             )}
           </div>
           <label className="text-xs font-medium text-gray-700">

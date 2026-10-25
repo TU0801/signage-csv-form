@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildCorrectionDictionary,
+  correctionKey,
   correctionRecord,
   lastDayOfPreviousMonth,
   matchBuildingInText,
@@ -13,6 +14,7 @@ import {
   readFromTextLayer,
   suggestBreaks,
   suggestSegmentTargets,
+  suggestedDefaultPerformedOn,
   type AiOcrRaw,
 } from '../lib/aiOcr';
 
@@ -50,6 +52,13 @@ describe('aiOcr 日付', () => {
     expect(parseTargetMonth('2026年10月分 警備報告書 東洋警備保障')).toBe('2026-10-01');
     expect(parseTargetMonth('令和８年１０月分')).toBe('2026-10-01');
     expect(parseTargetMonth('2026年10月5日')).toBeNull();
+  });
+
+  it('実施日の既定: 読めた実施日、読めず対象月が先月なら先月末、それ以外は変えない', () => {
+    expect(suggestedDefaultPerformedOn({ performedOn: '2026-10-03', targetMonth: '2026-09-01' }, '2026-10-25')).toBe('2026-10-03');
+    expect(suggestedDefaultPerformedOn({ performedOn: null, targetMonth: '2026-09-01' }, '2026-10-25')).toBe('2026-09-30');
+    expect(suggestedDefaultPerformedOn({ performedOn: null, targetMonth: '2026-10-01' }, '2026-10-25')).toBeNull();
+    expect(suggestedDefaultPerformedOn({ performedOn: null, targetMonth: null }, '2026-01-10')).toBeNull();
   });
 
   it('先月の末日', () => {
@@ -98,6 +107,14 @@ describe('aiOcr 自己改善の辞書', () => {
     expect(s.pages[0]?.property).toMatchObject({ code: 'B0323', method: 'dictionary' });
     expect(dict.has('property:天神ビル')).toBe(false);
     expect(dict.has('property:博多')).toBe(false);
+  });
+
+  it('区分の辞書は区分の値のときだけ当てる（区分でない値は書類の種類から決める）', () => {
+    const key = correctionKey('category', '見積書');
+    const ok = buildCorrectionDictionary([{ field: 'category', raw_text: key, resolved_value: 'invoice', confirmations: 2, conflicting: false }]);
+    expect(postProcessOcr(raw({ document_type: '見積書' }), { properties, vendors: [], inspectionTypes: [], dictionary: ok }).category).toBe('invoice');
+    const bad = buildCorrectionDictionary([{ field: 'category', raw_text: key, resolved_value: 'zzz', confirmations: 2, conflicting: false }]);
+    expect(postProcessOcr(raw({ document_type: '見積書' }), { properties, vendors: [], inspectionTypes: [], dictionary: bad }).category).toBe('estimate');
   });
 });
 

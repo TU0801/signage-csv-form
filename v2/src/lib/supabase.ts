@@ -95,6 +95,8 @@ export const RPC = {
   /** その他ファイルと AI-OCR の自己改善（修正依頼1025 G2・G4。scripts/fix-1025-reports.sql） */
   portalRegisterPropertyFile: 'portal_register_property_file',
   portalDeletePropertyFile: 'portal_delete_property_file',
+  /** その他ファイルを置ける建物（点検行の無い自社物件を含む） */
+  portalPropertyFileTargets: 'portal_property_file_targets',
   ocrRecordCorrections: 'ocr_record_corrections',
   ocrCorrectionDictionary: 'ocr_correction_dictionary',
 } as const;

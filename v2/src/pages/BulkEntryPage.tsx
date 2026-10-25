@@ -52,6 +52,7 @@ import { buildUnscheduledItems } from '@/features/inspection-portal/components/U
 import { ApplyModal, type ApplyTarget } from '@/features/inspection-portal/components/ApplyModal';
 import { ReportUploadModal } from '@/features/inspection-documents/components/ReportUploadModal';
 import { BulkReportUploadModal } from '@/features/inspection-documents/components/BulkReportUploadModal';
+import { OtherFileUploadModal } from '@/features/inspection-documents/components/OtherFileUploadModal';
 import { BuildingRequestModal } from '@/features/building-requests/components/BuildingRequestModal';
 import { ManagementCompanyFilter } from '@/features/single-entry/components/ManagementCompanySelect';
 import { useManagementCompanies } from '@/features/single-entry/hooks/useManagementCompanies';
@@ -171,6 +172,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
   const [applyTarget, setApplyTarget] = useState<ApplyTarget | null>(null);
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
   const [showBulkReport, setShowBulkReport] = useState(false);
+  const [showOtherFile, setShowOtherFile] = useState(false);
   const [showBuildingRequest, setShowBuildingRequest] = useState(false);
   const [completingKey, setCompletingKey] = useState<string | null>(null);
 
@@ -703,6 +705,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
           onOpenBulkApply={() => setShowBulkApply(true)}
           onOpenPaste={() => setShowPaste(true)}
           onOpenBulkReport={() => setShowBulkReport(true)}
+          onOpenOtherFile={() => setShowOtherFile(true)}
           onOpenBuildingRequest={() => setShowBuildingRequest(true)}
           onApplyTemplate={(id) => void handleApplyTemplate(id)}
           onOpenSaveTemplate={() => setShowSaveTemplate(true)}
@@ -825,6 +828,8 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
         vendorId={currentVendor.id}
         onUploaded={() => void portal.refetch()}
       />
+      {/* 建物の選択肢は、モーダルが DB の「置ける建物」を読む（修正依頼1025 G2） */}
+      <OtherFileUploadModal open={showOtherFile} onClose={() => setShowOtherFile(false)} />
       <BuildingRequestModal
         open={showBuildingRequest}
         onClose={() => setShowBuildingRequest(false)}

@@ -105,7 +105,12 @@ export interface ManagementCompanyRow {
 }
 
 /** その他ファイルの区分（signage_property_files.category） */
-export type PropertyFileCategory = 'estimate' | 'invoice' | 'contract' | 'building_info' | 'proposal' | 'photo' | 'other';
+export const PROPERTY_FILE_CATEGORY_VALUES = ['estimate', 'invoice', 'contract', 'building_info', 'proposal', 'photo', 'other'] as const;
+export type PropertyFileCategory = (typeof PROPERTY_FILE_CATEGORY_VALUES)[number];
+
+export function isPropertyFileCategory(value: unknown): value is PropertyFileCategory {
+  return typeof value === 'string' && (PROPERTY_FILE_CATEGORY_VALUES as readonly string[]).includes(value);
+}
 
 /** signage_property_files の1行（修正依頼1025 G2。scripts/fix-1025-reports.sql） */
 export interface DbPropertyFile {

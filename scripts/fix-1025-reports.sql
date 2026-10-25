@@ -2,7 +2,7 @@
 -- 2026-10-25 作成。本番へは未適用（適用はユーザー承認後）。ローカル DB（signage-v2-verify）で確かめた。
 -- 適用方法: ファイル全体を1つのクエリとして流す（Management API なら1回の query に全文を入れる。psql なら psql -1 -f）。
 --   BEGIN/COMMIT は付けない。先頭の lock_timeout で、ロックが取れないときは待ち続けずに失敗させる。
--- 何度流しても同じ結果になる（冪等）。すべて追加だけで、既存の関数・ポリシー・表は変えない。
+-- 何度流しても同じ結果になる（冪等）。既存（1024 以前）の関数・ポリシー・表は変えない。変えるのはこのファイルで足したものだけ。
 --
 -- 本番の今の状態（2026-10-25 に Management API の読み取りで確認）:
 --   - バケットは templates / hp-attachments / noj-notices / biz-files / noj-forms / poster-images / inspection-reports。property-files は無い
@@ -13,12 +13,16 @@
 --      管理会社は自社が管理会社の物件）。物件は signage_master_properties の行（id）で正確に特定する（1024 の方針）
 --   2. 表 signage.signage_property_files（見積書・請求書・契約書・建物関連情報・提案書・写真・その他）と、読める人の判定
 --      signage.property_file_visible: 管理者・アップロードした会社（保守会社は vendor_id、ほかはアップロードした本人）・物件の管理会社
---      書き込みは RPC（portal_register_property_file / portal_delete_property_file）だけ
+--      書き込みは RPC（portal_register_property_file / portal_delete_property_file）だけ。
+--      同じ内容の二重登録の照合は、呼んだ人が見られるファイルだけ（エラーにファイル名は出さない）
+--      画面の建物の選択肢は portal_property_file_targets（property_file_writable と同じ判定。点検行の無い自社物件も出る）
 --   3. 非公開バケット property-files（50MB。PDF・JPEG・PNG・Excel・Word・PowerPoint）。置き場所は {物件コード}/{uuid}.{拡張子}
 --      （物件コードは signage_master_properties で一意。本番の254件はすべて英数字・ハイフン・下線だけ＝2026-10-25 確認）
 --   4. AI-OCR の自己改善: 表 signage.signage_ocr_corrections（読んだ文字列 → 人が確定した値）と RPC
---      ocr_record_corrections（記録）・ocr_correction_dictionary（辞書。2回以上・値が割れていないものを画面が自動で当てる）
---   5. AI-OCR の呼び出し記録 signage.signage_ocr_usage（Edge Function signage-ai-ocr が service_role で書く。1日の上限の数え上げ用）
+--      ocr_record_corrections（記録。確定した値を項目ごとに検査し、同じ人の同じ確定は1行）・ocr_correction_dictionary
+--      （辞書。建物は2人以上、建物以外は2社以上の同じ確定があり、値が割れていないものを画面が自動で当てる）
+--   5. AI-OCR の呼び出し記録 signage.signage_ocr_usage と枠の予約 ocr_reserve_usage（Edge Function signage-ai-ocr が
+--      service_role で、モデルを呼ぶ前に1日の上限の確認と予約を原子的に行い、呼んだ後でその行に結果を書く）
 -- 戻し手順は末尾。
 
 SET lock_timeout = '5s';
@@ -154,10 +158,13 @@ BEGIN
   END IF;
   -- 同じ建物に同じ内容のファイルが登録済みなら止める（二重の登録を防ぐ）
   IF p_content_hash IS NOT NULL THEN
-    SELECT f.file_name INTO dup FROM signage.signage_property_files f
-     WHERE f.property_id = p_property_id AND f.content_hash = p_content_hash AND f.status = 'active' LIMIT 1;
+    -- 照合するのは呼んだ人が見られるファイルだけ。ファイル名もエラーに出さない
+    -- （ハッシュは画面から来るので、見えない他社のファイルの有無・名前を探る窓口にしない）
+    SELECT f.id INTO dup FROM signage.signage_property_files f
+     WHERE f.property_id = p_property_id AND f.content_hash = p_content_hash AND f.status = 'active'
+       AND signage.property_file_visible(f.vendor_id, f.uploaded_by, f.property_code) LIMIT 1;
     IF FOUND THEN
-      RAISE EXCEPTION '同じ内容のファイルがこの建物に登録済みです（%）', dup.file_name USING ERRCODE = '23505';
+      RAISE EXCEPTION '同じ内容のファイルがこの建物に登録済みです（一覧で確かめてください）' USING ERRCODE = '23505';
     END IF;
   END IF;
 
@@ -202,6 +209,20 @@ BEGIN
   UPDATE signage.signage_property_files SET status = 'deleted' WHERE id = p_file_id RETURNING * INTO r;
   RETURN r;
 END;
+$function$;
+
+-- その他ファイルを置ける建物の一覧（画面の建物の選択肢。判定は property_file_writable と同じ）。
+-- 点検行の無い自社物件（管理会社）も選べるように、点検の一覧ではなくこれを使う
+CREATE OR REPLACE FUNCTION signage.portal_property_file_targets()
+ RETURNS TABLE(property_code text, property_name text)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'biz', 'signage', 'pg_temp'
+AS $function$
+  select s.property_code, s.property_name
+  from signage.signage_master_properties s
+  where signage.current_role_kind() is not null and signage.property_file_writable(s.id)
+  order by s.property_name, s.property_code;
 $function$;
 
 -- ============================================================
@@ -268,37 +289,69 @@ CREATE TABLE IF NOT EXISTS signage.signage_ocr_corrections (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS signage_ocr_corrections_lookup_idx ON signage.signage_ocr_corrections (field, raw_text);
+-- 記録した会社（保守会社は 'vendor:<保守会社id>'、管理会社は 'mgmt:<管理会社id>'、管理者は 'admin'）。
+-- 建物以外の辞書（区分・保守会社・点検種別）は全社に効くので、確定の回数は会社の異なり数で数える
+ALTER TABLE signage.signage_ocr_corrections ADD COLUMN IF NOT EXISTS recorded_org text;
+UPDATE signage.signage_ocr_corrections c
+   SET recorded_org = coalesce(
+         (SELECT CASE p.role WHEN 'admin' THEN 'admin'
+                             WHEN 'user' THEN 'vendor:' || p.vendor_id::text
+                             WHEN 'management' THEN 'mgmt:' || p.management_company_id::text END
+            FROM signage.signage_profiles p WHERE p.id = c.recorded_by),
+         'user:' || c.recorded_by::text)
+ WHERE c.recorded_org IS NULL;
+ALTER TABLE signage.signage_ocr_corrections ALTER COLUMN recorded_org SET NOT NULL;
+-- 同じ人の同じ確定は1行だけ（何度確定しても回数は増えない）
+DELETE FROM signage.signage_ocr_corrections c
+ USING signage.signage_ocr_corrections d
+ WHERE c.field = d.field AND c.raw_text = d.raw_text AND c.resolved_value = d.resolved_value
+   AND c.recorded_by = d.recorded_by AND (c.created_at, c.id) > (d.created_at, d.id);
+CREATE UNIQUE INDEX IF NOT EXISTS signage_ocr_corrections_once_idx
+  ON signage.signage_ocr_corrections (field, raw_text, resolved_value, recorded_by);
 ALTER TABLE signage.signage_ocr_corrections ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON signage.signage_ocr_corrections FROM PUBLIC, anon, authenticated;
 GRANT ALL ON signage.signage_ocr_corrections TO service_role;
 -- 直接の読み書きは無し（RPC だけ）
 
--- 記録。p_items は [{field, raw_text, ai_value, resolved_value}]（50件まで）。
--- 建物は、記録する人がファイルを置ける物件（property_file_writable）のコードだけ受け付ける（範囲外の物件への辞書の書き込みを断る）
+-- 記録。p_items は [{field, raw_text, ai_value, resolved_value}]（50件まで）。確定した値は項目ごとに確かめ、合わないものは捨てる:
+--   property: 記録する人がファイルを置ける物件（property_file_writable）のコード（範囲外の物件への辞書の書き込みを断る）
+--   category: その他ファイルの区分の値 / vendor: signage_master_vendors にある保守会社の id / inspection_type: 点検種別マスター（biz.inspection_types）の名前
+-- 同じ人の同じ確定（同じ呼び出しの中の重複を含む）は1回として扱う。戻り値は新しく記録した件数
 CREATE OR REPLACE FUNCTION signage.ocr_record_corrections(p_items jsonb)
  RETURNS integer
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'signage', 'pg_temp'
+ SET search_path TO 'biz', 'signage', 'pg_temp'
 AS $function$
 DECLARE
   item jsonb;
   v_field text;
   v_raw text;
   v_resolved text;
+  v_role text := signage.current_role_kind();
+  v_org text;
+  v_inserted integer;
   v_count integer := 0;
 BEGIN
-  IF signage.current_role_kind() IS NULL THEN
+  IF v_role IS NULL THEN
     RAISE EXCEPTION 'ログインが必要です' USING ERRCODE = '42501';
   END IF;
+  v_org := CASE v_role
+    WHEN 'admin' THEN 'admin'
+    WHEN 'user' THEN 'vendor:' || coalesce(signage.current_vendor_id()::text, 'none:' || auth.uid()::text)
+    WHEN 'management' THEN 'mgmt:' || coalesce(signage.current_management_company_id()::text, 'none:' || auth.uid()::text)
+  END;
   IF p_items IS NULL OR jsonb_typeof(p_items) <> 'array' OR jsonb_array_length(p_items) > 50 THEN
     RAISE EXCEPTION '記録の形式が不正です' USING ERRCODE = '22023';
   END IF;
   FOR item IN SELECT * FROM jsonb_array_elements(p_items) LOOP
+    IF jsonb_typeof(item) <> 'object' THEN
+      CONTINUE;
+    END IF;
     v_field := item->>'field';
     v_raw := btrim(coalesce(item->>'raw_text', ''));
     v_resolved := btrim(coalesce(item->>'resolved_value', ''));
-    IF v_field NOT IN ('property', 'inspection_type', 'vendor', 'category')
+    IF v_field IS NULL OR v_field NOT IN ('property', 'inspection_type', 'vendor', 'category')
        OR length(v_raw) NOT BETWEEN 1 AND 200 OR length(v_resolved) NOT BETWEEN 1 AND 200 THEN
       CONTINUE;
     END IF;
@@ -307,15 +360,31 @@ BEGIN
           WHERE s.property_code = v_resolved AND signage.property_file_writable(s.id)) THEN
       CONTINUE;
     END IF;
-    INSERT INTO signage.signage_ocr_corrections (field, raw_text, ai_value, resolved_value, recorded_by)
-    VALUES (v_field, v_raw, left(item->>'ai_value', 200), v_resolved, auth.uid());
-    v_count := v_count + 1;
+    IF v_field = 'category'
+       AND v_resolved NOT IN ('estimate', 'invoice', 'contract', 'building_info', 'proposal', 'photo', 'other') THEN
+      CONTINUE;
+    END IF;
+    IF v_field = 'vendor' AND NOT (
+         v_resolved ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+         AND EXISTS (SELECT 1 FROM signage.signage_master_vendors v WHERE v.id = v_resolved::uuid)) THEN
+      CONTINUE;
+    END IF;
+    IF v_field = 'inspection_type' AND NOT EXISTS (SELECT 1 FROM biz.inspection_types t WHERE t.label = v_resolved) THEN
+      CONTINUE;
+    END IF;
+    INSERT INTO signage.signage_ocr_corrections (field, raw_text, ai_value, resolved_value, recorded_by, recorded_org)
+    VALUES (v_field, v_raw, left(item->>'ai_value', 200), v_resolved, auth.uid(), v_org)
+    ON CONFLICT (field, raw_text, resolved_value, recorded_by) DO NOTHING;
+    GET DIAGNOSTICS v_inserted = ROW_COUNT;
+    v_count := v_count + v_inserted;
   END LOOP;
   RETURN v_count;
 END;
 $function$;
 
 -- 辞書。読み（field・raw_text）ごとに、確定した値と回数、ほかの値に割れているか（conflicting）を返す。
+-- 回数: 建物は確定した人の異なり数（建物の辞書は範囲内の物件にしか効かないので、同じ会社の2人でもよい）、
+--       建物以外（区分・保守会社・点検種別）は全社に効くので、確定した会社の異なり数（1社だけでは自動で当たらない）。
 -- 建物は、呼び出した人が扱える物件（管理者は全件・保守会社はファイルを置ける物件・管理会社は自社物件）のものだけ返す。
 -- 割れの判定は範囲外の記録も含めて行う（範囲内の値だけを見て「割れていない」と誤らない）
 CREATE OR REPLACE FUNCTION signage.ocr_correction_dictionary()
@@ -325,7 +394,8 @@ CREATE OR REPLACE FUNCTION signage.ocr_correction_dictionary()
  SET search_path TO 'signage', 'pg_temp'
 AS $function$
   with agg as (
-    select c.field, c.raw_text, c.resolved_value, count(*) as n,
+    select c.field, c.raw_text, c.resolved_value,
+           case when c.field = 'property' then count(distinct c.recorded_by) else count(distinct c.recorded_org) end as n,
            count(*) over (partition by c.field, c.raw_text) as values_for_raw
     from signage.signage_ocr_corrections c
     group by c.field, c.raw_text, c.resolved_value
@@ -360,6 +430,37 @@ ALTER TABLE signage.signage_ocr_usage ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON signage.signage_ocr_usage FROM PUBLIC, anon, authenticated;
 GRANT ALL ON signage.signage_ocr_usage TO service_role;
 
+-- 1日の上限の枠の予約（Edge Function がモデルを呼ぶ前に service_role で呼ぶ）。
+-- 件数の確認と予約の行の挿入を、advisory lock の中で1つの処理として行う（同時に送られても上限を超えて呼ばない）。
+-- 全体・本人とも上限未満なら予約の行（ok=false）を入れて id を返し、どちらかが上限なら null。
+-- 失敗した呼び出しも予約の行が残るので数に入る（再試行の乱用を防ぐ）。日の区切りは日本時間の0時
+CREATE OR REPLACE FUNCTION signage.ocr_reserve_usage(
+  p_user_id uuid, p_mode text, p_pages integer, p_limit_total integer, p_limit_user integer)
+ RETURNS bigint
+ LANGUAGE plpgsql
+ VOLATILE SECURITY DEFINER
+ SET search_path TO 'signage', 'pg_temp'
+AS $function$
+DECLARE
+  v_since timestamptz := ((now() AT TIME ZONE 'Asia/Tokyo')::date)::timestamp AT TIME ZONE 'Asia/Tokyo';
+  v_id bigint;
+BEGIN
+  IF p_user_id IS NULL THEN
+    RAISE EXCEPTION 'user_id が必要です' USING ERRCODE = '22023';
+  END IF;
+  -- 取引の終わり（コミット）まで持つ。後に来た呼び出しは、先の予約がコミットされてから数える
+  PERFORM pg_advisory_xact_lock(hashtext('signage.signage_ocr_usage'));
+  IF (SELECT count(*) FROM signage.signage_ocr_usage u WHERE u.created_at >= v_since) >= coalesce(p_limit_total, 0)
+     OR (SELECT count(*) FROM signage.signage_ocr_usage u WHERE u.created_at >= v_since AND u.user_id = p_user_id) >= coalesce(p_limit_user, 0) THEN
+    RETURN NULL;
+  END IF;
+  INSERT INTO signage.signage_ocr_usage (user_id, mode, pages, ok)
+  VALUES (p_user_id, p_mode, p_pages, false)
+  RETURNING id INTO v_id;
+  RETURN v_id;
+END;
+$function$;
+
 -- ============================================================
 -- 6. 実行権限
 -- ============================================================
@@ -371,6 +472,10 @@ REVOKE ALL ON FUNCTION signage.portal_register_property_file(text, text, text, t
 REVOKE ALL ON FUNCTION signage.portal_delete_property_file(uuid) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION signage.ocr_record_corrections(jsonb) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION signage.ocr_correction_dictionary() FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION signage.portal_property_file_targets() FROM PUBLIC, anon;
+-- 枠の予約は Edge Function（service_role）だけ
+REVOKE ALL ON FUNCTION signage.ocr_reserve_usage(uuid, text, integer, integer, integer) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION signage.ocr_reserve_usage(uuid, text, integer, integer, integer) TO service_role;
 -- ポリシーの式は呼び出し元の権限で評価されるので、補助関数も authenticated に EXECUTE を残す
 GRANT EXECUTE ON FUNCTION signage.property_file_writable(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION signage.property_file_visible(uuid, uuid, text) TO authenticated;
@@ -380,13 +485,15 @@ GRANT EXECUTE ON FUNCTION signage.portal_register_property_file(text, text, text
 GRANT EXECUTE ON FUNCTION signage.portal_delete_property_file(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION signage.ocr_record_corrections(jsonb) TO authenticated;
 GRANT EXECUTE ON FUNCTION signage.ocr_correction_dictionary() TO authenticated;
+GRANT EXECUTE ON FUNCTION signage.portal_property_file_targets() TO authenticated;
 
 -- ============================================================
 -- 戻し手順（逆順）
 -- ============================================================
 -- DROP POLICY "property_files_select" / "property_files_insert" / "property_files_admin_update" / "property_files_admin_delete" ON storage.objects;
 -- （バケット property-files は中身を確認してから削除）
--- DROP FUNCTION signage.ocr_correction_dictionary(), signage.ocr_record_corrections(jsonb),
+-- DROP FUNCTION signage.ocr_reserve_usage(uuid, text, integer, integer, integer), signage.portal_property_file_targets(),
+--   signage.ocr_correction_dictionary(), signage.ocr_record_corrections(jsonb),
 --   signage.portal_delete_property_file(uuid), signage.portal_register_property_file(text, text, text, text, text, text, text, bigint, text, date, text, jsonb),
 --   signage.property_file_object_visible(text), signage.property_file_object_property_id(text),
 --   signage.property_file_visible(uuid, uuid, text), signage.property_file_writable(uuid);

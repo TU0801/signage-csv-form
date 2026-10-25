@@ -13,7 +13,7 @@
  * 純関数だけを置き、テスト（__tests__/aiOcr.test.ts）で確かめる。
  */
 
-import type { PropertyFileCategory } from '@/types/portal';
+import { isPropertyFileCategory, type PropertyFileCategory } from '@/types/portal';
 
 /** 送るページ数の上限（Edge Function の MAX_PDF_PAGES と同じ値） */
 export const AI_OCR_MAX_PDF_PAGES = 10;
@@ -583,7 +583,8 @@ export function postProcessOcr(raw: AiOcrRaw, ctx: OcrContext): OcrSuggestion {
 
   const docTypeFromDict = lookupCorrection(ctx.dictionary, 'category', raw.document_type);
   const fromType = categoryOfDocumentType(raw.document_type);
-  const category = (docTypeFromDict as PropertyFileCategory | null) ?? fromType.category;
+  // 辞書の値は区分の値のときだけ使う（区分でない値で全社の既定を変えない）
+  const category = isPropertyFileCategory(docTypeFromDict) ? docTypeFromDict : fromType.category;
 
   const pageCount = Math.max(raw.pages.length, pageTexts.length);
   const byPage = new Map(raw.pages.map((p) => [p.page, p]));
@@ -701,4 +702,18 @@ export function lastDayOfPreviousMonth(today: string): string {
   const m = Number(today.slice(5, 7));
   const d = new Date(Date.UTC(y, m - 1, 0));
   return d.toISOString().slice(0, 10);
+}
+
+/**
+ * 読み取り結果から、実施日（全区間の既定）に入れる値（修正依頼1025 G3）。実施日が読めたらその日、
+ * 読めず対象月が先月なら先月の末日、どちらでもなければ null（今の既定＝今日のまま）
+ */
+export function suggestedDefaultPerformedOn(
+  suggestion: Pick<OcrSuggestion, 'performedOn' | 'targetMonth'>,
+  today: string,
+): string | null {
+  if (suggestion.performedOn) return suggestion.performedOn;
+  const lastMonthEnd = lastDayOfPreviousMonth(today);
+  if (suggestion.targetMonth && suggestion.targetMonth.slice(0, 7) === lastMonthEnd.slice(0, 7)) return lastMonthEnd;
+  return null;
 }

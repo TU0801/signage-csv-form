@@ -8,6 +8,7 @@ const api = vi.hoisted(() => ({
   readWithAiOcr: vi.fn(),
   bytesToBase64: vi.fn(() => 'AAAA'),
   registerPropertyFile: vi.fn(),
+  fetchPropertyFileTargets: vi.fn(async () => [] as { code: string; name: string }[]),
 }));
 vi.mock('@/lib/api/property-files', () => api);
 vi.mock('@/lib/supabase', () => ({ supabase: {}, TABLES: {}, RPC: {} }));
@@ -66,6 +67,13 @@ describe('OtherFileUploadModal', () => {
     expect(second.file.type).toBe('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     await waitFor(() => expect(onUploaded).toHaveBeenCalled());
     expect(screen.getAllByText('登録しました')).toHaveLength(2);
+  });
+
+  it('建物の選択肢に、DB の置ける建物（点検行の無い自社物件）も出す', async () => {
+    api.fetchPropertyFileTargets.mockResolvedValueOnce([{ code: '900003-00', name: 'テスト第三マンション（点検なし）' }]);
+    render(<OtherFileUploadModal open onClose={vi.fn()} properties={properties} />);
+    expect(await screen.findByRole('option', { name: /テスト第三マンション（点検なし）/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /テスト第一マンション/ })).toBeInTheDocument();
   });
 
   it('置けない形式のファイルは追加しない', () => {
