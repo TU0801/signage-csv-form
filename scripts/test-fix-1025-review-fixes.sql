@@ -8,7 +8,10 @@
 --   N3: 貼紙の URL（1枚目の poster_image と extra_posters の upload）は許可リストとの完全一致だけ通る。
 --       %2F・%5C・'\'・タブ・CR・LF・'/./'・'//'・2〜5重の符号化・'..'・大文字のホスト・別のホスト・他社のライブラリの完全な URL・
 --       他の方のフォルダ・サブフォルダ・%xx 入りのファイル名は止まり（42501）、本人のアップロード・範囲内のライブラリ・NULL は通る。
---       管理者が他の方の申請を直すときは申請した方のフォルダで見る。同じ物件の他の方の追加貼紙の申請の画像は写せる（点検一覧）
+--       管理者が他の方の申請を直すときは申請した方のフォルダで見る。同じ物件・同じ点検種別の他の方の差戻し中の追加貼紙の申請の
+--       画像は写せる（点検一覧）。差戻しでない（下書き・承認済み）申請・別の点検種別の画像は写せない。
+--       写した画像を、物件コードを変えて別の物件へ持ち出せない。ライブラリの行の URL が後から変わった古い URL は、
+--       他社の物件へ移せない（同じ管理会社の物件へは移せる）。本人のアップロードは別の物件へ移せる
 --   S4: 保守会社の無い保守会社アカウントは OCR の確定を記録しない（0件）
 --   N1: 大文字で書いた保守会社の id は小文字にそろえて記録する（割れにならない）
 --   N2: signage_ocr_usage のシーケンスに anon・authenticated の権限が無い
@@ -169,14 +172,75 @@ BEGIN
     c_lib || 'a0000000-0000-4000-8000-000000000001/1761_ab12.png', v_entry));
   RAISE NOTICE 'ok N3 管理者の編集は申請した方のフォルダで見る';
 
-  -- user-b が、同じ物件の user@ の追加貼紙の申請の画像で新しい申請を出す（点検一覧の差戻し）: 通る。
-  -- どの申請にも無い user@ のフォルダの画像・別の物件の申請の画像は止まる
+  -- user-b が、同じ物件の user@ の追加貼紙の申請の画像で新しい申請を出す（点検一覧の差戻し）: 差戻し中なら通る。
+  -- 下書き・承認済みの申請の画像・別の点検種別・どの申請にも無い user@ のフォルダの画像・別の物件の申請の画像は止まる
   PERFORM pg_temp.act_as('a0000000-0000-4000-8000-000000000005');
+  PERFORM pg_temp.expect_poster_denied('N3 下書きの申請の画像', format(c_ins, v_own || '1761360000001_ef34gh.png'));
+  PERFORM pg_temp.as_owner();
+  UPDATE signage.signage_entries SET status = 'ready' WHERE id = v_entry;
+  PERFORM pg_temp.act_as('a0000000-0000-4000-8000-000000000005');
+  PERFORM pg_temp.expect_poster_denied('N3 承認済みの申請の画像', format(c_ins, v_own || '1761360000001_ef34gh.png'));
+  PERFORM pg_temp.as_owner();
+  UPDATE signage.signage_entries SET status = 'pending', review_comment = 'TEST1025 差戻し' WHERE id = v_entry;
+  PERFORM pg_temp.act_as('a0000000-0000-4000-8000-000000000005');
+  PERFORM pg_temp.expect_poster_denied('N3 別の点検種別の差戻しの画像', replace(format(c_ins, v_own || '1761360000001_ef34gh.png'),
+    '''x'', ''custom''', '''y'', ''custom'''));
   EXECUTE format(c_ins, v_own || '1761360000001_ef34gh.png');
   PERFORM pg_temp.expect_poster_denied('N3 どの申請にも無い他の方の画像', format(c_ins, v_own || '1761360000009_zz99zz.png'));
   PERFORM pg_temp.expect_poster_denied('N3 別の物件の申請の画像', replace(format(c_ins, v_own || '1761360000001_ef34gh.png'),
     '''120409-00''', '''TEST1025-other'''));
-  RAISE NOTICE 'ok N3 同じ物件の他の方の追加貼紙の画像は写せる';
+  RAISE NOTICE 'ok N3 同じ物件の他の方の差戻しの追加貼紙の画像は写せる';
+
+  -- 写した画像を別の物件へ持ち出せない: user-b の差戻しの画像を user@ が写し（120409-00）、120411-00（管理会社 c..10）へ移す
+  PERFORM pg_temp.act_as('a0000000-0000-4000-8000-000000000005');
+  EXECUTE format(c_ins, c_lib || 'a0000000-0000-4000-8000-000000000005/1761360000002_bb22bb.png');
+  PERFORM pg_temp.as_owner();
+  UPDATE signage.signage_entries SET status = 'pending', review_comment = 'TEST1025 差戻し'
+   WHERE poster_image = c_lib || 'a0000000-0000-4000-8000-000000000005/1761360000002_bb22bb.png';
+  PERFORM pg_temp.act_as('a0000000-0000-4000-8000-000000000002');
+  EXECUTE format(c_ins, c_lib || 'a0000000-0000-4000-8000-000000000005/1761360000002_bb22bb.png');
+  SELECT id INTO v_entry FROM signage.signage_entries
+   WHERE user_id = 'a0000000-0000-4000-8000-000000000002'
+     AND poster_image = c_lib || 'a0000000-0000-4000-8000-000000000005/1761360000002_bb22bb.png';
+  -- 保守会社が書き換えられるのは未申請（pending）の行だけ（guard_entry_approval_flow）なので、移す行は pending にしておく
+  PERFORM pg_temp.as_owner();
+  UPDATE signage.signage_entries SET status = 'pending'
+   WHERE user_id = 'a0000000-0000-4000-8000-000000000002' AND poster_type = 'custom' AND property_code = '120409-00';
+  PERFORM pg_temp.act_as('a0000000-0000-4000-8000-000000000002');
+  PERFORM pg_temp.expect_poster_denied('N3 写した他の方の画像を別の物件へ移す', format(
+    'UPDATE signage.signage_entries SET property_code = %L WHERE id = %L', '120411-00', v_entry));
+  -- 本人のアップロードは別の物件へ移せる
+  SELECT id INTO v_entry FROM signage.signage_entries
+   WHERE user_id = 'a0000000-0000-4000-8000-000000000002' AND poster_image = v_own || '1761360000001_ef34gh.png';
+  EXECUTE format('UPDATE signage.signage_entries SET property_code = %L WHERE id = %L', '120411-00', v_entry);
+  GET DIAGNOSTICS n = ROW_COUNT;
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'NG N3 本人のアップロードの申請を別の物件へ移せない: %', n;
+  END IF;
+  RAISE NOTICE 'ok N3 写した画像は別の物件へ移せない（本人のアップロードは移せる）';
+
+  -- ライブラリの行（c..09）の URL を後から変えたとき、古い URL の申請は c..10 の物件へ移せない（c..09 の物件へは移せる）
+  SELECT id INTO v_entry FROM signage.signage_entries
+   WHERE user_id = 'a0000000-0000-4000-8000-000000000002'
+     AND poster_image = c_lib || 'library/c0000000-0000-4000-8000-000000000009/1761360000000_ab12cd.png';
+  PERFORM pg_temp.as_owner();
+  UPDATE signage.signage_poster_library
+     SET image_url = c_lib || 'library/c0000000-0000-4000-8000-000000000009/1761360000000_ab12cdb.png',
+         storage_path = 'library/c0000000-0000-4000-8000-000000000009/1761360000000_ab12cdb.png'
+   WHERE storage_path = 'library/c0000000-0000-4000-8000-000000000009/1761360000000_ab12cd.png';
+  GET DIAGNOSTICS n = ROW_COUNT;
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'NG N3 ライブラリの行を付け替えられない: %', n;
+  END IF;
+  PERFORM pg_temp.act_as('a0000000-0000-4000-8000-000000000002');
+  PERFORM pg_temp.expect_poster_denied('N3 付け替え前のライブラリの URL を他社の物件へ移す', format(
+    'UPDATE signage.signage_entries SET property_code = %L WHERE id = %L', '120411-00', v_entry));
+  EXECUTE format('UPDATE signage.signage_entries SET property_code = %L WHERE id = %L', 'T1024-01', v_entry);
+  GET DIAGNOSTICS n = ROW_COUNT;
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'NG N3 付け替え前のライブラリの URL を同じ管理会社の物件へ移せない: %', n;
+  END IF;
+  RAISE NOTICE 'ok N3 付け替え前のライブラリの URL は他社の物件へ移せない';
 
   -- S4
   PERFORM pg_temp.act_as('a9000000-1025-4000-8000-0000000000f1');

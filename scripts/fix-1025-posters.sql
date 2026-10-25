@@ -405,14 +405,20 @@ GRANT EXECUTE ON FUNCTION signage.orphan_poster_images() TO authenticated, servi
 --       Auth の URL の形でない）ときは (b) を通さない
 --   (c) ライブラリ: 有効なライブラリの行の image_url と完全に同じで、行が全社共通か物件の管理会社の分
 --       （poster_library_for_property と同じ範囲。物件の管理会社は申請の物件コードと一致する物件行で見る）
---   (d) poster_image だけ: 同じ物件コードの別の追加貼紙の申請の poster_image と完全に同じで、その値がその申請の (b) の形
---       （点検一覧で、他の方の差戻しの追加貼紙を新しい申請として出す経路。inspection-portal ApplyModal）
+--   (d) poster_image だけ: 同じ物件コード・同じ点検種別の、差戻し中（status='pending' で review_comment あり）の別の追加貼紙の
+--       申請の poster_image と完全に同じで、その値がその申請の (b) の形
+--       （点検一覧で、他の方の差戻しの追加貼紙を新しい申請として出す経路。inspection-portal ApplyModal。差戻し中の申請しか写さない）
 --   extra_posters の要素の形: オブジェクトで、source は upload か library、position は '0'〜'4' か無し、image_url は文字列。
 --     upload は (b)、library は library_id の行で (c)。
 --   物件行が無い（建物追加の仮のコード REQ-・旧書式の物件コード）なら、ライブラリは全社共通だけ。
--- 確かめるのは INSERT と、貼紙・物件コードが変わった UPDATE だけ（承認・差戻し・取込などの状態の変更では見ない）。
--- UPDATE で前から入っていた値（poster_image が変わらない・extra_posters の前からの要素）は、入ったときに確かめ済みなので、
--- 物件コードが変わったときにライブラリの範囲だけ確かめ直す（無効になったライブラリでも、建物の承認の付け替えを止めない）。
+-- 確かめるのは INSERT と、貼紙・物件コード・user_id が変わった UPDATE だけ（承認・差戻し・取込などの状態の変更では見ない）。
+-- UPDATE で前から入っていた値（poster_image が変わらない・extra_posters の前からの要素）は、物件コードか user_id が変わったときに
+-- 新しい物件・user_id で確かめ直す。1枚目は次のどれかでなければ止める（無効になったライブラリでも、建物の承認の付け替えは止めない）:
+--   ライブラリの行の URL なら範囲（全社共通か物件の管理会社の分）／ライブラリの置き場所の形
+--   （poster-images/library/{common|物件の管理会社の id}/ファイル名。ライブラリの行の URL が後から変わった古い URL）／
+--   (b)（新しい user_id）／新しい物件コードに同じ画像の (b) の形の追加貼紙の申請がある、または同じ建物追加の申請
+--   （property_request_id）の行に同じ画像がある（建物の承認でまとめて付け替わる）。
+--   (d) で入れた他の方の画像を、物件コードを変えて別の物件へ持ち出すのはここで止まる（修正依頼1025 検証）。
 -- JWT の無い経路（管理 SQL）は対象外
 DROP FUNCTION IF EXISTS signage.poster_url_normalized(text);
 
@@ -456,10 +462,12 @@ BEGIN
   IF TG_OP = 'UPDATE'
      AND NEW.poster_image IS NOT DISTINCT FROM OLD.poster_image
      AND NEW.extra_posters IS NOT DISTINCT FROM OLD.extra_posters
-     AND NEW.property_code IS NOT DISTINCT FROM OLD.property_code THEN
+     AND NEW.property_code IS NOT DISTINCT FROM OLD.property_code
+     AND NEW.user_id IS NOT DISTINCT FROM OLD.user_id THEN
     RETURN NEW;
   END IF;
-  v_code_changed := TG_OP = 'INSERT' OR NEW.property_code IS DISTINCT FROM OLD.property_code;
+  v_code_changed := TG_OP = 'INSERT' OR NEW.property_code IS DISTINCT FROM OLD.property_code
+                    OR NEW.user_id IS DISTINCT FROM OLD.user_id;
 
   SELECT bp.management_company_id INTO v_company
     FROM signage.signage_master_properties sp
@@ -478,7 +486,7 @@ BEGIN
     END IF;
     v_url := x ->> 'image_url';
     IF x ->> 'source' = 'upload' THEN
-      CONTINUE WHEN NOT v_is_new;
+      CONTINUE WHEN NOT v_is_new AND NEW.user_id IS NOT DISTINCT FROM OLD.user_id;
       IF NOT signage.poster_is_own_upload(v_url, NEW.user_id, v_base) THEN
         RAISE EXCEPTION '追加の貼紙の画像は、申請する方がアップロードした画像だけ使えます' USING ERRCODE = '42501';
       END IF;
@@ -503,15 +511,43 @@ BEGIN
   END IF;
   v_is_new := TG_OP = 'INSERT' OR v_url IS DISTINCT FROM OLD.poster_image;
   IF NOT v_is_new THEN
-    -- 前から入っていた値で、物件コードだけ変わった。ライブラリの画像なら範囲だけ確かめ直す
-    IF EXISTS (SELECT 1 FROM signage.signage_poster_library l WHERE l.image_url = v_url)
-       AND NOT EXISTS (
-         SELECT 1 FROM signage.signage_poster_library l
-          WHERE l.image_url = v_url
-            AND (l.management_company_id IS NULL OR l.management_company_id = v_company)) THEN
-      RAISE EXCEPTION '管理会社の貼紙は、その管理会社の物件の申請でだけ使えます' USING ERRCODE = '42501';
+    -- 前から入っていた値で、物件コードか user_id が変わった。新しい物件・user_id で確かめ直す
+    IF EXISTS (SELECT 1 FROM signage.signage_poster_library l WHERE l.image_url = v_url) THEN
+      IF NOT EXISTS (
+           SELECT 1 FROM signage.signage_poster_library l
+            WHERE l.image_url = v_url
+              AND (l.management_company_id IS NULL OR l.management_company_id = v_company)) THEN
+        RAISE EXCEPTION '管理会社の貼紙は、その管理会社の物件の申請でだけ使えます' USING ERRCODE = '42501';
+      END IF;
+      RETURN NEW;
     END IF;
-    RETURN NEW;
+    -- ライブラリの行の URL が後から変わった古い URL: 置き場所のフォルダ（全社共通か物件の管理会社）で見る
+    IF v_base IS NOT NULL
+       AND (left(v_url, length(v_base || '/storage/v1/object/public/poster-images/library/common/'))
+              = v_base || '/storage/v1/object/public/poster-images/library/common/'
+            AND substr(v_url, length(v_base || '/storage/v1/object/public/poster-images/library/common/') + 1) ~ '^[A-Za-z0-9][A-Za-z0-9._-]*$'
+         OR v_company IS NOT NULL
+            AND left(v_url, length(v_base || '/storage/v1/object/public/poster-images/library/' || v_company::text || '/'))
+              = v_base || '/storage/v1/object/public/poster-images/library/' || v_company::text || '/'
+            AND substr(v_url, length(v_base || '/storage/v1/object/public/poster-images/library/' || v_company::text || '/') + 1)
+              ~ '^[A-Za-z0-9][A-Za-z0-9._-]*$') THEN
+      RETURN NEW;
+    END IF;
+    IF signage.poster_is_own_upload(v_url, NEW.user_id, v_base) THEN
+      RETURN NEW;
+    END IF;
+    IF EXISTS (
+         SELECT 1 FROM signage.signage_entries e
+          WHERE e.poster_image = v_url
+            AND e.id IS DISTINCT FROM NEW.id
+            AND e.poster_type = 'custom'
+            AND (e.property_code = NEW.property_code
+                 OR (NEW.property_request_id IS NOT NULL AND e.property_request_id = NEW.property_request_id))
+            AND signage.poster_is_own_upload(e.poster_image, e.user_id, v_base)) THEN
+      RETURN NEW;
+    END IF;
+    RAISE EXCEPTION '1枚目の貼紙の画像は、この物件では使えません（他の方の画像やライブラリの貼紙を別の物件へ移すことはできません）'
+      USING ERRCODE = '42501';
   END IF;
   IF signage.poster_is_own_upload(v_url, NEW.user_id, v_base) THEN
     RETURN NEW;                                                          -- (b)
@@ -528,7 +564,10 @@ BEGIN
        SELECT 1 FROM signage.signage_entries e
         WHERE e.poster_image = v_url
           AND e.property_code = NEW.property_code
+          AND e.inspection_type IS NOT DISTINCT FROM NEW.inspection_type
           AND e.poster_type = 'custom'
+          AND e.status = 'pending'
+          AND coalesce(btrim(e.review_comment), '') <> ''
           AND e.id IS DISTINCT FROM NEW.id
           AND signage.poster_is_own_upload(e.poster_image, e.user_id, v_base)) THEN
     RETURN NEW;                                                          -- (d)
