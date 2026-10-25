@@ -366,7 +366,12 @@ function RowDetailForm({ row, masterData, onClose }: { row: BulkEntryRow; master
             busy={uploading}
             onUpload={handleExtraFile}
             onPickLibrary={(item) =>
-              setExtraPosters((prev) => [...prev, { image_url: item.image_url, source: 'library', library_id: item.id }])
+              // 同じライブラリの貼紙は1回だけ（DB も同じ要素の重複を断る）
+              setExtraPosters((prev) =>
+                prev.some((x) => x.source === 'library' && x.library_id === item.id)
+                  ? prev
+                  : [...prev, { image_url: item.image_url, source: 'library', library_id: item.id }],
+              )
             }
             onRemove={(index) => setExtraPosters((prev) => prev.filter((_, i) => i !== index))}
             onPositionChange={(index, pos) =>

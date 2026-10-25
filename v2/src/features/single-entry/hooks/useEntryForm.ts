@@ -186,8 +186,9 @@ export function useEntryForm({
 
   /** 2枚目以降の貼紙をライブラリの画像で足す */
   const addExtraLibrary = useCallback((item: PosterLibraryItem) => {
+    // 同じライブラリの貼紙は1回だけ（DB も同じ要素の重複を断る）
     setExtraPosters((prev) =>
-      prev.length >= MAX_EXTRA_POSTERS
+      prev.length >= MAX_EXTRA_POSTERS || prev.some((x) => x.libraryId === item.id)
         ? prev
         : [...prev, { file: null, dataUrl: item.image_url, libraryId: item.id, name: item.display_name, position: null }],
     );

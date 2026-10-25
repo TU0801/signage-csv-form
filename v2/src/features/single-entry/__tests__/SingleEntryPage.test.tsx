@@ -502,6 +502,26 @@ describe('1件入力画面（貼紙ライブラリと2枚目以降の貼紙。�
       ],
     });
   });
+
+  it('同じライブラリの貼紙を2回選んでも、2枚目以降には1枚だけ入る（DB は同じ要素の重複を断る）', async () => {
+    libraryApi.fetchLibraryForProperty.mockResolvedValue([
+      { id: 'lib-1', display_name: '騒音注意', category: '注意', image_url: LIB, management_company_id: null, sort_order: 0 },
+    ]);
+    render(
+      <ToastProvider>
+        <SingleEntryPage />
+      </ToastProvider>,
+    );
+    await waitFor(() => expect(screen.getByRole('combobox', { name: '点検工事案内 *' })).toHaveValue('排水管清掃'));
+    pick('物件コード *', 'z0015A01');
+    fireEvent.click(screen.getByRole('button', { name: '＋ライブラリから追加' }));
+    fireEvent.click(await screen.findByTitle('注意 / 騒音注意'));
+    fireEvent.click(screen.getByRole('button', { name: '＋ライブラリから追加' }));
+    fireEvent.click(await screen.findByTitle('注意 / 騒音注意'));
+    await waitFor(() =>
+      expect(within(screen.getByTestId('extra-poster-previews')).getAllByRole('img')).toHaveLength(1),
+    );
+  });
 });
 
 describe('1件入力画面（未承認の建物。修正依頼1025 D4・F2）', () => {
