@@ -189,7 +189,9 @@ BEGIN
 END;
 $function$;
 
--- 削除（論理）。アップロードした本人と管理者だけ
+-- 削除（論理）。アップロードした本人と管理者だけ。
+-- 削除は表示から外すだけで、物件の管理会社・管理者・アップロードした会社は削除後も署名付き URL で読める
+-- （ユーザー決定 2026-10-25。報告書も同じ）。property_file_visible・property_file_object_visible は status を見ない
 CREATE OR REPLACE FUNCTION signage.portal_delete_property_file(p_file_id uuid)
  RETURNS signage.signage_property_files
  LANGUAGE plpgsql
@@ -341,6 +343,12 @@ BEGIN
     WHEN 'user' THEN 'vendor:' || coalesce(signage.current_vendor_id()::text, 'none:' || auth.uid()::text)
     WHEN 'management' THEN 'mgmt:' || coalesce(signage.current_management_company_id()::text, 'none:' || auth.uid()::text)
   END;
+  -- 保守会社・管理会社の無いアカウントは記録しない（1人ずつ別の会社に数えられ、建物以外の辞書の「2社以上」を1人で満たせるため。
+  -- このアカウントはファイルを置ける物件が無いので、正当な記録は失われない。修正依頼1025 S4）
+  IF (v_role = 'user' AND signage.current_vendor_id() IS NULL)
+     OR (v_role = 'management' AND signage.current_management_company_id() IS NULL) THEN
+    RETURN 0;
+  END IF;
   IF p_items IS NULL OR jsonb_typeof(p_items) <> 'array' OR jsonb_array_length(p_items) > 50 THEN
     RAISE EXCEPTION '記録の形式が不正です' USING ERRCODE = '22023';
   END IF;
@@ -370,6 +378,10 @@ BEGIN
     END IF;
     IF v_field = 'vendor' AND NOT EXISTS (SELECT 1 FROM signage.signage_master_vendors v WHERE v.id = v_resolved::uuid) THEN
       CONTINUE;
+    END IF;
+    -- 大文字で書いた同じ id を別の値として保存させない（割れに見せて自動適用を止めさせない。N1）
+    IF v_field = 'vendor' THEN
+      v_resolved := v_resolved::uuid::text;
     END IF;
     IF v_field = 'inspection_type' AND NOT EXISTS (SELECT 1 FROM biz.inspection_types t WHERE t.label = v_resolved) THEN
       CONTINUE;
@@ -431,6 +443,8 @@ CREATE INDEX IF NOT EXISTS signage_ocr_usage_created_idx ON signage.signage_ocr_
 ALTER TABLE signage.signage_ocr_usage ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON signage.signage_ocr_usage FROM PUBLIC, anon, authenticated;
 GRANT ALL ON signage.signage_ocr_usage TO service_role;
+-- identity のシーケンスにも default privileges の権限が付くので外す（service_role の INSERT はそのまま通る。N2）
+REVOKE ALL ON SEQUENCE signage.signage_ocr_usage_id_seq FROM PUBLIC, anon, authenticated;
 
 -- 1日の上限の枠の予約（Edge Function がモデルを呼ぶ前に service_role で呼ぶ）。
 -- 件数の確認と予約の行の挿入を、advisory lock の中で1つの処理として行う（同時に送られても上限を超えて呼ばない）。

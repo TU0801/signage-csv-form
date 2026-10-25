@@ -14,6 +14,8 @@
 --   4. Storage poster-images/library/{common|<管理会社id>}/ の登録・更新・削除ポリシー（新しい名前で足す。既存は変えない）
 --   7. 申請の貼紙の確かめ（トリガー signage.guard_entry_posters）: extra_posters の要素の形、アップロードの画像は申請者のフォルダ、
 --      ライブラリの貼紙（extra_posters と、poster_image が library/ の画像）は物件の管理会社の分か全社共通だけ
+--      1枚目の URL は signage.poster_url_normalized() で書き方（%xx・'/./'・'//'）を揃えてから見る（修正依頼1025 検証 N3）
+--      ライブラリのファイル名は英数字で始まる名前だけ（CSV の点検案内TPLNo に数式を入れさせない。検証 S3）
 --   0. signage.poster_public_base(): JWT の iss（https://<ref>.supabase.co/auth/v1）からこのプロジェクトの URL を出す。
 --      ライブラリの行・申請の貼紙の URL のホストをこれと突き合わせる
 --
@@ -80,11 +82,19 @@ CREATE TABLE IF NOT EXISTS signage.signage_poster_library (
   created_by uuid NULL DEFAULT auth.uid(),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  -- 置き場所は poster-images/library/{common|<管理会社id>}/ に限る（範囲と置き場所を一致させる）
+  -- 置き場所は poster-images/library/{common|<管理会社id>}/ に限る（範囲と置き場所を一致させる）。
+  -- ファイル名は英数字で始まり英数字・._- だけ（ファイル名は一括入力 CSV の点検案内TPLNo に入るので、= + - @ で始まる名前で
+  -- 数式を入れさせない。画面が付ける名前 <数字>_<英小文字数字>.png|jpg はこの形）。既にある表は下の DO で置き換える
   CONSTRAINT signage_poster_library_path_check CHECK (
     position('..' in storage_path) = 0
-    AND storage_path LIKE 'library/' || coalesce(management_company_id::text, 'common') || '/%'
+    AND storage_path ~ ('^library/' || coalesce(management_company_id::text, 'common') || '/[A-Za-z0-9][A-Za-z0-9._-]*$')
   )
+);
+-- 修正依頼1025 S3: 初版の path_check（フォルダだけ確かめる）を置き換える（何度流しても同じ。行があれば確かめ直す）
+ALTER TABLE signage.signage_poster_library DROP CONSTRAINT IF EXISTS signage_poster_library_path_check;
+ALTER TABLE signage.signage_poster_library ADD CONSTRAINT signage_poster_library_path_check CHECK (
+  position('..' in storage_path) = 0
+  AND storage_path ~ ('^library/' || coalesce(management_company_id::text, 'common') || '/[A-Za-z0-9][A-Za-z0-9._-]*$')
 );
 COMMENT ON TABLE signage.signage_poster_library IS
   '文字を合成しない貼紙のライブラリ（修正依頼1025 D2）。画像は poster-images/library/{common|<管理会社id>}/';
@@ -393,6 +403,50 @@ GRANT EXECUTE ON FUNCTION signage.orphan_poster_images() TO authenticated, servi
 -- 確かめるのは INSERT と、貼紙・物件コードが変わった UPDATE だけ（承認・差戻し・取込などの状態の変更では見ない）。
 -- UPDATE で前から入っていた要素は、物件コードが変わったときに範囲だけ確かめ直す（無効になったライブラリでも、建物の承認の
 -- 付け替えを止めない）。JWT の無い経路（管理 SQL）は対象外
+-- URL の書き方を揃える（修正依頼1025 N3）: %xx を復号し、スキーム・ホストより後の '/./' と連続する '/' を1つにする。
+-- '/./library/' や '/%6Cibrary/' と書いて、下のライブラリの範囲の確かめを抜けさせない。復号できない（UTF-8 でない）なら null
+CREATE OR REPLACE FUNCTION signage.poster_url_normalized(p_url text)
+ RETURNS text
+ LANGUAGE plpgsql
+ IMMUTABLE
+ SET search_path TO 'pg_catalog', 'pg_temp'
+AS $function$
+DECLARE
+  v text := p_url;
+  v_prev text;
+  v_head text;
+  i int := 0;
+BEGIN
+  IF v IS NULL THEN
+    RETURN NULL;
+  END IF;
+  -- 二重に符号化した書き方（%256C）も揃うよう、変わらなくなるまで（最大3回）復号する
+  LOOP
+    v_prev := v;
+    SELECT convert_from(
+             coalesce(string_agg(
+               CASE WHEN t.m[1] ~ '^%[0-9A-Fa-f]{2}$' THEN decode(substr(t.m[1], 2), 'hex') ELSE convert_to(t.m[1], 'UTF8') END,
+               ''::bytea ORDER BY t.ord), ''::bytea),
+             'UTF8')
+      INTO v
+      FROM regexp_matches(v, '(%[0-9A-Fa-f]{2}|[^%]+|%)', 'g') WITH ORDINALITY AS t(m, ord);
+    i := i + 1;
+    EXIT WHEN v = v_prev OR i >= 3;
+  END LOOP;
+  v_head := coalesce(substring(v FROM '^[A-Za-z][A-Za-z0-9+.-]*://[^/?#]*'), '');
+  v := substr(v, length(v_head) + 1);
+  LOOP
+    v_prev := v;
+    v := regexp_replace(regexp_replace(v, '/\.(/|$)', '/', 'g'), '/{2,}', '/', 'g');
+    EXIT WHEN v = v_prev;
+  END LOOP;
+  RETURN v_head || v;
+EXCEPTION WHEN character_not_in_repertoire OR untranslatable_character OR invalid_parameter_value THEN
+  RETURN NULL;
+END;
+$function$;
+REVOKE ALL ON FUNCTION signage.poster_url_normalized(text) FROM PUBLIC, anon, authenticated;
+
 CREATE OR REPLACE FUNCTION signage.guard_entry_posters()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -462,8 +516,12 @@ BEGIN
     END IF;
   END LOOP;
 
-  -- 1枚目がライブラリの画像（poster-images/library/ の公開 URL。ホストによらず見る）
-  IF NEW.poster_image ~ '/storage/v1/object/public/poster-images/library/'
+  -- 1枚目がライブラリの画像（poster-images/library/ の公開 URL。ホストによらず見る）。書き方の揺れ（%xx・'/./'・'//'）を
+  -- 揃えてから見る。揃えられない・'..' を含む URL は、ライブラリの画像かどうか決められないので、ライブラリの画像と同じに扱う
+  -- （ライブラリの行の image_url と完全に同じでなければ止まる）
+  v_url := signage.poster_url_normalized(NEW.poster_image);
+  IF NEW.poster_image IS NOT NULL
+     AND (v_url IS NULL OR v_url ~ '/\.\.(/|$)' OR v_url ~ '/storage/v1/object/public/poster-images/library/')
      AND (TG_OP = 'INSERT' OR v_code_changed OR NEW.poster_image IS DISTINCT FROM OLD.poster_image) THEN
     v_is_new := TG_OP = 'INSERT' OR NEW.poster_image IS DISTINCT FROM OLD.poster_image;
     IF NOT EXISTS (
@@ -488,6 +546,7 @@ CREATE TRIGGER guard_entry_posters BEFORE INSERT OR UPDATE ON signage.signage_en
 -- ============================================================
 -- DROP TRIGGER IF EXISTS guard_entry_posters ON signage.signage_entries;
 -- DROP FUNCTION IF EXISTS signage.guard_entry_posters();
+-- DROP FUNCTION IF EXISTS signage.poster_url_normalized(text);
 -- DROP POLICY IF EXISTS "poster-images library select" ON storage.objects;
 -- DROP POLICY IF EXISTS "poster-images library insert" ON storage.objects;
 -- DROP POLICY IF EXISTS "poster-images library delete" ON storage.objects;
