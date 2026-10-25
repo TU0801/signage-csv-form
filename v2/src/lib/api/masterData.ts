@@ -16,7 +16,12 @@ import type {
   PropertyUnit,
   UnitInspectionTypeOption,
 } from '@/types/app';
-import type { RpcInspectionRow, RpcPropertyManagementCompanyRow, RpcUnitInspectionRow } from '@/types/rpc';
+import type {
+  RpcInspectionRow,
+  RpcMasterPropertyManagementCompanyRow,
+  RpcPropertyManagementCompanyRow,
+  RpcUnitInspectionRow,
+} from '@/types/rpc';
 import { getAssignedBuildings } from './relationships';
 import { inspectionRpc } from './scopedRpc';
 
@@ -112,6 +117,14 @@ export function toMasterProperties(rows: DbProperty[]): MasterProperty[] {
  */
 export function fetchPropertyManagementCompanies(): Promise<RpcPropertyManagementCompanyRow[]> {
   return rpcAllRows<RpcPropertyManagementCompanyRow>(RPC.propertyManagementCompanies);
+}
+
+/**
+ * 物件ごとの管理会社（マスター管理の物件一覧の列と絞り込み。修正依頼1025 E1）。正本は biz.properties.management_company_id。
+ * 管理者は全物件、管理会社は自社物件だけ（RPC master_property_management_companies が絞る）。失敗はそのまま投げる
+ */
+export function fetchMasterPropertyManagementCompanies(): Promise<RpcMasterPropertyManagementCompanyRow[]> {
+  return rpcAllRows<RpcMasterPropertyManagementCompanyRow>(RPC.masterPropertyManagementCompanies);
 }
 
 /** 検査月の引き当てのキー（物件コード × 点検種別。biz の一意制約と同じ組） */

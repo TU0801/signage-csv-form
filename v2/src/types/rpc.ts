@@ -64,6 +64,15 @@ export interface RpcUnitInspectionTypeOption {
   sort: number | null;
 }
 
+/** master_property_management_companies() の1行（修正依頼1025 E1。管理者は全物件・管理会社は自社物件、ほかは0行。未設定は null） */
+export interface RpcMasterPropertyManagementCompanyRow {
+  property_code: string;
+  management_company_id: string | null;
+  management_company_name: string | null;
+  /** biz.companies.short_name（空は null） */
+  management_company_short_name: string | null;
+}
+
 /** property_management_companies() の1行（物件ごとの管理会社。未設定は null。有効な管理者以外には0行） */
 export interface RpcPropertyManagementCompanyRow {
   property_code: string;

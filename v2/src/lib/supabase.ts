@@ -52,6 +52,8 @@ export const RPC = {
   upsertUnitInspection: 'upsert_unit_inspection',
   deleteUnitInspection: 'delete_unit_inspection',
   propertyManagementCompanies: 'property_management_companies',
+  /** マスター管理の物件一覧の管理会社（修正依頼1025 E1。管理者は全物件・管理会社は自社物件）。scripts/fix-1025-master.sql */
+  masterPropertyManagementCompanies: 'master_property_management_companies',
   /** 点検ポータル（2026-10-21）。範囲（管理者・保守会社・管理会社）は DB 側で絞る */
   portalInspections: 'portal_inspections',
   portalEntries: 'portal_entries',
