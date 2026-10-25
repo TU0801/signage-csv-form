@@ -364,9 +364,11 @@ BEGIN
        AND v_resolved NOT IN ('estimate', 'invoice', 'contract', 'building_info', 'proposal', 'photo', 'other') THEN
       CONTINUE;
     END IF;
-    IF v_field = 'vendor' AND NOT (
-         v_resolved ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-         AND EXISTS (SELECT 1 FROM signage.signage_master_vendors v WHERE v.id = v_resolved::uuid)) THEN
+    -- uuid の形を先に確かめてから型変換する（評価順に頼らない）
+    IF v_field = 'vendor' AND v_resolved !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+      CONTINUE;
+    END IF;
+    IF v_field = 'vendor' AND NOT EXISTS (SELECT 1 FROM signage.signage_master_vendors v WHERE v.id = v_resolved::uuid) THEN
       CONTINUE;
     END IF;
     IF v_field = 'inspection_type' AND NOT EXISTS (SELECT 1 FROM biz.inspection_types t WHERE t.label = v_resolved) THEN
