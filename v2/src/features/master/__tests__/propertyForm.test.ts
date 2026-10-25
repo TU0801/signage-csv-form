@@ -21,7 +21,7 @@ const {
   savePropertyForm,
   inspectionsChanged,
   propertyListSummary,
-  vendorSummary,
+  managementCompanyMap,
 } = await import('../lib/propertyForm');
 
 const insp = (over: Partial<UnitInspection> = {}): UnitInspection => ({
@@ -66,25 +66,46 @@ describe('property form helpers (v1 js/admin-masters.js)', () => {
     expect(inspectionsChanged([row], [])).toBe(true);
   });
 
-  // 一覧の補足列：設備の数・台の数・保守会社（設備情報と台の保守から重複なく）
-  it('propertyListSummary and vendorSummary', () => {
-    const row = (vendor_id: string | null) => ({
-      inspection_type_id: 't',
+  // 一覧の補足列（1025 E2）：設備は点検行1行ずつ＋台ごとに管理している種別は台の保守の行で展開。同じ保守会社も重ねない
+  it('propertyListSummary lists one row per equipment (units expanded, aggregate row skipped)', () => {
+    const row = (vendor_id: string | null, inspection_type_id = 't') => ({
+      inspection_type_id,
       vendor_id,
       inspection_months: [],
       remarks: '',
       remarks2: '',
     });
-    expect(
-      propertyListSummary({ inspections: [row('v1'), row(null), row('v2')], units: [unit([insp({ vendor_id: 'v1' }), insp({ vendor_id: 'v3' })])] }),
-    ).toEqual({ equipmentCount: 3, unitCount: 1, vendorIds: ['v1', 'v2', 'v3'] });
-    // 台ごとに管理している種別（elev）の集計行は、モーダルの設備情報の表に出ないので数えない
-    expect(
-      propertyListSummary({ inspections: [{ ...row('v1'), inspection_type_id: 'elev' }], units: [unit([insp()])] }).equipmentCount,
-    ).toBe(0);
-    expect(vendorSummary([])).toBe('-');
-    expect(vendorSummary(['A社', 'B社'])).toBe('A社、B社');
-    expect(vendorSummary(['A社', 'B社', 'C社', 'D社'])).toBe('A社、B社 他2社');
+    const sum = propertyListSummary({
+      // elev は台で管理している種別なので、物件単位の集計行は数えない
+      inspections: [row('v1'), row(null), row('v1', 'elev')],
+      units: [
+        { ...unit([insp({ vendor_id: 'v1' })]), unit_id: 'u1', unit_code: 'No1' },
+        { ...unit([insp({ vendor_id: 'v1' })]), unit_id: 'u2', unit_code: '' },
+        { ...unit([]), unit_id: 'u3', unit_code: 'No3' },
+      ],
+    });
+    expect(sum.equipmentCount).toBe(4);
+    expect(sum.unitCount).toBe(3);
+    expect(sum.equipment.map((e) => [e.vendorId, e.unitLabel])).toEqual([
+      ['v1', null],
+      [null, null],
+      ['v1', 'No1'],
+      // 台コードが無い台は同じ大分類の並びで No を振る
+      ['v1', 'No2'],
+    ]);
+    expect(sum.equipment[2]?.inspectionTypeLabel).toBe('エレベーター点検');
+  });
+
+  // 1025 E1: 管理会社の列は略称、略称が無ければ正式名。管理会社が未設定の物件は入れない（「管理会社なし」になる）
+  it('managementCompanyMap prefers the short name and skips properties without a company', () => {
+    const m = managementCompanyMap([
+      { property_code: 'A', management_company_id: 'm1', management_company_name: '株式会社えん建物管理', management_company_short_name: '㈱えん建物管理' },
+      { property_code: 'B', management_company_id: 'm2', management_company_name: '株式会社長谷工コミュニティ九州', management_company_short_name: null },
+      { property_code: 'C', management_company_id: null, management_company_name: null, management_company_short_name: null },
+    ]);
+    expect(m.get('A')).toEqual({ id: 'm1', label: '㈱えん建物管理', name: '株式会社えん建物管理' });
+    expect(m.get('B')?.label).toBe('株式会社長谷工コミュニティ九州');
+    expect(m.has('C')).toBe(false);
   });
 
   it('validateUnitInspections rejects unselected and duplicated types', () => {
