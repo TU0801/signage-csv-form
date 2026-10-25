@@ -71,6 +71,21 @@ describe('点検登録フォームの点検行との結び付け', () => {
     expect(scheduleRowInput(items.find((i) => i.targetMonth === '2026-05-01')!, memos).row.memo).toBe('');
   });
 
+  it('2台目以降の行は読み取りで、1台目の申請の日付・備考・メモを出さない（修正依頼1025 決定4）', () => {
+    const items = buildSchedule(
+      [makeInspection()],
+      [makeEntry({ id: 'e-nov', status: 'ready', target_month: '2026-11-01', inspection_start: '2026-11-10', inspection_end: '2026-11-11', remarks: '午前' })],
+      [],
+      { today: '2026-10-21', monthsAhead: 12 },
+    );
+    const nov = items.find((i) => i.targetMonth === '2026-11-01')!;
+    const memos = new Map([['e-nov', 'メモ']]);
+    const second = scheduleRowInput({ ...nov, key: `${nov.key}:u2`, secondary: true }, memos);
+    expect(second.meta).toMatchObject({ locked: true, secondary: true });
+    expect(second.row).toMatchObject({ startDate: '', endDate: '', remarks: '', memo: '', terminalId: 'T001' });
+    expect(scheduleRowInput(nov, memos).row.startDate).toBe('2026-11-10');
+  });
+
   it('最初のエラーの行と、そのエラーを直す欄（端末は物件の欄）を返す', () => {
     const rows = [
       { id: 3, errors: [] },

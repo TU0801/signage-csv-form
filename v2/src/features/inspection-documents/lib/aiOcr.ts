@@ -622,7 +622,9 @@ export function postProcessOcr(raw: AiOcrRaw, ctx: OcrContext): OcrSuggestion {
     vendorRead: raw.vendor_name,
     vendor: vendor ?? null,
     inspectionTypeRead: raw.inspection_type,
-    inspectionType: resolveInspectionType(raw.inspection_type, ctx),
+    // 文字情報だけで読むと raw.inspection_type は空なので、ページの文字で当てた点検種別を使う（区間の割り当てと同じ取り方）
+    inspectionType:
+      resolveInspectionType(raw.inspection_type, ctx) ?? pages.find((p) => p.inspectionType)?.inspectionType ?? null,
     pages,
     property,
   };

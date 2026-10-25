@@ -199,6 +199,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
   const provisional = useProvisionalBuildings(currentVendor.id, ready);
   // 申請した建物の行を『＋行を追加』と同じ手の行で足す（点検種別は申請のもの、無ければ保守会社の既定）。
   // 管理者がモーダルで別の保守会社を選んだときは、いま入力している保守会社の行ではないので足さない
+  const tableRef = useRef<HTMLDivElement>(null);
   const handleBuildingRequested = useCallback(
     (request: DbPropertyRequest) => {
       if (!currentVendor.id || request.vendor_id !== currentVendor.id) return;
@@ -208,7 +209,9 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       const label =
         masterData.notices.find((n) => n.id && n.id === request.inspection_type_id)?.inspectionType ||
         defaultInspectionType(code, [], inspectionDefaults.linkedIds, masterData.notices);
-      addRow({ propertyCode: code, inspectionType: label });
+      // 『＋行を追加』と同じく表の一番上に入れ、表を上へ戻す（F1）
+      addRow({ propertyCode: code, inspectionType: label }, true);
+      setTimeout(() => tableRef.current?.scrollTo?.({ top: 0 }), 0);
     },
     [currentVendor.id, provisional, addRow],
   );
@@ -323,6 +326,9 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
     (row: BulkEntryRow) => {
       if (row.schedule) {
         const item = itemsByKey.get(row.schedule.key);
+        // 画面に戻った直後（点検の予定の読み込み中）は、前に入れた予定の行を時期で絞れず印も無いので出さない。
+        // 読み込めたら予定の行は入れ直される。読み込みに失敗したときは前の行を出したまま（修正依頼1025 N6）
+        if (!item && !portal.loaded && !portal.error) return false;
         // 時期は点検一覧と同じ（既定は 超過＋今月＋今後3か月。過去の月は超過〔未申請〕だけ）。過去の月の報告書UP・完了連絡は「すべて」で出す
         if (item && item.targetMonth && !matchTiming(item, timing, today)) return false;
         if (item && !item.targetMonth && timing === 'overdue') return false;
@@ -339,7 +345,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       }
       return true;
     },
-    [itemsByKey, timing, today, managementCompanyId, managementIndex, managementOf, search, propertyNameOf],
+    [itemsByKey, portal.loaded, portal.error, timing, today, managementCompanyId, managementIndex, managementOf, search, propertyNameOf],
   );
 
   // 選択中の保守会社の点検行（手で足した行を点検行に結び付ける・点検月を出すため）
@@ -536,7 +542,6 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
   const refreshTemplates = useCallback(() => setTemplatesVersion((v) => v + 1), []);
 
   // 「＋行を追加」: 新しい行は表の一番上（F1）。表を上へ戻して物件欄へ移る
-  const tableRef = useRef<HTMLDivElement>(null);
   const handleAddRow = useCallback(() => {
     addRowWithCopy();
     setTimeout(() => {

@@ -366,6 +366,23 @@ describe('BulkEntryPage (v1 js/bulk.js init / adminVendorSelect)', () => {
       });
     });
 
+    it('画面に戻った直後、点検の予定を読み込むまでは前の予定の行を出さない（時期で絞れないため。修正依頼1025 N6）', async () => {
+      const first = renderPage();
+      await waitFor(() => expect(screen.getAllByTestId('target-month')).toHaveLength(2));
+      first.unmount();
+      let release: (rows: unknown[]) => void = () => {};
+      portalApi.fetchPortalInspections.mockReturnValueOnce(new Promise((r) => (release = r)));
+      renderPage();
+      await waitFor(() => expect(useBulkStore.getState().sessionLoaded).toBe(true));
+      // 店（bulkStore）には前の予定の行（時期で隠していた過去の月を含む）が残っている
+      expect(useBulkStore.getState().rows.filter((r) => r.schedule).length).toBeGreaterThan(2);
+      expect(screen.queryAllByTestId('target-month')).toHaveLength(0);
+      await act(async () =>
+        release([makeInspection({ property_code: 'z0001A01', property_name: '物件A', inspection_type_label: '消防設備点検', vendor_id: 'v1' })]),
+      );
+      await waitFor(() => expect(screen.getAllByTestId('target-month')).toHaveLength(2));
+    });
+
     it('時期の既定は点検一覧と同じ（申請済みの過去の月は出さず、「すべて」で出す。B13）', async () => {
       portalApi.fetchPortalEntries.mockResolvedValue([
         makeEntry({ property_code: 'z0001A01', inspection_type: '消防設備点検', target_month: '2026-05-01', inspection_start: '2026-05-10', status: 'ready' }),

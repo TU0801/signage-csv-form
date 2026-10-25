@@ -26,7 +26,8 @@ export function scheduleRowInput(
   const { inspection } = item;
   // 2台目以降の行と申請不要の点検は、この表から申請しない（入力欄を出さない。修正依頼1025 H3・H4/G4）
   const locked = (!!item.targetMonth && item.application !== 'not_applied') || !!item.secondary || !!item.reportOnly;
-  const entry = scheduleRowEntry(item);
+  // 2台目以降の行は表示だけ（日付・備考・メモは空。ステータスは meta で1台目と同じ。修正依頼1025 決定4）
+  const entry = item.secondary ? null : scheduleRowEntry(item);
   return {
     meta: {
       key: item.key,

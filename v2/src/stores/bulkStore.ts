@@ -106,7 +106,8 @@ export interface BulkState {
     approved?: ReadonlyMap<string, { propertyCode: string; terminalId: string }>,
   ) => void;
 
-  addRow: (data?: BulkRowInput) => number;
+  /** top: 表の一番上に入れる（既定は末尾） */
+  addRow: (data?: BulkRowInput, top?: boolean) => number;
   addRowWithCopy: () => void;
   duplicateRows: (ids: number[]) => void;
   /** 行が無ければ false */
@@ -390,8 +391,8 @@ export const useBulkStore = create<BulkState>((set, get) => {
     },
 
     // v1: js/bulk-table.js addRow
-    addRow: (data = {}) => {
-      const [row] = appendRows([data]);
+    addRow: (data = {}, top = false) => {
+      const [row] = appendRows([data], top);
       get().triggerAutoSave();
       return row!.id;
     },

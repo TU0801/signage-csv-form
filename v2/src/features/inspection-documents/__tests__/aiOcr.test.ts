@@ -125,6 +125,19 @@ describe('aiOcr 区間への割り当て', () => {
     inspection: { property_code: code, inspection_type_label: label, vendor_id: 'v2', unit_vendor_ids: [] },
   });
 
+  it('文字情報だけで読んだときも、抽出データの点検種別にページの文字で当てた点検種別を出す', () => {
+    const pageTexts = ['（表紙）', '2026年10月分 警備報告書 エンクレスト天神'];
+    const s = postProcessOcr(readFromTextLayer(pageTexts), {
+      properties,
+      vendors: [],
+      inspectionTypes: ['警備報告'],
+      dictionary: new Map(),
+      pageTexts,
+    });
+    expect(s.inspectionTypeRead).toBe('');
+    expect(s.inspectionType).toBe('警備報告');
+  });
+
   it('文字情報だけで建物・対象月を読み、建物が変わるページで区切って区間ごとに点検を選ぶ', () => {
     const pageTexts = [
       '2026年10月分 警備報告書 エンクレスト天神 東洋警備保障株式会社',

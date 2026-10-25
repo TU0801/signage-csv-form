@@ -85,6 +85,12 @@ describe('bulkStore (v1 js/bulk-table.js / bulk-modals.js の行操作)', () => 
     expect(s().rows.map((r) => !!r.schedule)).toEqual([false, false, false, true]);
   });
 
+  it('建物追加の申請の行（addRow の top）は、手で足した行より上の表の一番上に入る（修正依頼1025 F2）', () => {
+    s().addRow({ propertyCode: 'z0001A01', inspectionType: '消防設備点検' });
+    s().addRow({ propertyCode: 'z0002A01', inspectionType: '消防設備点検' }, true);
+    expect(s().rows.map((r) => r.propertyCode)).toEqual(['z0002A01', 'z0001A01']);
+  });
+
   it('changing the property picks its first terminal; start date fills an empty end date', () => {
     s().addRow({ propertyCode: 'z0001A01', terminalId: 'T-A2', inspectionType: '消防設備点検' });
     const id = s().rows[0]!.id;
