@@ -408,8 +408,9 @@ GRANT EXECUTE ON FUNCTION signage.orphan_poster_images() TO authenticated, servi
 --   (d) poster_image だけ: 同じ物件コード・同じ点検種別の、差戻し中（status='pending' で review_comment あり）の別の追加貼紙の
 --       申請の poster_image と完全に同じで、その値がその申請の (b) の形
 --       （点検一覧で、他の方の差戻しの追加貼紙を新しい申請として出す経路。inspection-portal ApplyModal。差戻し中の申請しか写さない）
---   extra_posters の要素の形: オブジェクトで、source は upload か library、position は '0'〜'4' か無し、image_url は文字列。
---     upload は (b)、library は library_id の行で (c)。
+--   extra_posters の要素の形: オブジェクトで、source は upload か library、position は '0'〜'4' か無し、image_url は空でない文字列、
+--     library は library_id（uuid）あり。形は前から入っていた要素でも毎回見る。同じ要素を重ねて足すのは止める。
+--     upload は (b)、library は library_id の行で (c)。前から入っていた要素かは要素の完全一致で見る。
 --   物件行が無い（建物追加の仮のコード REQ-・旧書式の物件コード）なら、ライブラリは全社共通だけ。
 -- 確かめるのは INSERT と、貼紙・物件コード・user_id・点検種別が変わった UPDATE だけ（承認・差戻し・取込などの状態の変更では見ない）。
 -- UPDATE で前から入っていた値（poster_image が変わらない・extra_posters の前からの要素）は、物件コードか user_id が変わったときに
@@ -418,8 +419,9 @@ GRANT EXECUTE ON FUNCTION signage.orphan_poster_images() TO authenticated, servi
 --   ライブラリの行の URL なら範囲（全社共通か物件の管理会社の分）／ライブラリの置き場所の形
 --   （poster-images/library/{common|物件の管理会社の id}/ファイル名。ライブラリの行の URL が後から変わった古い URL）／
 --   (b)（新しい user_id）／新しい物件コード・点検種別で (d) と同じ条件を満たす（差戻し中の持ち主の申請がある）／
---   変わったのが物件コードだけで、同じ建物追加の申請（property_request_id）の行に同じ画像の持ち主の申請がある
---   （建物の承認でまとめて付け替わる。仮のコードの行は下書き・未申請で差戻しでないこともあるので、状態は見ない）。
+--   建物の承認の付け替え（管理者。変わったのが物件コードだけで、同じ建物追加の申請の仮のコード REQ- から、その申請の
+--   created_property_code へ。持ち主の行が消えた・画像が替わっていても通す。仮のコードの行は下書き・未申請で差戻しでないことも
+--   あるので、状態は見ない）。
 --   (d) で入れた他の方の画像を、物件コード・点検種別を変えて (d) の条件の外へ持ち出すのはここで止まる（修正依頼1025 検証）。
 -- JWT の無い経路（管理 SQL）は対象外
 DROP FUNCTION IF EXISTS signage.poster_url_normalized(text);
@@ -481,15 +483,30 @@ BEGIN
    WHERE sp.property_code = NEW.property_code;
 
   FOR x IN SELECT e FROM jsonb_array_elements(coalesce(NEW.extra_posters, '[]'::jsonb)) AS t(e) LOOP
-    v_is_new := TG_OP = 'INSERT' OR NOT (coalesce(OLD.extra_posters, '[]'::jsonb) @> jsonb_build_array(x));
-    CONTINUE WHEN NOT v_is_new AND NOT v_code_changed;
+    -- 形は前から入っていた要素でも毎回見る（空の要素・library_id を落とした要素を通さない）
     IF jsonb_typeof(x) IS DISTINCT FROM 'object'
        OR jsonb_typeof(x -> 'image_url') IS DISTINCT FROM 'string'
+       OR btrim(x ->> 'image_url') = ''
        OR coalesce(x ->> 'source', '') NOT IN ('upload', 'library')
        OR (x ? 'position' AND jsonb_typeof(x -> 'position') <> 'null'
            AND (jsonb_typeof(x -> 'position') <> 'string' OR (x ->> 'position') !~ '^[0-4]$')) THEN
       RAISE EXCEPTION '追加の貼紙の形が正しくありません' USING ERRCODE = '22023';
     END IF;
+    IF x ->> 'source' = 'library'
+       AND coalesce(x ->> 'library_id', '') !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+      RAISE EXCEPTION '追加の貼紙の形が正しくありません（ライブラリの貼紙）' USING ERRCODE = '22023';
+    END IF;
+    -- 同じ要素を重ねて足させない（CSV で同じ貼紙の行が重なる）。前から重なっていた分を超えて増やすときだけ止める
+    IF (SELECT count(*) FROM jsonb_array_elements(NEW.extra_posters) n WHERE n = x) > 1
+       AND (SELECT count(*) FROM jsonb_array_elements(NEW.extra_posters) n WHERE n = x)
+           > (SELECT count(*) FROM jsonb_array_elements(CASE WHEN TG_OP = 'UPDATE' THEN coalesce(OLD.extra_posters, '[]'::jsonb)
+                                                              ELSE '[]'::jsonb END) o WHERE o = x) THEN
+      RAISE EXCEPTION '同じ追加の貼紙が重なっています' USING ERRCODE = '22023';
+    END IF;
+    -- 前から入っていた要素かは、要素の完全一致で見る（包含 @> だと、前の要素の一部だけの要素も前からのものになる）
+    v_is_new := TG_OP = 'INSERT'
+                OR NOT EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(OLD.extra_posters, '[]'::jsonb)) o WHERE o = x);
+    CONTINUE WHEN NOT v_is_new AND NOT v_code_changed;
     v_url := x ->> 'image_url';
     IF x ->> 'source' = 'upload' THEN
       CONTINUE WHEN NOT v_is_new AND NEW.user_id IS NOT DISTINCT FROM OLD.user_id;
@@ -497,9 +514,6 @@ BEGIN
         RAISE EXCEPTION '追加の貼紙の画像は、申請する方がアップロードした画像だけ使えます' USING ERRCODE = '42501';
       END IF;
     ELSE
-      IF coalesce(x ->> 'library_id', '') !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
-        RAISE EXCEPTION '追加の貼紙の形が正しくありません（ライブラリの貼紙）' USING ERRCODE = '22023';
-      END IF;
       SELECT * INTO v_lib FROM signage.signage_poster_library WHERE id = (x ->> 'library_id')::uuid;
       IF NOT FOUND OR v_lib.image_url IS DISTINCT FROM v_url OR (v_is_new AND NOT v_lib.is_active) THEN
         RAISE EXCEPTION 'この貼紙ライブラリの貼紙は使えません（登録が変わったか、無効になっています）' USING ERRCODE = '22023';
@@ -545,20 +559,22 @@ BEGIN
     IF signage.poster_is_own_upload(v_url, NEW.user_id, v_base) THEN
       RETURN NEW;
     END IF;
-    -- 他の方の画像（(d) で写したもの）。建物の承認の付け替え: 同じ建物追加の申請の行に同じ画像の持ち主の申請があり、
-    -- 変わったのが物件コードだけ（建物追加の申請・user_id・点検種別はそのまま。物件コードは guard_entry_property_request が
-    -- 仮のコードか承認でできた物件コードに限る）
+    -- 他の方の画像（(d) で写したもの）。建物の承認の付け替え（approve_property_request）: 建物追加の申請・user_id・点検種別は
+    -- そのままで、物件コードがその申請の仮のコード（REQ-）から、承認済みのその申請の created_property_code へ変わるだけ。
+    -- 行は同じ建物追加の申請に属したままなので、持ち主の行の有無・画像は見ない（持ち主が行を消した・画像を替えたときも承認を止めない）。
+    -- 保守会社がこの付け替えを自分でできないことは guard_entry_property_request が守る（承認前は REQ- から変えられず、
+    -- 承認の関数が承認待ち・差戻し・下書きの行を全部付け替えるので、承認後に REQ- の行は残らない）。念のため管理者に限る
     IF NEW.property_request_id IS NOT NULL
        AND NEW.property_request_id IS NOT DISTINCT FROM OLD.property_request_id
        AND NEW.user_id IS NOT DISTINCT FROM OLD.user_id
        AND NEW.inspection_type IS NOT DISTINCT FROM OLD.inspection_type
+       AND OLD.property_code = 'REQ-' || left(NEW.property_request_id::text, 8)
+       AND signage.is_active_admin()
        AND EXISTS (
-         SELECT 1 FROM signage.signage_entries e
-          WHERE e.poster_image = v_url
-            AND e.id IS DISTINCT FROM NEW.id
-            AND e.poster_type = 'custom'
-            AND e.property_request_id = NEW.property_request_id
-            AND signage.poster_is_own_upload(e.poster_image, e.user_id, v_base)) THEN
+         SELECT 1 FROM signage.signage_property_requests r
+          WHERE r.id = NEW.property_request_id
+            AND r.status = 'approved'
+            AND r.created_property_code = NEW.property_code) THEN
       RETURN NEW;
     END IF;
     -- それ以外は (d) と同じ条件を新しい物件コード・点検種別で満たすこと（差戻し中の、同じ物件・同じ点検種別の持ち主の申請）

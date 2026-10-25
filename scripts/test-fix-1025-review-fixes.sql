@@ -13,7 +13,9 @@
 --       写した画像を、物件コードを変えて別の物件へ持ち出せない。ライブラリの行の URL が後から変わった古い URL は、
 --       他社の物件へ移せない（同じ管理会社の物件へは移せる）。本人のアップロードは別の物件へ移せる。
 --       写した画像の行の点検種別を変えて (d) の条件をすり抜けられない（物件コードと一緒に変えても）。2枚目以降だけの変更は通る。
---       建物の承認では、仮のコードで写した画像の行も持ち主の行と一緒に付け替わる
+--       建物の承認では、仮のコードで写した画像の行も持ち主の行と一緒に付け替わる（持ち主の行が消えた・画像が替わったときも）。
+--       保守会社は仮のコードの行を自分で正式な物件コードへ付け替えられない。
+--       extra_posters の前から入っていた要素は完全一致で見て、形は毎回見る（空の要素・library_id を落とした要素・重複は足せない）
 --   S4: 保守会社の無い保守会社アカウントは OCR の確定を記録しない（0件）
 --   N1: 大文字で書いた保守会社の id は小文字にそろえて記録する（割れにならない）
 --   N2: signage_ocr_usage のシーケンスに anon・authenticated の権限が無い
@@ -62,8 +64,23 @@ BEGIN
   RAISE EXCEPTION 'NG (通ってしまった) %', p_label;
 END $$;
 
+-- p_sql が extra_posters の形の確かめ（guard_entry_posters の 22023）で止まること
+CREATE FUNCTION pg_temp.expect_extra_shape_denied(p_label text, p_sql text) RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  BEGIN
+    EXECUTE p_sql;
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLSTATE = '22023' AND SQLERRM LIKE '%追加の貼紙%' THEN
+      RAISE NOTICE 'ok (止まった) %: %', p_label, SQLERRM;
+      RETURN;
+    END IF;
+    RAISE EXCEPTION 'NG (別の理由で止まった) %: % %', p_label, SQLSTATE, SQLERRM;
+  END;
+  RAISE EXCEPTION 'NG (通ってしまった) %', p_label;
+END $$;
+
 GRANT EXECUTE ON FUNCTION pg_temp.act_as(text, text), pg_temp.as_owner(), pg_temp.expect_error(text, text),
-  pg_temp.expect_poster_denied(text, text) TO authenticated;
+  pg_temp.expect_poster_denied(text, text), pg_temp.expect_extra_shape_denied(text, text) TO authenticated;
 
 -- 管理会社 c..10 のライブラリの貼紙と、保守会社の無い保守会社アカウント
 INSERT INTO signage.signage_poster_library (id, display_name, image_url, storage_path, management_company_id)
@@ -87,6 +104,8 @@ DECLARE
   v_bad text[];
   v_url text;
   v_entry uuid;
+  v_x1 jsonb;
+  v_x2 jsonb;
   n integer;
   rec record;
 BEGIN
@@ -275,6 +294,115 @@ BEGIN
   PERFORM pg_temp.expect_poster_denied('N3 付け替わった写しの行の点検種別を変える（持ち主の行は別の点検種別ではない）', format(
     'UPDATE signage.signage_entries SET inspection_type = %L WHERE id = %L', 'y', v_entry));
   RAISE NOTICE 'ok N3 建物の承認で写した画像の行も付け替わる';
+
+  -- 建物の承認の付け替えは、写した元の持ち主の行が消えていても（d2）・画像が替わっていても（d3）止まらない。
+  -- 承認前に保守会社が仮のコードの行の物件コードを書き換えるのは止まる
+  PERFORM pg_temp.as_owner();
+  INSERT INTO signage.signage_property_requests (id, vendor_id, management_company_id, property_name, status, requested_by)
+  VALUES ('aaaaaaab-1025-4000-8000-0000000000d2', 'c0000000-0000-4000-8000-000000000001',
+          'c0000000-0000-4000-8000-000000000009', 'TEST1025建物2', 'pending', 'a0000000-0000-4000-8000-000000000002'),
+         ('aaaaaaac-1025-4000-8000-0000000000d3', 'c0000000-0000-4000-8000-000000000001',
+          'c0000000-0000-4000-8000-000000000009', 'TEST1025建物3', 'pending', 'a0000000-0000-4000-8000-000000000002');
+  INSERT INTO signage.signage_entries (user_id, property_code, terminal_id, vendor_name, inspection_type, poster_type, poster_image,
+                                       status, review_comment, property_request_id)
+  VALUES ('a0000000-0000-4000-8000-000000000005', 'REQ-aaaaaaab', '', 'x', 'x', 'custom',
+          c_lib || 'a0000000-0000-4000-8000-000000000005/1761360000005_ee55ee.png', 'pending', 'TEST1025 差戻し',
+          'aaaaaaab-1025-4000-8000-0000000000d2'),
+         ('a0000000-0000-4000-8000-000000000005', 'REQ-aaaaaaac', '', 'x', 'x', 'custom',
+          c_lib || 'a0000000-0000-4000-8000-000000000005/1761360000006_ff66ff.png', 'pending', 'TEST1025 差戻し',
+          'aaaaaaac-1025-4000-8000-0000000000d3');
+  PERFORM pg_temp.act_as('a0000000-0000-4000-8000-000000000002');
+  INSERT INTO signage.signage_entries (user_id, property_code, terminal_id, vendor_name, inspection_type, poster_type, poster_image,
+                                       status, property_request_id)
+  VALUES (auth.uid(), 'REQ-aaaaaaab', '', 'x', 'x', 'custom',
+          c_lib || 'a0000000-0000-4000-8000-000000000005/1761360000005_ee55ee.png', 'pending', 'aaaaaaab-1025-4000-8000-0000000000d2'),
+         (auth.uid(), 'REQ-aaaaaaac', '', 'x', 'x', 'custom',
+          c_lib || 'a0000000-0000-4000-8000-000000000005/1761360000006_ff66ff.png', 'pending', 'aaaaaaac-1025-4000-8000-0000000000d3');
+  -- 承認前の書き換えは guard_entry_property_request が止める（貼紙の確かめを通る本人のアップロードの行で見る）
+  INSERT INTO signage.signage_entries (user_id, property_code, terminal_id, vendor_name, inspection_type, poster_type, poster_image,
+                                       status, property_request_id)
+  VALUES (auth.uid(), 'REQ-aaaaaaab', '', 'x', 'x', 'custom', v_own || '1761360000008_hh88hh.png', 'pending',
+          'aaaaaaab-1025-4000-8000-0000000000d2')
+  RETURNING id INTO v_entry;
+  BEGIN
+    EXECUTE format('UPDATE signage.signage_entries SET property_code = %L WHERE id = %L', 'TEST1025-d2', v_entry);
+    RAISE EXCEPTION 'NG (通ってしまった) N3 承認前に保守会社が仮のコードの行を物件コードへ書き換える';
+  EXCEPTION WHEN SQLSTATE '22023' THEN
+    IF SQLERRM NOT LIKE '%建物の承認前は物件コードを変えられません%' THEN
+      RAISE EXCEPTION 'NG (別の理由で止まった) N3 承認前の書き換え: %', SQLERRM;
+    END IF;
+    RAISE NOTICE 'ok (止まった) N3 承認前に保守会社が仮のコードの行を物件コードへ書き換える: %', SQLERRM;
+  END;
+  PERFORM pg_temp.as_owner();
+  DELETE FROM signage.signage_entries
+   WHERE user_id = 'a0000000-0000-4000-8000-000000000005' AND property_request_id = 'aaaaaaab-1025-4000-8000-0000000000d2';
+  UPDATE signage.signage_entries SET poster_image = c_lib || 'a0000000-0000-4000-8000-000000000005/1761360000007_gg77gg.png'
+   WHERE user_id = 'a0000000-0000-4000-8000-000000000005' AND property_request_id = 'aaaaaaac-1025-4000-8000-0000000000d3';
+  PERFORM pg_temp.act_as('a0000000-0000-4000-8000-000000000001');
+  PERFORM signage.approve_property_request('aaaaaaab-1025-4000-8000-0000000000d2', 'TEST1025-d2', NULL);
+  PERFORM signage.approve_property_request('aaaaaaac-1025-4000-8000-0000000000d3', 'TEST1025-d3', NULL);
+  PERFORM pg_temp.as_owner();
+  SELECT count(*) INTO n FROM signage.signage_entries
+   WHERE user_id = 'a0000000-0000-4000-8000-000000000002'
+     AND poster_image LIKE c_lib || 'a0000000-0000-4000-8000-000000000005/%'
+     AND (property_request_id = 'aaaaaaab-1025-4000-8000-0000000000d2' AND property_code = 'TEST1025-d2'
+          OR property_request_id = 'aaaaaaac-1025-4000-8000-0000000000d3' AND property_code = 'TEST1025-d3');
+  IF n <> 2 THEN
+    RAISE EXCEPTION 'NG N3 持ち主の行が消えた・画像が替わった写しの行が建物の承認で付け替わらない: %', n;
+  END IF;
+  -- 承認後に仮のコードの行が残っていても（通常は残らない。トリガーを止めて作る）、保守会社は自分で正式な物件コードへ付け替えられない
+  SET LOCAL session_replication_role = replica;
+  INSERT INTO signage.signage_entries (user_id, property_code, terminal_id, vendor_name, inspection_type, poster_type, poster_image,
+                                       status, property_request_id)
+  VALUES ('a0000000-0000-4000-8000-000000000002', 'REQ-aaaaaaab', '', 'x', 'x', 'custom',
+          c_lib || 'a0000000-0000-4000-8000-000000000005/1761360000005_ee55ee.png', 'pending', 'aaaaaaab-1025-4000-8000-0000000000d2')
+  RETURNING id INTO v_entry;
+  SET LOCAL session_replication_role = origin;
+  PERFORM pg_temp.act_as('a0000000-0000-4000-8000-000000000002');
+  PERFORM pg_temp.expect_poster_denied('N3 承認後に保守会社が写しの行を仮のコードから正式な物件コードへ付け替える', format(
+    'UPDATE signage.signage_entries SET property_code = %L WHERE id = %L', 'TEST1025-d2', v_entry));
+  RAISE NOTICE 'ok N3 建物の承認は持ち主の行が消えた・画像が替わった写しの行も付け替える（保守会社の付け替えは止まる）';
+
+  -- extra_posters の前から入っていた要素は完全一致で見る。空の要素・library_id を落とした要素・形を崩した要素・
+  -- 同じ要素の重複は足せない。並べ替え・要素を外すのは通る
+  PERFORM pg_temp.as_owner();
+  INSERT INTO signage.signage_poster_library (id, display_name, image_url, storage_path, management_company_id)
+  VALUES ('bbbbbbbb-1025-4000-8000-0000000000c2', 'TEST1025 c09',
+          c_lib || 'library/c0000000-0000-4000-8000-000000000009/1761360000010_lb09lb.png',
+          'library/c0000000-0000-4000-8000-000000000009/1761360000010_lb09lb.png', 'c0000000-0000-4000-8000-000000000009');
+  PERFORM pg_temp.act_as('a0000000-0000-4000-8000-000000000002');
+  v_x1 := jsonb_build_object('source', 'upload', 'image_url', v_own || '1761360000011_up11up.png', 'position', '1');
+  v_x2 := jsonb_build_object('source', 'library', 'image_url',
+                             c_lib || 'library/c0000000-0000-4000-8000-000000000009/1761360000010_lb09lb.png',
+                             'library_id', 'bbbbbbbb-1025-4000-8000-0000000000c2', 'position', '2');
+  INSERT INTO signage.signage_entries (user_id, property_code, terminal_id, vendor_name, inspection_type, poster_type, extra_posters, status)
+  VALUES (auth.uid(), '120409-00', '', 'x', 'x', 'template', jsonb_build_array(v_x1, v_x2), 'pending')
+  RETURNING id INTO v_entry;
+  PERFORM pg_temp.expect_extra_shape_denied('N3 空の要素を足す', format(
+    'UPDATE signage.signage_entries SET extra_posters = %L::jsonb WHERE id = %L', jsonb_build_array(v_x1, v_x2, '{}'::jsonb)::text, v_entry));
+  PERFORM pg_temp.expect_extra_shape_denied('N3 ライブラリの要素を image_url だけにする', format(
+    'UPDATE signage.signage_entries SET extra_posters = %L::jsonb WHERE id = %L',
+    jsonb_build_array(v_x1, jsonb_build_object('image_url', v_x2 ->> 'image_url'))::text, v_entry));
+  PERFORM pg_temp.expect_extra_shape_denied('N3 ライブラリの要素の library_id を落とす', format(
+    'UPDATE signage.signage_entries SET extra_posters = %L::jsonb WHERE id = %L',
+    jsonb_build_array(v_x1, v_x2 - 'library_id')::text, v_entry));
+  PERFORM pg_temp.expect_extra_shape_denied('N3 アップロードの要素の source を落とす', format(
+    'UPDATE signage.signage_entries SET extra_posters = %L::jsonb WHERE id = %L',
+    jsonb_build_array(v_x1 - 'source', v_x2)::text, v_entry));
+  PERFORM pg_temp.expect_extra_shape_denied('N3 同じ要素を重ねて足す', format(
+    'UPDATE signage.signage_entries SET extra_posters = %L::jsonb WHERE id = %L',
+    jsonb_build_array(v_x1, v_x2, v_x2, v_x1)::text, v_entry));
+  PERFORM pg_temp.expect_extra_shape_denied('N3 同じ要素を重ねて申請する', format(c_ins_extra,
+    jsonb_build_array(v_x1, v_x1)::text));
+  EXECUTE format('UPDATE signage.signage_entries SET extra_posters = %L::jsonb WHERE id = %L',
+    jsonb_build_array(v_x2, v_x1)::text, v_entry);
+  EXECUTE format('UPDATE signage.signage_entries SET extra_posters = %L::jsonb WHERE id = %L',
+    jsonb_build_array(v_x2)::text, v_entry);
+  SELECT count(*) INTO n FROM signage.signage_entries WHERE id = v_entry AND extra_posters = jsonb_build_array(v_x2);
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'NG N3 extra_posters の並べ替え・要素を外すのが通らない: %', n;
+  END IF;
+  RAISE NOTICE 'ok N3 extra_posters の形は前からの要素でも見る・重複は足せない';
 
   -- ライブラリの行（c..09）の URL を後から変えたとき、古い URL の申請は c..10 の物件へ移せない（c..09 の物件へは移せる）
   SELECT id INTO v_entry FROM signage.signage_entries
