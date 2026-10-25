@@ -16,6 +16,8 @@
 --   - 管理会社の審査（任意）: 管理会社は自社が管理会社の申請を読めて、「審査済み（承認推奨）」か差戻し（却下）にできる。
 --     管理者は審査の有無にかかわらず承認・却下できる。
 --   - 未承認の建物を使えるのは申請した月（日本時間）の間だけ。翌月以降は再申請が要る（注記「次回以降は承認がなければ再度申請」）。
+--     差戻しの申請し直しも同じ（先月以前の建物追加の申請に結び付いた掲示は、月が替わると申請し直せない。取り下げて出し直す）。
+--   - 仮のコードの掲示は、どの状態でも承認・取込済みにできず、仮のコードのまま建物追加の申請との結び付きを外せない。
 
 SET lock_timeout = '5s';
 
@@ -74,22 +76,38 @@ AS $function$
 DECLARE
   r signage.signage_property_requests;
   v_changed boolean := TG_OP = 'INSERT' OR NEW.property_request_id IS DISTINCT FROM OLD.property_request_id;
+  -- 差戻し（pending）から申請し直す（draft）のも、申請を出すのと同じ確かめ（申請した月の間だけ・建物が承認待ち）をする。
+  -- 管理者・JWT を持たない経路（承認の関数の付け替えなど）は対象外
+  v_resubmit boolean := false;
 BEGIN
+  -- 仮のコードの掲示は、建物追加の申請の状態・結び付きの有無にかかわらず、承認（ready）・取込済み（exported）にさせない
+  -- （建物の承認で正式な物件コードに付け替わってから承認する。承認済みの行だけが CSV に出る）
+  IF NEW.property_code ~* '^REQ-' AND NEW.status IN ('ready', 'exported') THEN
+    RAISE EXCEPTION '建物追加の申請が承認されるまで、この建物の掲示は承認できません' USING ERRCODE = '42501';
+  END IF;
+
   IF NEW.property_request_id IS NULL THEN
     -- 仮のコードは建物追加の申請からだけ（申請 id 無しで REQ- を名乗らせない）
     IF NEW.property_code ~* '^REQ-' AND (TG_OP = 'INSERT' OR NEW.property_code IS DISTINCT FROM OLD.property_code) THEN
       RAISE EXCEPTION '「REQ-」で始まる物件コードは建物追加の申請からだけ使えます' USING ERRCODE = '22023';
     END IF;
-    -- 申請の行が消えて結び付きが外れた（ON DELETE SET NULL）仮のコードの行も承認させない（CSV に出さない）
-    IF NEW.property_code ~* '^REQ-' AND NEW.status IN ('ready', 'exported') THEN
-      RAISE EXCEPTION '建物追加の申請が承認されるまで、この建物の掲示は承認できません' USING ERRCODE = '42501';
+    -- 仮のコードのまま建物追加の申請との結び付きを外させない（外すと承認での付け替えも却下での片付けも届かず、行が残り続ける）。
+    -- 申請の行が消えたとき（外部キーの ON DELETE SET NULL）だけは通す
+    IF TG_OP = 'UPDATE' AND OLD.property_request_id IS NOT NULL AND NEW.property_code ~* '^REQ-'
+       AND EXISTS (SELECT 1 FROM signage.signage_property_requests WHERE id = OLD.property_request_id) THEN
+      RAISE EXCEPTION '建物の承認前は、建物追加の申請との結び付きを外せません' USING ERRCODE = '22023';
     END IF;
     RETURN NEW;
   END IF;
 
-  SELECT * INTO r FROM signage.signage_property_requests WHERE id = NEW.property_request_id;
+  -- FOR SHARE: 同じ申請の承認・却下（FOR UPDATE で読んで status を変える）と同時に動いたら、その終わりを待ってから
+  -- 確定した状態で判定する（待たずに承認前の状態で通すと、承認の付け替えに漏れた仮のコードの行が残る）
+  SELECT * INTO r FROM signage.signage_property_requests WHERE id = NEW.property_request_id FOR SHARE;
   IF NOT FOUND THEN
     RAISE EXCEPTION '建物追加の申請が見つかりません' USING ERRCODE = '22023';
+  END IF;
+  IF TG_OP = 'UPDATE' AND NEW.status = 'draft' AND OLD.status IS DISTINCT FROM 'draft' AND auth.uid() IS NOT NULL THEN
+    v_resubmit := NOT signage.is_active_admin();
   END IF;
 
   IF r.status = 'approved' THEN
@@ -109,13 +127,10 @@ BEGIN
   IF NEW.property_code IS DISTINCT FROM 'REQ-' || left(r.id::text, 8) THEN
     RAISE EXCEPTION '建物の承認前は物件コードを変えられません' USING ERRCODE = '22023';
   END IF;
-  IF NEW.status IN ('ready', 'exported') THEN
-    RAISE EXCEPTION '建物追加の申請が承認されるまで、この建物の掲示は承認できません' USING ERRCODE = '42501';
-  END IF;
   IF NEW.property_inspection_id IS NOT NULL THEN
     RAISE EXCEPTION '建物の承認前は点検に結び付けられません' USING ERRCODE = '22023';
   END IF;
-  IF v_changed THEN
+  IF v_changed OR v_resubmit THEN
     IF r.status <> 'pending' THEN
       RAISE EXCEPTION '建物追加の申請は却下されています。もう一度申請してください' USING ERRCODE = '22023';
     END IF;
@@ -127,6 +142,8 @@ BEGIN
        AND r.vendor_id IS DISTINCT FROM signage.current_vendor_id() THEN
       RAISE EXCEPTION '他社の建物追加の申請には申請できません' USING ERRCODE = '42501';
     END IF;
+  END IF;
+  IF v_changed THEN
     -- 保守会社は建物の申請の保守会社（承認時に担当になる保守会社）
     NEW.vendor_id := r.vendor_id;
   END IF;
