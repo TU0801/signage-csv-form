@@ -68,7 +68,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   signOut: async () => {
     // 先に画面のユーザーを外す（自分のログアウトを別タブでの切り替えと取り違えない）
     set({ user: null, session: null, profile: null });
-    await supabase.auth.signOut();
+    // この端末のセッションだけを終える。既定（global）だと同じアカウントの全端末が切れ、
+    // a@a のような共用アカウントでは他の人の画面までログイン切れになる
+    await supabase.auth.signOut({ scope: 'local' });
   },
 
   // v1: login.html checkAuth → redirectByProfile（判定不能は scope:'local' で破棄）
