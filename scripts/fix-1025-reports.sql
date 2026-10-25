@@ -215,7 +215,8 @@ VALUES ('property-files', 'property-files', false, 52428800, ARRAY[
   'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/vnd.ms-powerpoint'])
 ON CONFLICT (id) DO NOTHING;
 
--- 置き場所の先頭（物件コード）→ 物件の行の id（完全一致。無ければ null で、アップロードは通らない）
+-- 置き場所の先頭（物件コード）→ 物件の行の id（完全一致。無ければ null で、アップロードは通らない）。
+-- 有効なアカウント（管理者・保守会社・管理会社）でなければ null（物件コードから id を引く窓口にしない）
 CREATE OR REPLACE FUNCTION signage.property_file_object_property_id(p_name text)
  RETURNS uuid
  LANGUAGE sql
@@ -223,7 +224,8 @@ CREATE OR REPLACE FUNCTION signage.property_file_object_property_id(p_name text)
  SET search_path TO 'signage', 'pg_temp'
 AS $function$
   select s.id from signage.signage_master_properties s
-  where p_name not like '%..%' and s.property_code = split_part(p_name, '/', 1);
+  where signage.current_role_kind() is not null
+    and p_name not like '%..%' and s.property_code = split_part(p_name, '/', 1);
 $function$;
 
 -- オブジェクトを読めるのは、それを保存先に持つ記録を読める人（登録前・登録に失敗したファイルは管理者だけ）
