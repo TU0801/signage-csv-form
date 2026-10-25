@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { DbInspectionReport, PortalInspectionRow } from '@/types/portal';
+import type { DbInspectionReport, DbPropertyFile, PortalInspectionRow } from '@/types/portal';
 import { fetchInspectionReports, fetchPortalInspections } from '@/lib/api/portal';
+import { fetchPropertyFiles } from '@/lib/api/property-files';
 
-// 点検は再提出のときにしか使わないので、点検の読み込みに失敗しても報告書の一覧は出す（allSettled で別々に受ける）
+// 点検は再提出のときにしか使わないので、点検の読み込みに失敗しても報告書の一覧は出す（allSettled で別々に受ける）。
+// その他ファイル（修正依頼1025 G2）も別に受ける（表がまだ無い環境・読めないときも報告書は出す）
 function fetchBoth() {
-  return Promise.allSettled([fetchInspectionReports(), fetchPortalInspections()]);
+  return Promise.allSettled([fetchInspectionReports(), fetchPortalInspections(), fetchPropertyFiles()]);
 }
 
 /**
@@ -21,8 +23,17 @@ export function useInspectionDocuments() {
   const [error, setError] = useState<unknown>(null);
   /** 点検を読めなかった（一覧は出せるが再提出ができない） */
   const [inspectionsError, setInspectionsError] = useState<unknown>(null);
+  const [files, setFiles] = useState<DbPropertyFile[]>([]);
+  /** その他ファイルを読めなかった理由（読めたら null） */
+  const [filesError, setFilesError] = useState<unknown>(null);
 
-  const apply = useCallback(([r, i]: Awaited<ReturnType<typeof fetchBoth>>) => {
+  const apply = useCallback(([r, i, f]: Awaited<ReturnType<typeof fetchBoth>>) => {
+    if (f.status === 'fulfilled') {
+      setFiles(f.value);
+      setFilesError(null);
+    } else {
+      setFilesError(f.reason);
+    }
     if (i.status === 'fulfilled') {
       setInspections(i.value);
       setInspectionsError(null);
@@ -53,5 +64,10 @@ export function useInspectionDocuments() {
     setReports((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
   }, []);
 
-  return { reports, inspections, loading, error, inspectionsError, reload, replaceReport };
+  /** RPC が返した1行で差し替える（その他ファイル） */
+  const replaceFile = useCallback((updated: DbPropertyFile) => {
+    setFiles((prev) => prev.map((f) => (f.id === updated.id ? updated : f)));
+  }, []);
+
+  return { reports, inspections, files, loading, error, inspectionsError, filesError, reload, replaceReport, replaceFile };
 }

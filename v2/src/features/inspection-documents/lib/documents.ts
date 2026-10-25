@@ -131,8 +131,11 @@ export interface TreeBuildingNode {
   years: TreeYearNode[];
 }
 
+/** ツリーに載せる行の列（報告書のほか、その他ファイルも区分名を点検種別の段に入れて載せる。lib/propertyFiles） */
+export type TreeRow = Pick<DbInspectionReport, 'property_code' | 'property_name' | 'performed_on' | 'inspection_type_label'>;
+
 /** 建物は名前順、年は新しい順、点検種別は名前順。件数は渡した行（絞り込み後）で数える */
-export function buildReportTree(reports: DbInspectionReport[]): TreeBuildingNode[] {
+export function buildReportTree(reports: TreeRow[]): TreeBuildingNode[] {
   const buildings = new Map<string, { name: string; years: Map<string, Map<string, number>> }>();
   for (const r of reports) {
     let b = buildings.get(r.property_code);

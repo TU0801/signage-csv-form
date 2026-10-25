@@ -103,3 +103,32 @@ export interface ManagementCompanyRow {
   id: string;
   name: string;
 }
+
+/** その他ファイルの区分（signage_property_files.category） */
+export type PropertyFileCategory = 'estimate' | 'invoice' | 'contract' | 'building_info' | 'proposal' | 'photo' | 'other';
+
+/** signage_property_files の1行（修正依頼1025 G2。scripts/fix-1025-reports.sql） */
+export interface DbPropertyFile {
+  id: string;
+  property_id: string | null;
+  property_code: string;
+  property_name: string;
+  category: PropertyFileCategory;
+  category_note: string | null;
+  doc_date: string | null;
+  file_name: string;
+  original_name: string | null;
+  storage_path: string;
+  mime_type: string;
+  size_bytes: number | null;
+  content_hash: string | null;
+  uploaded_by: string;
+  vendor_id: string | null;
+  vendor_name: string | null;
+  management_company_id: string | null;
+  note: string | null;
+  ocr_result: unknown;
+  status: 'active' | 'deleted';
+  created_at: string;
+  updated_at: string;
+}

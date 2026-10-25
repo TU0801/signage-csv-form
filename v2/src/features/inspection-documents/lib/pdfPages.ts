@@ -18,6 +18,11 @@ export interface PdfPages {
     width: number,
     skip?: () => boolean,
   ) => Promise<void>;
+  /**
+   * ページごとの文字情報（テキスト層。AI-OCR の前に読む）。先頭から maxPages ページまで。
+   * スキャン画像だけの PDF では空の文字列が並ぶ
+   */
+  pageTexts: (maxPages?: number) => Promise<string[]>;
   destroy: () => void;
 }
 
@@ -53,6 +58,20 @@ export async function openPdfPages(bytes: Uint8Array): Promise<PdfPages> {
       const run = chain.then(() => renderOne(...args));
       chain = run.catch(() => undefined);
       return run;
+    },
+    pageTexts: async (maxPages = doc.numPages) => {
+      const texts: string[] = [];
+      for (let i = 1; i <= Math.min(maxPages, doc.numPages); i++) {
+        const page = await doc.getPage(i);
+        const content = await page.getTextContent();
+        texts.push(
+          content.items
+            .map((item) => ('str' in item ? item.str + (item.hasEOL ? '\n' : '') : ''))
+            .join('')
+            .trim(),
+        );
+      }
+      return texts;
     },
     destroy: () => {
       void task.destroy();

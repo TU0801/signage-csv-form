@@ -1,7 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { makeReport } from './fixtures';
+import { makePropertyFile, makeReport } from './fixtures';
 
 const api = vi.hoisted(() => ({
   fetchInspectionReports: vi.fn(),
@@ -11,8 +11,18 @@ const api = vi.hoisted(() => ({
   updateInspectionReport: vi.fn(),
 }));
 vi.mock('@/lib/api/portal', () => api);
+const fileApi = vi.hoisted(() => ({
+  fetchPropertyFiles: vi.fn(async () => [] as unknown[]),
+  deletePropertyFile: vi.fn(),
+  propertyFileSignedUrl: vi.fn(),
+  fetchAiOcrStatus: vi.fn(async () => ({ configured: false, message: null })),
+  fetchCorrectionDictionary: vi.fn(async () => [] as unknown[]),
+}));
+vi.mock('@/lib/api/property-files', () => fileApi);
 vi.mock('@/lib/supabase', () => ({ supabase: {}, TABLES: {}, RPC: {} }));
-vi.mock('@/hooks/useAuth', () => ({ useAuth: () => ({ isAdmin: false, isManagement: false, vendorId: 'v1' }) }));
+vi.mock('@/hooks/useAuth', () => ({
+  useAuth: () => ({ isAdmin: false, isManagement: false, vendorId: 'v1', user: { id: 'u1' } }),
+}));
 const toast = vi.hoisted(() => vi.fn());
 vi.mock('@/components/ui/Toast', () => ({ useToast: () => ({ addToast: toast }) }));
 // モーダルは各テストで見る（ここでは一覧だけ）
@@ -70,5 +80,25 @@ describe('InspectionDocuments', () => {
     renderAt('/portal/documents');
     expect(await screen.findByText('点検行が削除済み')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '再提出' })).toBeNull();
+  });
+
+  it('その他ファイルは建物 → 年 → 区分名でツリーに並び、選ぶと表に出る。アップロードした本人は削除できる', async () => {
+    api.fetchInspectionReports.mockResolvedValue([makeReport({ id: 'a', file_name: 'a.pdf' })]);
+    fileApi.fetchPropertyFiles.mockResolvedValue([
+      makePropertyFile({ id: 'f1' }),
+      makePropertyFile({ id: 'f2', category: 'other', category_note: '管理規約', file_name: '規約.pdf', uploaded_by: 'u9' }),
+    ]);
+    renderAt('/portal/documents');
+    const tree = await screen.findByRole('navigation', { name: '報告書のフォルダ' });
+    fireEvent.click(within(tree).getAllByRole('button', { name: '開く' })[0]!);
+    fireEvent.click(within(tree).getAllByRole('button', { name: '開く' })[0]!);
+    fireEvent.click(within(tree).getByRole('button', { name: /^見積書/ }));
+    const files = await screen.findByRole('table', { name: 'その他ファイル' });
+    expect(within(files).getByText('見積書_エレベーター改修.pdf')).toBeInTheDocument();
+    expect(within(files).queryByText('規約.pdf')).toBeNull();
+    expect(within(files).getByRole('button', { name: '削除' })).toBeInTheDocument();
+    expect(within(tree).getByRole('button', { name: /その他（管理規約）/ })).toBeInTheDocument();
+    // 報告書の表は区分のフォルダでは0件
+    expect(screen.queryByText('a.pdf')).toBeNull();
   });
 });

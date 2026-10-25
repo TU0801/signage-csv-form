@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import type { DbInspectionReport, PortalInspectionRow } from '@/types/portal';
+import type { DbInspectionReport, DbPropertyFile, PortalInspectionRow } from '@/types/portal';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
 import { Spinner } from '@/components/ui/Spinner';
@@ -10,6 +10,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { downloadCsv } from '@/lib/csv';
 import { entryErrorReason } from '@/lib/api/admin-entries';
 import { reportSignedUrl, reviewInspectionReport, updateInspectionReport } from '@/lib/api/portal';
+import { deletePropertyFile, propertyFileSignedUrl } from '@/lib/api/property-files';
 import { todayJst } from '@/features/inspection-portal/lib/schedule';
 import { useInspectionDocuments } from '../hooks/useInspectionDocuments';
 import {
@@ -31,7 +32,17 @@ import { ReportEditModal } from './ReportEditModal';
 import { ReportReturnModal } from './ReportReturnModal';
 import { ReportUploadModal } from './ReportUploadModal';
 import { BulkReportUploadModal } from './BulkReportUploadModal';
+import { OtherFileUploadModal } from './OtherFileUploadModal';
+import { PropertyFilesTable, type PropertyFileAction } from './PropertyFilesTable';
 import type { ReportAction } from './ReportRowActions';
+import {
+  canDeletePropertyFile,
+  filterPropertyFiles,
+  propertyCandidatesOf,
+  propertyFileInSelection,
+  propertyFileTreeRow,
+  vendorCandidatesOf,
+} from '../lib/propertyFiles';
 
 /**
  * 点検報告書の整理（DocFlow 相当・OCR なし）。左に建物 → 年 → 点検種別の仮想ツリー、右に表。
@@ -40,8 +51,9 @@ import type { ReportAction } from './ReportRowActions';
  */
 export function InspectionDocuments() {
   const { addToast } = useToast();
-  const { isAdmin, isManagement, vendorId } = useAuth();
-  const { reports, inspections, loading, error, inspectionsError, reload, replaceReport } = useInspectionDocuments();
+  const { isAdmin, isManagement, vendorId, user } = useAuth();
+  const { reports, inspections, files, loading, error, inspectionsError, filesError, reload, replaceReport, replaceFile } =
+    useInspectionDocuments();
 
   const [filters, setFilters] = useState<ReportFilters>(DEFAULT_REPORT_FILTERS);
   const [treeSelection, setTreeSelection] = useState<TreeSelection | null>(null);
@@ -79,12 +91,30 @@ export function InspectionDocuments() {
   const [deleting, setDeleting] = useState<DbInspectionReport | null>(null);
   const [resubmit, setResubmit] = useState<{ report: DbInspectionReport; inspection: PortalInspectionRow } | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [otherOpen, setOtherOpen] = useState(false);
+  const [deletingFile, setDeletingFile] = useState<DbPropertyFile | null>(null);
   // 一括アップロードは提出できるロール（保守会社・管理者）だけ。管理者は保守会社を選ばず全社の点検から選ぶ
   const canBulkUpload = isAdmin || !isManagement;
 
   const viewer = useMemo(() => ({ isAdmin, isManagement, vendorId }), [isAdmin, isManagement, vendorId]);
   const filtered = useMemo(() => filterReports(reports, filters), [reports, filters]);
-  const tree = useMemo(() => buildReportTree(filtered), [filtered]);
+  // その他ファイル（見積書など）は、ツリーの点検種別の段に区分名で並べる（修正依頼1025 G2）
+  const filteredFiles = useMemo(() => filterPropertyFiles(files, filters), [files, filters]);
+  const tree = useMemo(
+    () => buildReportTree([...filtered, ...filteredFiles.map(propertyFileTreeRow)]),
+    [filtered, filteredFiles],
+  );
+  // 点検一覧のリンクで1件の報告書を指しているときは、その他ファイルは出さない
+  const visibleFiles = useMemo(
+    () => (focusId ? [] : filteredFiles.filter((f) => propertyFileInSelection(f, treeSelection))),
+    [filteredFiles, treeSelection, focusId],
+  );
+  const propertyCandidates = useMemo(() => propertyCandidatesOf(inspections), [inspections]);
+  const vendorCandidates = useMemo(() => vendorCandidatesOf(inspections), [inspections]);
+  const inspectionTypeLabels = useMemo(
+    () => [...new Set(inspections.map((i) => i.inspection_type_label ?? '').filter(Boolean))],
+    [inspections],
+  );
   const visible = useMemo(
     () => filtered.filter((r) => matchesTreeSelection(r, treeSelection) && (!focusId || r.id === focusId)),
     [filtered, treeSelection, focusId],
@@ -181,6 +211,36 @@ export function InspectionDocuments() {
     }
   };
 
+  const handleFileAction = async (file: DbPropertyFile, action: PropertyFileAction) => {
+    if (action === 'delete') {
+      setDeletingFile(file);
+      return;
+    }
+    if (action === 'open') {
+      const tab = window.open('', '_blank');
+      try {
+        const url = await propertyFileSignedUrl(file);
+        if (tab) {
+          tab.opener = null;
+          tab.location.href = url;
+        } else window.open(url, '_blank', 'noopener');
+      } catch (err) {
+        tab?.close();
+        failToast('ファイルを開くの', err);
+      }
+      return;
+    }
+    try {
+      const url = await propertyFileSignedUrl(file, { download: true });
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.file_name;
+      a.click();
+    } catch (err) {
+      failToast('ダウンロード', err);
+    }
+  };
+
   const handleReturn = async (report: DbInspectionReport, comment: string) => {
     try {
       replaceReport(await reviewInspectionReport(report.id, 'return', comment));
@@ -232,11 +292,17 @@ export function InspectionDocuments() {
         <p className="text-xs text-gray-500">
           建物・年・点検種別で整理して表示します。左のフォルダを選ぶと表を絞り込めます。
         </p>
-        {canBulkUpload && (
-          <Button size="sm" className="ml-auto self-center text-xs" onClick={() => setBulkOpen(true)}>
-            報告書一括アップロード
+        <span className="ml-auto flex gap-1 self-center">
+          {/* その他ファイルは管理会社もアップロードできる（建物関連情報など） */}
+          <Button variant="secondary" size="sm" className="text-xs" onClick={() => setOtherOpen(true)}>
+            その他ファイルアップロード
           </Button>
-        )}
+          {canBulkUpload && (
+            <Button size="sm" className="text-xs" onClick={() => setBulkOpen(true)}>
+              報告書一括アップロード
+            </Button>
+          )}
+        </span>
       </div>
       <ReportFiltersBar
         filters={filters}
@@ -309,7 +375,7 @@ export function InspectionDocuments() {
         <aside className="w-48 shrink-0 overflow-y-auto 2xl:w-56 rounded border border-gray-200 bg-white p-1">
           <ReportTree
             tree={tree}
-            total={filtered.length}
+            total={filtered.length + filteredFiles.length}
             selection={treeSelection}
             onSelect={(sel) => {
               // フォルダを選び直したら、指定の1件への絞り込みは外す
@@ -359,6 +425,24 @@ export function InspectionDocuments() {
               onAction={(r, a) => void handleAction(r, a)}
             />
           )}
+          {(visibleFiles.length > 0 || filesError != null) && (
+            <section className="mt-2 border-t border-gray-200" aria-label="その他ファイルの一覧">
+              <h2 className="px-1.5 py-1 text-xs font-bold text-gray-700">
+                その他ファイル（{visibleFiles.length}件）
+                {filesError != null && (
+                  <span className="ml-2 font-normal text-red-700">読み込めませんでした（{entryErrorReason(filesError)}）</span>
+                )}
+              </h2>
+              {visibleFiles.length > 0 && (
+                <PropertyFilesTable
+                  files={visibleFiles}
+                  canDelete={(f) => canDeletePropertyFile(f, { isAdmin, userId: user?.id })}
+                  busyId={busyId}
+                  onAction={(f, a) => void handleFileAction(f, a)}
+                />
+              )}
+            </section>
+          )}
         </div>
       </div>
 
@@ -384,6 +468,35 @@ export function InspectionDocuments() {
         entryId={resubmit?.report.entry_id ?? null}
         previous={resubmit?.report ?? null}
         // 再提出は前の版を置き換え済みにするので、1行の差し替えでなく読み直す
+        onUploaded={() => void reload()}
+      />
+      <ConfirmDialog
+        open={!!deletingFile}
+        onClose={() => setDeletingFile(null)}
+        onConfirm={() => {
+          const target = deletingFile;
+          if (!target) return;
+          setBusyId(target.id);
+          void deletePropertyFile(target.id)
+            .then((updated) => {
+              replaceFile(updated);
+              addToast('削除しました', 'success');
+            })
+            .catch((err: unknown) => failToast('削除', err))
+            .finally(() => setBusyId(null));
+        }}
+        title="ファイルの削除"
+        message={`「${deletingFile?.file_name ?? ''}」を削除しますか？\n削除したファイルは「削除済みも表示」で一覧に残ります（元に戻すときは管理者に連絡）。`}
+        confirmLabel="削除"
+        variant="danger"
+      />
+      <OtherFileUploadModal
+        open={otherOpen}
+        onClose={() => setOtherOpen(false)}
+        properties={propertyCandidates}
+        vendors={vendorCandidates}
+        inspectionTypes={inspectionTypeLabels}
+        defaultPropertyCode={treeSelection?.propertyCode ?? null}
         onUploaded={() => void reload()}
       />
       {canBulkUpload && (
