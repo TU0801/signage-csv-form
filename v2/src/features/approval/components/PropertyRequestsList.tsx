@@ -97,7 +97,8 @@ export function PropertyRequestsList() {
         requests.map((r) => ({
           ...r,
           vendorName: vendorMap.get(r.vendor_id) ?? '-',
-          managementCompanyName: companyMap.get(r.management_company_id) ?? '-',
+          // 管理会社のアカウントには管理会社の候補が返らない（自社の申請だけが見える）ので「自社」と出す
+          managementCompanyName: companyMap.get(r.management_company_id) ?? (isManagement ? '自社' : '-'),
           inspectionTypeName: (r.inspection_type_id && typeMap.get(r.inspection_type_id)) || '-',
           requesterEmail: (r.requested_by && emails.get(r.requested_by)) || '-',
           entryCount: counts.get(r.id) ?? 0,
@@ -109,7 +110,7 @@ export function PropertyRequestsList() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isManagement]);
 
   useEffect(() => {
     void load();

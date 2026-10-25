@@ -439,7 +439,8 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
           };
         }
       }
-      const m = row.propertyCode ? managementIndex?.byCode.get(String(row.propertyCode)) : null;
+      // 未承認の建物は申請で選んだ管理会社（managementOf）
+      const m = managementOf(row);
       const linked = row.propertyCode ? inspectionOfManual(row) : undefined;
       return {
         managementName: m ? (managementNames.get(m) ?? '') : '',
@@ -448,7 +449,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
         inspectedOn: formatInspectedOn(linked ? inspectedOnById.get(linked.inspection_id) : null),
       };
     },
-    [itemsByKey, completed, today, inspectedOnById, actionsOf, managementIndex, inspectionOfManual, managementNames, currentVendor.name],
+    [itemsByKey, completed, today, inspectedOnById, actionsOf, managementOf, inspectionOfManual, managementNames, currentVendor.name],
   );
 
   // 一括設定は今見えている選択行（申請済みの予定を除く）だけに入れる（隠れた行を黙って上書きしない）
