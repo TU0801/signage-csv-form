@@ -84,7 +84,8 @@ export const RPC = {
   /** 点検登録フォーム（2026-10-24）。scripts/fix-1024-core.sql */
   managementCompaniesScoped: 'management_companies_scoped',
   portalCompletions: 'portal_completions',
-  portalMarkCompleted: 'portal_mark_completed',
+  /** 完了連絡。毎月・申請不要の印と点検月以外の月の申請を通す版（修正依頼1025 form。scripts/fix-1025-form.sql）。旧 portal_mark_completed は使わない */
+  portalMarkCompleted: 'portal_mark_completed_any_month',
   portalUnmarkCompleted: 'portal_unmark_completed',
   portalInspectionDates: 'portal_inspection_dates',
   /** マスター管理の物件の検査月（管理者・管理会社は自社物件）。書き込みは upsert の戻り値の点検行 id で */

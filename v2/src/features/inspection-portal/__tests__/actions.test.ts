@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { reportEntryId, rowActions } from '../lib/actions';
+import { completionBlockedReason, reportEntryId, rowActions } from '../lib/actions';
 import { makeEntry, makeInspection } from './fixtures';
 
 const vendor = { isAdmin: false, isManagement: false };
@@ -64,5 +64,23 @@ describe('報告書に渡す申請 id（修正依頼1024 F3）', () => {
     const inspection = makeInspection();
     expect(reportEntryId({ inspection, entries: [makeEntry({ id: 'linked' })] })).toBe('linked');
     expect(reportEntryId({ inspection, entries: [makeEntry({ id: 'legacy', property_inspection_id: null, target_month: null })] })).toBeNull();
+  });
+});
+
+describe('完了連絡を出せるか（点検月以外の月。D5・H4）', () => {
+  const base = { inspection: makeInspection(), targetMonth: '2026-12-01', entries: [] };
+  it('点検月以外の月の行は、その月の申請（点検に結び付いたもの）が無ければ出せない。申請があれば出せる', () => {
+    expect(completionBlockedReason({ ...base, offMonth: true })).toMatch(/申請を出してから/);
+    // 差戻し（pending）や別の月の申請では出せない
+    expect(
+      completionBlockedReason({ ...base, offMonth: true, entries: [makeEntry({ status: 'pending', target_month: '2026-12-01' })] }),
+    ).not.toBeNull();
+    expect(completionBlockedReason({ ...base, offMonth: true, entries: [makeEntry({ target_month: '2026-12-01' })] })).toBeNull();
+  });
+
+  it('点検月の行と、毎月・申請不要の点検種別の行は申請が無くても出せる', () => {
+    expect(completionBlockedReason(base)).toBeNull();
+    expect(completionBlockedReason({ ...base, monthly: true })).toBeNull();
+    expect(completionBlockedReason({ ...base, offMonth: true, reportOnly: true })).toBeNull();
   });
 });

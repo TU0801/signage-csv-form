@@ -173,8 +173,9 @@ export interface BuildScheduleOptions {
   /** 点検種別の印（申請不要・毎月。修正依頼1025 H4/G4） */
   flags?: ReadonlyMap<string, InspectionTypeFlags>;
   /**
-   * 点検月以外の月の行も出す（D5「全ての月」）。点検月以外の月は今月以降と、申請がある過去の月だけ。
-   * 点検月以外の訪問の申請（対象月はその月）ができる。超過にはしない
+   * 点検月以外の月の行も出す（D5「全ての月」）。点検月以外の月は今月以降だけ。
+   * 点検月以外の訪問の申請（対象月はその月）ができる。超過にはしない。
+   * 申請か報告書がある点検月以外の月は、この指定に関係なく出す
    */
   allMonths?: boolean;
 }
@@ -199,12 +200,14 @@ export function buildSchedule(
     const flag = flags?.get(inspection.inspection_type_id);
     for (let m = monthOf(inspection.schedule_from); m <= lastMonth; m = addMonths(m, 1)) {
       const offMonth = !months.has(Number(m.slice(5, 7)));
-      if (offMonth && !allMonths) continue;
       const matched = entries
         .filter((e) => entryMatches(e, inspection, m))
         .sort((a, b) => b.created_at.localeCompare(a.created_at));
-      // 点検月以外の過去の月は、申請があるときだけ（無い月まで出すと過去の月が全部並ぶ）
-      if (offMonth && m < currentMonth && matched.length === 0) continue;
+      const report = latestReport(reports, inspection.inspection_id, m);
+      // 点検月以外の月は、申請か報告書がある月は常に出す（「点検月のみ」や点検一覧・報告書一括アップロードでも、
+      // 「全ての月」で出した申請・報告書が消えないように）。それ以外は「全ての月」の今月以降だけ
+      // （過去の月まで出すと、申請の無い過去の月が全部並ぶ）
+      if (offMonth && matched.length === 0 && !report && (!allMonths || m < currentMonth)) continue;
       const timing: Timing = m < currentMonth ? 'overdue' : m === currentMonth ? 'current' : 'upcoming';
       const application = applicationState(matched);
       const noOverdue = offMonth || !!flag?.reportOnly || !!flag?.monthly;
@@ -216,7 +219,7 @@ export function buildSchedule(
         application,
         overdueUnapplied: !noOverdue && timing === 'overdue' && !matched.some((e) => APPLIED_STATUSES.has(e.status)),
         entries: matched,
-        report: latestReport(reports, inspection.inspection_id, m),
+        report,
         ...(flag?.reportOnly ? { reportOnly: true } : {}),
         ...(flag?.monthly ? { monthly: true } : {}),
         ...(offMonth ? { offMonth: true } : {}),

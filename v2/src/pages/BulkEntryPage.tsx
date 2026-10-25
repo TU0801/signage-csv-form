@@ -37,7 +37,7 @@ import {
 import type { BulkEntryRow } from '@/features/bulk-entry/types';
 import { usePortalData } from '@/features/inspection-portal/hooks/usePortalData';
 import { inspectionsOfVendor } from '@/features/inspection-portal/lib/inspectionLink';
-import { reportEntryId } from '@/features/inspection-portal/lib/actions';
+import { completionBlockedReason, reportEntryId } from '@/features/inspection-portal/lib/actions';
 import { matchTiming, TIMING_OPTIONS, type TimingFilter } from '@/features/inspection-portal/lib/filters';
 import {
   buildSchedule,
@@ -373,6 +373,8 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       const accepted = item.report?.status === 'accepted';
       const sentBack = item.application === 'sent_back' ? focusEntry(item.entries) : null;
       const busy = !!key && completingKey === key;
+      // 点検月以外の月の行は、その月の申請があるときだけ完了連絡できる（D5。毎月・申請不要の点検種別は月を問わない）
+      const blocked = completionBlockedReason(item);
       // 2台目以降の行は報告書UP・完了連絡を出さない（1台目の行で扱う。修正依頼1025 H3）
       if (item.secondary) return null;
       return (
@@ -400,9 +402,12 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
               <button
                 type="button"
                 className={cn(smallBtn, 'border-green-400 bg-green-50 text-green-800 hover:bg-green-100')}
-                disabled={busy || !month}
-                onClick={() => month && void toggleCompletion(item, month, false)}
-                title={month ? '点検の完了を連絡する（報告書が無くても点検完了になります）' : '申請してから完了を連絡できます（対象月が決まらないため）'}
+                disabled={busy || !month || !!blocked}
+                onClick={() => month && !blocked && void toggleCompletion(item, month, false)}
+                title={
+                  blocked ??
+                  (month ? '点検の完了を連絡する（報告書が無くても点検完了になります）' : '申請してから完了を連絡できます（対象月が決まらないため）')
+                }
               >
                 完了連絡
               </button>
@@ -434,15 +439,15 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
           const sentBack = item.application === 'sent_back' ? focusEntry(item.entries)?.review_comment : null;
           const reason = status === 'report_returned' ? item.report?.review_comment : status === 'sent_back' ? sentBack : null;
           const fullName = item.inspection.management_company_name ?? '';
-          // 台ごとの行は台の点検月・検査月（未登録なら点検行の値）。毎月の点検種別は「毎月」（H4）
-          const unitMonths = item.unit?.inspection_months.length ? item.unit.inspection_months : null;
+          // 点検月は点検行の値（台ごとの行も同じ。行は点検行の点検月から作るので、台の点検月を出すと行の月と食い違う）。
+          // 検査月は台の値（未登録なら点検行の値）。毎月の点検種別は「毎月」（H4）
           return {
             status,
             reason: item.secondary ? null : (reason ?? null),
             managementName: managementLabel(item.inspection.management_company_id, fullName),
             managementFullName: fullName,
             vendorName: item.inspection.vendor_name ?? '',
-            months: item.monthly ? '毎月' : (unitMonths ?? item.inspection.inspection_months).join(','),
+            months: item.monthly ? '毎月' : item.inspection.inspection_months.join(','),
             inspectedOn: formatInspectedOn(item.unit?.inspected_on ?? inspectedOnById.get(item.inspection.inspection_id)),
             actions: item.secondary ? undefined : actionsOf(item),
           };
