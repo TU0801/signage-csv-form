@@ -11,7 +11,9 @@
 --       管理者が他の方の申請を直すときは申請した方のフォルダで見る。同じ物件・同じ点検種別の他の方の差戻し中の追加貼紙の申請の
 --       画像は写せる（点検一覧）。差戻しでない（下書き・承認済み）申請・別の点検種別の画像は写せない。
 --       写した画像を、物件コードを変えて別の物件へ持ち出せない。ライブラリの行の URL が後から変わった古い URL は、
---       他社の物件へ移せない（同じ管理会社の物件へは移せる）。本人のアップロードは別の物件へ移せる
+--       他社の物件へ移せない（同じ管理会社の物件へは移せる）。本人のアップロードは別の物件へ移せる。
+--       写した画像の行の点検種別を変えて (d) の条件をすり抜けられない（物件コードと一緒に変えても）。2枚目以降だけの変更は通る。
+--       建物の承認では、仮のコードで写した画像の行も持ち主の行と一緒に付け替わる
 --   S4: 保守会社の無い保守会社アカウントは OCR の確定を記録しない（0件）
 --   N1: 大文字で書いた保守会社の id は小文字にそろえて記録する（割れにならない）
 --   N2: signage_ocr_usage のシーケンスに anon・authenticated の権限が無い
@@ -218,6 +220,61 @@ BEGIN
     RAISE EXCEPTION 'NG N3 本人のアップロードの申請を別の物件へ移せない: %', n;
   END IF;
   RAISE NOTICE 'ok N3 写した画像は別の物件へ移せない（本人のアップロードは移せる）';
+
+  -- 写した画像の行の点検種別を変えて (d) の点検種別の条件をすり抜けられない（状態の変更と一緒でも）。
+  -- 持ち主が同じ画像を別の物件に下書きで持っていても、物件コード・点検種別を一緒に変えてそこへ移せない。
+  -- 2枚目以降だけを変えるのは通る
+  SELECT id INTO v_entry FROM signage.signage_entries
+   WHERE user_id = 'a0000000-0000-4000-8000-000000000002'
+     AND poster_image = c_lib || 'a0000000-0000-4000-8000-000000000005/1761360000002_bb22bb.png';
+  PERFORM pg_temp.expect_poster_denied('N3 写した画像の行の点検種別を変える', format(
+    'UPDATE signage.signage_entries SET inspection_type = %L WHERE id = %L', 'y', v_entry));
+  PERFORM pg_temp.expect_poster_denied('N3 写した画像の行の点検種別を変えて申請し直す', format(
+    'UPDATE signage.signage_entries SET inspection_type = %L, status = %L WHERE id = %L', 'ZZ', 'draft', v_entry));
+  PERFORM pg_temp.as_owner();
+  INSERT INTO signage.signage_entries (user_id, property_code, terminal_id, vendor_name, inspection_type, poster_type, poster_image, status)
+  VALUES ('a0000000-0000-4000-8000-000000000005', '120411-00', '', 'x', 'z', 'custom',
+          c_lib || 'a0000000-0000-4000-8000-000000000005/1761360000002_bb22bb.png', 'draft');
+  PERFORM pg_temp.act_as('a0000000-0000-4000-8000-000000000002');
+  PERFORM pg_temp.expect_poster_denied('N3 写した画像を、持ち主の下書きがある別の物件へ点検種別ごと移す', format(
+    'UPDATE signage.signage_entries SET property_code = %L, inspection_type = %L WHERE id = %L', '120411-00', 'z', v_entry));
+  EXECUTE format('UPDATE signage.signage_entries SET extra_posters = %L::jsonb WHERE id = %L',
+    jsonb_build_array(jsonb_build_object('source', 'upload', 'image_url', v_own || '1761360000003_cc33cc.png'))::text, v_entry);
+  GET DIAGNOSTICS n = ROW_COUNT;
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'NG N3 写した画像の行の 2枚目以降を変えられない: %', n;
+  END IF;
+  RAISE NOTICE 'ok N3 点検種別を変えて写した画像の条件をすり抜けられない';
+
+  -- 建物の承認の付け替え: 仮のコードで写した他の方の差戻しの画像の行も、持ち主の行と一緒に正式な物件コードへ移る。
+  -- 移った後に点検種別を変えるのは止まる
+  PERFORM pg_temp.as_owner();
+  INSERT INTO signage.signage_property_requests (id, vendor_id, management_company_id, property_name, status, requested_by)
+  VALUES ('aaaaaaaa-1025-4000-8000-0000000000d1', 'c0000000-0000-4000-8000-000000000001',
+          'c0000000-0000-4000-8000-000000000009', 'TEST1025建物', 'pending', 'a0000000-0000-4000-8000-000000000002');
+  INSERT INTO signage.signage_entries (user_id, property_code, terminal_id, vendor_name, inspection_type, poster_type, poster_image,
+                                       status, review_comment, property_request_id)
+  VALUES ('a0000000-0000-4000-8000-000000000005', 'REQ-aaaaaaaa', '', 'x', 'x', 'custom',
+          c_lib || 'a0000000-0000-4000-8000-000000000005/1761360000004_dd44dd.png', 'pending', 'TEST1025 差戻し',
+          'aaaaaaaa-1025-4000-8000-0000000000d1');
+  PERFORM pg_temp.act_as('a0000000-0000-4000-8000-000000000002');
+  INSERT INTO signage.signage_entries (user_id, property_code, terminal_id, vendor_name, inspection_type, poster_type, poster_image,
+                                       status, property_request_id)
+  VALUES (auth.uid(), 'REQ-aaaaaaaa', '', 'x', 'x', 'custom',
+          c_lib || 'a0000000-0000-4000-8000-000000000005/1761360000004_dd44dd.png', 'pending', 'aaaaaaaa-1025-4000-8000-0000000000d1')
+  RETURNING id INTO v_entry;
+  PERFORM pg_temp.act_as('a0000000-0000-4000-8000-000000000001');
+  PERFORM signage.approve_property_request('aaaaaaaa-1025-4000-8000-0000000000d1', 'TEST1025-d1', NULL);
+  PERFORM pg_temp.as_owner();
+  SELECT count(*) INTO n FROM signage.signage_entries
+   WHERE property_request_id = 'aaaaaaaa-1025-4000-8000-0000000000d1' AND property_code = 'TEST1025-d1';
+  IF n <> 2 THEN
+    RAISE EXCEPTION 'NG N3 建物の承認で写した画像の行が付け替わらない: %', n;
+  END IF;
+  PERFORM pg_temp.act_as('a0000000-0000-4000-8000-000000000002');
+  PERFORM pg_temp.expect_poster_denied('N3 付け替わった写しの行の点検種別を変える（持ち主の行は別の点検種別ではない）', format(
+    'UPDATE signage.signage_entries SET inspection_type = %L WHERE id = %L', 'y', v_entry));
+  RAISE NOTICE 'ok N3 建物の承認で写した画像の行も付け替わる';
 
   -- ライブラリの行（c..09）の URL を後から変えたとき、古い URL の申請は c..10 の物件へ移せない（c..09 の物件へは移せる）
   SELECT id INTO v_entry FROM signage.signage_entries

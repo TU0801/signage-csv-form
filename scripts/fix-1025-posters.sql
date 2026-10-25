@@ -411,16 +411,16 @@ GRANT EXECUTE ON FUNCTION signage.orphan_poster_images() TO authenticated, servi
 --   extra_posters の要素の形: オブジェクトで、source は upload か library、position は '0'〜'4' か無し、image_url は文字列。
 --     upload は (b)、library は library_id の行で (c)。
 --   物件行が無い（建物追加の仮のコード REQ-・旧書式の物件コード）なら、ライブラリは全社共通だけ。
--- 確かめるのは INSERT と、貼紙・物件コード・user_id が変わった UPDATE だけ（承認・差戻し・取込などの状態の変更では見ない）。
+-- 確かめるのは INSERT と、貼紙・物件コード・user_id・点検種別が変わった UPDATE だけ（承認・差戻し・取込などの状態の変更では見ない）。
 -- UPDATE で前から入っていた値（poster_image が変わらない・extra_posters の前からの要素）は、物件コードか user_id が変わったときに
--- 新しい物件・user_id で確かめ直す。1枚目は次のどれかでなければ止める（無効になったライブラリでも、建物の承認の付け替えは止めない）:
+-- 新しい物件・user_id で確かめ直す（1枚目は点検種別が変わったときも）。1枚目は次のどれかでなければ止める
+-- （無効になったライブラリでも、建物の承認の付け替えは止めない）:
 --   ライブラリの行の URL なら範囲（全社共通か物件の管理会社の分）／ライブラリの置き場所の形
 --   （poster-images/library/{common|物件の管理会社の id}/ファイル名。ライブラリの行の URL が後から変わった古い URL）／
---   (b)（新しい user_id）／新しい物件コードに同じ画像の (b) の形の追加貼紙の申請がある、または同じ建物追加の申請
---   （property_request_id）の行に同じ画像がある（建物の承認でまとめて付け替わる）。
---   (d) で入れた他の方の画像を、物件コードを変えて別の物件へ持ち出すのはここで止まる（修正依頼1025 検証）。
---   移すときの「同じ画像の申請がある」は (d) より広い（状態・差戻し・点検種別を見ない）。移す先にもう同じ画像があるなら
---   持ち出しにならず、建物の承認で付け替わる仮のコードの行（下書き・未申請で差戻しでない）も通す必要があるため。
+--   (b)（新しい user_id）／新しい物件コード・点検種別で (d) と同じ条件を満たす（差戻し中の持ち主の申請がある）／
+--   変わったのが物件コードだけで、同じ建物追加の申請（property_request_id）の行に同じ画像の持ち主の申請がある
+--   （建物の承認でまとめて付け替わる。仮のコードの行は下書き・未申請で差戻しでないこともあるので、状態は見ない）。
+--   (d) で入れた他の方の画像を、物件コード・点検種別を変えて (d) の条件の外へ持ち出すのはここで止まる（修正依頼1025 検証）。
 -- JWT の無い経路（管理 SQL）は対象外
 DROP FUNCTION IF EXISTS signage.poster_url_normalized(text);
 
@@ -452,6 +452,7 @@ AS $function$
 DECLARE
   v_base text := signage.poster_public_base();
   v_code_changed boolean;
+  v_type_changed boolean;
   v_is_new boolean;
   v_company uuid;
   x jsonb;
@@ -465,11 +466,14 @@ BEGIN
      AND NEW.poster_image IS NOT DISTINCT FROM OLD.poster_image
      AND NEW.extra_posters IS NOT DISTINCT FROM OLD.extra_posters
      AND NEW.property_code IS NOT DISTINCT FROM OLD.property_code
-     AND NEW.user_id IS NOT DISTINCT FROM OLD.user_id THEN
+     AND NEW.user_id IS NOT DISTINCT FROM OLD.user_id
+     AND NEW.inspection_type IS NOT DISTINCT FROM OLD.inspection_type THEN
     RETURN NEW;
   END IF;
   v_code_changed := TG_OP = 'INSERT' OR NEW.property_code IS DISTINCT FROM OLD.property_code
                     OR NEW.user_id IS DISTINCT FROM OLD.user_id;
+  -- 点検種別は (d) の条件なので、1枚目だけ確かめ直す（2枚目以降は点検種別で変わらない）
+  v_type_changed := TG_OP = 'UPDATE' AND NEW.inspection_type IS DISTINCT FROM OLD.inspection_type;
 
   SELECT bp.management_company_id INTO v_company
     FROM signage.signage_master_properties sp
@@ -513,7 +517,10 @@ BEGIN
   END IF;
   v_is_new := TG_OP = 'INSERT' OR v_url IS DISTINCT FROM OLD.poster_image;
   IF NOT v_is_new THEN
-    -- 前から入っていた値で、物件コードか user_id が変わった。新しい物件・user_id で確かめ直す
+    IF NOT v_code_changed AND NOT v_type_changed THEN
+      RETURN NEW;                                                        -- 変わったのは 2枚目以降だけ
+    END IF;
+    -- 前から入っていた値で、物件コード・user_id・点検種別のどれかが変わった。新しい物件・user_id・点検種別で確かめ直す
     IF EXISTS (SELECT 1 FROM signage.signage_poster_library l WHERE l.image_url = v_url) THEN
       IF NOT EXISTS (
            SELECT 1 FROM signage.signage_poster_library l
@@ -538,13 +545,32 @@ BEGIN
     IF signage.poster_is_own_upload(v_url, NEW.user_id, v_base) THEN
       RETURN NEW;
     END IF;
+    -- 他の方の画像（(d) で写したもの）。建物の承認の付け替え: 同じ建物追加の申請の行に同じ画像の持ち主の申請があり、
+    -- 変わったのが物件コードだけ（建物追加の申請・user_id・点検種別はそのまま。物件コードは guard_entry_property_request が
+    -- 仮のコードか承認でできた物件コードに限る）
+    IF NEW.property_request_id IS NOT NULL
+       AND NEW.property_request_id IS NOT DISTINCT FROM OLD.property_request_id
+       AND NEW.user_id IS NOT DISTINCT FROM OLD.user_id
+       AND NEW.inspection_type IS NOT DISTINCT FROM OLD.inspection_type
+       AND EXISTS (
+         SELECT 1 FROM signage.signage_entries e
+          WHERE e.poster_image = v_url
+            AND e.id IS DISTINCT FROM NEW.id
+            AND e.poster_type = 'custom'
+            AND e.property_request_id = NEW.property_request_id
+            AND signage.poster_is_own_upload(e.poster_image, e.user_id, v_base)) THEN
+      RETURN NEW;
+    END IF;
+    -- それ以外は (d) と同じ条件を新しい物件コード・点検種別で満たすこと（差戻し中の、同じ物件・同じ点検種別の持ち主の申請）
     IF EXISTS (
          SELECT 1 FROM signage.signage_entries e
           WHERE e.poster_image = v_url
             AND e.id IS DISTINCT FROM NEW.id
             AND e.poster_type = 'custom'
-            AND (e.property_code = NEW.property_code
-                 OR (NEW.property_request_id IS NOT NULL AND e.property_request_id = NEW.property_request_id))
+            AND e.property_code = NEW.property_code
+            AND e.inspection_type IS NOT DISTINCT FROM NEW.inspection_type
+            AND e.status = 'pending'
+            AND coalesce(btrim(e.review_comment), '') <> ''
             AND signage.poster_is_own_upload(e.poster_image, e.user_id, v_base)) THEN
       RETURN NEW;
     END IF;
