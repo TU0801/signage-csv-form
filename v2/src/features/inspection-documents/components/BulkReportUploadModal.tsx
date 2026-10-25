@@ -10,7 +10,8 @@ import { useAuth } from '@/hooks/useAuth';
 import type { DbInspectionReport } from '@/types/portal';
 import { entryErrorReason } from '@/lib/api/admin-entries';
 import { usePortalData } from '@/features/inspection-portal/hooks/usePortalData';
-import { formatMonth, todayJst } from '@/features/inspection-portal/lib/schedule';
+import { formatMonth, todayJst, typeFlagsMap } from '@/features/inspection-portal/lib/schedule';
+import { buildUnitIndex } from '@/features/inspection-portal/lib/units';
 import { buildReportFileName } from '../lib/fileName';
 import { formatBytes } from '../lib/documents';
 import { validateReportFile } from '../lib/upload';
@@ -131,9 +132,14 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
   // 閉じたら pdfjs の文書を片付ける
   useEffect(() => () => pdf?.pages.destroy(), [pdf]);
 
+  // 毎月・申請不要の点検種別と号機（修正依頼1025 form G4・H1）も選択肢に反映する
+  const targetOptions = useMemo(
+    () => ({ flags: typeFlagsMap(data.typeFlags), units: buildUnitIndex(data.units) }),
+    [data.typeFlags, data.units],
+  );
   const targets = useMemo(
-    () => buildTargets(data.inspections, data.entries, data.reports, vendorId, today),
-    [data.inspections, data.entries, data.reports, vendorId, today],
+    () => buildTargets(data.inspections, data.entries, data.reports, vendorId, today, undefined, targetOptions),
+    [data.inspections, data.entries, data.reports, vendorId, today, targetOptions],
   );
   const targetMap = useMemo(() => new Map(targets.map((t) => [t.key, t])), [targets]);
   const groups = useMemo(() => {

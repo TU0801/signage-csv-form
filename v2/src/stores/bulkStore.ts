@@ -188,10 +188,19 @@ export const useBulkStore = create<BulkState>((set, get) => {
     return validate(row);
   };
 
-  const appendRows = (inputs: BulkRowInput[]) => {
+  /**
+   * 手で足した行を入れる。手で足した行は表の上（予定の行の上）にまとめて置く（修正依頼1025 F1）。
+   * atTop なら一番上（「＋行を追加」）、それ以外は手で足した行の最後（予定の行の直前）
+   */
+  const appendRows = (inputs: BulkRowInput[], atTop = false) => {
     let counter = get().rowIdCounter;
     const newRows = inputs.map((data) => buildRow(++counter, data));
-    set((s) => ({ rows: [...s.rows, ...newRows], rowIdCounter: counter }));
+    set((s) => {
+      if (atTop) return { rows: [...newRows, ...s.rows], rowIdCounter: counter };
+      const firstSchedule = s.rows.findIndex((r) => r.schedule);
+      const at = firstSchedule === -1 ? s.rows.length : firstSchedule;
+      return { rows: [...s.rows.slice(0, at), ...newRows, ...s.rows.slice(at)], rowIdCounter: counter };
+    });
     return newRows;
   };
 
@@ -279,7 +288,8 @@ export const useBulkStore = create<BulkState>((set, get) => {
         };
         return validate(built);
       });
-      const nextRows = [...scheduleRows, ...manual];
+      // 手で足した行を上、予定の行をその下に（修正依頼1025 F1: 「＋行を追加」の行が表の一番上に来る）
+      const nextRows = [...manual, ...scheduleRows];
       const ids = new Set(nextRows.map((r) => r.id));
       set((s) => ({
         rows: nextRows,
@@ -324,17 +334,21 @@ export const useBulkStore = create<BulkState>((set, get) => {
       return row!.id;
     },
 
-    // 最後の行の物件・端末・点検種別・点検日・表示時間・位置を引き継ぐ（備考は空）。v1: js/bulk-table.js addRowWithCopy
+    // 直前に足した行（手で足した行の一番上）の物件・端末・点検種別・点検日・表示時間・位置を引き継ぐ（備考は空）。
+    // 新しい行は表の一番上に入れる（修正依頼1025 F1。v1 は最後の行を写して末尾に足す）。v1: js/bulk-table.js addRowWithCopy
     // 点検予定の行は写さない（手で足した行が無ければ空の行）
     addRowWithCopy: () => {
-      const { rows, addRow } = get();
-      const manual = rows.filter((r) => !r.schedule);
-      const last = manual[manual.length - 1];
+      const { rows } = get();
+      const last = rows.find((r) => !r.schedule);
+      const addTop = (data: BulkRowInput) => {
+        appendRows([data], true);
+        get().triggerAutoSave();
+      };
       if (!last) {
-        addRow({});
+        addTop({});
         return;
       }
-      addRow({
+      addTop({
         propertyCode: last.propertyCode,
         terminalId: last.terminalId,
         vendorName: last.vendorName,

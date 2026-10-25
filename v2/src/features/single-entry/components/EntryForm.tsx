@@ -29,6 +29,9 @@ interface EntryFormProps {
   onCancelEdit: () => void;
   signageOnly: boolean;
   onSignageOnlyChange: (checked: boolean) => void;
+  /** 点検月のみ（既定）／全て（修正依頼1025 D5）。省略すると切り替えを出さない */
+  inspectionMonthOnly?: boolean;
+  onInspectionMonthOnlyChange?: (only: boolean) => void;
   onAdd: () => void;
   onDuplicate: () => void;
   canDuplicate: boolean;
@@ -57,6 +60,8 @@ export function EntryForm({
   onCancelEdit,
   signageOnly,
   onSignageOnlyChange,
+  inspectionMonthOnly,
+  onInspectionMonthOnlyChange,
   onAdd,
   onDuplicate,
   canDuplicate,
@@ -130,6 +135,18 @@ export function EntryForm({
               />
               サイネージ設置物件のみ
             </label>
+            {onInspectionMonthOnlyChange && (
+              <select
+                aria-label="物件の候補"
+                value={inspectionMonthOnly ? 'month' : 'all'}
+                onChange={(e) => onInspectionMonthOnlyChange(e.target.value === 'month')}
+                className="h-6 rounded border border-gray-300 bg-white px-1 text-xs text-gray-700"
+                title="点検月のみ: 今月が点検月の点検（点検月未登録・毎月を含む）がある物件だけ（既定）／全て: 全物件"
+              >
+                <option value="month">点検月のみ</option>
+                <option value="all">全て</option>
+              </select>
+            )}
           </div>
           {/* コード・物件名の一部で絞り込める。「端末なし」はサイネージ未設置の物件 */}
           <Combobox

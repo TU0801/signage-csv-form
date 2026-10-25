@@ -6,7 +6,9 @@ import {
   latestReport,
   monthOf,
   unscheduledInspections,
+  type InspectionTypeFlags,
 } from '@/features/inspection-portal/lib/schedule';
+import { unitLabel, unitsForVendor, type UnitIndex } from '@/features/inspection-portal/lib/units';
 
 /*
  * 報告書一括アップロード（1つの PDF を区間に分けて点検ごとに登録する）の、画面に依らない計算。
@@ -64,6 +66,14 @@ export function inspectionOfVendor(inspection: PortalInspectionRow, vendorId: st
   return inspection.vendor_id === vendorId || inspection.unit_vendor_ids.includes(vendorId);
 }
 
+/** 選択肢の追加の材料（修正依頼1025 form: 点検種別の印と号機） */
+export interface BuildTargetsOptions {
+  /** 点検種別の印。毎月の点検種別は毎月の選択肢を出す（申請不要の点検種別もそのまま選べる） */
+  flags?: ReadonlyMap<string, InspectionTypeFlags>;
+  /** 号機。台が2台以上の点検は、報告書は1台目の行の分（点検 × 対象月で1枚）なので、選択肢は1つで台の No を添える */
+  units?: UnitIndex;
+}
+
 /**
  * 選択肢を作る。点検月のある点検行は予定（今月から monthsAhead か月先まで・過去は点検行の登録月から）、
  * 点検月の無い点検行は1つずつ。並びは対象月の新しい順、最後に点検月未登録。
@@ -76,11 +86,18 @@ export function buildTargets(
   vendorId: string | null,
   today: string,
   monthsAhead = 3,
+  { flags, units }: BuildTargetsOptions = {},
 ): BulkTarget[] {
   const mine = vendorId ? inspections.filter((i) => inspectionOfVendor(i, vendorId)) : inspections;
+  // 台の No（2台以上なら「No1・No2」、1台なら No1）。点検行の設備会社固有コードは出さない（物件名とコードで足りる）
+  const unitSuffix = (i: PortalInspectionRow) => {
+    if (!units) return '';
+    const list = unitsForVendor(units, i, vendorId);
+    return list.length > 1 ? `（${list.map((u, n) => unitLabel(u, n + 1)).join('・')}）` : '';
+  };
   const name = (i: PortalInspectionRow) =>
-    `${i.property_name}（${i.property_code}）・${i.inspection_type_label ?? '点検'}${vendorId ? '' : `・${i.vendor_name ?? '保守会社未設定'}`}`;
-  const scheduled = buildSchedule(mine, entries, reports, { today, monthsAhead })
+    `${i.property_name}（${i.property_code}）・${i.inspection_type_label ?? '点検'}${unitSuffix(i)}${vendorId ? '' : `・${i.vendor_name ?? '保守会社未設定'}`}`;
+  const scheduled = buildSchedule(mine, entries, reports, { today, monthsAhead, flags })
     .sort((a, b) => b.targetMonth.localeCompare(a.targetMonth))
     .map<BulkTarget>((item) => ({
       key: item.key,
@@ -91,7 +108,7 @@ export function buildTargets(
       // 閉じた選択欄でも対象月が分かるように、見出しだけでなく選択肢にも月を入れる
       label: `${formatMonth(item.targetMonth)}・${name(item.inspection)}`,
     }));
-  const unscheduled = unscheduledInspections(mine)
+  const unscheduled = unscheduledInspections(mine, flags)
     .slice()
     .sort(
       (a, b) =>

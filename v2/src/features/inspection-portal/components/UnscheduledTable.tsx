@@ -3,7 +3,14 @@ import { Button } from '@/components/ui/Button';
 import type { DbInspectionReport, PortalEntryRow, PortalInspectionRow } from '@/types/portal';
 import { rowActions, type PortalRole } from '../lib/actions';
 import type { StatusOf } from '../lib/filters';
-import { applicationState, focusEntry, formatMonth, monthOf, type ScheduleItem } from '../lib/schedule';
+import {
+  applicationState,
+  focusEntry,
+  formatMonth,
+  monthOf,
+  type InspectionTypeFlags,
+  type ScheduleItem,
+} from '../lib/schedule';
 import { portalColumns, ReportCell, ReviewButtons } from './ScheduleTable';
 import { StatusBadge } from './StatusBadge';
 
@@ -24,6 +31,7 @@ export function buildUnscheduledItems(
   inspections: PortalInspectionRow[],
   entries: PortalEntryRow[],
   reports: DbInspectionReport[],
+  flags?: ReadonlyMap<string, InspectionTypeFlags>,
 ): UnscheduledItem[] {
   return inspections.map((inspection) => {
     const mine = entries
@@ -45,6 +53,7 @@ export function buildUnscheduledItems(
       overdueUnapplied: false,
       entries: mine,
       report,
+      ...(flags?.get(inspection.inspection_type_id)?.reportOnly ? { reportOnly: true } : {}),
     };
   });
 }
@@ -93,7 +102,7 @@ export function UnscheduledTable({
         const a = rowActions(item, role);
         const resubmit = a.apply?.kind === 'resubmit' ? a.apply.entry : null;
         // 点検月が無いので、差戻し中でも別の月の申請は出せる（申請は常に出す）
-        return { item, a, resubmit, canApply: a.report };
+        return { item, a, resubmit, canApply: a.report && !item.reportOnly };
       }),
     [items, role],
   );

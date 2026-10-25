@@ -88,6 +88,30 @@ export function buildPropertyOptions(
   return options;
 }
 
+/**
+ * 「点検月のみ」（修正依頼1025 D5。既定）で物件の候補に残す物件コード。保守会社の点検行のうち、
+ * 点検月にその月（今月）を含むもの・点検月が未登録のもの・毎月の点検種別のものがある物件。
+ * 物件コードの書式の揺れ（120410 と 120410-00）は吸収する（normalizePropertyCode と同じ）
+ */
+export function inspectionMonthPropertyCodes(
+  inspections: { property_code: string; inspection_type_id: string; inspection_months: number[] }[],
+  month: number,
+  monthlyTypeIds: ReadonlySet<string> = new Set(),
+): Set<string> {
+  const codes = new Set<string>();
+  inspections.forEach((i) => {
+    if (i.inspection_months.length === 0 || i.inspection_months.includes(month) || monthlyTypeIds.has(i.inspection_type_id)) {
+      codes.add(i.property_code.trim().replace(/-00$/, ''));
+    }
+  });
+  return codes;
+}
+
+/** 物件が「点検月のみ」の候補に入るか（inspectionMonthPropertyCodes の結果で判定） */
+export function inInspectionMonth(codes: ReadonlySet<string>, propertyCode: string): boolean {
+  return codes.has(propertyCode.trim().replace(/-00$/, ''));
+}
+
 /** 管理会社フィルターの「未設定」の値（'' = 全て、それ以外は会社 ID） */
 export const MANAGEMENT_COMPANY_NONE = '__none__';
 

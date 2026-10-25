@@ -62,7 +62,27 @@ describe('bulkStore (v1 js/bulk-table.js / bulk-modals.js の行操作)', () => 
   it('add-row copies the last row except remarks and detail settings', () => {
     s().addRow({ propertyCode: 'z0001A01', terminalId: 'T-A2', inspectionType: '消防設備点検', remarks: 'x', noticeText: '案内', position: 3 });
     s().addRowWithCopy();
-    expect(s().rows[1]).toMatchObject({ propertyCode: 'z0001A01', terminalId: 'T-A2', remarks: '', noticeText: '', position: 3, isValid: true });
+    // 新しい行は表の一番上（修正依頼1025 F1）
+    expect(s().rows[0]).toMatchObject({ propertyCode: 'z0001A01', terminalId: 'T-A2', remarks: '', noticeText: '', position: 3, isValid: true });
+    expect(s().rows[1]).toMatchObject({ remarks: 'x' });
+  });
+
+  it('「＋行を追加」の行は予定の行より上（表の一番上）に入り、直前に足した行を写す（修正依頼1025 F1）', () => {
+    const meta = { key: 'i1:2026-11-01', inspectionId: 'i1', targetMonth: '2026-11-01', locked: false, propertyName: '物件Z', terminalIds: [] };
+    s().syncScheduleRows([{ meta, row: { propertyCode: 'z9999A01', inspectionType: '消防設備点検' } }]);
+    s().addRow({ propertyCode: 'z0001A01', inspectionType: '消防設備点検' });
+    s().addRowWithCopy();
+    s().updateRow(s().rows[0]!.id, { inspectionType: '定期清掃' });
+    s().addRowWithCopy();
+    expect(s().rows.map((r) => [r.schedule ? 'schedule' : 'manual', r.inspectionType])).toEqual([
+      ['manual', '定期清掃'],
+      ['manual', '定期清掃'],
+      ['manual', '消防設備点検'],
+      ['schedule', '消防設備点検'],
+    ]);
+    // 予定を入れ直しても手で足した行が上のまま
+    s().syncScheduleRows([{ meta, row: { propertyCode: 'z9999A01', inspectionType: '消防設備点検' } }]);
+    expect(s().rows.map((r) => !!r.schedule)).toEqual([false, false, false, true]);
   });
 
   it('changing the property picks its first terminal; start date fills an empty end date', () => {
@@ -145,20 +165,22 @@ describe('bulkStore (v1 js/bulk-table.js / bulk-modals.js の行操作)', () => 
     const meta = { key: 'i1:2026-11-01', inspectionId: 'i1', targetMonth: '2026-11-01', locked: false, propertyName: '物件Z', terminalIds: [] };
     s().syncScheduleRows([{ meta, row: { propertyCode: 'z9999A01', inspectionType: '消防設備点検' } }]);
     s().addRow({ propertyCode: 'z0001A01', inspectionType: '消防設備点検' });
-    const scheduleId = s().rows[0]!.id;
+    // 手で足した行は予定の行の上（修正依頼1025 F1）
+    const scheduleRow = () => s().rows.find((r) => r.schedule)!;
+    const scheduleId = scheduleRow().id;
     // 保守会社の物件マスターに無い物件・端末0台でも、予定の行はエラーにしない（点検一覧の申請と同じ）
-    expect(s().rows[0]).toMatchObject({ isValid: true, startDate: '' });
+    expect(scheduleRow()).toMatchObject({ isValid: true, startDate: '' });
     s().changeStartDate(scheduleId, '2026-11-12');
     s().syncScheduleRows([{ meta, row: { propertyCode: 'z9999A01', inspectionType: '消防設備点検' } }]);
-    expect(s().rows[0]).toMatchObject({ id: scheduleId, startDate: '2026-11-12', endDate: '2026-11-12' });
+    expect(scheduleRow()).toMatchObject({ id: scheduleId, startDate: '2026-11-12', endDate: '2026-11-12' });
     vi.advanceTimersByTime(1000);
     const saved = JSON.parse(localStorage.getItem('bulk_autosave_user-1')!) as { rows: { propertyCode: string }[] };
     expect(saved.rows.map((r) => r.propertyCode)).toEqual(['z0001A01']);
     s().replaceRows([{ propertyCode: '120442-00' }]);
-    expect(s().rows.map((r) => r.propertyCode)).toEqual(['z9999A01', '120442-00']);
+    expect(s().rows.map((r) => r.propertyCode)).toEqual(['120442-00', 'z9999A01']);
     // 申請済みになったら読み取り（入力していた値は申請の値に置き換わる）
     s().syncScheduleRows([{ meta: { ...meta, locked: true }, row: { propertyCode: 'z9999A01', startDate: '2026-11-20' } }]);
-    expect(s().rows[0]).toMatchObject({ startDate: '2026-11-20', schedule: { locked: true } });
+    expect(scheduleRow()).toMatchObject({ startDate: '2026-11-20', schedule: { locked: true } });
   });
 
   it('申請した予定の行の入力を空に戻すと、読み直しても申請の対象・未送信の入力にならない（点検月未登録の行）', () => {

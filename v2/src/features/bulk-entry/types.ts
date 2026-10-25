@@ -63,6 +63,14 @@ export interface BulkScheduleMeta {
   propertyName: string;
   /** 物件の端末 ID（0台の物件も申請できる＝点検一覧の申請と同じ） */
   terminalIds: string[];
+  /** 物件の下に出す設備会社固有の No（台の unit_code・点検行の設備会社固有コード。修正依頼1025 H2）。無ければ物件コードだけ */
+  unitCode?: string | null;
+  /** 2台目以降の行（H1・H3）。表示だけ（locked）。申請・報告書UP・完了連絡は1台目の行 */
+  secondary?: boolean;
+  /** 申請不要（報告書のみ）の点検（H4/G4）。申請の欄を出さない（locked） */
+  reportOnly?: boolean;
+  /** 点検月以外の月の行（D5「全ての月」） */
+  offMonth?: boolean;
 }
 
 /** 行を作るときに渡す値（v1 addRow の data） */

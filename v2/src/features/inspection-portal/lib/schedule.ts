@@ -1,4 +1,11 @@
-import type { DbInspectionReport, PortalEntryRow, PortalInspectionRow, ReportStatus } from '@/types/portal';
+import type {
+  DbInspectionReport,
+  InspectionTypeFlagRow,
+  PortalEntryRow,
+  PortalInspectionRow,
+  PortalUnitRow,
+  ReportStatus,
+} from '@/types/portal';
 
 /*
  * 点検ポータルの「予定」（点検行 × 対象月）と、その申請・報告書の状況を組み立てる。
@@ -62,6 +69,39 @@ export interface ScheduleItem {
   entries: PortalEntryRow[];
   /** この予定の最新の報告書（置き換え済み・削除済みを除く） */
   report: DbInspectionReport | null;
+  /** 申請不要（報告書のみ）の点検種別（修正依頼1025 H4/G4）。申請の欄を出さず、超過にしない */
+  reportOnly?: boolean;
+  /** 点検月『毎月』の点検種別。毎月の行を出し、超過にしない */
+  monthly?: boolean;
+  /** 点検月以外の月の行（「全ての月」で出す。D5）。超過にしない */
+  offMonth?: boolean;
+  /** 物件の下に出す設備会社固有の No（台の unit_code、台が無ければ点検行の設備会社固有コード。H2） */
+  unitCode?: string | null;
+  /** 台ごとに分けた行の台（H1。台が2台以上の点検だけ） */
+  unit?: PortalUnitRow;
+  /** 2台目以降の行（H3: 申請・報告書UP・完了連絡は1台目の行だけ。表示だけでステータスは1台目と同じ） */
+  secondary?: boolean;
+}
+
+/** 点検種別の印（signage_inspection_type_flags） */
+export interface InspectionTypeFlags {
+  reportOnly: boolean;
+  monthly: boolean;
+}
+
+/** 点検種別 ID → 印。行が無い点検種別は印なし */
+export function typeFlagsMap(rows: InspectionTypeFlagRow[]): Map<string, InspectionTypeFlags> {
+  return new Map(rows.map((r) => [r.inspection_type_id, { reportOnly: !!r.report_only, monthly: !!r.monthly }]));
+}
+
+const EVERY_MONTH = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+/** 予定を作る点検月。毎月の点検種別は 1〜12 */
+export function scheduleMonths(
+  inspection: Pick<PortalInspectionRow, 'inspection_type_id' | 'inspection_months'>,
+  flags?: ReadonlyMap<string, InspectionTypeFlags>,
+): number[] {
+  return flags?.get(inspection.inspection_type_id)?.monthly ? EVERY_MONTH : inspection.inspection_months;
 }
 
 /** 申請として数える状態（承認待ち・承認済み・取込済み）。pending は未申請（差戻しを含む） */
@@ -130,40 +170,56 @@ export interface BuildScheduleOptions {
   today: string;
   /** 今月から何か月先まで出すか（既定 3） */
   monthsAhead?: number;
+  /** 点検種別の印（申請不要・毎月。修正依頼1025 H4/G4） */
+  flags?: ReadonlyMap<string, InspectionTypeFlags>;
+  /**
+   * 点検月以外の月の行も出す（D5「全ての月」）。点検月以外の月は今月以降と、申請がある過去の月だけ。
+   * 点検月以外の訪問の申請（対象月はその月）ができる。超過にはしない
+   */
+  allMonths?: boolean;
 }
 
 /**
  * 予定を組み立てる。点検月がある点検行だけが対象（点検月の無い点検行は unscheduledInspections で別に出す）。
  * 過去の月は、点検行の登録月（schedule_from）から今月の前月まで全部を出す（超過を見落とさないため）。
+ * 毎月の点検種別は点検月を 1〜12 とみなす。申請不要・毎月の点検種別と点検月以外の月の行は超過にしない
  */
 export function buildSchedule(
   inspections: PortalInspectionRow[],
   entries: PortalEntryRow[],
   reports: DbInspectionReport[],
-  { today, monthsAhead = 3 }: BuildScheduleOptions,
+  { today, monthsAhead = 3, flags, allMonths = false }: BuildScheduleOptions,
 ): ScheduleItem[] {
   const currentMonth = monthOf(today);
   const lastMonth = addMonths(currentMonth, monthsAhead);
   const items: ScheduleItem[] = [];
   for (const inspection of inspections) {
-    const months = new Set(inspection.inspection_months);
+    const months = new Set(scheduleMonths(inspection, flags));
     if (months.size === 0) continue;
+    const flag = flags?.get(inspection.inspection_type_id);
     for (let m = monthOf(inspection.schedule_from); m <= lastMonth; m = addMonths(m, 1)) {
-      if (!months.has(Number(m.slice(5, 7)))) continue;
+      const offMonth = !months.has(Number(m.slice(5, 7)));
+      if (offMonth && !allMonths) continue;
       const matched = entries
         .filter((e) => entryMatches(e, inspection, m))
         .sort((a, b) => b.created_at.localeCompare(a.created_at));
+      // 点検月以外の過去の月は、申請があるときだけ（無い月まで出すと過去の月が全部並ぶ）
+      if (offMonth && m < currentMonth && matched.length === 0) continue;
       const timing: Timing = m < currentMonth ? 'overdue' : m === currentMonth ? 'current' : 'upcoming';
       const application = applicationState(matched);
+      const noOverdue = offMonth || !!flag?.reportOnly || !!flag?.monthly;
       items.push({
         key: `${inspection.inspection_id}:${m}`,
         inspection,
         targetMonth: m,
         timing,
         application,
-        overdueUnapplied: timing === 'overdue' && !matched.some((e) => APPLIED_STATUSES.has(e.status)),
+        overdueUnapplied: !noOverdue && timing === 'overdue' && !matched.some((e) => APPLIED_STATUSES.has(e.status)),
         entries: matched,
         report: latestReport(reports, inspection.inspection_id, m),
+        ...(flag?.reportOnly ? { reportOnly: true } : {}),
+        ...(flag?.monthly ? { monthly: true } : {}),
+        ...(offMonth ? { offMonth: true } : {}),
       });
     }
   }
@@ -175,7 +231,10 @@ export function buildSchedule(
   );
 }
 
-/** 点検月が登録されていない点検行（超過の判定ができない。申請は月を選んでできる） */
-export function unscheduledInspections(inspections: PortalInspectionRow[]): PortalInspectionRow[] {
-  return inspections.filter((i) => i.inspection_months.length === 0);
+/** 点検月が登録されていない点検行（超過の判定ができない。申請は月を選んでできる）。毎月の点検種別は予定に出すので除く */
+export function unscheduledInspections(
+  inspections: PortalInspectionRow[],
+  flags?: ReadonlyMap<string, InspectionTypeFlags>,
+): PortalInspectionRow[] {
+  return inspections.filter((i) => scheduleMonths(i, flags).length === 0);
 }

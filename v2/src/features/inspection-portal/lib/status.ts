@@ -1,5 +1,5 @@
 import type { DbInspectionCompletion } from '@/types/database';
-import { focusEntry, type ScheduleItem } from './schedule';
+import { focusEntry, monthOf, type ScheduleItem } from './schedule';
 
 /*
  * 点検のステータス（修正依頼1024 B14）。既存の状態（申請・報告書・完了連絡）から自動で決める。
@@ -99,13 +99,18 @@ export function inspectionStatus(
 
 /** 行の完了連絡の有無を含めてステータスを決める */
 export function itemStatus(
-  item: Pick<ScheduleItem, 'application' | 'overdueUnapplied' | 'entries' | 'report' | 'targetMonth' | 'inspection'>,
+  item: Pick<ScheduleItem, 'application' | 'overdueUnapplied' | 'entries' | 'report' | 'targetMonth' | 'inspection' | 'reportOnly'>,
   completed: ReadonlySet<string>,
   today: string,
 ): InspectionStatus {
   const month = completionMonth(item);
   const done = !!month && completed.has(completionKey(item.inspection.inspection_id, month));
-  return inspectionStatus(item, { completed: done, today });
+  const status = inspectionStatus(item, { completed: done, today });
+  // 申請不要（報告書のみ）の点検は申請が無いので、対象月が過ぎて報告書・完了連絡が無ければ「報告書未提出」（修正依頼1025 H4/G4）
+  if (item.reportOnly && status === 'not_applied' && item.targetMonth && item.targetMonth < monthOf(today)) {
+    return 'report_missing';
+  }
+  return status;
 }
 
 export function countStatuses(statuses: InspectionStatus[]): Record<InspectionStatus, number> {

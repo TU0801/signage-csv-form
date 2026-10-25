@@ -63,6 +63,7 @@ const portalApi = vi.hoisted(() => ({ fail: false, extra: [] as Record<string, u
 vi.mock('@/lib/api/portal', async () => {
   const { makeInspection } = await import('@/features/inspection-portal/__tests__/fixtures');
   return {
+    fetchInspectionTypeFlags: () => Promise.resolve([]),
     fetchPortalInspections: () =>
       portalApi.fail
         ? Promise.reject(new Error('portal failed'))
@@ -82,6 +83,11 @@ vi.mock('@/lib/api/single-entry', async (importOriginal) => {
     insertEntries: (...args: unknown[]) => insertEntries(...args),
   };
 });
+
+/** 物件の候補を「全て」にする（既定は点検月のみ。修正依頼1025 D5） */
+function showAllProperties() {
+  fireEvent.change(screen.getByLabelText('物件の候補'), { target: { value: 'all' } });
+}
 
 /** 検索つきの選択欄で、コードで絞って先頭の候補を選ぶ */
 function pick(name: string, query: string) {
@@ -203,6 +209,7 @@ describe('1件入力画面（管理者の管理会社フィルター）', () => 
       fireEvent.click(screen.getByRole('combobox', { name: '物件コード *' }));
       expect(screen.getByRole('listbox')).toBeInTheDocument();
     });
+    showAllProperties();
     pick('物件コード *', '120273-00');
     pick('点検工事案内 *', '排水管');
     fireEvent.click(screen.getByRole('button', { name: 'データを追加' }));
@@ -371,6 +378,7 @@ describe('1件入力画面（物件を選んだときの点検工事案内。修
     fireEvent.change(screen.getByLabelText('案内カテゴリ'), { target: { value: '点検' } });
     expect(typeBox()).toHaveValue('エレベーター定期点検');
     // 120273-00 には点検行が無い
+    showAllProperties();
     pick('物件コード *', '120273-00');
     expect(typeBox()).toHaveValue('エレベーター定期点検');
     expect(screen.getByLabelText('案内カテゴリ')).toHaveValue('点検');
@@ -386,6 +394,7 @@ describe('1件入力画面（記録する保守会社。修正依頼1024 本番�
     );
     await waitFor(() => expect(screen.getByRole('combobox', { name: '点検工事案内 *' })).toHaveValue('排水管清掃'));
     // 120273-00 には点検行が無いので結び付かない
+    showAllProperties();
     pick('物件コード *', '120273-00');
     fireEvent.click(screen.getByRole('button', { name: 'データを追加' }));
     await screen.findByRole('table');
@@ -394,5 +403,39 @@ describe('1件入力画面（記録する保守会社。修正依頼1024 本番�
     const row = (insertEntries.mock.calls[0]![0] as Record<string, unknown>[])[0]!;
     expect(row).not.toHaveProperty('property_inspection_id');
     expect(row).toMatchObject({ vendor_name: '三菱電機ﾋﾞﾙｿﾘｭｰｼｮﾝｽﾞ㈱', emergency_contact: '0120-000-000' });
+  });
+});
+
+describe('1件入力画面（物件の候補: 点検月のみ／全て。修正依頼1025 D5）', () => {
+  it('既定は今月が点検月の点検（点検月未登録を含む）がある物件だけ。「全て」で全物件', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-20T03:00:00Z'));
+    try {
+      portalApi.extra = [
+        { inspection_id: 'i-oct', property_code: '120273-00', inspection_type_label: '外壁工事', vendor_id: 'v-mine', inspection_months: [4, 10] },
+        { inspection_id: 'i-nov', property_code: '2010', inspection_type_label: '外壁工事', vendor_id: 'v-mine', inspection_months: [5, 11] },
+      ];
+      render(
+        <ToastProvider>
+          <SingleEntryPage />
+        </ToastProvider>,
+      );
+      const propertyInput = await screen.findByRole('combobox', { name: '物件コード *' });
+      const codes = () => {
+        fireEvent.click(propertyInput);
+        const list = within(screen.getByRole('listbox'))
+          .getAllByRole('option')
+          .map((o) => o.textContent?.split(' ')[0]);
+        fireEvent.keyDown(propertyInput, { key: 'Escape' });
+        return list;
+      };
+      expect(screen.getByLabelText('物件の候補')).toHaveValue('month');
+      // 10月が点検月の 120273-00 と、点検月未登録の z0015A01。11月だけの 2010 は出さない
+      await waitFor(() => expect(codes()).toEqual(['120273-00', 'z0015A01']));
+      showAllProperties();
+      expect(codes()).toEqual(['2010', '120273-00', 'z0015A01']);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
