@@ -419,6 +419,8 @@ GRANT EXECUTE ON FUNCTION signage.orphan_poster_images() TO authenticated, servi
 --   (b)（新しい user_id）／新しい物件コードに同じ画像の (b) の形の追加貼紙の申請がある、または同じ建物追加の申請
 --   （property_request_id）の行に同じ画像がある（建物の承認でまとめて付け替わる）。
 --   (d) で入れた他の方の画像を、物件コードを変えて別の物件へ持ち出すのはここで止まる（修正依頼1025 検証）。
+--   移すときの「同じ画像の申請がある」は (d) より広い（状態・差戻し・点検種別を見ない）。移す先にもう同じ画像があるなら
+--   持ち出しにならず、建物の承認で付け替わる仮のコードの行（下書き・未申請で差戻しでない）も通す必要があるため。
 -- JWT の無い経路（管理 SQL）は対象外
 DROP FUNCTION IF EXISTS signage.poster_url_normalized(text);
 
