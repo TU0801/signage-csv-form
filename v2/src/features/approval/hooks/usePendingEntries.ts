@@ -87,17 +87,20 @@ export function usePendingEntries() {
 
   // v1: js/admin-pending.js approveSelected
   const approveBulk = useCallback(
-    async (ids: string[]) => {
-      if (ids.length === 0) return;
-      // 1件ずつ（版を比べるため）。全件の結果を待ってから読み直し、失敗があれば最初の理由で知らせる
+    async (ids: string[]): Promise<{ succeeded: number; failed: number; errors: unknown[] }> => {
+      if (ids.length === 0) return { succeeded: 0, failed: 0, errors: [] };
+      // 1件ずつ（版を比べるため）。全件の結果を待ってから読み直し、通った件数と断られた件数（とその理由）を返す
+      // （一部だけ通ったときに、何件承認できたかを伝えるため。修正依頼1026 後続）
       const results = isManagement
         ? await Promise.allSettled(ids.map((id) => approveEntryChecked(id, versionOf(id))))
         : await approveEntries(ids.map((id) => ({ id, updatedAt: versionOf(id) })));
       // v1: js/admin-pending.js → js/admin.js loadAllData（データ一覧の開始日が空なら今日を入れる）
       applyDefaultStartDate();
       await fetchPendingEntries();
-      const failed = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
-      if (failed[0]) throw failed[0].reason;
+      const errors = results
+        .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+        .map((r) => r.reason as unknown);
+      return { succeeded: results.length - errors.length, failed: errors.length, errors };
     },
     [fetchPendingEntries, isManagement, versionOf],
   );

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildSchedule } from '../lib/schedule';
 import { buildUnscheduledItems } from '../components/UnscheduledTable';
-import { completionKey, completionMonth, inspectionStatus, isRowCompleted, itemStatus, rowUndoCompletionUnitId } from '../lib/status';
+import { completionKey, completionMonth, inspectionStatus, isRowCompleted, itemStatus, rowUndoCompletionUnitIds } from '../lib/status';
 import type { PortalUnitRow } from '@/types/portal';
 import { makeEntry, makeInspection, makeReport } from './fixtures';
 
@@ -60,8 +60,16 @@ describe('点検のステータス（B14）', () => {
     const item = { ...novItem([]), unit: { unit_id: 'u1' } as PortalUnitRow };
     const unitless = new Set([completionKey('i1', '2026-11-01')]);
     expect(isRowCompleted(item, unitless)).toBe(true);
-    expect(rowUndoCompletionUnitId(item, unitless)).toBeNull();
+    expect(rowUndoCompletionUnitIds(item, unitless)).toEqual([null]);
     // その台の完了連絡があれば台で取り消す
-    expect(rowUndoCompletionUnitId(item, new Set([completionKey('i1', '2026-11-01', 'u1')]))).toBe('u1');
+    expect(rowUndoCompletionUnitIds(item, new Set([completionKey('i1', '2026-11-01', 'u1')]))).toEqual(['u1']);
+  });
+
+  it('台ごとの行に台の完了連絡と台なしの完了連絡が両方あれば、1回の取り消しで両方を取り消す（台が先）', () => {
+    const item = { ...novItem([]), unit: { unit_id: 'u1' } as PortalUnitRow };
+    const both = new Set([completionKey('i1', '2026-11-01'), completionKey('i1', '2026-11-01', 'u1')]);
+    expect(rowUndoCompletionUnitIds(item, both)).toEqual(['u1', null]);
+    // 別の台の完了連絡は取り消さない
+    expect(rowUndoCompletionUnitIds(item, new Set([completionKey('i1', '2026-11-01', 'u2')]))).toEqual([]);
   });
 });

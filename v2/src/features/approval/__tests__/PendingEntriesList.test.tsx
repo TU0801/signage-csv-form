@@ -20,7 +20,7 @@ vi.mock('../hooks/usePendingEntries', () => ({
     sendBackEntry: vi.fn(),
   }),
 }));
-vi.mock('@/lib/api/admin-entries', () => ({ entryErrorReason: () => '理由' }));
+vi.mock('@/lib/api/admin-entries', () => ({ entryErrorReason: () => '理由', STALE_ENTRY_MESSAGE: '修正されました' }));
 vi.mock('@/lib/api/property-requests', () => ({
   fetchPropertyRequestsByIds: async () => [{ id: 'req-1', property_name: '新築マンション' }],
 }));

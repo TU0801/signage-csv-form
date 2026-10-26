@@ -499,6 +499,54 @@ describe('BulkEntryPage (v1 js/bulk.js init / adminVendorSelect)', () => {
       await waitFor(() => expect(formApi.markCompleted).toHaveBeenCalledWith('i1', '2026-11-01', 'u2'));
     });
 
+    describe('台の完了連絡と台なしの完了連絡が両方ある行の取り消し（修正依頼1026 後続）', () => {
+      const twoUnits = () => {
+        portalApi.fetchPortalInspectionUnits.mockResolvedValue([
+          { inspection_id: 'i1', unit_id: 'u1', unit_code: 'No1', unit_sort: 0, maintainer_id: 'v1', inspection_months: [], inspected_on: null, equipment_code: null },
+          { inspection_id: 'i1', unit_id: 'u2', unit_code: 'No2', unit_sort: 1, maintainer_id: 'v1', inspection_months: [], inspected_on: null, equipment_code: null },
+        ]);
+        // 5月分: No1 の台の完了連絡と、台なしの完了連絡（全部の台の行に効く）
+        formApi.fetchCompletions.mockResolvedValue([
+          { id: 'c-u1', property_inspection_id: 'i1', target_month: '2026-05-01', property_unit_id: 'u1', vendor_id: 'v1', completed_at: '', completed_by: null },
+          { id: 'c-all', property_inspection_id: 'i1', target_month: '2026-05-01', property_unit_id: null, vendor_id: 'v2', completed_at: '', completed_by: null },
+        ]);
+      };
+      const mayRows = () =>
+        screen.getAllByTestId('target-month').filter((el) => el.textContent === '2026年5月').map((el) => el.closest('tr')!);
+
+      it('1回の取り消しで両方を取り消し、ほかの台の行の完了も外れることを確認で知らせる', async () => {
+        twoUnits();
+        formApi.unmarkCompleted.mockResolvedValue(true);
+        renderPage();
+        await waitFor(() => expect(mayRows()).toHaveLength(2));
+        fireEvent.click(within(mayRows()[0]!).getByRole('button', { name: '完了取消' }));
+        expect(await screen.findByText(/ほかの台の行の「点検完了」も外れます/)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+        await waitFor(() => expect(formApi.unmarkCompleted).toHaveBeenCalledTimes(2));
+        expect(formApi.unmarkCompleted.mock.calls).toEqual([
+          ['i1', '2026-05-01', 'u1'],
+          ['i1', '2026-05-01', null],
+        ]);
+        expect(await screen.findByText('完了連絡を取り消しました')).toBeInTheDocument();
+      });
+
+      it('片方が断られたら、取り消した方と取り消せなかった方を知らせる', async () => {
+        twoUnits();
+        formApi.unmarkCompleted
+          .mockResolvedValueOnce(true)
+          .mockRejectedValueOnce({ code: '42501', message: 'この点検の完了連絡を取り消す権限がありません' });
+        renderPage();
+        await waitFor(() => expect(mayRows()).toHaveLength(2));
+        fireEvent.click(within(mayRows()[0]!).getByRole('button', { name: '完了取消' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+        expect(
+          await screen.findByText(
+            'No1 の完了連絡は取り消しました。点検全体（台なし）の完了連絡は取り消せませんでした: この点検の完了連絡を取り消す権限がありません（この行は「点検完了」のままです）',
+          ),
+        ).toBeInTheDocument();
+      });
+    });
+
     it('申請済み（承認前）の行は『修正』で入力できる状態にし、『申請する』で新しい申請を作らずその申請を直す（修正依頼1026 I11）', async () => {
       portalApi.fetchPortalEntries.mockResolvedValue([
         makeEntry({ id: 'e-nov', property_code: 'z0001A01', inspection_type: '消防設備点検', inspection_start: '2026-11-10', remarks: '9時〜' }),

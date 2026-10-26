@@ -65,7 +65,7 @@ import {
   isRowCompleted,
   itemStatus,
   rowCompletionKey,
-  rowUndoCompletionUnitId,
+  rowUndoCompletionUnitIds,
 } from '@/features/inspection-portal/lib/status';
 import { buildUnscheduledItems } from '@/features/inspection-portal/components/UnscheduledTable';
 import { ApplyModal, type ApplyTarget } from '@/features/inspection-portal/components/ApplyModal';
@@ -414,23 +414,62 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
     [isAdmin, profileVendorId],
   );
 
-  // unitId: 記録・取り消しする完了連絡の台（台ごとの行は台。台なしの完了連絡を取り消すときは null）
+  // unitIds: 記録・取り消しする完了連絡の台（台ごとの行は台、台なしの完了連絡は null）。記録は1つ。取り消しは
+  // その行を完了にしている完了連絡すべて（台ごとと台なしが両方あれば両方。修正依頼1026 後続）
   const toggleCompletion = useCallback(
-    async (item: ScheduleItem, month: string, undo: boolean, unitId: string | null) => {
+    async (item: ScheduleItem, month: string, undo: boolean, unitIds: (string | null)[]) => {
       const unit = item.unit && item.unitCode ? `・${item.unitCode}` : '';
       const subject = `${formatMonth(month)}・${item.inspection.property_name}${unit}・${item.inspection.inspection_type_label ?? ''}`;
+      // 台ごとの行で台なしの完了連絡（点検の全体）を取り消すと、ほかの台の行の完了も外れる
+      const unitlessOnUnitRow = !!item.unit && unitIds.includes(null);
       const ok = await confirm(
         undo
-          ? `完了連絡を取り消しますか？\n${subject}`
+          ? `完了連絡を取り消しますか？\n${subject}` +
+              (unitlessOnUnitRow
+                ? '\nこの点検全体（台なし）の完了連絡も取り消すため、ほかの台の行の「点検完了」も外れます'
+                : '')
           : `点検の完了を連絡しますか？\n${subject}\n報告書が無くても「点検完了」になります（あとで取り消せます）`,
       );
       if (!ok) return;
-      const key = completionKey(item.inspection.inspection_id, month, item.unit?.unit_id);
+      const id = item.inspection.inspection_id;
+      const key = completionKey(id, month, item.unit?.unit_id);
       setCompletingKey(key);
       try {
-        if (undo) await unmarkCompleted(item.inspection.inspection_id, month, unitId);
-        else await markCompleted(item.inspection.inspection_id, month, unitId);
-        addToast(undo ? '完了連絡を取り消しました' : '完了を連絡しました', 'success');
+        if (!undo) {
+          await markCompleted(id, month, unitIds[0] ?? null);
+          addToast('完了を連絡しました', 'success');
+          await portal.refetch();
+          return;
+        }
+        // 1つずつ取り消し、断られても残りを試す（消えた分と消えなかった分を知らせるため）
+        const labelOf = (u: string | null) =>
+          u ? `${item.unitCode ?? '台'} の完了連絡` : item.unit ? '点検全体（台なし）の完了連絡' : '完了連絡';
+        const removed: string[] = [];
+        const failed: { label: string; reason: string; stillThere: boolean }[] = [];
+        for (const u of unitIds) {
+          try {
+            if (await unmarkCompleted(id, month, u)) removed.push(labelOf(u));
+            else
+              failed.push({
+                label: labelOf(u),
+                reason: '見つかりませんでした（ほかの操作で取り消された可能性があります）',
+                stillThere: false,
+              });
+          } catch (err) {
+            console.error('Completion undo failed:', err);
+            failed.push({ label: labelOf(u), reason: entryErrorReason(err), stillThere: true });
+          }
+        }
+        if (failed.length === 0) {
+          addToast('完了連絡を取り消しました', 'success');
+        } else if (removed.length === 0 && failed.length === 1) {
+          addToast(`取り消しに失敗しました: ${failed[0]!.reason}`, 'error');
+        } else {
+          const notDone = failed.map((f) => `${f.label}は取り消せませんでした: ${f.reason}`).join('。');
+          const still = failed.some((f) => f.stillThere) ? '（この行は「点検完了」のままです）' : '';
+          addToast(removed.length > 0 ? `${removed.join('と')}は取り消しました。${notDone}${still}` : `${notDone}${still}`, 'error');
+        }
+        // 一部だけ取り消せたときも読み直す（消えた分を画面に出す）
         await portal.refetch();
       } catch (err) {
         console.error('Completion failed:', err);
@@ -476,8 +515,8 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       const month = completionMonth(item);
       const key = rowCompletionKey(item);
       const hasCompletion = isRowCompleted(item, completed);
-      // 取り消すのはこの行の台の完了連絡。台ごとに分ける前の台なしの完了連絡（点検の全体）ならそれを取り消す
-      const undoUnit = rowUndoCompletionUnitId(item, completed);
+      // 取り消すのはこの行を完了にしている完了連絡すべて（この行の台の完了連絡と、台ごとに分ける前の台なしの完了連絡＝点検の全体）
+      const undoUnits = rowUndoCompletionUnitIds(item, completed);
       const accepted = item.report?.status === 'accepted';
       const sentBack = item.application === 'sent_back' ? focusEntry(item.entries) : null;
       const busy = !!key && completingKey === key;
@@ -512,7 +551,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
               type="button"
               className={cn(smallBtn, 'border-gray-300 bg-white text-gray-500 hover:bg-gray-100')}
               disabled={busy}
-              onClick={() => void toggleCompletion(item, month!, true, undoUnit)}
+              onClick={() => void toggleCompletion(item, month!, true, undoUnits)}
               title="完了連絡を取り消す"
             >
               完了取消
@@ -523,7 +562,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
                 type="button"
                 className={cn(smallBtn, 'border-green-400 bg-green-50 text-green-800 hover:bg-green-100')}
                 disabled={busy || !month || !!blocked}
-                onClick={() => month && !blocked && void toggleCompletion(item, month, false, item.unit?.unit_id ?? null)}
+                onClick={() => month && !blocked && void toggleCompletion(item, month, false, [item.unit?.unit_id ?? null])}
                 title={
                   blocked ??
                   (month ? '点検の完了を連絡する（報告書が無くても点検完了になります）' : '申請してから完了を連絡できます（対象月が決まらないため）')

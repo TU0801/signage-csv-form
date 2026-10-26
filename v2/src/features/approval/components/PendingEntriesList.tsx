@@ -6,7 +6,8 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
 import { useAuthStore } from '@/stores/authStore';
 import { SendBackDialog } from '@/features/inspection-portal/components/SendBackDialog';
-import { entryErrorReason } from '@/lib/api/admin-entries';
+import { entryErrorReason, STALE_ENTRY_MESSAGE } from '@/lib/api/admin-entries';
+import { bulkApproveMessage } from '../lib/bulkApproveMessage';
 import { EntryEditModal } from '@/features/entries-list/components/EntryEditModal';
 import { useEntryLookups } from '@/features/entries-list/hooks/useEntryLookups';
 import { NAME_COL } from '@/features/entries-list/lib/tableColumns';
@@ -48,8 +49,9 @@ export function PendingEntriesList() {
     sendBackEntry,
   } = usePendingEntries();
   const lookups = useEntryLookups();
-  // 台ごとの申請の台の No（修正依頼1026 I7）。台ごとの申請があるときだけ読む
-  const unitLabels = useUnitLabels(entries.some((e) => !!e.property_unit_id));
+  // 台ごとの申請の台の No（修正依頼1026 I7）。台ごとの申請があるときだけ読み、読み込み済みに無い台が現れたら読み直す
+  const unitIds = useMemo(() => entries.map((e) => e.property_unit_id), [entries]);
+  const unitLabels = useUnitLabels(unitIds);
   const { addToast } = useToast();
   // 管理会社: 承認と差戻しだけ（却下＝削除・編集は管理者だけ）
   const isManagement = useAuthStore((s) => s.profile?.role === 'management');
@@ -158,14 +160,20 @@ export function PendingEntriesList() {
       return;
     }
     try {
-      await approveBulk(ids);
-      setSelectedIds(new Set(blocked));
-      addToast(
-        blocked.length > 0
-          ? `${ids.length}件を承認しました（建物未承認の${blocked.length}件は承認していません）`
-          : `${ids.length}件を承認しました`,
-        'success',
-      );
+      const { succeeded, failed, errors } = await approveBulk(ids);
+      // 承認済みの行は読み直しで一覧から消える。断られた行（修正されていた行など）と建物未承認の行は選んだままにする
+      if (failed === 0) setSelectedIds(new Set(blocked));
+      else console.error('Failed to approve entries:', errors);
+      const reasons = errors.map((e) => entryErrorReason(e));
+      const others = reasons.filter((r) => r !== STALE_ENTRY_MESSAGE);
+      const { message, tone } = bulkApproveMessage({
+        succeeded,
+        stale: reasons.length - others.length,
+        otherFailed: others.length,
+        otherReason: others[0] ?? '',
+        blocked: blocked.length,
+      });
+      addToast(message, tone);
     } catch (err) {
       console.error('Failed to approve entries:', err);
       addToast(`承認に失敗しました: ${entryErrorReason(err)}`, 'error');
