@@ -59,11 +59,12 @@ vi.mock('@/lib/api/relationships', () => ({
   fetchActivePropertyCodes: () => Promise.resolve(['120273-00', 'z0015A01', '2010']),
 }));
 // 申請を結び付ける点検行（portal_inspections。保守会社のアカウントは DB が担当の点検に絞って返す）。点検月の無い点検行はどの月の申請も結び付く
-const portalApi = vi.hoisted(() => ({ fail: false, extra: [] as Record<string, unknown>[] }));
+const portalApi = vi.hoisted(() => ({ fail: false, extra: [] as Record<string, unknown>[], units: [] as Record<string, unknown>[] }));
 vi.mock('@/lib/api/portal', async () => {
   const { makeInspection } = await import('@/features/inspection-portal/__tests__/fixtures');
   return {
     fetchInspectionTypeFlags: () => Promise.resolve([]),
+    fetchPortalInspectionUnits: () => Promise.resolve(portalApi.units),
     fetchPortalInspections: () =>
       portalApi.fail
         ? Promise.reject(new Error('portal failed'))
@@ -114,6 +115,7 @@ beforeEach(() => {
   isAdmin = false;
   portalApi.fail = false;
   portalApi.extra = [];
+  portalApi.units = [];
   requestsApi.rows = [];
   insertEntries.mockReset();
   insertEntries.mockResolvedValue([]);
@@ -337,6 +339,26 @@ describe('1件入力画面（点検予定への結び付け。修正依頼1024 �
       vendor_id: 'v-mine',
       target_month: `${String(row.inspection_start).slice(0, 7)}-01`,
     });
+  });
+
+  it('号機が2台以上の点検に結び付く申請は出さず、点検登録フォームから台ごとに申請するよう案内する（修正依頼1026 I7）', async () => {
+    portalApi.units = [
+      { inspection_id: 'i-clean', unit_id: 'u1' },
+      { inspection_id: 'i-clean', unit_id: 'u2' },
+    ];
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(
+      <ToastProvider>
+        <SingleEntryPage />
+      </ToastProvider>,
+    );
+    await waitFor(() => expect(screen.getByRole('combobox', { name: '点検工事案内 *' })).toHaveValue('排水管清掃'));
+    pick('物件コード *', 'z0015A01');
+    fireEvent.click(screen.getByRole('button', { name: 'データを追加' }));
+    await screen.findByRole('table');
+    fireEvent.click(screen.getByRole('button', { name: '申請する' }));
+    expect(await screen.findByText(/点検登録フォーム（一括入力）から台ごとに申請してください/)).toBeInTheDocument();
+    expect(insertEntries).not.toHaveBeenCalled();
   });
 
   it('点検行が読めなければ結び付けずに申請し、成功の知らせにその旨を足す', async () => {

@@ -10,11 +10,25 @@ import { applicationState, hasAppliedEntry, type ScheduleItem } from './schedule
  * 号機（台）ごとの予定行（修正依頼1025 H1〜H3 → 1026 I7）。
  * 台が2台以上の点検は、予定行（点検行 × 対象月）を台の数だけ出す。申請・完了連絡・ステータスは台ごと
  * （申請は signage_entries.property_unit_id、完了連絡は signage_inspection_completions.property_unit_id）。
- * 台なしの申請（1台以下の点検・旧来・1件入力）は点検行 × 対象月の全体の申請として全部の台に効く。
+ * 台なしの申請（1台以下の点検・旧来・管理者）は点検行 × 対象月の全体の申請として全部の台に効く。2台以上の点検へは、
+ * 管理者以外は台なしで申請・完了連絡できない（DB の guard_entry_unit・完了連絡の関数。1件入力は台を選べないので申請させない。1026 R3）。
  * 報告書は点検行 × 対象月の単位のままで、報告書UP は1台目の行（代表）だけに出し、報告書の状態は全部の台に出す。
  * 物件の下には設備会社固有の No（台の unit_code。サイネージの台は端末番号）を出す。
  * 点検日連絡（業務システムの notify_inspection_date）が OFF の点検・台は申請不要（報告書のみ）として扱う（修正依頼1026）。
  */
+
+/**
+ * 号機が2台以上の点検に、台を指定せずに申請しようとしたときの案内（修正依頼1026 I7 ユーザー判断）。
+ * 1件入力は台を選べないので申請させない。DB（guard_entry_unit）が止めたときも同じ文言を返す
+ */
+export const MULTI_UNIT_APPLY_MESSAGE = '点検登録フォーム（一括入力）から台ごとに申請してください';
+
+/** 号機が2台以上の点検行の ID */
+export function multiUnitInspectionIds(rows: Pick<PortalUnitRow, 'inspection_id' | 'unit_id'>[]): Set<string> {
+  const counts = new Map<string, number>();
+  for (const r of rows) if (r.unit_id) counts.set(r.inspection_id, (counts.get(r.inspection_id) ?? 0) + 1);
+  return new Set([...counts].filter(([, n]) => n >= 2).map(([id]) => id));
+}
 
 /** 点検行 ID → 台（並び順）と、台の無い点検行の設備会社固有コード */
 export interface UnitIndex {

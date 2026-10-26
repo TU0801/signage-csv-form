@@ -12,12 +12,16 @@
 --    （guard_entry_approval_flow）に断られ、台を消せなくなるため。台が消えた申請は No が出なくなるだけ（行・CSV はそのまま）。
 --    書き込みはガード guard_entry_unit が確かめる: 台がその点検の物件・点検種別の台であること、管理者以外は台の保守会社
 --    （台の保守会社が未設定なら点検行の保守会社）が自社であること。
+--    台が2台以上の点検へは、管理者以外は台なしの申請を出せない（INSERT と、台・点検を変える UPDATE。修正依頼1026 再検証 R3。
+--    台なしの申請は全部の台に効くので、1台だけを保守する会社が他社の台の状態まで決めてしまう）。文言は1件入力の案内と同じ
+--    「点検登録フォーム（一括入力）から台ごとに申請してください」。台・点検を変えない UPDATE（既存の台なしの行）は今のまま通す。
 -- 2. 完了連絡を台ごとに（I7）
 --    signage_inspection_completions.property_unit_id（biz.property_units。台を消したら完了連絡も消える）と、一意を
 --    （点検行, 対象月, 台）に（NULLS NOT DISTINCT。台なしの完了連絡は今どおり点検行 × 対象月に1件）。
 --    portal_mark_completed_any_month / portal_unmark_completed に p_unit_id（既定 NULL＝台なし）を足し、2引数の版は消す
 --    （PostgREST は名前で引数を渡すので、2引数で呼ぶ今の画面もそのまま動く）。portal_mark_completed（1024）は新しい一意に合わせるだけ。
 --    portal_completions は台の列を足す（戻り値が変わるので作り直す）。
+--    台が2台以上の点検は、管理者以外は台なしの完了連絡を出せない（portal_mark_completed・portal_mark_completed_any_month の両方。R3）。
 -- 3. 点検日連絡（biz の notify_inspection_date）
 --    signage.portal_inspection_notify_off(): 点検日連絡が OFF の点検行（unit_id NULL）と台（unit_id あり）。範囲は inspection_in_scope。
 --    画面は OFF の点検を申請不要（報告書のみ。signage_inspection_type_flags.report_only と OR）として扱い、点検月超過にしない。
@@ -62,6 +66,21 @@ AS $function$
 $function$;
 REVOKE ALL ON FUNCTION signage.inspection_unit_vendor(uuid, uuid) FROM PUBLIC, anon, authenticated;
 
+-- 点検（物件 × 点検種別）の台の数（portal_inspection_units の台の行と同じ数え方。修正依頼1026 再検証 R3）
+CREATE OR REPLACE FUNCTION signage.inspection_unit_count(p_inspection_id uuid)
+ RETURNS integer
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'biz', 'signage', 'pg_temp'
+AS $function$
+  select count(*)::int
+    from biz.property_inspections pi
+    join biz.property_units u on u.property_id = pi.property_id
+    join biz.property_unit_inspections ui on ui.unit_id = u.id and ui.inspection_type_id = pi.inspection_type_id
+   where pi.id = p_inspection_id;
+$function$;
+REVOKE ALL ON FUNCTION signage.inspection_unit_count(uuid) FROM PUBLIC, anon, authenticated;
+
 CREATE OR REPLACE FUNCTION signage.guard_entry_unit()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -70,8 +89,22 @@ CREATE OR REPLACE FUNCTION signage.guard_entry_unit()
 AS $function$
 DECLARE
   v record;
+  v_changed boolean;
 BEGIN
   IF NEW.property_unit_id IS NULL THEN
+    -- 台が2台以上の点検への台なしの申請は管理者以外断る（INSERT と、台・点検を変えたときだけ。既存の台なしの行の更新は通す）
+    -- （INSERT では OLD を見ない。plpgsql の OR は短絡が保証されないので IF を分ける）
+    IF TG_OP = 'INSERT' THEN
+      v_changed := true;
+    ELSE
+      v_changed := NEW.property_unit_id IS DISTINCT FROM OLD.property_unit_id
+                   OR NEW.property_inspection_id IS DISTINCT FROM OLD.property_inspection_id;
+    END IF;
+    IF v_changed AND NEW.property_inspection_id IS NOT NULL AND auth.uid() IS NOT NULL AND NOT signage.is_active_admin() THEN
+      IF signage.inspection_unit_count(NEW.property_inspection_id) >= 2 THEN
+        RAISE EXCEPTION '点検登録フォーム（一括入力）から台ごとに申請してください' USING ERRCODE = '22023';
+      END IF;
+    END IF;
     RETURN NEW;
   END IF;
   -- 台も点検も変わらない更新・業務システムで点検行を消したとき（FK の SET NULL）の更新は見ない
@@ -164,6 +197,10 @@ BEGIN
   IF p_target_month IS NULL THEN
     RAISE EXCEPTION '対象月を指定してください' USING ERRCODE = '22023';
   END IF;
+  -- 台が2台以上の点検は台ごとに完了を連絡する（台なしは管理者だけ。R3）
+  IF NOT signage.is_active_admin() AND signage.inspection_unit_count(p_inspection_id) >= 2 THEN
+    RAISE EXCEPTION '号機が2台以上の点検は、点検登録フォーム（一括入力）から台ごとに完了を連絡してください' USING ERRCODE = '22023';
+  END IF;
   SELECT coalesce(inspection_months, '{}') INTO v_months FROM biz.property_inspections WHERE id = p_inspection_id;
   IF cardinality(v_months) > 0 AND NOT (extract(month from p_target_month)::int = ANY (v_months)) THEN
     RAISE EXCEPTION '対象月がこの点検の点検月ではありません' USING ERRCODE = '22023';
@@ -217,6 +254,9 @@ BEGIN
     IF NOT signage.is_active_admin() AND v_unit.vendor_id IS DISTINCT FROM signage.current_vendor_id() THEN
       RAISE EXCEPTION 'この台の完了連絡をする権限がありません' USING ERRCODE = '42501';
     END IF;
+  ELSIF NOT signage.is_active_admin() AND signage.inspection_unit_count(p_inspection_id) >= 2 THEN
+    -- 台が2台以上の点検は台ごとに完了を連絡する（台なしの完了連絡は全部の台に効くので、管理者だけ。R3）
+    RAISE EXCEPTION '号機が2台以上の点検は、点検登録フォーム（一括入力）から台ごとに完了を連絡してください' USING ERRCODE = '22023';
   END IF;
   v_month := date_trunc('month', p_target_month)::date;
   SELECT coalesce(inspection_months, '{}'), inspection_type_id INTO v_months, v_type
@@ -499,6 +539,7 @@ GRANT EXECUTE ON FUNCTION signage.portal_approve_entry_checked(uuid, timestamptz
 --     UNIQUE (property_inspection_id, target_month);
 --   ALTER TABLE signage.signage_inspection_completions DROP COLUMN property_unit_id;
 -- DROP FUNCTION IF EXISTS signage.inspection_notify_off(uuid, uuid);
+-- DROP FUNCTION IF EXISTS signage.inspection_unit_count(uuid);
 -- DROP TRIGGER IF EXISTS guard_entry_unit ON signage.signage_entries; DROP FUNCTION IF EXISTS signage.guard_entry_unit();
 -- DROP FUNCTION IF EXISTS signage.inspection_unit_vendor(uuid, uuid);
 -- ALTER TABLE signage.signage_entries DROP COLUMN property_unit_id;   -- 台ごとの申請の台が分からなくなる
