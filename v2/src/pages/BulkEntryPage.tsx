@@ -32,6 +32,7 @@ import {
   isApplyTarget,
   scheduleRowEntry,
   scheduleRowInput,
+  submittedEntryPatch,
 } from '@/features/bulk-entry/utils/scheduleRows';
 import { clearAutoSave } from '@/features/bulk-entry/utils/bulkAutoSave';
 import { getStoredTemplates, getVisibleTemplates, templateRows } from '@/features/bulk-entry/utils/bulkTemplates';
@@ -54,10 +55,17 @@ import {
   unscheduledInspections,
   type ScheduleItem,
 } from '@/features/inspection-portal/lib/schedule';
-import { buildUnitIndex, expandByUnits } from '@/features/inspection-portal/lib/units';
+import { buildNotifyOffIndex, buildUnitIndex, expandByUnits } from '@/features/inspection-portal/lib/units';
 import { useManagementShortNames } from '@/features/inspection-portal/hooks/useManagementShortNames';
 import { orderRows, type SortState } from '@/features/bulk-entry/utils/rowOrder';
-import { completionKey, completionKeys, completionMonth, itemStatus } from '@/features/inspection-portal/lib/status';
+import {
+  completionKey,
+  completionKeys,
+  completionMonth,
+  isRowCompleted,
+  itemStatus,
+  rowCompletionKey,
+} from '@/features/inspection-portal/lib/status';
 import { buildUnscheduledItems } from '@/features/inspection-portal/components/UnscheduledTable';
 import { ApplyModal, type ApplyTarget } from '@/features/inspection-portal/components/ApplyModal';
 import { ReportUploadModal } from '@/features/inspection-documents/components/ReportUploadModal';
@@ -66,12 +74,13 @@ import { OtherFileUploadModal } from '@/features/inspection-documents/components
 import { BuildingRequestModal } from '@/features/building-requests/components/BuildingRequestModal';
 import { useProvisionalBuildings } from '@/features/building-requests/hooks/useProvisionalBuildings';
 import { isProvisionalCode, provisionalCode } from '@/features/building-requests/lib/provisional';
-import type { DbPropertyRequest } from '@/types/database';
+import type { DbEntry, DbPropertyRequest } from '@/types/database';
+import { fetchSubmittedEntryForEdit, updateSubmittedEntry } from '@/lib/api/portal';
 import { ManagementCompanyFilter } from '@/features/single-entry/components/ManagementCompanySelect';
 import { useManagementCompanies } from '@/features/single-entry/hooks/useManagementCompanies';
 import { MANAGEMENT_COMPANY_NONE } from '@/features/single-entry/lib/entryLogic';
 import { compareVendorNames } from '@/lib/vendorOptions';
-import type { PortalInspectionRow } from '@/types/portal';
+import type { PortalEntryRow, PortalInspectionRow } from '@/types/portal';
 
 /** v1 の申請失敗メッセージ（message と details をそのまま付ける）。v1: js/bulk-data.js saveAll catch */
 function saveErrorMessage(error: unknown): string {
@@ -226,6 +235,8 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
   // 点検種別の印（申請不要・毎月。H4/G4）と号機（台。H1〜H3）
   const flags = useMemo(() => typeFlagsMap(portal.typeFlags), [portal.typeFlags]);
   const unitIndex = useMemo(() => buildUnitIndex(portal.units), [portal.units]);
+  // 点検日連絡が OFF の点検・台は申請不要（報告書のみ。修正依頼1026）
+  const notifyIndex = useMemo(() => buildNotifyOffIndex(portal.notifyOff), [portal.notifyOff]);
   // 台を絞る保守会社（保守会社のアカウントは自社、管理者は選んだ保守会社）
   const unitVendorId = isAdmin ? currentVendor.id : (profileVendorId ?? null);
 
@@ -242,9 +253,9 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       portal.reports,
       flags,
     );
-    // 台が2台以上の点検は台ごとの行に分ける（申請・報告書UP・完了連絡は1台目の行だけ）
-    return expandByUnits([...scheduled, ...unscheduled], unitIndex, unitVendorId);
-  }, [vendorInspections, portal.entries, portal.reports, today, flags, allMonths, unitIndex, unitVendorId]);
+    // 台が2台以上の点検は台ごとの行に分ける（申請・完了連絡は台ごと、報告書UP は1台目の行だけ。修正依頼1026 I7）
+    return expandByUnits([...scheduled, ...unscheduled], unitIndex, unitVendorId, { notify: notifyIndex });
+  }, [vendorInspections, portal.entries, portal.reports, today, flags, allMonths, unitIndex, unitVendorId, notifyIndex]);
   const itemsByKey = useMemo(() => new Map(scheduleItems.map((i) => [i.key, i])), [scheduleItems]);
   const completed = useMemo(() => completionKeys(portal.completions), [portal.completions]);
   const inspectedOnById = useMemo(
@@ -253,16 +264,26 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
   );
 
   // 申請済みの予定の行に出すメモ（B12。portal_entries はメモを返さないので、読み取りの行の申請だけ別に読む）
-  const lockedEntryIds = useMemo(
+  // 更新日時も鍵に入れる（申請済みの申請を修正したときに、同じ id のメモを読み直す。修正依頼1026 I11）
+  const lockedEntryKey = useMemo(
     () =>
-      [...new Set(scheduleItems.map((i) => scheduleRowEntry(i)?.id).filter((id): id is string => !!id))].sort().join(','),
+      [
+        ...new Set(
+          scheduleItems
+            .map((i) => scheduleRowEntry(i))
+            .filter((e): e is PortalEntryRow => !!e)
+            .map((e) => `${e.id}@${e.updated_at ?? ''}`),
+        ),
+      ]
+        .sort()
+        .join(','),
     [scheduleItems],
   );
   const [entryMemos, setEntryMemos] = useState<ReadonlyMap<string, string>>(() => new Map());
   useEffect(() => {
-    if (!lockedEntryIds) return;
+    if (!lockedEntryKey) return;
     let cancelled = false;
-    fetchEntryMemos(lockedEntryIds.split(','))
+    fetchEntryMemos(lockedEntryKey.split(',').map((k) => k.split('@')[0]!))
       .then((memos) => {
         if (!cancelled) setEntryMemos(memos);
       })
@@ -271,14 +292,29 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
     return () => {
       cancelled = true;
     };
-  }, [lockedEntryIds]);
+  }, [lockedEntryKey]);
+
+  // 申請済み（承認前）の申請を修正している予定の行（修正依頼1026 I11）。予定の key → 申請の行全体。
+  // 読み直しでその申請が承認・差戻しされていたら（行の申請が変わったら）修正をやめる
+  const [editing, setEditing] = useState<ReadonlyMap<string, DbEntry>>(() => new Map());
+  const editOf = useCallback(
+    (item: ScheduleItem): DbEntry | null => {
+      const edit = editing.get(item.key);
+      if (!edit) return null;
+      const entry = scheduleRowEntry(item);
+      return entry && entry.id === edit.id && entry.status === 'draft' ? edit : null;
+    },
+    [editing],
+  );
 
   // 予定を表の行にする（読み込み・保守会社の切り替え・申請のあとに入れ直す）。点検種別の既定（B9）にも点検行を渡す
   useEffect(() => {
     if (!ready || !portal.loaded) return;
     // 予定から外れた行（予定の変更など）が持っていた画像は片付ける
-    discardImagesDroppedBy(() => syncScheduleRows(scheduleItems.map((item) => scheduleRowInput(item, entryMemos))));
-  }, [ready, portal.loaded, scheduleItems, entryMemos, syncScheduleRows]);
+    discardImagesDroppedBy(() =>
+      syncScheduleRows(scheduleItems.map((item) => scheduleRowInput(item, entryMemos, editOf(item)))),
+    );
+  }, [ready, portal.loaded, scheduleItems, entryMemos, editOf, syncScheduleRows]);
   useEffect(() => {
     setInspectionDefaults({
       vendorInspections: vendorInspections.map((i) => ({ propertyCode: i.property_code, label: i.inspection_type_label ?? '' })),
@@ -377,20 +413,22 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
     [isAdmin, profileVendorId],
   );
 
+  // unitId: 記録・取り消しする完了連絡の台（台ごとの行は台。台なしの完了連絡を取り消すときは null）
   const toggleCompletion = useCallback(
-    async (item: ScheduleItem, month: string, undo: boolean) => {
-      const subject = `${formatMonth(month)}・${item.inspection.property_name}・${item.inspection.inspection_type_label ?? ''}`;
+    async (item: ScheduleItem, month: string, undo: boolean, unitId: string | null) => {
+      const unit = item.unit && item.unitCode ? `・${item.unitCode}` : '';
+      const subject = `${formatMonth(month)}・${item.inspection.property_name}${unit}・${item.inspection.inspection_type_label ?? ''}`;
       const ok = await confirm(
         undo
           ? `完了連絡を取り消しますか？\n${subject}`
           : `点検の完了を連絡しますか？\n${subject}\n報告書が無くても「点検完了」になります（あとで取り消せます）`,
       );
       if (!ok) return;
-      const key = completionKey(item.inspection.inspection_id, month);
+      const key = completionKey(item.inspection.inspection_id, month, item.unit?.unit_id);
       setCompletingKey(key);
       try {
-        if (undo) await unmarkCompleted(item.inspection.inspection_id, month);
-        else await markCompleted(item.inspection.inspection_id, month);
+        if (undo) await unmarkCompleted(item.inspection.inspection_id, month, unitId);
+        else await markCompleted(item.inspection.inspection_id, month, unitId);
         addToast(undo ? '完了連絡を取り消しました' : '完了を連絡しました', 'success');
         await portal.refetch();
       } catch (err) {
@@ -403,34 +441,80 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
     [confirm, addToast, portal],
   );
 
+  // 申請済み（承認前）の申請の修正を始める（修正依頼1026 I11）。申請の行全体を読み、行を入力できる状態にする
+  const [openingEditKey, setOpeningEditKey] = useState<string | null>(null);
+  const startEdit = useCallback(
+    async (item: ScheduleItem, entry: PortalEntryRow) => {
+      setOpeningEditKey(item.key);
+      try {
+        const row = await fetchSubmittedEntryForEdit(entry.id);
+        setEditing((prev) => new Map(prev).set(item.key, row));
+      } catch (err) {
+        console.error('Failed to open entry for edit:', err);
+        addToast(`申請を修正できません: ${entryErrorReason(err)}`, 'error');
+      } finally {
+        setOpeningEditKey(null);
+      }
+    },
+    [addToast],
+  );
+  const stopEdit = useCallback(
+    async (key: string) => {
+      if (!(await confirm('修正をやめますか？（入力した内容は消え、申請は今のまま残ります）'))) return;
+      setEditing((prev) => {
+        const next = new Map(prev);
+        next.delete(key);
+        return next;
+      });
+    },
+    [confirm],
+  );
+
   const actionsOf = useCallback(
     (item: ScheduleItem): ReactNode => {
       const month = completionMonth(item);
-      const key = month ? completionKey(item.inspection.inspection_id, month) : null;
-      const hasCompletion = !!key && completed.has(key);
+      const key = rowCompletionKey(item);
+      const hasCompletion = isRowCompleted(item, completed);
+      // 取り消すのはこの行の台の完了連絡。台ごとに分ける前の台なしの完了連絡（点検の全体）ならそれを取り消す
+      const undoUnit =
+        month && item.unit?.unit_id && completed.has(completionKey(item.inspection.inspection_id, month, item.unit.unit_id))
+          ? item.unit.unit_id
+          : null;
       const accepted = item.report?.status === 'accepted';
       const sentBack = item.application === 'sent_back' ? focusEntry(item.entries) : null;
       const busy = !!key && completingKey === key;
       // 点検月以外の月の行は、その月の申請があるときだけ完了連絡できる（D5。毎月・申請不要の点検種別は月を問わない）
       const blocked = completionBlockedReason(item);
-      // 2台目以降の行は報告書UP・完了連絡を出さない（1台目の行で扱う。修正依頼1025 H3）
-      if (item.secondary) return null;
+      // 申請済み（承認前）の申請は、申請者・同じ保守会社・管理者が直せる（修正依頼1026 I11）
+      const draft = item.application === 'applied' ? focusEntry(item.entries) : null;
+      // 申請不要（報告書のみ）の行は日付の欄を出さないので直せない（申請は台なしの申請か、印が付く前のもの）。
+      // 台なしの申請（1件入力・旧来）は全部の台の行に出るので、直すのは1台目の行だけ（同じ申請を2つの行で同時に直させない）
+      const canEdit =
+        !!draft &&
+        draft.status === 'draft' &&
+        !item.reportOnly &&
+        !(item.secondary && !draft.property_unit_id) &&
+        (isAdmin || draft.is_mine || (!!draft.vendor_id && draft.vendor_id === profileVendorId));
+      const isEditing = !!editOf(item);
       return (
         <div className="flex flex-wrap gap-1">
-          <button
-            type="button"
-            className={cn(smallBtn, 'border-gray-300 bg-white text-gray-700 hover:bg-gray-100')}
-            onClick={() => openReport(item)}
-            title="この点検の報告書（PDF）を1件ずつ登録する"
-          >
-            {item.report?.status === 'returned' ? '報告書を再提出' : '報告書UP'}
-          </button>
+          {/* 報告書は点検行 × 対象月の単位なので、報告書UP は1台目の行だけ（修正依頼1026 I7） */}
+          {!item.secondary && (
+            <button
+              type="button"
+              className={cn(smallBtn, 'border-gray-300 bg-white text-gray-700 hover:bg-gray-100')}
+              onClick={() => openReport(item)}
+              title="この点検の報告書（PDF）を1件ずつ登録する"
+            >
+              {item.report?.status === 'returned' ? '報告書を再提出' : '報告書UP'}
+            </button>
+          )}
           {hasCompletion ? (
             <button
               type="button"
               className={cn(smallBtn, 'border-gray-300 bg-white text-gray-500 hover:bg-gray-100')}
               disabled={busy}
-              onClick={() => void toggleCompletion(item, month!, true)}
+              onClick={() => void toggleCompletion(item, month!, true, undoUnit)}
               title="完了連絡を取り消す"
             >
               完了取消
@@ -441,7 +525,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
                 type="button"
                 className={cn(smallBtn, 'border-green-400 bg-green-50 text-green-800 hover:bg-green-100')}
                 disabled={busy || !month || !!blocked}
-                onClick={() => month && !blocked && void toggleCompletion(item, month, false)}
+                onClick={() => month && !blocked && void toggleCompletion(item, month, false, item.unit?.unit_id ?? null)}
                 title={
                   blocked ??
                   (month ? '点検の完了を連絡する（報告書が無くても点検完了になります）' : '申請してから完了を連絡できます（対象月が決まらないため）')
@@ -462,10 +546,43 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
               修正して再申請
             </button>
           )}
+          {isEditing ? (
+            <button
+              type="button"
+              className={cn(smallBtn, 'border-gray-300 bg-white text-gray-600 hover:bg-gray-100')}
+              onClick={() => void stopEdit(item.key)}
+              title="修正をやめる（申請は今のまま）"
+            >
+              修正をやめる
+            </button>
+          ) : (
+            canEdit && (
+              <button
+                type="button"
+                className={cn(smallBtn, 'border-blue-400 bg-blue-50 text-blue-800 hover:bg-blue-100')}
+                disabled={openingEditKey === item.key}
+                onClick={() => void startEdit(item, draft!)}
+                title="承認前の申請を直す（点検日・備考・メモ・案内文・貼紙）。直したら『申請する』で保存します"
+              >
+                修正
+              </button>
+            )
+          )}
         </div>
       );
     },
-    [completed, completingKey, openReport, toggleCompletion],
+    [
+      completed,
+      completingKey,
+      openReport,
+      toggleCompletion,
+      isAdmin,
+      profileVendorId,
+      editOf,
+      stopEdit,
+      startEdit,
+      openingEditKey,
+    ],
   );
 
   const infoOf = useCallback(
@@ -481,13 +598,13 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
           // 検査月は台の値（未登録なら点検行の値）。毎月の点検種別は「毎月」（H4）
           return {
             status,
-            reason: item.secondary ? null : (reason ?? null),
+            reason: reason ?? null,
             managementName: managementLabel(item.inspection.management_company_id, fullName),
             managementFullName: fullName,
             vendorName: item.inspection.vendor_name ?? '',
             months: item.monthly ? '毎月' : item.inspection.inspection_months.join(','),
             inspectedOn: formatInspectedOn(item.unit?.inspected_on ?? inspectedOnById.get(item.inspection.inspection_id)),
-            actions: item.secondary ? undefined : actionsOf(item),
+            actions: actionsOf(item),
           };
         }
       }
@@ -656,7 +773,21 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
     const hidden = all.filter((r) => isApplyTarget(r) && !isVisible(r)).length;
     setSaving(true);
     try {
-      await createBulkEntries(buildBulkEntries(targets, masterData, vendor, appSettings, vendorInspections), userId ?? '');
+      // 修正中の行（申請済み・承認前。修正依頼1026 I11）は新しい申請を作らず、その申請を直す。直しは何度流しても同じなので先に送る
+      // （新しい申請の INSERT が失敗しても、もう一度『申請する』で直しが重ねて効くだけ）
+      const edits = targets.filter((r) => r.schedule?.editEntryId);
+      const news = targets.filter((r) => !r.schedule?.editEntryId);
+      for (const row of edits) {
+        const [built] = buildBulkEntries([row], masterData, vendor, appSettings, vendorInspections);
+        if (built) await updateSubmittedEntry(row.schedule!.editEntryId!, submittedEntryPatch({ ...built }));
+      }
+      if (news.length > 0) {
+        await createBulkEntries(buildBulkEntries(news, masterData, vendor, appSettings, vendorInspections), userId ?? '');
+      }
+      if (edits.length > 0) {
+        const keys = new Set(edits.map((r) => r.schedule!.key));
+        setEditing((prev) => new Map([...prev].filter(([k]) => !keys.has(k))));
+      }
       cancelBulkAutoSave();
       clearAutoSave(userId);
       // 申請した手の行だけ消す（申請中に足した行・絞り込みで隠れていた行は残り、removeRows が残りの行で自動保存を書き直す）。

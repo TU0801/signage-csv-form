@@ -5,7 +5,7 @@ import {
   fetchPendingEntries as apiFetchPendingEntries,
   rejectEntry as apiRejectEntry,
 } from '@/lib/api/admin-entries';
-import { reviewEntry } from '@/lib/api/portal';
+import { approveEntryChecked, reviewEntry } from '@/lib/api/portal';
 import { useAuthStore } from '@/stores/authStore';
 import type { DbEntry } from '@/types/database';
 import { applyDefaultStartDate } from '@/features/entries-list/hooks/useEntriesFilters';
@@ -14,7 +14,8 @@ import { useAdminCountsStore } from '@/stores/adminCountsStore';
 /**
  * 承認待ち（申請済み = draft）のエントリ。承認・却下・一括承認のあとは一覧を読み直す。
  * 管理会社は自社物件の申請だけが読め（RLS）、承認・差戻しは portal_review_entry（範囲を DB が確かめる）で行う。
- * 管理会社は却下（削除）できない（guard_entry_management_delete）
+ * 管理会社は却下（削除）できない（guard_entry_management_delete）。
+ * 承認は一覧で読んだ版（updated_at）の申請だけ（承認前の申請は保守会社が直せるので、見ていない内容を承認しない。修正依頼1026 I11）
  */
 // v1: js/admin-pending.js
 export function usePendingEntries() {
@@ -40,16 +41,28 @@ export function usePendingEntries() {
     }
   }, []);
 
+  // 一覧で読んだ版。一覧に無い申請（読み直しの前など）は版が分からないので null（DB が断る）
+  const versionOf = useCallback(
+    (id: string): string | null => entries.find((e) => e.id === id)?.updated_at ?? null,
+    [entries],
+  );
+
   // v1: js/admin-pending.js approveSingle
   const approveEntry = useCallback(
     async (id: string) => {
-      if (isManagement) await reviewEntry(id, 'approve');
-      else await apiApproveEntry(id);
+      try {
+        if (isManagement) await approveEntryChecked(id, versionOf(id));
+        else await apiApproveEntry(id, versionOf(id));
+      } catch (err) {
+        // 直されていたら最新の内容を出し直す（断られたまま古い内容を見せない）
+        await fetchPendingEntries();
+        throw err;
+      }
       // v1: js/admin-pending.js → js/admin.js loadAllData（データ一覧の開始日が空なら今日を入れる）
       applyDefaultStartDate();
       await fetchPendingEntries();
     },
-    [fetchPendingEntries, isManagement],
+    [fetchPendingEntries, isManagement, versionOf],
   );
 
   // 差戻し（管理者・管理会社。理由を付けて未申請に戻す。点検一覧の差戻しと同じ RPC）
@@ -76,21 +89,17 @@ export function usePendingEntries() {
   const approveBulk = useCallback(
     async (ids: string[]) => {
       if (ids.length === 0) return;
-      if (isManagement) {
-        // RPC は1件ずつ。全件の結果を待ってから読み直し、失敗があれば最初の理由で知らせる
-        const results = await Promise.allSettled(ids.map((id) => reviewEntry(id, 'approve')));
-        applyDefaultStartDate();
-        await fetchPendingEntries();
-        const failed = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
-        if (failed[0]) throw failed[0].reason;
-        return;
-      }
-      await approveEntries(ids);
+      // 1件ずつ（版を比べるため）。全件の結果を待ってから読み直し、失敗があれば最初の理由で知らせる
+      const results = isManagement
+        ? await Promise.allSettled(ids.map((id) => approveEntryChecked(id, versionOf(id))))
+        : await approveEntries(ids.map((id) => ({ id, updatedAt: versionOf(id) })));
       // v1: js/admin-pending.js → js/admin.js loadAllData（データ一覧の開始日が空なら今日を入れる）
       applyDefaultStartDate();
       await fetchPendingEntries();
+      const failed = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+      if (failed[0]) throw failed[0].reason;
     },
-    [fetchPendingEntries, isManagement],
+    [fetchPendingEntries, isManagement, versionOf],
   );
 
   // 選択した行をまとめて却下（1件ずつの却下と同じく削除）。却下は取り消せないので、全件の結果が出てから読み直し、

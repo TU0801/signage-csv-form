@@ -60,6 +60,8 @@ export interface DbEntry {
    * 建物が承認されるまで承認（ready）できない。承認で正式な物件コードに付け替わる（scripts/fix-1025-building.sql）
    */
   property_request_id?: string | null;
+  /** 台ごとの申請の台（biz.property_units.id。修正依頼1026 I7）。台が2台以上の点検だけ */
+  property_unit_id?: string | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -259,6 +261,8 @@ export interface DbInspectionCompletion {
   vendor_id: string | null;
   completed_at: string;
   completed_by: string | null;
+  /** 台ごとの完了連絡の台（biz.property_units.id。修正依頼1026 I7）。null は台なし（点検行 × 対象月の全体。旧来の行も） */
+  property_unit_id?: string | null;
 }
 
 /** RPC property_inspection_dates の1行（物件×点検種別の検査月。値のある点検だけ。管理者は全件・管理会社は自社物件） */

@@ -3,6 +3,7 @@ import { inspectionLinkOf } from '../utils/buildBulkEntries';
 import { firstError } from '../utils/columns';
 import { scheduleRowInput } from '../utils/scheduleRows';
 import { buildSchedule } from '@/features/inspection-portal/lib/schedule';
+import { buildNotifyOffIndex, buildUnitIndex, expandByUnits } from '@/features/inspection-portal/lib/units';
 import { makeEntry, makeInspection } from '@/features/inspection-portal/__tests__/fixtures';
 import type { BulkEntryRow } from '../types';
 
@@ -71,19 +72,42 @@ describe('点検登録フォームの点検行との結び付け', () => {
     expect(scheduleRowInput(items.find((i) => i.targetMonth === '2026-05-01')!, memos).row.memo).toBe('');
   });
 
-  it('2台目以降の行は読み取りで、1台目の申請の日付・備考・メモを出さない（修正依頼1025 決定4）', () => {
-    const items = buildSchedule(
-      [makeInspection()],
-      [makeEntry({ id: 'e-nov', status: 'ready', target_month: '2026-11-01', inspection_start: '2026-11-10', inspection_end: '2026-11-11', remarks: '午前' })],
-      [],
-      { today: '2026-10-21', monthsAhead: 12 },
-    );
-    const nov = items.find((i) => i.targetMonth === '2026-11-01')!;
-    const memos = new Map([['e-nov', 'メモ']]);
-    const second = scheduleRowInput({ ...nov, key: `${nov.key}:u2`, secondary: true }, memos);
-    expect(second.meta).toMatchObject({ locked: true, secondary: true });
-    expect(second.row).toMatchObject({ startDate: '', endDate: '', remarks: '', memo: '', terminalId: 'T001' });
-    expect(scheduleRowInput(nov, memos).row.startDate).toBe('2026-11-10');
+  it('台ごとの行は台の申請（と台なしの申請）だけで状態を決め、台の点検日連絡 OFF は申請不要。保守会社に1台しか見えなくても他の台の申請と混ぜない（修正依頼1026 I7）', () => {
+    const unit = (id: string, code: string, maintainer: string) => ({
+      inspection_id: 'i1',
+      unit_id: id,
+      unit_code: code,
+      unit_sort: Number(code.slice(2)),
+      maintainer_id: maintainer,
+      inspection_months: [],
+      inspected_on: null,
+      equipment_code: null,
+    });
+    const index = buildUnitIndex([unit('u1', 'No1', 'v1'), unit('u2', 'No2', 'v1'), unit('u3', 'No3', 'v2')]);
+    const entries = [
+      makeEntry({ id: 'e-u2', status: 'ready', target_month: '2026-11-01', property_unit_id: 'u2', inspection_start: '2026-11-10' }),
+      makeEntry({ id: 'e-u3', status: 'draft', target_month: '2026-05-01', property_unit_id: 'u3', inspection_start: '2026-05-10' }),
+    ];
+    const items = buildSchedule([makeInspection()], entries, [], { today: '2026-10-21', monthsAhead: 12 });
+    const notify = buildNotifyOffIndex([{ inspection_id: 'i1', unit_id: 'u1' }]);
+    const rows = expandByUnits(items, index, 'v1', { notify });
+    const nov = rows.filter((i) => i.targetMonth === '2026-11-01');
+    expect(nov.map((i) => [i.unitCode, i.application, !!i.reportOnly, !!i.secondary])).toEqual([
+      ['No1', 'not_applied', true, false],
+      ['No2', 'approved', false, true],
+    ]);
+    // 5月は No3（他社 v2 の台）の申請だけ。v1 の No2 は超過（No1 は点検日連絡 OFF なので超過にしない）
+    const may = rows.filter((i) => i.targetMonth === '2026-05-01');
+    expect(may.map((i) => [i.unitCode, i.application, i.overdueUnapplied])).toEqual([
+      ['No1', 'not_applied', false],
+      ['No2', 'not_applied', true],
+    ]);
+    // 台ごとの行は台を申請に渡し、2台目の行も入力できる（申請済みは読み取り）
+    expect(scheduleRowInput(nov[1]!).meta).toMatchObject({ unitId: 'u2', secondary: true, locked: true });
+    expect(scheduleRowInput(may[1]!).meta).toMatchObject({ unitId: 'u2', secondary: true, locked: false });
+    // 他社の保守会社 v2 には No3 だけ（1台でも台ごとの申請で決める）
+    const v2 = expandByUnits(items, index, 'v2').filter((i) => i.targetMonth === '2026-05-01');
+    expect(v2.map((i) => [i.unitCode, i.application, i.unit?.unit_id])).toEqual([['No3', 'applied', 'u3']]);
   });
 
   it('最初のエラーの行と、そのエラーを直す欄（端末は物件の欄）を返す', () => {

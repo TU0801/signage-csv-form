@@ -1,5 +1,7 @@
 import { appliedEntry } from '@/features/inspection-portal/lib/actions';
 import { focusEntry, type ScheduleItem } from '@/features/inspection-portal/lib/schedule';
+import { parseExtraPosters } from '@/lib/extraPosters';
+import type { DbEntry } from '@/types/database';
 import type { PortalEntryRow } from '@/types/portal';
 import type { BulkEntryRow, BulkNotice, BulkRowInput, BulkScheduleMeta } from '../types';
 
@@ -8,39 +10,119 @@ import type { BulkEntryRow, BulkNotice, BulkRowInput, BulkScheduleMeta } from '.
  * 予定（点検行 × 対象月）は点検一覧と同じく buildSchedule / buildUnscheduledItems で作り、表の行にする。
  */
 
-/** 読み取りの予定の行に出す申請（申請済み・差戻し中の予定）。未申請・点検月の無い点検は null */
+/**
+ * 読み取りの予定の行に出す申請（申請済み・差戻し中の予定）。未申請・点検月の無い点検は null。
+ * 承認待ちの申請があればそれ（状態「点検予定申請中」と『修正』の対象＝focusEntry と同じ申請。取込済みの申請が並びの先にあっても
+ * その値を出さない。修正依頼1026 I11）。無ければ承認済み・取込済みのうち新しいもの
+ */
 export function scheduleRowEntry(item: ScheduleItem): PortalEntryRow | null {
   // 点検月の無い点検は月をまたいでまとめた行なので、いつでも別の月の申請を足せる（読み取りにしない）
   const locked = !!item.targetMonth && item.application !== 'not_applied';
-  return locked ? (appliedEntry(item) ?? focusEntry(item.entries)) : null;
+  if (!locked) return null;
+  const focus = focusEntry(item.entries);
+  return focus?.status === 'draft' ? focus : (appliedEntry(item) ?? focus);
+}
+
+/**
+ * 申請済み（承認前）の申請を表の行で直すときの値（修正依頼1026 I11）。申請の行全体（portal_entry_for_edit）から作る。
+ * 表示期間が点検日から決まる既定の値なら空に戻す（点検日を直したときに表示期間も追従するように）
+ */
+export function editRowInput(entry: DbEntry): BulkRowInput {
+  const end = entry.inspection_end ?? '';
+  const position = Number(entry.poster_position ?? 2);
+  return {
+    terminalId: entry.terminal_id ?? '',
+    startDate: entry.inspection_start ?? '',
+    endDate: end && end !== entry.inspection_start ? end : '',
+    remarks: entry.remarks ?? '',
+    memo: entry.memo ?? '',
+    noticeText: entry.announcement ?? '',
+    displayTime: entry.display_duration ?? undefined,
+    // 表示開始日が点検開始日と同じ（過ぎた予定を申請したときの既定）なら空に戻す（点検開始日を直したときに追従するように）
+    displayStartDate:
+      entry.display_start_date && entry.display_start_date !== entry.inspection_start ? entry.display_start_date : '',
+    displayStartTime: entry.display_start_time ?? '',
+    displayEndDate: entry.display_end_date && entry.display_end_date !== end ? entry.display_end_date : '',
+    displayEndTime: entry.display_end_time ?? '',
+    emergencyContact: entry.emergency_contact ?? '',
+    posterType: entry.poster_type === 'custom' ? 'custom' : 'template',
+    posterImage: entry.poster_image ?? '',
+    extraPosters: parseExtraPosters(entry.extra_posters),
+    position: Number.isNaN(position) ? 2 : position,
+  };
+}
+
+/**
+ * 修正中の行の申請を DB の修正（portal_update_submitted_entry）に渡す列にする。buildBulkEntries の行から、直せる列だけを取る
+ * （物件・点検・保守会社・状態・台は元の申請のまま）
+ */
+export function submittedEntryPatch(row: Record<string, unknown>): Record<string, unknown> {
+  const keys = [
+    'inspection_start',
+    'inspection_end',
+    'remarks',
+    'memo',
+    'announcement',
+    'terminal_id',
+    'emergency_contact',
+    'poster_type',
+    'poster_image',
+    'poster_position',
+    'display_duration',
+    'display_start_date',
+    'display_start_time',
+    'display_end_date',
+    'display_end_time',
+  ];
+  const patch: Record<string, unknown> = Object.fromEntries(keys.filter((k) => k in row).map((k) => [k, row[k]]));
+  // 追加の貼紙を全部外したときも空にする（buildBulkEntries は無ければ送らない）
+  patch.extra_posters = row.extra_posters ?? [];
+  // 終了日を省いたときは1日の点検（新しい申請と同じく開始日）
+  if (!patch.inspection_end) patch.inspection_end = patch.inspection_start ?? null;
+  return patch;
 }
 
 /**
  * 予定の行を表の行の材料にする。申請済み・差戻し中の予定は読み取り（申請の日付・備考・メモを出す）、未申請は点検開始日を空にする。
- * memos は申請 id → メモ（portal_entries はメモを返さないので別に読む。fetchEntryMemos）
+ * memos は申請 id → メモ（portal_entries はメモを返さないので別に読む。fetchEntryMemos）。
+ * editing は修正中の申請（申請済み・承認前。修正依頼1026 I11）。渡すと行は入力できる状態で、その申請の値を入れる
  */
 export function scheduleRowInput(
   item: ScheduleItem,
   memos?: ReadonlyMap<string, string>,
+  editing?: DbEntry | null,
 ): { meta: BulkScheduleMeta; row: BulkRowInput } {
   const { inspection } = item;
-  // 2台目以降の行と申請不要の点検は、この表から申請しない（入力欄を出さない。修正依頼1025 H3・H4/G4）
-  const locked = (!!item.targetMonth && item.application !== 'not_applied') || !!item.secondary || !!item.reportOnly;
-  // 2台目以降の行は表示だけ（日付・備考・メモは空。ステータスは meta で1台目と同じ。修正依頼1025 決定4）
-  const entry = item.secondary ? null : scheduleRowEntry(item);
+  // 申請不要の点検は、この表から申請しない（入力欄を出さない。修正依頼1025 H4/G4）。台ごとの行は台ごとに申請する（1026 I7）
+  const edit = editing && editing.status === 'draft' ? editing : null;
+  const locked = !edit && ((!!item.targetMonth && item.application !== 'not_applied') || !!item.reportOnly);
+  const entry = scheduleRowEntry(item);
+  const meta: BulkScheduleMeta = {
+    key: item.key,
+    inspectionId: inspection.inspection_id,
+    targetMonth: item.targetMonth || null,
+    locked,
+    propertyName: inspection.property_name,
+    terminalIds: inspection.terminal_ids,
+    ...(item.unitCode ? { unitCode: item.unitCode } : {}),
+    ...(item.secondary ? { secondary: true } : {}),
+    ...(item.unit?.unit_id ? { unitId: item.unit.unit_id } : {}),
+    ...(item.reportOnly ? { reportOnly: true } : {}),
+    ...(item.offMonth ? { offMonth: true } : {}),
+    ...(edit ? { editEntryId: edit.id } : {}),
+  };
+  if (edit) {
+    return {
+      meta,
+      row: {
+        propertyCode: inspection.property_code,
+        inspectionType: inspection.inspection_type_label ?? '',
+        ...editRowInput(edit),
+      },
+    };
+  }
   return {
-    meta: {
-      key: item.key,
-      inspectionId: inspection.inspection_id,
-      targetMonth: item.targetMonth || null,
-      locked,
-      propertyName: inspection.property_name,
-      terminalIds: inspection.terminal_ids,
-      ...(item.unitCode ? { unitCode: item.unitCode } : {}),
-      ...(item.secondary ? { secondary: true } : {}),
-      ...(item.reportOnly ? { reportOnly: true } : {}),
-      ...(item.offMonth ? { offMonth: true } : {}),
-    },
+    meta,
     row: {
       propertyCode: inspection.property_code,
       terminalId: entry?.terminal_id ?? inspection.terminal_ids[0] ?? '',

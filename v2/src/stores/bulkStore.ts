@@ -281,8 +281,11 @@ export const useBulkStore = create<BulkState>((set, get) => {
       let counter = get().rowIdCounter;
       const scheduleRows = inputs.map(({ meta, row }) => {
         const prev = existing.get(meta.key);
-        // 未申請のまま残っている予定は、入力中の値（日付・備考・メモ・詳細）を残して情報だけ入れ替える
-        if (prev && !prev.schedule!.locked && !meta.locked) return validate({ ...prev, schedule: meta });
+        // 未申請のまま残っている予定は、入力中の値（日付・備考・メモ・詳細）を残して情報だけ入れ替える。
+        // 修正中の行（修正依頼1026 I11）も同じ申請を直している間は入力中の値を残す（修正を始めた・やめたときは入れ直す）
+        if (prev && !prev.schedule!.locked && !meta.locked && prev.schedule!.editEntryId === meta.editEntryId) {
+          return validate({ ...prev, schedule: meta });
+        }
         const built: BulkEntryRow = {
           id: prev?.id ?? ++counter,
           propertyCode: row.propertyCode ?? '',
@@ -305,6 +308,8 @@ export const useBulkStore = create<BulkState>((set, get) => {
           posterImage: '',
           extraPosters: undefined,
           position: 2,
+          // 修正中の行（修正依頼1026 I11）は申請の値（案内文・貼紙・表示期間など）も入れる。未定義の値は既定のまま
+          ...Object.fromEntries(Object.entries(row).filter(([, v]) => v !== undefined)),
           isValid: false,
           errors: [],
           schedule: meta,

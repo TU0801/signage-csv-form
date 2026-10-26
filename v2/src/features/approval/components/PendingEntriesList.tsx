@@ -18,6 +18,7 @@ import { PendingEntryRow } from './PendingEntryRow';
 import { EntryDetailModal } from './EntryDetailModal';
 import { usePendingEntries } from '../hooks/usePendingEntries';
 import { useRefetchOnVisible } from '../hooks/useRefetchOnVisible';
+import { useUnitLabels } from '@/features/inspection-portal/hooks/useUnitLabels';
 
 type PendingConfirm =
   | { kind: 'approve'; id: string }
@@ -47,6 +48,8 @@ export function PendingEntriesList() {
     sendBackEntry,
   } = usePendingEntries();
   const lookups = useEntryLookups();
+  // 台ごとの申請の台の No（修正依頼1026 I7）。台ごとの申請があるときだけ読む
+  const unitLabels = useUnitLabels(entries.some((e) => !!e.property_unit_id));
   const { addToast } = useToast();
   // 管理会社: 承認と差戻しだけ（却下＝削除・編集は管理者だけ）
   const isManagement = useAuthStore((s) => s.profile?.role === 'management');
@@ -145,7 +148,8 @@ export function PendingEntriesList() {
     [rejectEntry, addToast],
   );
 
-  // v1: js/admin-pending.js approveSelected。建物未承認の申請は承認できないので外す（1件でも混ざると一括の更新が全部失敗する）
+  // v1: js/admin-pending.js approveSelected。建物未承認の申請は承認できないので外す（断られて失敗の知らせになるため）。
+  // 承認は版を比べて1件ずつ（修正依頼1026 I11）なので、一部だけ断られると残りは承認済みになり、断られた行は選択に残る
   const handleBulkApprove = useCallback(async () => {
     const blocked = entries.filter((e) => selected.includes(e.id) && pendingBuildingOf(e) !== undefined).map((e) => e.id);
     const ids = selected.filter((id) => !blocked.includes(id));
@@ -359,6 +363,7 @@ export function PendingEntriesList() {
                       onEdit={isManagement ? undefined : setEditEntry}
                       onSendBack={setSendBackTarget}
                       pendingBuildingName={pendingBuildingOf(entry)}
+                      unitCode={entry.property_unit_id ? (unitLabels.get(entry.property_unit_id) ?? '号機不明') : undefined}
                     />
                   ))}
                 </tbody>

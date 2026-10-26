@@ -3,7 +3,9 @@ import { entryErrorReason } from '@/lib/api/admin-entries';
 import {
   fetchInspectionReports,
   fetchInspectionTypeFlags,
+  fetchNotifyOff,
   fetchPortalEntries,
+  fetchPortalEntryUnits,
   fetchPortalInspections,
   fetchPortalInspectionUnits,
 } from '@/lib/api/portal';
@@ -12,6 +14,7 @@ import type { DbInspectionCompletion, RpcInspectionDateRow } from '@/types/datab
 import type {
   DbInspectionReport,
   InspectionTypeFlagRow,
+  NotifyOffRow,
   PortalEntryRow,
   PortalInspectionRow,
   PortalUnitRow,
@@ -29,6 +32,8 @@ export interface PortalData {
   units: PortalUnitRow[];
   /** 点検種別の印（申請不要・毎月。H4/G4）。読めなければ空（印なし） */
   typeFlags: InspectionTypeFlagRow[];
+  /** 点検日連絡が OFF の点検行・台（修正依頼1026）。読めなければ空（全部 ON） */
+  notifyOff: NotifyOffRow[];
 }
 
 const EMPTY: PortalData = {
@@ -39,7 +44,15 @@ const EMPTY: PortalData = {
   inspectionDates: [],
   units: [],
   typeFlags: [],
+  notifyOff: [],
 };
+
+/** 申請に台（portal_entry_units）を付ける（修正依頼1026 I7）。読めなければ台なしのまま */
+export function withEntryUnits(entries: PortalEntryRow[], units: { entry_id: string; property_unit_id: string }[]): PortalEntryRow[] {
+  if (units.length === 0) return entries;
+  const byEntry = new Map(units.map((u) => [u.entry_id, u.property_unit_id]));
+  return entries.map((e) => (byEntry.has(e.id) ? { ...e, property_unit_id: byEntry.get(e.id) } : e));
+}
 
 /** 完了連絡・検査月は補助の情報なので、読めなくても一覧は出す（空として続ける） */
 function orEmpty<T>(p: Promise<T[]>, what: string): Promise<T[]> {
@@ -75,17 +88,33 @@ export function usePortalData() {
     const mine = ++seq.current;
     setLoading(true);
     try {
-      const [inspections, entries, reports, completions, inspectionDates, units, typeFlags] = await Promise.all([
-        fetchPortalInspections(),
-        fetchPortalEntries(),
-        fetchInspectionReports(),
-        orEmpty(fetchCompletions(), '完了連絡'),
-        orEmpty(fetchInspectionDates(), '検査月'),
-        tryEmpty(() => fetchPortalInspectionUnits(), '号機'),
-        tryEmpty(() => fetchInspectionTypeFlags(), '点検種別の印'),
-      ]);
+      const [inspections, rawEntries, reports, completions, inspectionDates, units, typeFlags, entryUnits, notifyOff] =
+        await Promise.all([
+          fetchPortalInspections(),
+          fetchPortalEntries(),
+          fetchInspectionReports(),
+          orEmpty(fetchCompletions(), '完了連絡'),
+          orEmpty(fetchInspectionDates(), '検査月'),
+          tryEmpty(() => fetchPortalInspectionUnits(), '号機'),
+          tryEmpty(() => fetchInspectionTypeFlags(), '点検種別の印'),
+          // 読めなければ null（下で台ごとに分けるのをやめる）
+          tryEmpty(() => fetchPortalEntryUnits().then((rows) => [rows]), '申請の台').then((r) => r[0] ?? null),
+          tryEmpty(() => fetchNotifyOff(), '点検日連絡'),
+        ]);
       if (mine !== seq.current) return;
-      setData({ inspections, entries, reports, completions, inspectionDates, units, typeFlags });
+      // 申請の台が読めないときは号機も空にする（台つきの申請が台なしに見え、全部の台が申請済みに見えるのを避ける。
+      // 台ごとに分けずに点検行 × 対象月の行で出す）
+      const entries = withEntryUnits(rawEntries, entryUnits ?? []);
+      setData({
+        inspections,
+        entries,
+        reports,
+        completions,
+        inspectionDates,
+        units: entryUnits ? units : [],
+        typeFlags,
+        notifyOff,
+      });
       setError(null);
       setLoaded(true);
     } catch (err) {

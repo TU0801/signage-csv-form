@@ -62,6 +62,8 @@ export const RPC = {
   portalInspections: 'portal_inspections',
   portalEntries: 'portal_entries',
   portalReviewEntry: 'portal_review_entry',
+  /** 見た版（updated_at）の申請だけを承認する（修正依頼1026 I11）。scripts/fix-1026-units.sql */
+  portalApproveEntryChecked: 'portal_approve_entry_checked',
   portalRegisterReport: 'portal_register_report',
   portalUpdateReport: 'portal_update_report',
   portalReviewReport: 'portal_review_report',
@@ -105,6 +107,11 @@ export const RPC = {
   /** 点検登録フォーム（修正依頼1025 form）。号機（台）と設備会社固有コード、管理会社の略称。scripts/fix-1025-form.sql */
   portalInspectionUnits: 'portal_inspection_units',
   managementCompanyShortNames: 'management_company_short_names',
+  /** 号機（台）ごとの申請・点検日連絡・申請済みの修正（修正依頼1026 units。scripts/fix-1026-units.sql） */
+  portalEntryUnits: 'portal_entry_units',
+  portalInspectionNotifyOff: 'portal_inspection_notify_off',
+  portalEntryForEdit: 'portal_entry_for_edit',
+  portalUpdateSubmittedEntry: 'portal_update_submitted_entry',
   /** この物件の申請で選べる貼紙ライブラリ（全社共通＋物件の管理会社の分。修正依頼1025 D2） */
   posterLibraryForProperty: 'poster_library_for_property',
   /** ライブラリの画像が申請・ライブラリの行から使われているか（使われていなければ片付けてよい） */
