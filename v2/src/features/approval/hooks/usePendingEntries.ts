@@ -89,7 +89,7 @@ export function usePendingEntries() {
   const approveBulk = useCallback(
     async (ids: string[]): Promise<{ succeeded: number; failed: number; errors: unknown[] }> => {
       if (ids.length === 0) return { succeeded: 0, failed: 0, errors: [] };
-      // 1件ずつ（版を比べるため）。全件の結果を待ってから読み直し、通った件数と断られた件数（とその理由）を返す
+      // 1件ごとに RPC を呼ぶ（版を比べるため。同時に送る）。全件の結果を待ってから読み直し、通った件数と断られた件数（とその理由）を返す
       // （一部だけ通ったときに、何件承認できたかを伝えるため。修正依頼1026 後続）
       const results = isManagement
         ? await Promise.allSettled(ids.map((id) => approveEntryChecked(id, versionOf(id))))

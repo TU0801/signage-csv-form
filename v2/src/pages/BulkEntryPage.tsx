@@ -422,11 +422,13 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       const subject = `${formatMonth(month)}・${item.inspection.property_name}${unit}・${item.inspection.inspection_type_label ?? ''}`;
       // 台ごとの行で台なしの完了連絡（点検の全体）を取り消すと、ほかの台の行の完了も外れる
       const unitlessOnUnitRow = !!item.unit && unitIds.includes(null);
+      // 「も」は台の完了連絡と一緒に取り消すときだけ（台なしだけならそれを取り消す）
+      const alsoUnit = unitIds.some((u) => u !== null);
       const ok = await confirm(
         undo
           ? `完了連絡を取り消しますか？\n${subject}` +
               (unitlessOnUnitRow
-                ? '\nこの点検全体（台なし）の完了連絡も取り消すため、ほかの台の行の「点検完了」も外れます'
+                ? `\nこの点検全体（台なし）の完了連絡${alsoUnit ? 'も' : 'を'}取り消すため、ほかの台の行の「点検完了」も外れます`
                 : '')
           : `点検の完了を連絡しますか？\n${subject}\n報告書が無くても「点検完了」になります（あとで取り消せます）`,
       );
@@ -441,7 +443,8 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
           await portal.refetch();
           return;
         }
-        // 1つずつ取り消し、断られても残りを試す（消えた分と消えなかった分を知らせるため）
+        // 台が先に1つずつ取り消す。台の完了連絡が断られたら台なしは取り消さない（この行は完了のまま残るので、
+        // ほかの台の行の完了だけが外れるのを避ける）。見つからなかった（取り消し済み）ときは次へ進む
         const labelOf = (u: string | null) =>
           u ? `${item.unitCode ?? '台'} の完了連絡` : item.unit ? '点検全体（台なし）の完了連絡' : '完了連絡';
         const removed: string[] = [];
@@ -458,6 +461,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
           } catch (err) {
             console.error('Completion undo failed:', err);
             failed.push({ label: labelOf(u), reason: entryErrorReason(err), stillThere: true });
+            if (u !== null) break;
           }
         }
         if (failed.length === 0) {

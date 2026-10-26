@@ -545,6 +545,19 @@ describe('BulkEntryPage (v1 js/bulk.js init / adminVendorSelect)', () => {
           ),
         ).toBeInTheDocument();
       });
+
+      it('台の完了連絡が断られたら、台なしの完了連絡は取り消さない（この行が完了のまま、ほかの台の行の完了だけ外れるのを防ぐ）', async () => {
+        twoUnits();
+        formApi.unmarkCompleted.mockRejectedValueOnce({ code: '42501', message: '完了連絡を取り消せるのは、連絡した保守会社か管理者だけです' });
+        renderPage();
+        await waitFor(() => expect(mayRows()).toHaveLength(2));
+        fireEvent.click(within(mayRows()[0]!).getByRole('button', { name: '完了取消' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'OK' }));
+        expect(
+          await screen.findByText('取り消しに失敗しました: 完了連絡を取り消せるのは、連絡した保守会社か管理者だけです'),
+        ).toBeInTheDocument();
+        expect(formApi.unmarkCompleted.mock.calls).toEqual([['i1', '2026-05-01', 'u1']]);
+      });
     });
 
     it('申請済み（承認前）の行は『修正』で入力できる状態にし、『申請する』で新しい申請を作らずその申請を直す（修正依頼1026 I11）', async () => {
