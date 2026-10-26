@@ -14,6 +14,16 @@ vi.mock('@/lib/api/property-files', () => api);
 vi.mock('@/lib/supabase', () => ({ supabase: {}, TABLES: {}, RPC: {} }));
 const toast = vi.hoisted(() => vi.fn());
 vi.mock('@/components/ui/Toast', () => ({ useToast: () => ({ addToast: toast }) }));
+// jsdom には canvas の描画が無いので、pdfjs は差し替える（プレビューと文字情報の読み取り）
+const pdfTexts = vi.hoisted(() => ({ value: [] as string[] }));
+vi.mock('../lib/pdfPages', () => ({
+  openPdfPages: vi.fn(async () => ({
+    pageCount: 1,
+    render: vi.fn(async () => {}),
+    pageTexts: vi.fn(async () => pdfTexts.value),
+    destroy: vi.fn(),
+  })),
+}));
 
 import { OtherFileUploadModal } from '../components/OtherFileUploadModal';
 
@@ -25,7 +35,16 @@ beforeAll(() => {
     this.removeAttribute('open');
   };
 });
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  pdfTexts.value = [];
+});
+
+/** 建物名の「検索して選ぶ」欄で選ぶ（修正依頼1026 J1） */
+async function chooseProperty(name: RegExp) {
+  fireEvent.click(screen.getByLabelText('建物名'));
+  fireEvent.click(await screen.findByRole('option', { name }));
+}
 
 const properties = [
   { code: '900001-00', name: 'テスト第一マンション' },
@@ -45,7 +64,7 @@ describe('OtherFileUploadModal', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'その他' }));
     expect(screen.getByText('「その他」の内容を入力してください')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('その他の内容'), { target: { value: '管理規約' } });
-    fireEvent.change(screen.getByLabelText('建物名'), { target: { value: '900002-00' } });
+    await chooseProperty(/テスト第二マンション/);
     fireEvent.change(screen.getByTestId('other-file-input'), {
       target: {
         files: [
@@ -72,6 +91,8 @@ describe('OtherFileUploadModal', () => {
   it('建物の選択肢に、DB の置ける建物（点検行の無い自社物件）も出す', async () => {
     api.fetchPropertyFileTargets.mockResolvedValueOnce([{ code: '900003-00', name: 'テスト第三マンション（点検なし）' }]);
     render(<OtherFileUploadModal open onClose={vi.fn()} properties={properties} />);
+    await waitFor(() => expect(api.fetchPropertyFileTargets).toHaveBeenCalled());
+    fireEvent.click(screen.getByLabelText('建物名'));
     expect(await screen.findByRole('option', { name: /テスト第三マンション（点検なし）/ })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: /テスト第一マンション/ })).toBeInTheDocument();
   });
@@ -105,10 +126,12 @@ describe('OtherFileUploadModal', () => {
       target: { files: [new File(['img'], '見積.jpg', { type: 'image/jpeg' })] },
     });
     expect(await screen.findByTestId('ocr-summary')).toHaveTextContent('見積書');
+    // 画像はプレビューにそのまま出す（J3）
+    expect(screen.getByTestId('file-preview').querySelector('img')).not.toBeNull();
     expect(api.readWithAiOcr).toHaveBeenCalledWith(expect.objectContaining({ mode: 'image', mediaType: 'image/jpeg' }));
     expect(screen.getByRole('radio', { name: '見積書' })).toHaveAttribute('aria-checked', 'true');
-    expect((screen.getByLabelText('建物名') as HTMLSelectElement).value).toBe('900001-00');
-    expect((screen.getByLabelText('書類の日付') as HTMLInputElement).value).toBe('2026-10-20');
+    expect((screen.getByLabelText('建物名') as HTMLInputElement).value).toBe('テスト第一マンション');
+    expect((screen.getByLabelText('作業実施日') as HTMLInputElement).value).toBe('2026-10-20');
     fireEvent.click(screen.getByRole('button', { name: '1件を登録する' }));
     await waitFor(() => expect(api.recordCorrections).toHaveBeenCalled());
     expect(api.recordCorrections.mock.calls[0]![0]).toEqual(
@@ -117,5 +140,31 @@ describe('OtherFileUploadModal', () => {
         expect.objectContaining({ field: 'category', raw_text: '見積書', resolved_value: 'estimate' }),
       ]),
     );
+    // 作業実施日があれば「作業実施日_建物名_区分」で保存する（J4）
+    expect(api.registerPropertyFile.mock.calls[0]![0]).toMatchObject({ fileName: '20261020_テスト第一マンション_見積書.jpg' });
+  });
+
+  it('期間の書類（PDF の文字情報）は前半の日付を作業実施日の初期値にし、保存するファイル名にも使う（修正依頼1026 J4）', async () => {
+    pdfTexts.value = ['請求書\n作業期間 2026年9月1日～2026年9月30日\nテスト第二マンション'];
+    api.registerPropertyFile.mockResolvedValue({ id: 'f1' });
+    render(<OtherFileUploadModal open onClose={vi.fn()} properties={properties} />);
+    fireEvent.click(screen.getByRole('radio', { name: '請求書' }));
+    await chooseProperty(/テスト第二マンション/);
+    fireEvent.change(screen.getByTestId('other-file-input'), {
+      target: {
+        files: [
+          new File(['%PDF-1.4'], 'scan001.pdf', { type: 'application/pdf' }),
+          new File(['%PDF-1.4 b'], 'scan002.pdf', { type: 'application/pdf' }),
+        ],
+      },
+    });
+    await waitFor(() => expect((screen.getByLabelText('作業実施日') as HTMLInputElement).value).toBe('2026-09-01'));
+    expect(screen.getByText('※リストにない建物は建物追加申請をお願いします。')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '2件を登録する' }));
+    await waitFor(() => expect(api.registerPropertyFile).toHaveBeenCalledTimes(2));
+    expect(api.registerPropertyFile.mock.calls.map((c) => (c[0] as { fileName: string }).fileName)).toEqual([
+      '20260901_テスト第二マンション_請求書_1.pdf',
+      '20260901_テスト第二マンション_請求書_2.pdf',
+    ]);
   });
 });

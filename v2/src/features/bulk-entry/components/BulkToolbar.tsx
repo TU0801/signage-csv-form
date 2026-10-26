@@ -86,29 +86,32 @@ export function BulkToolbar({
           <Button size="sm" variant="secondary" onClick={onOpenPaste} disabled={disabled} title="Excelからデータを貼り付け">
             Excelから取込
           </Button>
-          {onOpenBulkReport && (
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={onOpenBulkReport}
-              disabled={disabled}
-              title="複数の点検をまとめた1つのPDFを切り分けて報告書として登録する"
-              className="border-blue-300 text-blue-700"
-            >
-              報告書一括アップロード
-            </Button>
-          )}
-          {onOpenOtherFile && (
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={onOpenOtherFile}
-              disabled={disabled}
-              title="見積書・請求書・契約書・建物関連情報・提案書・写真などを建物ごとに登録する"
-              className="border-blue-300 text-blue-700"
-            >
-              その他ファイルアップロード
-            </Button>
+          {/* アップロードの2つは塗りの色と周りの枠で目立たせる（修正依頼1026 I10） */}
+          {(onOpenBulkReport || onOpenOtherFile) && (
+            <div className="flex items-center gap-1 rounded-md border-2 border-indigo-300 bg-indigo-50 p-0.5" data-testid="upload-buttons">
+              {onOpenBulkReport && (
+                <Button
+                  size="sm"
+                  variant="accent"
+                  onClick={onOpenBulkReport}
+                  disabled={disabled}
+                  title="複数の点検をまとめた1つのPDFを切り分けて報告書として登録する"
+                >
+                  報告書一括アップロード
+                </Button>
+              )}
+              {onOpenOtherFile && (
+                <Button
+                  size="sm"
+                  variant="accent"
+                  onClick={onOpenOtherFile}
+                  disabled={disabled}
+                  title="見積書・請求書・契約書・建物関連情報・提案書・写真などを建物ごとに登録する"
+                >
+                  その他ファイルアップロード
+                </Button>
+              )}
+            </div>
           )}
           {onOpenBuildingRequest && (
             <Button

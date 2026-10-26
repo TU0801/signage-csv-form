@@ -29,7 +29,7 @@ describe('ログイン画面（v1 login.html）', () => {
         <LoginPage />
       </MemoryRouter>,
     );
-    expect(screen.getByRole('heading', { name: '📋 点検日入力フォーム' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '📋 設備点検管理システム' })).toBeInTheDocument();
     expect(screen.getByText('アカウントにログインしてください')).toBeInTheDocument();
     expect(screen.getByText('パスワードを忘れた場合は管理者にお問い合わせください')).toBeInTheDocument();
     expect(screen.getByText('vtest')).toBeInTheDocument();

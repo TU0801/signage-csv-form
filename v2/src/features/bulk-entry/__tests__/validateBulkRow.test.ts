@@ -43,10 +43,10 @@ describe('validateBulkRow (v1 js/bulk-table.js validateRow)', () => {
     expect(errorsOf({ displayTime: 21 })).toEqual(['表示時間(20秒以下)']);
   });
 
-  it('remarks are limited by line count and characters per line', () => {
+  it('備考の行数・1行の文字数は目安なのでエラーにしない（申請を止めない。修正依頼1026 I8）', () => {
     expect(errorsOf({ remarks: '12345\n12345' })).toEqual([]);
-    expect(errorsOf({ remarks: 'a\nb\nc' })).toEqual(['備考行数(2行以下)']);
-    expect(errorsOf({ remarks: '123456' })).toEqual(['備考文字数(1行5文字以下)']);
+    expect(errorsOf({ remarks: 'a\nb\nc' })).toEqual([]);
+    expect(errorsOf({ remarks: '123456' })).toEqual([]);
   });
 
   it('an inspection type missing from the master is an error (only once the master is loaded)', () => {

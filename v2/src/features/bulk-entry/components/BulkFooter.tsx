@@ -23,7 +23,11 @@ export function BulkFooter({ saving, onSave, onDownloadCsv, onCopyCsv, saveBlock
         <Button variant="success" size="lg" onClick={onSave} disabled={disabled || saving || !!saveBlockedReason}>
           {saving ? '保存中...' : '↑ 申請する'}
         </Button>
-        <span className="text-xs text-gray-500">管理者の承認後に反映されます</span>
+        <div className="text-xs leading-tight text-gray-500">
+          <p>管理者の承認後に反映されます</p>
+          {/* ブラウザの拡大率はサイトから変えられないので、戻し方を案内する（修正依頼1026 I2） */}
+          <p data-testid="zoom-help">画面が大きい／小さいときは Ctrl+0（Mac は ⌘+0）で100%に戻せます</p>
+        </div>
         {saveBlockedReason && <span className="text-xs font-medium text-red-600">{saveBlockedReason}</span>}
       </div>
       <div className="flex items-center gap-2">
