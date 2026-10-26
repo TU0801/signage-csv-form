@@ -33,7 +33,8 @@ export function editRowInput(entry: DbEntry): BulkRowInput {
   return {
     terminalId: entry.terminal_id ?? '',
     startDate: entry.inspection_start ?? '',
-    endDate: end && end !== entry.inspection_start ? end : '',
+    // 1日の点検でも保存済みの終了日を残す（空にすると表示終了日が null・表示開始日が申請日になり期間が逆になる。修正依頼1026 R1）
+    endDate: end,
     remarks: entry.remarks ?? '',
     memo: entry.memo ?? '',
     noticeText: entry.announcement ?? '',

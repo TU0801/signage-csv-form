@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest';
-import { inspectionLinkOf } from '../utils/buildBulkEntries';
+import { describe, expect, it, vi } from 'vitest';
+import { buildBulkEntries, inspectionLinkOf } from '../utils/buildBulkEntries';
+import { DEFAULT_BULK_SETTINGS } from '../utils/bulkMaster';
 import { firstError } from '../utils/columns';
-import { scheduleRowInput } from '../utils/scheduleRows';
+import { editRowInput, scheduleRowInput, submittedEntryPatch } from '../utils/scheduleRows';
 import { buildSchedule } from '@/features/inspection-portal/lib/schedule';
 import { buildNotifyOffIndex, buildUnitIndex, expandByUnits } from '@/features/inspection-portal/lib/units';
 import { makeEntry, makeInspection } from '@/features/inspection-portal/__tests__/fixtures';
+import type { DbEntry } from '@/types/database';
 import type { BulkEntryRow } from '../types';
 
 const links = [
@@ -117,5 +119,45 @@ describe('点検登録フォームの点検行との結び付け', () => {
     ] as unknown as BulkEntryRow[];
     expect(firstError(rows)).toEqual({ rowId: 7, rowIndex: 1, col: 0, message: '端末' });
     expect(firstError([rows[0]!])).toBeNull();
+  });
+});
+
+describe('承認前の申請の修正（修正依頼1026 I11）', () => {
+  it('過去の1日の点検を日付に触れずに出し直しても、表示期間は逆にならず表示終了日も元のまま（R1）', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-26T03:00:00Z'));
+    try {
+      const saved = {
+        terminal_id: 'T001',
+        inspection_start: '2026-08-20',
+        inspection_end: '2026-08-20',
+        display_start_date: '2026-08-20',
+        display_end_date: '2026-08-20',
+        poster_type: 'template',
+        poster_position: '2',
+      } as unknown as DbEntry;
+      const input = editRowInput(saved);
+      expect(input.endDate).toBe('2026-08-20');
+      const row = {
+        id: 1,
+        propertyCode: '900001',
+        vendorName: '保守',
+        inspectionType: 'エレベーター定期点検',
+        showOnBoard: true,
+        isValid: true,
+        errors: [],
+        ...input,
+      } as BulkEntryRow;
+      const master = {
+        properties: [],
+        vendors: [{ id: 'v1', vendorName: '保守', emergencyContact: '' }],
+        notices: [{ inspectionType: 'エレベーター定期点検', templateNo: '1', noticeText: '' }],
+      };
+      const [built] = buildBulkEntries([row], master, { id: 'v1', name: '保守' }, DEFAULT_BULK_SETTINGS);
+      const patch = submittedEntryPatch({ ...built });
+      expect(patch).toMatchObject({ inspection_end: '2026-08-20', display_start_date: '2026-08-20', display_end_date: '2026-08-20' });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
