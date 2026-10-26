@@ -139,6 +139,12 @@ export function UnscheduledTable({
                 <tr key={item.key} data-testid="unscheduled-row">
                   <td className={td}>
                     <div>{inspection.property_name}</div>
+                    {/* 台ごとの行の No（設備会社固有の No。修正依頼1026 I7） */}
+                    {item.unitCode && (
+                      <div className="text-[11px] font-semibold text-red-700" data-testid="unit-code">
+                        {item.unitCode}
+                      </div>
+                    )}
                     <div className="text-[11px] text-gray-500">{inspection.property_code}</div>
                   </td>
                   <td className={td}>{inspection.inspection_type_label ?? '－'}</td>

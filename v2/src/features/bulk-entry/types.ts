@@ -71,8 +71,15 @@ export interface BulkScheduleMeta {
   terminalIds: string[];
   /** 物件の下に出す設備会社固有の No（台の unit_code・点検行の設備会社固有コード。修正依頼1025 H2）。無ければ物件コードだけ */
   unitCode?: string | null;
-  /** 2台目以降の行（H1・H3）。表示だけ（locked）。申請・報告書UP・完了連絡は1台目の行 */
+  /** 2台目以降の行（H1。修正依頼1026 I7: 申請・完了連絡は台ごと、報告書UP は1台目の行だけ） */
   secondary?: boolean;
+  /** 台ごとの行の台（biz.property_units.id。修正依頼1026 I7）。申請の property_unit_id に入る。台なしの行は無し */
+  unitId?: string;
+  /**
+   * 申請済み（承認前）の申請を修正している行（修正依頼1026 I11）。その申請の id。
+   * 行は入力できる（locked でない）状態になり、『申請する』で新しい申請ではなくこの申請を直す
+   */
+  editEntryId?: string;
   /** 申請不要（報告書のみ）の点検（H4/G4）。申請の欄を出さない（locked） */
   reportOnly?: boolean;
   /** 点検月以外の月の行（D5「全ての月」） */

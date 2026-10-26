@@ -9,6 +9,7 @@ import { useBulkDragDrop } from '../hooks/useBulkDragDrop';
 import { defaultDisplayTime, terminalIdsFor, uniqueProperties } from '../utils/bulkMaster';
 import { COL, LAST_INPUT_COL } from '../utils/columns';
 import { hasRowDetail, rowDetailSummary } from '../utils/rowDetail';
+import { REMARKS_PLACEHOLDER, remarksNotice } from '@/lib/remarks';
 import { nextSort, orderRows, type SortColumn, type SortState } from '../utils/rowOrder';
 import { discardUnheldRowImages, rowPosterImages } from '../utils/discardRowImages';
 import { ContextMenu } from './ContextMenu';
@@ -52,7 +53,7 @@ interface BulkTableProps {
 
 const cellInputBase = 'block h-7 w-full rounded border px-2 py-0 text-sm focus:border-blue-500 focus:outline-none';
 /** 日付の入力欄（列を狭くしたぶん余白と文字を詰める。F6） */
-const dateInput = 'px-1 text-xs';
+const dateInput = 'min-w-0 max-w-[6.5rem] pl-1 pr-0.5 text-xs';
 const cellInput = (invalid = false) => cn(cellInputBase, invalid ? 'border-red-400' : 'border-gray-300');
 
 /** 読み取りの値（入力欄と同じ高さ） */
@@ -64,10 +65,8 @@ const th = 'cell-head text-left font-medium text-gray-600';
 /** 右端に固定する列の左の境目（横スクロールで下を流れる列と区別する） */
 const stickyEdge = 'shadow-[inset_1px_0_0_#e5e7eb]';
 
-/** 備考の title。全文に入力の目安を添える（目安の文言は従来の title のまま残す） */
-const REMARKS_HINT = '1行25文字×5行まで';
-/** 備考の入力例（B11。1行の入力欄なので2つの例を「/」で並べる） */
-export const REMARKS_PLACEHOLDER = '例: 10:00～12:00 / No2号機11:00～12:00';
+/** 見出しの2段目（対象月・検査月） */
+const subHead = 'text-[10px] font-normal text-gray-400';
 
 const SORT_LABEL: Record<SortColumn, string> = {
   status: 'ステータス',
@@ -131,11 +130,6 @@ function hasError(row: BulkEntryRow, ...prefixes: string[]) {
   return row.errors.some((e) => prefixes.some((p) => e.startsWith(p)));
 }
 
-/** 備考の1行の最大文字数に対する、いちばん長い行の文字数 */
-function remarksLongestLine(remarks: string) {
-  return Math.max(0, ...remarks.split('\n').map((l) => l.length));
-}
-
 /**
  * 点検登録フォーム（一括入力）の表。上に選択中の保守会社の点検予定（点検行 × 対象月）、その下に手で足した行。
  * 予定の行は物件・点検種別が決まっていて、点検開始日を入れると申請の対象になる。申請済みの予定は読み取りで出す。
@@ -195,7 +189,8 @@ export function BulkTable({
     [masterData.notices],
   );
   const inspectionNames = useMemo(() => new Set(masterData.notices.map((n) => n.inspectionType)), [masterData.notices]);
-  const remarksLimit = Number(appSettings.remarks_chars_per_line || 25);
+  const remarksPerLine = Number(appSettings.remarks_chars_per_line || 25);
+  const remarksMaxLines = Number(appSettings.remarks_max_lines || 5);
   const displayTimeDefault = defaultDisplayTime(appSettings);
 
   // 手で足した行 → 予定の行（並べ替えは予定の行だけ）。修正依頼1025 F1・F3
@@ -300,7 +295,8 @@ export function BulkTable({
 
   return (
     <>
-      <table className="w-full border-collapse text-sm">
+      {/* bulk-table: 列が多いのでセルの横の余白を詰める（index.css） */}
+      <table className="bulk-table w-full border-collapse text-sm">
         <thead className="sticky top-0 z-10 bg-gray-50">
           <tr className="border-b">
             <th className="cell-head w-8 min-w-[2rem]">
@@ -313,41 +309,51 @@ export function BulkTable({
               />
             </th>
             {/* 並びは注記の配置どおり: ステータス・報告書UP・完了連絡 → No（対象月）→ 点検月/検査月 → 物件（F15）。
-                ステータス・No・点検月/検査月は見出しの ▲▼ で予定の行を並べ替える（修正依頼1025 F3） */}
-            <th className={cn(th, 'min-w-[7rem]')}>
+                ステータス・No・点検月/検査月は見出しの ▲▼ で予定の行を並べ替える（修正依頼1025 F3）。
+                拡大率100%の 1366px 幅でも横スクロールがほぼ出ないよう、列は狭くして文字は折り返す（修正依頼1026 I2〜I5） */}
+            <th className={cn(th, 'w-[6rem] min-w-[6rem]')}>
               <SortButton column="status" sort={sort} onSortChange={onSortChange}>
                 ステータス
               </SortButton>
             </th>
-            <th className={cn(th, 'min-w-[8.5rem]')}>報告書UP・完了連絡</th>
-            <th className={cn(th, 'w-20 min-w-[5rem]')}>
+            {/* 見出しは2行（I3）。ボタンは縦に並ぶ */}
+            <th className={cn(th, 'w-[4.25rem] min-w-[4.25rem] leading-tight')}>
+              <span className="text-[11px]">報告書UP・</span>
+              <br />
+              <span className="text-[11px]">完了連絡</span>
+            </th>
+            <th className={cn(th, 'w-[4.5rem] min-w-[4.5rem]')}>
               <SortButton column="targetMonth" sort={sort} onSortChange={onSortChange}>
-                No<div className="text-[10px] font-normal text-gray-400">対象月</div>
+                No<div className={subHead}>対象月</div>
               </SortButton>
             </th>
             {/* 点検月と検査月は1列に上下2段（F4） */}
-            <th className={cn(th, 'min-w-[5.5rem]')}>
+            <th className={cn(th, 'w-[4.5rem] min-w-[4.5rem]')}>
               <SortButton column="months" sort={sort} onSortChange={onSortChange}>
-                点検月<div className="text-[10px] font-normal text-gray-400">検査月</div>
+                点検月<div className={subHead}>検査月</div>
               </SortButton>
             </th>
-            <th className={cn(th, 'min-w-[15rem]')}>
+            <th className={cn(th, 'w-[16rem] min-w-[8.5rem]')}>
               物件<span className="text-red-500">*</span>
             </th>
-            {showManagement && <th className={cn(th, 'w-28 min-w-[6rem]')}>管理会社</th>}
-            {showVendor && <th className={cn(th, 'w-32 min-w-[7rem]')}>保守会社</th>}
-            <th className={cn(th, 'min-w-[12rem]')}>
+            {/* 点検種別は狭くして折り返す（I5） */}
+            <th className={cn(th, 'w-[6.5rem] min-w-[6.5rem]')}>
               点検種別<span className="text-red-500">*</span>
             </th>
             {/* 日付の列は狭く（F6。yyyy/mm/dd とカレンダーのボタンが入る幅） */}
-            <th className={cn(th, 'w-[7.5rem] min-w-[7.5rem]')}>点検開始日</th>
-            <th className={cn(th, 'w-[7.5rem] min-w-[7.5rem]')}>点検終了日</th>
-            <th className={cn(th, 'min-w-[14rem]')}>備考（作業時間を記載下さい）</th>
-            <th className={cn(th, 'min-w-[9rem]')} title="CSV には出ません（点検月の変更などの覚え書き）">
+            <th className={cn(th, 'w-[6.5rem] min-w-[6.5rem]')}>点検開始日</th>
+            <th className={cn(th, 'w-[6.5rem] min-w-[6.5rem]')}>点検終了日</th>
+            {/* 備考は幅を広く・2行の入力欄（I8） */}
+            <th className={cn(th, 'w-[28rem] min-w-[15rem]')}>備考（作業時間を記載下さい）</th>
+            <th className={cn(th, 'w-[5rem] min-w-[5rem]')} title="CSV には出ません（点検月の変更などの覚え書き）">
               メモ
             </th>
+            {/* 管理会社・保守会社（略称）は右側へ（I4。右端に固定の『詳細』の手前） */}
+            {/* 管理者のときだけ出る列。1366 幅で Windows の縦スクロールバー（約17px）が出ても横スクロールしない幅（I2） */}
+            {showManagement && <th className={cn(th, 'w-[4.25rem] min-w-[4.25rem]')}>管理会社</th>}
+            {showVendor && <th className={cn(th, 'w-[4.25rem] min-w-[4.25rem]')}>保守会社</th>}
             {/* 幅は w-* だけだと表が入れ物より広いときに縮むので min-w も付ける。詳細は横スクロールしても右端に残す */}
-            <th className={cn(th, 'sticky right-0 w-16 min-w-[4rem] bg-gray-50 text-center', stickyEdge)}>詳細</th>
+            <th className={cn(th, 'sticky right-0 w-[3rem] min-w-[3rem] bg-gray-50 text-center', stickyEdge)}>詳細</th>
           </tr>
         </thead>
         <tbody>
@@ -363,7 +369,7 @@ export function BulkTable({
             const unregisteredInspection =
               !schedule && !!row.inspectionType && inspectionNames.size > 0 && !inspectionNames.has(row.inspectionType);
             const hasDetail = hasRowDetail(row, displayTimeDefault);
-            const remarksLength = remarksLongestLine(row.remarks);
+            const remarksWarning = locked ? null : remarksNotice(row.remarks, remarksPerLine, remarksMaxLines);
             const selected = selectedIds.has(row.id);
             const noTerminal = !schedule && propExists && terminalIds.length === 0;
             // 右端に固定する列は下の列が透けないよう背景を塗る（選択中の行の色に合わせる）
@@ -388,7 +394,7 @@ export function BulkTable({
                   'border-b align-top',
                   // 2台目以降の行は1台目の行と続けて見えるよう上の罫線を点線に（H1）
                   schedule?.secondary && 'border-t [border-top-style:dashed]',
-                  locked && !schedule?.reportOnly && !schedule?.secondary && 'bg-gray-50',
+                  locked && !schedule?.reportOnly && 'bg-gray-50',
                   info.status === 'overdue' && !selected && 'bg-red-50/60',
                   selected && 'bg-blue-50',
                   draggedRowId === row.id && 'opacity-50',
@@ -439,14 +445,12 @@ export function BulkTable({
                   {schedule ? (
                     <div className="px-1 text-xs leading-tight" title={`${row.propertyCode} ${schedule.propertyName}`}>
                       <div className="text-gray-900">{schedule.propertyName}</div>
-                      {/* 設備会社固有の No（号機。サイネージの台は端末番号）を出し、物件コードは小さく添える（修正依頼1025 H2） */}
+                      {/* 設備会社固有の No（No1・No2。保守会社が㈱BARAN のサイネージの台は端末番号）だけを出す（修正依頼1026 I6）。
+                          No の無い点検は何も出さない（物件コードは端末番号と同じ形のものが多いので出さない。title には残す） */}
                       {schedule.unitCode && (
                         <div className="text-[11px] font-semibold text-red-700" data-testid="unit-code">
                           {schedule.unitCode}
                         </div>
-                      )}
-                      {schedule.unitCode !== row.propertyCode && (
-                        <div className="text-[11px] text-gray-500">{row.propertyCode}</div>
                       )}
                     </div>
                   ) : (
@@ -493,27 +497,11 @@ export function BulkTable({
                     </>
                   )}
                 </td>
-                {showManagement && (
-                  <td className="cell">
-                    {/* 略称（未登録なら正式名）を折り返して出す（修正依頼1025 F5）。正式名は title */}
-                    <span
-                      className="block min-h-7 max-w-[7rem] whitespace-normal break-all px-1 py-1 text-xs leading-tight text-gray-700"
-                      title={info.managementFullName ?? info.managementName}
-                    >
-                      {info.managementName || '－'}
-                    </span>
-                  </td>
-                )}
-                {showVendor && (
-                  <td className="cell">
-                    <span className={cn(cellText, 'block max-w-[9rem] truncate text-gray-700')} title={info.vendorName}>
-                      {info.vendorName || '－'}
-                    </span>
-                  </td>
-                )}
                 <td className="cell">
                   {schedule ? (
-                    <span className={cn(cellText, 'text-gray-900')}>{row.inspectionType || '－'}</span>
+                    <span className="block min-h-7 whitespace-normal break-all px-1 py-1 text-xs leading-tight text-gray-900">
+                      {row.inspectionType || '－'}
+                    </span>
                   ) : (
                     <>
                       <SearchableSelect
@@ -556,7 +544,7 @@ export function BulkTable({
                       value={row.startDate}
                       onChange={(e) => changeStartDate(row.id, e.target.value)}
                       onKeyDown={(e) => handleCellKeyDown(e, index, COL.startDate)}
-                      className={cn(cellInput(), dateInput)}
+                      className={cn(cellInput(), dateInput, 'field-required')}
                     />
                   )}
                 </td>
@@ -574,7 +562,7 @@ export function BulkTable({
                       value={row.endDate}
                       onChange={(e) => updateRow(row.id, { endDate: e.target.value })}
                       onKeyDown={(e) => handleCellKeyDown(e, index, COL.endDate)}
-                      className={cn(cellInput(hasError(row, '点検終了日')), dateInput)}
+                      className={cn(cellInput(hasError(row, '点検終了日')), dateInput, 'field-required')}
                     />
                   )}
                 </td>
@@ -582,40 +570,42 @@ export function BulkTable({
                   {locked ? (
                     <span className={cn(cellText, 'whitespace-pre-line leading-tight text-gray-700')}>{row.remarks || '－'}</span>
                   ) : (
-                    // 1行の入力欄なので、実際の上限は1行の文字数。入力中に残りの文字数を右端に出す
-                    <div className="relative">
-                      <input
-                        type="text"
+                    // 2行の入力欄（スクロールバーつき。修正依頼1026 I8）。Enter は改行（次の欄へは Alt+Enter か Tab）。
+                    // 行数・1行の文字数は目安で、超えたら下に注意を出す（申請は止めない）
+                    <>
+                      <textarea
                         data-col={COL.remarks}
                         aria-label="備考"
+                        rows={2}
                         value={row.remarks}
                         placeholder={REMARKS_PLACEHOLDER}
-                        maxLength={125}
-                        title={row.remarks ? `${row.remarks}\n${REMARKS_HINT}` : REMARKS_HINT}
+                        maxLength={500}
+                        title={`${row.remarks || REMARKS_PLACEHOLDER}\n（Enter で改行・Alt+Enter で次の欄）`}
                         onChange={(e) => changeRemarks(row.id, e.target.value)}
-                        onKeyDown={(e) => handleCellKeyDown(e, index, COL.remarks)}
-                        className={cn(cellInput(hasError(row, '備考')), row.remarks && 'pr-16')}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.altKey) return;
+                          handleCellKeyDown(e, index, COL.remarks);
+                        }}
+                        className={cn(
+                          'block w-full resize-y overflow-y-auto rounded border px-1.5 py-0.5 text-xs leading-snug focus:border-blue-500 focus:outline-none',
+                          'placeholder:text-[11px]',
+                          remarksWarning ? 'border-amber-400' : 'border-gray-300',
+                          'field-required',
+                        )}
                       />
-                      {row.remarks && (
-                        <span
-                          className={cn(
-                            'pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[11px]',
-                            remarksLength > remarksLimit ? 'font-medium text-red-600' : 'text-gray-400',
-                          )}
-                        >
-                          {remarksLength > remarksLimit
-                            ? `${remarksLength - remarksLimit}文字超過`
-                            : `残り${remarksLimit - remarksLength}文字`}
-                        </span>
+                      {remarksWarning && (
+                        <p className="mt-0.5 text-[11px] leading-tight text-amber-700" data-testid="remarks-warning">
+                          {remarksWarning}
+                        </p>
                       )}
-                    </div>
+                    </>
                   )}
                 </td>
                 <td className="cell">
                   {locked ? (
                     // 申請に保存したメモを読み取りで出す（B12。読めるのは自分の申請と管理者）
                     row.memo ? (
-                      <span className={cn(cellText, 'max-w-[14rem] truncate')} title={row.memo}>
+                      <span className={cn(cellText, 'max-w-[5rem] truncate')} title={row.memo}>
                         {row.memo}
                       </span>
                     ) : (
@@ -627,7 +617,7 @@ export function BulkTable({
                       data-col={COL.memo}
                       aria-label="メモ"
                       value={row.memo}
-                      placeholder="CSVに出ないメモ"
+                      placeholder="メモ"
                       maxLength={500}
                       title={row.memo || '点検月の変更などのメモ（CSV には出ません）'}
                       onChange={(e) => changeMemo(row.id, e.target.value)}
@@ -636,6 +626,27 @@ export function BulkTable({
                     />
                   )}
                 </td>
+                {showManagement && (
+                  <td className="cell">
+                    {/* 略称（未登録なら正式名）を折り返して出す（修正依頼1025 F5）。正式名は title */}
+                    <span
+                      className="block min-h-7 max-w-[7rem] whitespace-normal break-all px-1 py-1 text-xs leading-tight text-gray-700"
+                      title={info.managementFullName ?? info.managementName}
+                    >
+                      {info.managementName || '－'}
+                    </span>
+                  </td>
+                )}
+                {showVendor && (
+                  <td className="cell">
+                    <span
+                      className="block min-h-7 whitespace-normal break-all px-0.5 py-1 text-xs leading-tight text-gray-700"
+                      title={info.vendorName}
+                    >
+                      {info.vendorName || '－'}
+                    </span>
+                  </td>
+                )}
                 <td className={cn('cell sticky right-0 text-center align-middle', stickyEdge, stickyBg)}>
                   {/* 設定済みかどうかと、表示期間・位置の要約を title で見られるようにする */}
                   <button
@@ -643,13 +654,11 @@ export function BulkTable({
                     data-col={COL.detail}
                     disabled={locked}
                     title={
-                      schedule?.secondary
-                        ? '2台目以降の行は1台目の行で申請します'
-                        : schedule?.reportOnly
-                          ? '申請不要（報告書のみ）の点検です'
-                          : locked
-                            ? '申請済みの予定は詳細を変えられません'
-                            : `詳細設定\n${rowDetailSummary(row)}`
+                      schedule?.reportOnly
+                        ? '申請不要（報告書のみ）の点検です'
+                        : locked
+                          ? '申請済みの予定は詳細を変えられません'
+                          : `詳細設定\n${rowDetailSummary(row)}`
                     }
                     onClick={() => onOpenRowDetail(row.id)}
                     className={cn(

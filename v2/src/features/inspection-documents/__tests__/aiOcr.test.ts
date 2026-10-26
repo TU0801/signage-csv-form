@@ -3,7 +3,7 @@ import {
   buildCorrectionDictionary,
   correctionKey,
   correctionRecord,
-  lastDayOfPreviousMonth,
+  firstDayOfPreviousMonth,
   matchBuildingInText,
   matchBuildingName,
   matchCompany,
@@ -54,17 +54,27 @@ describe('aiOcr 日付', () => {
     expect(parseTargetMonth('2026年10月5日')).toBeNull();
   });
 
-  it('実施日の既定: 読めた実施日、読めず対象月が先月なら先月末、それ以外は変えない', () => {
+  it('実施日の既定: 読めた実施日、読めず対象月が先月なら先月頭（修正依頼1026 K2）、それ以外は変えない', () => {
     expect(suggestedDefaultPerformedOn({ performedOn: '2026-10-03', targetMonth: '2026-09-01' }, '2026-10-25')).toBe('2026-10-03');
-    expect(suggestedDefaultPerformedOn({ performedOn: null, targetMonth: '2026-09-01' }, '2026-10-25')).toBe('2026-09-30');
+    expect(suggestedDefaultPerformedOn({ performedOn: null, targetMonth: '2026-09-01' }, '2026-10-25')).toBe('2026-09-01');
     expect(suggestedDefaultPerformedOn({ performedOn: null, targetMonth: '2026-10-01' }, '2026-10-25')).toBeNull();
     expect(suggestedDefaultPerformedOn({ performedOn: null, targetMonth: null }, '2026-01-10')).toBeNull();
   });
 
-  it('先月の末日', () => {
-    expect(lastDayOfPreviousMonth('2026-10-25')).toBe('2026-09-30');
-    expect(lastDayOfPreviousMonth('2026-03-01')).toBe('2026-02-28');
-    expect(lastDayOfPreviousMonth('2026-01-15')).toBe('2025-12-31');
+  it('先月の1日（『先月頭』）', () => {
+    expect(firstDayOfPreviousMonth('2026-10-25')).toBe('2026-09-01');
+    expect(firstDayOfPreviousMonth('2026-03-31')).toBe('2026-02-01');
+    expect(firstDayOfPreviousMonth('2026-01-15')).toBe('2025-12-01');
+  });
+
+  it('期間の書類は前半の日付を実施日にする（AI が後ろの日付を返しても。修正依頼1026 J4）', () => {
+    const ctx = { properties, vendors: [], inspectionTypes: [], dictionary: new Map() };
+    const s = postProcessOcr(
+      raw({ performed_on_text: '2026年9月1日～2026年9月30日', performed_on: '2026-09-30' }),
+      ctx,
+    );
+    expect(s.performedOn).toBe('2026-09-01');
+    expect(postProcessOcr(raw({ performed_on: '2026-09-30' }), ctx).performedOn).toBe('2026-09-30');
   });
 });
 

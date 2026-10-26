@@ -3,8 +3,8 @@ import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
 import { useAuth } from '@/hooks/useAuth';
-import { entryErrorReason } from '@/lib/api/admin-entries';
-import { reviewEntry } from '@/lib/api/portal';
+import { entryErrorReason, STALE_ENTRY_MESSAGE } from '@/lib/api/admin-entries';
+import { approveEntryChecked, reviewEntry } from '@/lib/api/portal';
 import type { PortalEntryRow, PortalInspectionRow } from '@/types/portal';
 import { useRefetchOnVisible } from '@/features/approval/hooks/useRefetchOnVisible';
 import { ReportUploadModal } from '@/features/inspection-documents/components/ReportUploadModal';
@@ -13,6 +13,7 @@ import { reportEntryId, canSubmit, type PortalRole } from '../lib/actions';
 import { filterSchedule, filterUnscheduled, INITIAL_FILTERS, type PortalFilters } from '../lib/filters';
 import { buildSchedule, formatMonth, todayJst, typeFlagsMap, unscheduledInspections, type ScheduleItem } from '../lib/schedule';
 import { completionKeys, countStatuses, itemStatus } from '../lib/status';
+import { buildNotifyOffIndex, buildUnitIndex, expandByUnits } from '../lib/units';
 import { ApplyModal, type ApplyTarget } from './ApplyModal';
 import { CountBadges } from './CountBadges';
 import { EntryDetailModal, type EntryDetailTarget } from './EntryDetailModal';
@@ -67,14 +68,29 @@ export function InspectionPortal() {
 
   // 点検種別の印（毎月・申請不要は超過にしない。修正依頼1025 H4/G4）
   const flags = useMemo(() => typeFlagsMap(data.typeFlags), [data.typeFlags]);
+  // 台が2台以上の点検は台ごとの行（申請・承認・完了連絡は台ごと。修正依頼1026 I7）。点検日連絡 OFF は申請不要（修正依頼1026）
+  const unitIndex = useMemo(() => buildUnitIndex(data.units), [data.units]);
+  const notify = useMemo(() => buildNotifyOffIndex(data.notifyOff), [data.notifyOff]);
   const schedule = useMemo(
-    () => buildSchedule(data.inspections, data.entries, data.reports, { today, monthsAhead: MONTHS_AHEAD, flags }),
-    [data.inspections, data.entries, data.reports, today, flags],
+    () =>
+      expandByUnits(
+        buildSchedule(data.inspections, data.entries, data.reports, { today, monthsAhead: MONTHS_AHEAD, flags }),
+        unitIndex,
+        null,
+        { notify },
+      ),
+    [data.inspections, data.entries, data.reports, today, flags, unitIndex, notify],
   );
   // 点検月の無い点検（本番の大半）も件数バッジと申請状況の絞り込みに含める
   const unscheduledAll = useMemo(
-    () => buildUnscheduledItems(unscheduledInspections(data.inspections, flags), data.entries, data.reports, flags),
-    [data.inspections, data.entries, data.reports, flags],
+    () =>
+      expandByUnits(
+        buildUnscheduledItems(unscheduledInspections(data.inspections, flags), data.entries, data.reports, flags),
+        unitIndex,
+        null,
+        { notify },
+      ),
+    [data.inspections, data.entries, data.reports, flags, unitIndex, notify],
   );
   // ステータス（修正依頼1024 B14）。完了連絡を含めて決める
   const completed = useMemo(() => completionKeys(data.completions), [data.completions]);
@@ -92,21 +108,32 @@ export function InspectionPortal() {
     if (busyEntryId) return;
     setBusyEntryId(entry.id);
     try {
-      await reviewEntry(entry.id, 'approve');
+      // 見た版の申請だけを承認する（承認前の申請は保守会社が直せる。修正依頼1026 I11）
+      await approveEntryChecked(entry.id, entry.updated_at);
       addToast('承認しました', 'success');
       setDetailTarget(null);
       await data.refetch();
     } catch (err) {
       console.error('Approve failed:', err);
       addToast(`承認に失敗しました: ${entryErrorReason(err)}`, 'error');
+      // 直されていたら詳細を閉じて読み直す（古い内容のまま承認し直させない）
+      if (entryErrorReason(err) === STALE_ENTRY_MESSAGE) {
+        setDetailTarget(null);
+        void data.refetch();
+      }
       throw err;
     } finally {
       setBusyEntryId(null);
     }
   };
 
+  // 台ごとの行は件名に台の No を足す（修正依頼1026 I7）
   const openDetail = (item: ScheduleItem, entry: PortalEntryRow, month: string | null) =>
-    setDetailTarget({ entry, subject: subjectOf(item.inspection, month), history: item.entries });
+    setDetailTarget({
+      entry,
+      subject: `${subjectOf(item.inspection, month)}${item.unit && item.unitCode ? `・${item.unitCode}` : ''}`,
+      history: item.entries,
+    });
 
   const sendBack = async (reason: string) => {
     if (!sendBackTarget) return;
@@ -197,7 +224,9 @@ export function InspectionPortal() {
         role={role}
         statusOf={statusOf}
         busyEntryId={busyEntryId}
-        onApply={(item, resubmit) => setApplyTarget({ inspection: item.inspection, targetMonth: item.targetMonth, resubmit })}
+        onApply={(item, resubmit) =>
+          setApplyTarget({ inspection: item.inspection, targetMonth: item.targetMonth, resubmit, unitId: item.unit?.unit_id ?? null })
+        }
         onReport={openReport}
         onReview={(item, entry) => openDetail(item, entry, item.targetMonth)}
       />
@@ -207,8 +236,12 @@ export function InspectionPortal() {
         role={role}
         statusOf={statusOf}
         busyEntryId={busyEntryId}
-        onApply={(item) => setApplyTarget({ inspection: item.inspection, targetMonth: null, resubmit: null })}
-        onResubmit={(item, entry) => setApplyTarget({ inspection: item.inspection, targetMonth: null, resubmit: entry })}
+        onApply={(item) =>
+          setApplyTarget({ inspection: item.inspection, targetMonth: null, resubmit: null, unitId: item.unit?.unit_id ?? null })
+        }
+        onResubmit={(item, entry) =>
+          setApplyTarget({ inspection: item.inspection, targetMonth: null, resubmit: entry, unitId: item.unit?.unit_id ?? null })
+        }
         onReport={openUnscheduledReport}
         onReview={(item, entry) => openDetail(item, entry, entry.target_month)}
         forceOpen={filters.status !== '' && unscheduled.length > 0}

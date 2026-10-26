@@ -90,6 +90,8 @@ export function buildBulkEntries(
         memo: row.memo || null,
         ...(link ?? {}),
         ...(requestId ? { property_request_id: requestId } : {}),
+        // 台ごとの行は台を入れる（修正依頼1026 I7。台ごとに申請・CSV の行になる）
+        ...(row.schedule?.unitId ? { property_unit_id: row.schedule.unitId } : {}),
       };
     });
 }

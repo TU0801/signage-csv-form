@@ -19,3 +19,15 @@
   font-size: 0.75rem;
   white-space: nowrap;
 }
+
+/* 点検登録フォームの一括入力の表は列が多いので、セルの横の余白を詰める（拡大率100%・1366px 幅で横スクロールを出しにくくする。修正依頼1026 I2）。
+   cell / cell-head は utilities の層にあるので、層の外のこの指定が勝つ */
+.bulk-table :is(th, td) {
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+
+/* 必須入力の欄の目印（修正依頼1026 I9）。入力欄の背景を薄い黄色にする。読み取りの値・無効の欄には付けない */
+@utility field-required {
+  background-color: #fffbe0;
+}

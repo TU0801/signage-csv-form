@@ -11,6 +11,7 @@ import type { AppSettings } from '@/lib/api/single-entry';
 import type { DbInspectionType, Terminal } from '@/types/database';
 import type { EntryFormApi } from '../hooks/useEntryForm';
 import { CATEGORY_OPTIONS, defaultNoticeText, noticeUsage, remarksUsage } from '../lib/entryLogic';
+import { REMARKS_PLACEHOLDER, remarksNotice } from '@/lib/remarks';
 import { customImageName } from '../types';
 import { LibraryPickerModal } from '@/features/poster-library/components/LibraryPickerModal';
 import { ExtraPostersEditor } from '@/features/poster-library/components/ExtraPostersEditor';
@@ -91,6 +92,8 @@ export function EntryForm({
   const noticeEdited = noticeDefault !== '' && values.noticeText !== noticeDefault;
   const notice = noticeUsage(values.noticeText, settings);
   const remarks = remarksUsage(values.remarks, settings);
+  // 目安を超えたら欄の下に注意（追加・申請は止めない。修正依頼1026 I8）
+  const remarksWarning = remarksNotice(values.remarks, settings.remarks_chars_per_line, settings.remarks_max_lines);
 
   // v1: js/script.js onImageSelected
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -171,6 +174,7 @@ export function EntryForm({
             options={propertyOptions}
             value={values.propertyCode}
             onChange={form.changeProperty}
+            className="field-required"
           />
         </div>
         {values.propertyCode && terminals.length === 0 ? (
@@ -211,6 +215,7 @@ export function EntryForm({
           groups={INSPECTION_GROUPS}
           value={values.inspectionTypeId}
           onChange={form.changeInspectionType}
+          className="field-required"
         />
 
         <fieldset className="space-y-0.5">
@@ -270,7 +275,7 @@ export function EntryForm({
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex-1 rounded-md border-2 border-dashed border-gray-300 p-3 text-center text-sm text-gray-600 hover:bg-gray-50"
+                  className="field-required flex-1 rounded-md border-2 border-dashed border-gray-300 p-3 text-center text-sm text-gray-600 hover:bg-gray-50"
                 >
                   クリックして画像を選択
                   <br />
@@ -369,6 +374,7 @@ export function EntryForm({
           type="date"
           value={values.startDate}
           onChange={(e) => form.changeStartDate(e.target.value)}
+          className="field-required"
         />
         <Input
           id="se-end-date"
@@ -376,6 +382,7 @@ export function EntryForm({
           type="date"
           value={values.endDate}
           onChange={(e) => form.changeEndDate(e.target.value)}
+          className="field-required"
         />
 
         <div className="space-y-0.5 sm:col-span-2">
@@ -383,16 +390,21 @@ export function EntryForm({
             id="se-remarks"
             label="備考（作業時間を記載下さい）"
             rows={3}
-            placeholder="例: 10:00～12:00 / No2号機11:00～12:00"
+            placeholder={REMARKS_PLACEHOLDER}
             value={values.remarks}
             disabled={isCustom}
-            className={isCustom ? 'bg-gray-200' : undefined}
+            className={isCustom ? 'bg-gray-200' : 'field-required'}
             onChange={(e) => form.setField('remarks', e.target.value)}
           />
           {!isCustom && (
-            <p className={cn('text-right text-xs text-gray-500', remarks.over && 'font-medium text-red-600')}>
-              {remarks.lines}/{remarks.maxLines}行・1行最長 {remarks.longest}/{remarks.perLine}字
-            </p>
+            <div className="flex items-start justify-between gap-2 text-xs">
+              <span className="text-amber-700" data-testid="remarks-warning">
+                {remarksWarning}
+              </span>
+              <span className={cn('shrink-0 text-gray-500', remarks.over && 'font-medium text-amber-700')}>
+                {remarks.lines}/{remarks.maxLines}行・1行最長 {remarks.longest}/{remarks.perLine}字
+              </span>
+            </div>
           )}
         </div>
         {/* メモは掲示・CSV に出さない（点検月の変更などの覚え書き。承認の画面で管理者が見る） */}

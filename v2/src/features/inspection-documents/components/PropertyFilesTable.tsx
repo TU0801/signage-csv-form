@@ -28,7 +28,7 @@ export function PropertyFilesTable({ files, canDelete, busyId, onAction }: Prope
           <th className={TH}>区分</th>
           <th className={TH}>ファイル名</th>
           <th className={TH}>建物</th>
-          <th className={TH}>書類の日付</th>
+          <th className={TH}>作業実施日</th>
           <th className={TH}>アップロード</th>
           <th className={TH}>メモ</th>
           <th className={TH}>登録日時</th>

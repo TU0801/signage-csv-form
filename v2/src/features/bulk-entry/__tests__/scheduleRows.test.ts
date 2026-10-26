@@ -1,9 +1,12 @@
-import { describe, expect, it } from 'vitest';
-import { inspectionLinkOf } from '../utils/buildBulkEntries';
+import { describe, expect, it, vi } from 'vitest';
+import { buildBulkEntries, inspectionLinkOf } from '../utils/buildBulkEntries';
+import { DEFAULT_BULK_SETTINGS } from '../utils/bulkMaster';
 import { firstError } from '../utils/columns';
-import { scheduleRowInput } from '../utils/scheduleRows';
+import { editRowInput, scheduleRowInput, submittedEntryPatch } from '../utils/scheduleRows';
 import { buildSchedule } from '@/features/inspection-portal/lib/schedule';
+import { buildNotifyOffIndex, buildUnitIndex, expandByUnits } from '@/features/inspection-portal/lib/units';
 import { makeEntry, makeInspection } from '@/features/inspection-portal/__tests__/fixtures';
+import type { DbEntry } from '@/types/database';
 import type { BulkEntryRow } from '../types';
 
 const links = [
@@ -71,19 +74,42 @@ describe('点検登録フォームの点検行との結び付け', () => {
     expect(scheduleRowInput(items.find((i) => i.targetMonth === '2026-05-01')!, memos).row.memo).toBe('');
   });
 
-  it('2台目以降の行は読み取りで、1台目の申請の日付・備考・メモを出さない（修正依頼1025 決定4）', () => {
-    const items = buildSchedule(
-      [makeInspection()],
-      [makeEntry({ id: 'e-nov', status: 'ready', target_month: '2026-11-01', inspection_start: '2026-11-10', inspection_end: '2026-11-11', remarks: '午前' })],
-      [],
-      { today: '2026-10-21', monthsAhead: 12 },
-    );
-    const nov = items.find((i) => i.targetMonth === '2026-11-01')!;
-    const memos = new Map([['e-nov', 'メモ']]);
-    const second = scheduleRowInput({ ...nov, key: `${nov.key}:u2`, secondary: true }, memos);
-    expect(second.meta).toMatchObject({ locked: true, secondary: true });
-    expect(second.row).toMatchObject({ startDate: '', endDate: '', remarks: '', memo: '', terminalId: 'T001' });
-    expect(scheduleRowInput(nov, memos).row.startDate).toBe('2026-11-10');
+  it('台ごとの行は台の申請（と台なしの申請）だけで状態を決め、台の点検日連絡 OFF は申請不要。保守会社に1台しか見えなくても他の台の申請と混ぜない（修正依頼1026 I7）', () => {
+    const unit = (id: string, code: string, maintainer: string) => ({
+      inspection_id: 'i1',
+      unit_id: id,
+      unit_code: code,
+      unit_sort: Number(code.slice(2)),
+      maintainer_id: maintainer,
+      inspection_months: [],
+      inspected_on: null,
+      equipment_code: null,
+    });
+    const index = buildUnitIndex([unit('u1', 'No1', 'v1'), unit('u2', 'No2', 'v1'), unit('u3', 'No3', 'v2')]);
+    const entries = [
+      makeEntry({ id: 'e-u2', status: 'ready', target_month: '2026-11-01', property_unit_id: 'u2', inspection_start: '2026-11-10' }),
+      makeEntry({ id: 'e-u3', status: 'draft', target_month: '2026-05-01', property_unit_id: 'u3', inspection_start: '2026-05-10' }),
+    ];
+    const items = buildSchedule([makeInspection()], entries, [], { today: '2026-10-21', monthsAhead: 12 });
+    const notify = buildNotifyOffIndex([{ inspection_id: 'i1', unit_id: 'u1' }]);
+    const rows = expandByUnits(items, index, 'v1', { notify });
+    const nov = rows.filter((i) => i.targetMonth === '2026-11-01');
+    expect(nov.map((i) => [i.unitCode, i.application, !!i.reportOnly, !!i.secondary])).toEqual([
+      ['No1', 'not_applied', true, false],
+      ['No2', 'approved', false, true],
+    ]);
+    // 5月は No3（他社 v2 の台）の申請だけ。v1 の No2 は超過（No1 は点検日連絡 OFF なので超過にしない）
+    const may = rows.filter((i) => i.targetMonth === '2026-05-01');
+    expect(may.map((i) => [i.unitCode, i.application, i.overdueUnapplied])).toEqual([
+      ['No1', 'not_applied', false],
+      ['No2', 'not_applied', true],
+    ]);
+    // 台ごとの行は台を申請に渡し、2台目の行も入力できる（申請済みは読み取り）
+    expect(scheduleRowInput(nov[1]!).meta).toMatchObject({ unitId: 'u2', secondary: true, locked: true });
+    expect(scheduleRowInput(may[1]!).meta).toMatchObject({ unitId: 'u2', secondary: true, locked: false });
+    // 他社の保守会社 v2 には No3 だけ（1台でも台ごとの申請で決める）
+    const v2 = expandByUnits(items, index, 'v2').filter((i) => i.targetMonth === '2026-05-01');
+    expect(v2.map((i) => [i.unitCode, i.application, i.unit?.unit_id])).toEqual([['No3', 'applied', 'u3']]);
   });
 
   it('最初のエラーの行と、そのエラーを直す欄（端末は物件の欄）を返す', () => {
@@ -93,5 +119,45 @@ describe('点検登録フォームの点検行との結び付け', () => {
     ] as unknown as BulkEntryRow[];
     expect(firstError(rows)).toEqual({ rowId: 7, rowIndex: 1, col: 0, message: '端末' });
     expect(firstError([rows[0]!])).toBeNull();
+  });
+});
+
+describe('承認前の申請の修正（修正依頼1026 I11）', () => {
+  it('過去の1日の点検を日付に触れずに出し直しても、表示期間は逆にならず表示終了日も元のまま（R1）', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-26T03:00:00Z'));
+    try {
+      const saved = {
+        terminal_id: 'T001',
+        inspection_start: '2026-08-20',
+        inspection_end: '2026-08-20',
+        display_start_date: '2026-08-20',
+        display_end_date: '2026-08-20',
+        poster_type: 'template',
+        poster_position: '2',
+      } as unknown as DbEntry;
+      const input = editRowInput(saved);
+      expect(input.endDate).toBe('2026-08-20');
+      const row = {
+        id: 1,
+        propertyCode: '900001',
+        vendorName: '保守',
+        inspectionType: 'エレベーター定期点検',
+        showOnBoard: true,
+        isValid: true,
+        errors: [],
+        ...input,
+      } as BulkEntryRow;
+      const master = {
+        properties: [],
+        vendors: [{ id: 'v1', vendorName: '保守', emergencyContact: '' }],
+        notices: [{ inspectionType: 'エレベーター定期点検', templateNo: '1', noticeText: '' }],
+      };
+      const [built] = buildBulkEntries([row], master, { id: 'v1', name: '保守' }, DEFAULT_BULK_SETTINGS);
+      const patch = submittedEntryPatch({ ...built });
+      expect(patch).toMatchObject({ inspection_end: '2026-08-20', display_start_date: '2026-08-20', display_end_date: '2026-08-20' });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -68,27 +68,26 @@ export async function countPendingEntries(): Promise<number> {
   return count ?? 0;
 }
 
+/** 承認しようとした申請が、画面で読んだ後に直されていた（承認前の申請は保守会社が直せる。修正依頼1026 I11） */
+export const STALE_ENTRY_MESSAGE = '申請が修正されました。最新の内容を確かめてから承認してください';
+
 // v1: js/supabase/approval.js approveEntry
-export async function approveEntry(id: string): Promise<DbEntry> {
-  const { data, error } = await supabase
-    .from(TABLES.entries)
-    .update({ status: 'ready' })
-    .eq('id', id)
-    .select()
-    .single();
+// expectedUpdatedAt は画面が読んだ updated_at。直された後（版が違う）なら更新せず断る（見ていない内容を承認しない）
+export async function approveEntry(id: string, expectedUpdatedAt: string | null): Promise<DbEntry> {
+  const base = supabase.from(TABLES.entries).update({ status: 'ready' }).eq('id', id);
+  const query = expectedUpdatedAt === null ? base.is('updated_at', null) : base.eq('updated_at', expectedUpdatedAt);
+  const { data, error } = await query.select();
   if (error) throw error;
-  return data as DbEntry;
+  const row = (data ?? [])[0] as DbEntry | undefined;
+  if (!row) throw new Error(STALE_ENTRY_MESSAGE);
+  return row;
 }
 
-// v1: js/supabase/approval.js approveEntries
-export async function approveEntries(ids: string[]): Promise<DbEntry[]> {
-  const { data, error } = await supabase
-    .from(TABLES.entries)
-    .update({ status: 'ready' })
-    .in('id', ids)
-    .select();
-  if (error) throw error;
-  return (data ?? []) as DbEntry[];
+// v1: js/supabase/approval.js approveEntries（v1 は1回の更新。版を1件ずつ比べるので1件ずつ承認し、全件の結果を待つ）
+export async function approveEntries(
+  targets: { id: string; updatedAt: string | null }[],
+): Promise<PromiseSettledResult<DbEntry>[]> {
+  return Promise.allSettled(targets.map((t) => approveEntry(t.id, t.updatedAt)));
 }
 
 /** 却下は物理削除（理由はどこにも保存しない。v1 と同じ） */

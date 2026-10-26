@@ -39,9 +39,9 @@ const split = vi.hoisted(() => ({
 }));
 vi.mock('../lib/pdfSplit', () => split);
 
-import { BulkReportUploadModal } from '../components/BulkReportUploadModal';
+import { BulkReportUploadModal, thumbWidthFor } from '../components/BulkReportUploadModal';
 import { todayJst } from '@/features/inspection-portal/lib/schedule';
-import { lastDayOfPreviousMonth } from '../lib/aiOcr';
+import { firstDayOfPreviousMonth } from '../lib/aiOcr';
 
 // PDF の読み込み・区間の描画が多く、並列で走らせると既定（findBy 1秒・テスト5秒）では足りないことがある
 configure({ asyncUtilTimeout: 5000 });
@@ -256,14 +256,28 @@ describe('BulkReportUploadModal', { timeout: 20000 }, () => {
     expect(api.registerInspectionReport).toHaveBeenCalledTimes(1);
   });
 
-  it('実施日の既定は今日で、『先月末』で先月の末日を入れられる（修正依頼1025 G3）', async () => {
+  it('実施日の既定は今日で、『先月頭』で先月の1日を入れられる（修正依頼1025 G3・1026 K2）', async () => {
     await setup();
     const input = screen.getByLabelText('実施日（全区間の既定）') as HTMLInputElement;
     expect(input.value).toBe(todayJst());
-    fireEvent.click(screen.getByRole('button', { name: '先月末' }));
-    expect(input.value).toBe(lastDayOfPreviousMonth(todayJst()));
+    fireEvent.click(screen.getByRole('button', { name: '先月頭' }));
+    expect(input.value).toBe(firstDayOfPreviousMonth(todayJst()));
     fireEvent.click(screen.getByRole('button', { name: '今日' }));
     expect(input.value).toBe(todayJst());
+  });
+
+  it('上に区間の表（AI-OCR の行を見出しに）、下にページのプレビュー。その他ファイルのボタンは無く、プレビューは1行2枚が既定（修正依頼1026 K1・K3・K5）', async () => {
+    await setup();
+    expect(screen.queryByRole('button', { name: 'その他ファイルアップロード' })).toBeNull();
+    const segBox = screen.getByTestId('bulk-segments-box');
+    const pagesBox = screen.getByTestId('bulk-pages-box');
+    expect(segBox.compareDocumentPosition(pagesBox) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(segBox).getByRole('checkbox', { name: 'AI-OCRで判定' })).toBeInTheDocument();
+    expect(within(segBox).getByTestId('bulk-segments-scroll')).toHaveClass('overflow-y-auto');
+    expect(within(pagesBox).getByRole('button', { name: '2枚' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(within(pagesBox).getByRole('button', { name: '4枚' }));
+    expect(within(pagesBox).getByRole('button', { name: '4枚' })).toHaveAttribute('aria-pressed', 'true');
+    expect(thumbWidthFor(1000, 2)).toBeGreaterThan(thumbWidthFor(1000, 4));
   });
 
   it('AI-OCR が未設定なら、チェックボックスを無効にして理由を出す', async () => {

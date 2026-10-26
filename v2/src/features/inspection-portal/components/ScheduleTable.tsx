@@ -149,6 +149,12 @@ export function ScheduleTable({
                 <td className={cn(td, 'whitespace-nowrap tabular-nums')}>{formatMonth(item.targetMonth)}</td>
                 <td className={td}>
                   <div>{inspection.property_name}</div>
+                  {/* 台ごとの行の No（設備会社固有の No。修正依頼1026 I7） */}
+                  {item.unitCode && (
+                    <div className="text-[11px] font-semibold text-red-700" data-testid="unit-code">
+                      {item.unitCode}
+                    </div>
+                  )}
                   <div className="text-[11px] text-gray-500">{inspection.property_code}</div>
                 </td>
                 <td className={td}>{inspection.inspection_type_label ?? '－'}</td>
@@ -177,7 +183,8 @@ export function ScheduleTable({
                         {a.apply.kind === 'resubmit' ? '修正して再申請' : '申請'}
                       </Button>
                     )}
-                    {a.report && (
+                    {/* 報告書は点検行 × 対象月の単位なので、報告書UP は1台目の行だけ（修正依頼1026 I7） */}
+                    {a.report && !item.secondary && (
                       <Button
                         variant="secondary"
                         size="sm"

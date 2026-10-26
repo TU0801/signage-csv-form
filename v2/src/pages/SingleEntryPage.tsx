@@ -12,7 +12,8 @@ import { templateFileUrl } from '@/lib/templateStorage';
 import { cn, todayUtc } from '@/lib/utils';
 import { PosterType } from '@/lib/constants';
 import { insertEntries, type AppSettings } from '@/lib/api/single-entry';
-import { fetchInspectionTypeFlags, fetchPortalInspections } from '@/lib/api/portal';
+import { fetchInspectionTypeFlags, fetchPortalInspectionUnits, fetchPortalInspections } from '@/lib/api/portal';
+import { MULTI_UNIT_APPLY_MESSAGE, multiUnitInspectionIds } from '@/features/inspection-portal/lib/units';
 import { fetchVendorPropertyRequests } from '@/lib/api/property-requests';
 import { todayJst } from '@/features/inspection-portal/lib/schedule';
 import type { MasterData } from '@/types/app';
@@ -415,12 +416,21 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
       }
       // 保守会社の点検行に一致する申請は点検に結び付ける（点検登録フォームに申請中として出て、報告書UP が通る）。
       // 点検行が読めなければ結び付けずに申請する（今までどおり）
-      const fetched = await fetchPortalInspections().catch((err: unknown) => {
-        console.error('点検行の取得に失敗しました（点検に結び付けずに申請します）:', err);
-        return null;
-      });
+      // 号機が2台以上の点検は台ごとに申請する（1件入力は台を選べないので申請させない。修正依頼1026 I7）。
+      // 台が読めなければここでは確かめない（保守会社のアカウントは DB の guard_entry_unit が止める）
+      const [fetched, units] = await Promise.all([
+        fetchPortalInspections().catch((err: unknown) => {
+          console.error('点検行の取得に失敗しました（点検に結び付けずに申請します）:', err);
+          return null;
+        }),
+        fetchPortalInspectionUnits().catch((err: unknown) => {
+          console.error('号機の取得に失敗しました:', err);
+          return [];
+        }),
+      ]);
       const linkSkipped = fetched === null;
       const inspections = fetched ?? [];
+      const multiUnit = multiUnitInspectionIds(units);
       // 未承認の建物の行は、申請の時点の建物追加の申請で確かめる（その間に承認されていれば正式な物件コード・端末で申請する）
       const requests: DbPropertyRequest[] =
         sending.some((e) => isProvisionalCode(e.propertyCode)) && vendorCtx.linkVendorId
@@ -449,6 +459,9 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
             };
           }
           const link = entryInspectionLink(e, inspections, isAdmin, vendorCtx.linkVendorId);
+          if (link && multiUnit.has(link.property_inspection_id)) {
+            throw new Error(`「${e.propertyName}」の点検は号機が2台以上あります。${MULTI_UNIT_APPLY_MESSAGE}`);
+          }
           // 点検予定に結び付いた申請は、その点検の保守会社（結び付けた会社）の社名・緊急連絡先で記録する（ユーザー決定 2026-10-25）。
           // 結び付かなければ追加した時点の保守会社（保守会社のアカウントは自社、管理者は選んだ会社）のまま
           const linked = link?.vendor_id ? vendors.find((v) => String(v.id) === String(link.vendor_id)) : undefined;

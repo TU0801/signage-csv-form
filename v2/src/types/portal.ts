@@ -48,6 +48,11 @@ export interface PortalEntryRow {
   updated_at: string | null;
   /** ログイン中のアカウントが作った申請か */
   is_mine: boolean;
+  /**
+   * 台ごとの申請の台（biz.property_units.id。修正依頼1026 I7）。portal_entries は返さないので portal_entry_units で足す。
+   * 台なし（1台以下の点検・旧来・1件入力）は null（点検行 × 対象月の全体の申請として全部の台に効く）
+   */
+  property_unit_id?: string | null;
   /** 掲示の内容（管理会社が承認の前に確かめる）。同じ点検の台を受け持つ別の保守会社には null で返る */
   terminal_id: string | null;
   template_no: string | null;
@@ -120,6 +125,18 @@ export interface PortalUnitRow {
   inspected_on: string | null;
   /** 点検行の設備会社固有コード（biz.property_inspections.maintainer_equipment_code） */
   equipment_code: string | null;
+}
+
+/** RPC portal_entry_units の1行（修正依頼1026 I7）。台ごとの申請の台 */
+export interface PortalEntryUnitRow {
+  entry_id: string;
+  property_unit_id: string;
+}
+
+/** RPC portal_inspection_notify_off の1行（修正依頼1026）。点検日連絡が OFF の点検行（unit_id null）と台 */
+export interface NotifyOffRow {
+  inspection_id: string;
+  unit_id: string | null;
 }
 
 /** signage_inspection_type_flags の1行（修正依頼1025 H4/G4）。行が無い点検種別はどちらも false */

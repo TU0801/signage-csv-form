@@ -33,6 +33,8 @@ export type BulkEntryInsert = Pick<
   target_month?: string | null;
   /** 未承認の建物（建物追加の申請）の行だけ（修正依頼1025 F2） */
   property_request_id?: string | null;
+  /** 台ごとの申請の台（台が2台以上の点検の予定の行だけ。修正依頼1026 I7） */
+  property_unit_id?: string | null;
 };
 
 /** 設定（有効メンバーは読める。値は text） */

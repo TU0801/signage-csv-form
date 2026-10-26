@@ -121,7 +121,7 @@ export function LoginPage() {
         <div className="m-auto w-full max-w-md rounded-lg border border-gray-200 bg-white p-8 shadow-sm">
           {/* v1: login.html .login-header（見出し・副題・#appVersion） */}
           <div className="text-center mb-6">
-            <h1 className="text-2xl font-bold text-gray-900">📋 点検日入力フォーム</h1>
+            <h1 className="text-2xl font-bold text-gray-900">📋 設備点検管理システム</h1>
             <p className="mt-1 text-sm text-gray-500">アカウントにログインしてください</p>
             <span className="mt-2 inline-block rounded bg-slate-200 px-2 py-0.5 text-xs text-slate-500">
               v{__APP_VERSION__}

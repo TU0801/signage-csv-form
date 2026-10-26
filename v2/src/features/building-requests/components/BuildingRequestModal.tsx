@@ -311,6 +311,7 @@ export function BuildingRequestModal({
                 placeholder="選択してください"
                 options={vendors.map((v) => ({ value: v.id, label: v.name }))}
                 error={errors.vendor}
+                className="field-required"
               />
             ) : (
               <div className="space-y-0.5">
@@ -335,6 +336,7 @@ export function BuildingRequestModal({
               placeholder="選択してください"
               options={companies.map((c) => ({ value: c.id, label: c.name }))}
               error={errors.managementCompany}
+              className="field-required"
             />
             <Input
               id="buildingRequestName"
@@ -347,6 +349,7 @@ export function BuildingRequestModal({
               }}
               placeholder="例: ○○マンション"
               error={errors.propertyName}
+              className="field-required"
               data-autofocus
             />
             <Input

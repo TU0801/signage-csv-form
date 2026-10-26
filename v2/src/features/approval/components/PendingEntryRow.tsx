@@ -27,6 +27,8 @@ interface PendingEntryRowProps {
    * 建物が承認されるまで承認できない（DB の guard_entry_property_request も止める。修正依頼1025 F2）
    */
   pendingBuildingName?: string;
+  /** 台ごとの申請の台の No（修正依頼1026 I7）。台なしの申請は undefined */
+  unitCode?: string;
 }
 
 const td = 'cell text-sm text-gray-900';
@@ -52,6 +54,7 @@ export function PendingEntryRow({
   onEdit,
   onSendBack,
   pendingBuildingName,
+  unitCode,
 }: PendingEntryRowProps) {
   const periodWarning = displayPeriodWarning(entry);
   const buildingPending = pendingBuildingName !== undefined;
@@ -91,6 +94,11 @@ export function PendingEntryRow({
         <div className={NAME_CELL} title={(buildingPending ? pendingBuildingName : propertyName) || undefined}>
           {(buildingPending ? pendingBuildingName : propertyName) || '-'}
         </div>
+        {unitCode && (
+          <div className="text-xs font-semibold text-red-700" data-testid="unit-code">
+            {unitCode}
+          </div>
+        )}
       </td>
       <td className={td}>
         <div className={NAME_CELL} title={entry.inspection_type || undefined}>
