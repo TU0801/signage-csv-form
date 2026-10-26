@@ -59,7 +59,8 @@ const EVERY_MONTH = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
  * 表示だけに使う（CSV・予定の組み立ては inspection_months をそのまま使う）
  */
 export function formatInspectionMonths(months: readonly number[], monthly = false): string {
-  const unique = [...new Set(months.map(Number))];
+  // 段の中は小さい月から（保存順の 4,7,10,1 でも「1,7」「4,10」と読めるように）
+  const unique = [...new Set(months.map(Number))].sort((a, b) => a - b);
   if (monthly || EVERY_MONTH.every((m) => unique.includes(m))) return '毎月';
   const odd = unique.filter((m) => m % 2 === 1);
   const even = unique.filter((m) => m % 2 === 0);

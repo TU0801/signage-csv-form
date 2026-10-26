@@ -212,4 +212,8 @@ describe('formatInspectionMonths（点検月の表示。修正依頼1027）', ()
     expect(formatInspectionMonths([4, 10])).toBe('4,10');
     expect(formatInspectionMonths([])).toBe('');
   });
+
+  it('段の中は小さい月から並べる（保存順が 4,7,10,1 でも）', () => {
+    expect(formatInspectionMonths([4, 7, 10, 1])).toBe('1,7\n4,10');
+  });
 });
