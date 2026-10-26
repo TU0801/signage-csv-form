@@ -37,6 +37,8 @@ export interface ApplyContext {
   vendor: Pick<DbVendor, 'id' | 'vendor_name' | 'emergency_contact'> | null;
   hasTemplateImage: (templateNo: string) => boolean;
   settings: AppSettings;
+  /** 台ごとの行から申請するときの台（修正依頼1026 I7。台ごとに申請・CSV の行になる）。台の無い点検・1台の点検は null */
+  unitId?: string | null;
 }
 
 /** 物件の端末（空の端末は除く） */
@@ -177,6 +179,7 @@ export function buildApplyRow(v: ApplyValues, ctx: ApplyContext, userId: string,
       property_inspection_id: inspection.inspection_id,
       vendor_id: ctx.vendor!.id,
       target_month: v.targetMonth,
+      ...(ctx.unitId ? { property_unit_id: ctx.unitId } : {}),
     },
   };
 }

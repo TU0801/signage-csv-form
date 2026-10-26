@@ -111,6 +111,24 @@ describe('ApplyModal（点検ポータルの申請）', () => {
     expect(onApplied).toHaveBeenCalled();
   });
 
+  it('台ごとの行から申請すると、その台を付けて INSERT する（台なしの申請にしない。修正依頼1026 I7）', async () => {
+    render(
+      <ApplyModal
+        target={{ inspection: makeInspection(), targetMonth: '2026-11-01', resubmit: null, unitId: 'u2' }}
+        onClose={vi.fn()}
+        onApplied={vi.fn()}
+        userId="u1"
+        isAdmin={false}
+        profileVendorId="v1"
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('点検開始日 *'), { target: { value: '2026-11-10' } });
+    fireEvent.click(screen.getByRole('button', { name: '申請する' }));
+    await waitFor(() => expect(api.insertEntries).toHaveBeenCalledTimes(1));
+    const [rows] = api.insertEntries.mock.calls[0] as unknown as [Record<string, unknown>[]];
+    expect(rows[0]).toMatchObject({ property_inspection_id: 'i1', property_unit_id: 'u2', target_month: '2026-11-01' });
+  });
+
   it('点検開始日が空なら申請しない', () => {
     render(
       <ApplyModal

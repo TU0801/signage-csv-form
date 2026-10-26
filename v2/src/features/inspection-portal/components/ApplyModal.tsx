@@ -41,6 +41,8 @@ export interface ApplyTarget {
   targetMonth: string | null;
   /** 差戻された申請を直して再申請するとき、その申請 */
   resubmit: PortalEntryRow | null;
+  /** 台ごとの行から開いたときの台（修正依頼1026 I7）。台の無い点検・1台の点検は null */
+  unitId?: string | null;
 }
 
 interface ApplyModalProps {
@@ -84,7 +86,7 @@ export function ApplyModal({ target, onClose, onApplied, userId, isAdmin, profil
       {target && ready && master.error && <p className="text-sm text-red-600">マスターデータの読み込みに失敗しました</p>}
       {target && ready && !master.error && (
         <ApplyForm
-          key={`${target.inspection.inspection_id}:${target.targetMonth}:${target.resubmit?.id ?? ''}`}
+          key={`${target.inspection.inspection_id}:${target.targetMonth}:${target.unitId ?? ''}:${target.resubmit?.id ?? ''}`}
           target={target}
           master={master}
           settings={settings}
@@ -140,8 +142,11 @@ function ApplyForm({
       vendor,
       hasTemplateImage: (key) => resolveTemplateImageUrl(key, master.templateImages, templateFileUrl) !== null,
       settings,
+      // 台ごとの行の台。差戻しの再申請（UPDATE）は台を書き換えない（toResubmitPatch）ので元の申請の台のまま。
+      // 他の方の差戻しを新しい申請として出すときは、行の台（無ければ元の申請の台）
+      unitId: target.unitId ?? resubmit?.property_unit_id ?? null,
     };
-  }, [master, inspection, settings, isAdmin, profileVendorId]);
+  }, [master, inspection, settings, isAdmin, profileVendorId, target.unitId, resubmit]);
 
   const defaultMonth = target.targetMonth ?? monthOf(today);
   const [values, setValues] = useState<ApplyValues>(() => {

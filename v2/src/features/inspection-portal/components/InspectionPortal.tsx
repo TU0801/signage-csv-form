@@ -224,7 +224,9 @@ export function InspectionPortal() {
         role={role}
         statusOf={statusOf}
         busyEntryId={busyEntryId}
-        onApply={(item, resubmit) => setApplyTarget({ inspection: item.inspection, targetMonth: item.targetMonth, resubmit })}
+        onApply={(item, resubmit) =>
+          setApplyTarget({ inspection: item.inspection, targetMonth: item.targetMonth, resubmit, unitId: item.unit?.unit_id ?? null })
+        }
         onReport={openReport}
         onReview={(item, entry) => openDetail(item, entry, item.targetMonth)}
       />
@@ -234,8 +236,12 @@ export function InspectionPortal() {
         role={role}
         statusOf={statusOf}
         busyEntryId={busyEntryId}
-        onApply={(item) => setApplyTarget({ inspection: item.inspection, targetMonth: null, resubmit: null })}
-        onResubmit={(item, entry) => setApplyTarget({ inspection: item.inspection, targetMonth: null, resubmit: entry })}
+        onApply={(item) =>
+          setApplyTarget({ inspection: item.inspection, targetMonth: null, resubmit: null, unitId: item.unit?.unit_id ?? null })
+        }
+        onResubmit={(item, entry) =>
+          setApplyTarget({ inspection: item.inspection, targetMonth: null, resubmit: entry, unitId: item.unit?.unit_id ?? null })
+        }
         onReport={openUnscheduledReport}
         onReview={(item, entry) => openDetail(item, entry, entry.target_month)}
         forceOpen={filters.status !== '' && unscheduled.length > 0}
