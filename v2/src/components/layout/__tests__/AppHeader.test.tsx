@@ -28,11 +28,11 @@ describe('ナビ（修正依頼1024 B3・B5）', () => {
   const links = () => screen.getAllByRole('link').map((a) => a.textContent);
   it('点検登録フォーム・点検報告書。管理者には管理者メニュー、管理会社には管理会社メニュー（C2）を出す', () => {
     const { unmount } = renderHeader();
-    expect(links()).toEqual(['サイネージCMS', '点検登録フォーム', '点検報告書']);
+    expect(links()).toEqual(['設備点検管理システム', '点検登録フォーム', '点検報告書']);
     unmount();
     auth.isManagement = true;
     const second = renderHeader();
-    expect(links()).toEqual(['サイネージCMS', '点検登録フォーム', '点検報告書', '管理会社メニュー']);
+    expect(links()).toEqual(['設備点検管理システム', '点検登録フォーム', '点検報告書', '管理会社メニュー']);
     expect(screen.getByRole('link', { name: '管理会社メニュー' })).toHaveAttribute('href', '/admin');
     second.unmount();
     auth.isManagement = false;

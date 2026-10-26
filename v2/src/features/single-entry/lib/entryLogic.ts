@@ -391,15 +391,7 @@ export function buildLocalEntry(values: SingleEntryValues, ctx: EntryContext): B
     errors.push(`表示時間は${s.display_time_max}秒以下にしてください`);
     settingsTab = true;
   }
-  if (values.remarks) {
-    const lines = values.remarks.split('\n');
-    if (lines.length > s.remarks_max_lines) {
-      errors.push(`掲示備考は${s.remarks_max_lines}行以下にしてください`);
-    }
-    if (lines.some((line) => line.length > s.remarks_chars_per_line)) {
-      errors.push(`掲示備考は1行${s.remarks_chars_per_line}文字以下にしてください`);
-    }
-  }
+  // 掲示備考の行数・1行の文字数は目安で、超えても追加・申請は止めない（欄の下に注意を出す。修正依頼1026 I8）
   if (values.noticeText && values.noticeText.length > s.notice_text_max_chars) {
     errors.push(`案内文は${s.notice_text_max_chars}文字以下にしてください`);
   }

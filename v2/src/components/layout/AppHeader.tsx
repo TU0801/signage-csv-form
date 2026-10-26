@@ -55,7 +55,7 @@ export function AppHeader({ width = 'standard' }: { width?: LayoutWidth }) {
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2">
               <Link to="/" className="text-lg font-bold text-gray-900">
-                サイネージCMS
+                設備点検管理システム
               </Link>
               {/* v1: index.html / bulk.html / admin.html の #appVersion（js/version.js APP_VERSION） */}
               <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">v{__APP_VERSION__}</span>

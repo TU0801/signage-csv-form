@@ -569,9 +569,10 @@ export function postProcessOcr(raw: AiOcrRaw, ctx: OcrContext): OcrSuggestion {
   const allText = pageTexts.join('\n');
   const targetMonth =
     isoMonthOrNull(raw.target_month) ?? parseTargetMonth(raw.target_month_text) ?? (allText ? parseTargetMonth(allText) : null);
+  // 期間の書類（例「2026年9月1日～2026年9月30日」）は前半の日付（修正依頼1026 J4）。読んだ文字に期間があればそちらを先に見る
   const performedOn =
-    isoDateOrNull(raw.performed_on) ??
     parseDateRange(raw.performed_on_text)?.start ??
+    isoDateOrNull(raw.performed_on) ??
     parseJapaneseDate(raw.performed_on_text) ??
     null;
 
@@ -698,24 +699,24 @@ export function suggestBreaks(pages: OcrPageSuggestion[], pageCount: number): Se
   return breaks;
 }
 
-/** 先月の末日（YYYY-MM-DD）。today は YYYY-MM-DD */
-export function lastDayOfPreviousMonth(today: string): string {
+/** 先月の1日（YYYY-MM-DD）。today は YYYY-MM-DD（修正依頼1026 K2: 『先月末』→『先月頭』） */
+export function firstDayOfPreviousMonth(today: string): string {
   const y = Number(today.slice(0, 4));
   const m = Number(today.slice(5, 7));
-  const d = new Date(Date.UTC(y, m - 1, 0));
+  const d = new Date(Date.UTC(y, m - 2, 1));
   return d.toISOString().slice(0, 10);
 }
 
 /**
  * 読み取り結果から、実施日（全区間の既定）に入れる値（修正依頼1025 G3）。実施日が読めたらその日、
- * 読めず対象月が先月なら先月の末日、どちらでもなければ null（今の既定＝今日のまま）
+ * 読めず対象月が先月なら先月の1日（修正依頼1026 K2。期間の書類は前半の日付を使うのと揃える）、どちらでもなければ null（今の既定＝今日のまま）
  */
 export function suggestedDefaultPerformedOn(
   suggestion: Pick<OcrSuggestion, 'performedOn' | 'targetMonth'>,
   today: string,
 ): string | null {
   if (suggestion.performedOn) return suggestion.performedOn;
-  const lastMonthEnd = lastDayOfPreviousMonth(today);
-  if (suggestion.targetMonth && suggestion.targetMonth.slice(0, 7) === lastMonthEnd.slice(0, 7)) return lastMonthEnd;
+  const lastMonthStart = firstDayOfPreviousMonth(today);
+  if (suggestion.targetMonth && suggestion.targetMonth.slice(0, 7) === lastMonthStart.slice(0, 7)) return lastMonthStart;
   return null;
 }

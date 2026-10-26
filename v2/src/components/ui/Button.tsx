@@ -7,6 +7,8 @@ const variants = {
   danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500',
   success: 'bg-green-600 text-white hover:bg-green-700 focus:ring-green-500',
   ghost: 'bg-transparent text-gray-600 hover:bg-gray-100 focus:ring-gray-400',
+  /** 目立たせたい操作（点検登録フォームの報告書一括・その他ファイルのアップロード。修正依頼1026 I10） */
+  accent: 'bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-indigo-500',
 } as const;
 
 const sizes = {

@@ -209,9 +209,13 @@ describe('データを追加（v1 addEntry）', () => {
     );
     expect(r).toEqual({
       ok: false,
-      message: '表示時間は30秒以下にしてください\n掲示備考は5行以下にしてください\n案内文は200文字以下にしてください',
+      message: '表示時間は30秒以下にしてください\n案内文は200文字以下にしてください',
       settingsTab: true,
     });
+  });
+
+  it('掲示備考は目安（行数・1行の文字数）を超えても追加できる（修正依頼1026 I8）', () => {
+    expect(buildLocalEntry(values({ ...ok, remarks: 'a\nb\nc\nd\ne\nf\n' + 'x'.repeat(40) }), ctx()).ok).toBe(true);
   });
 
   it('未設置物件でも追加でき、追加画像は点検種別「追加画像」・TPLNo はファイル名になる', () => {

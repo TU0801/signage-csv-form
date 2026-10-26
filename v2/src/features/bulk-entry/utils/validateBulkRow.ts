@@ -49,17 +49,7 @@ export function validateBulkRow(
     errors.push(`表示時間(${displayTimeMax}秒以下)`);
   }
 
-  if (row.remarks) {
-    const remarksMaxLines = Number(settings.remarks_max_lines || 5);
-    const remarksCharsPerLine = Number(settings.remarks_chars_per_line || 25);
-    const lines = row.remarks.split('\n');
-    if (lines.length > remarksMaxLines) {
-      errors.push(`備考行数(${remarksMaxLines}行以下)`);
-    }
-    if (lines.some((line) => line.length > remarksCharsPerLine)) {
-      errors.push(`備考文字数(1行${remarksCharsPerLine}文字以下)`);
-    }
-  }
+  // 備考の行数・1行の文字数は目安で、超えても申請は止めない（入力欄の下に注意を出す。修正依頼1026 I8。lib/remarks）
 
   if (row.noticeText) {
     const noticeTextMaxChars = Number(settings.notice_text_max_chars || 200);

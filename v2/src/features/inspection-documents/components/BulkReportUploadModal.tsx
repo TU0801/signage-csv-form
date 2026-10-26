@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
@@ -35,7 +35,7 @@ import {
 } from '../lib/bulkSegments';
 import {
   correctionRecord,
-  lastDayOfPreviousMonth,
+  firstDayOfPreviousMonth,
   suggestedDefaultPerformedOn,
   postProcessOcr,
   suggestBreaks,
@@ -47,7 +47,6 @@ import { propertyCandidatesOf, vendorCandidatesOf } from '../lib/propertyFiles';
 import { readPdfForOcr } from '../lib/runOcr';
 import { useAiOcr } from '../hooks/useAiOcr';
 import { AiOcrControls, OcrSummary, type OcrState } from './AiOcrControls';
-import { OtherFileUploadModal } from './OtherFileUploadModal';
 
 export interface BulkReportUploadModalProps {
   open: boolean;
@@ -64,10 +63,25 @@ export function BulkReportUploadModal(props: BulkReportUploadModalProps) {
   return <BulkReportUploadDialog {...props} />;
 }
 
-/** サムネイルの幅（修正依頼1025 G1: モーダルの最大幅で1行に4枚ほど） */
+/** サムネイルの幅の既定（入れ物の幅が測れないとき） */
 const THUMB_WIDTH = 240;
+/** 1行に並べるページの数の選択肢と既定（修正依頼1026 K5: 拡大率100%で文字が読めるよう既定は2枚） */
+const PER_ROW_OPTIONS = [2, 3, 4] as const;
+type PerRow = (typeof PER_ROW_OPTIONS)[number];
+const DEFAULT_PER_ROW: PerRow = 2;
+/** ページ1枚ぶんの幅のうちサムネイル以外（区切りの帯 20px・枠と余白 12px） */
+const THUMB_CHROME = 32;
+/** 描く解像度の上限（px）。大きく並べても 27 ページの PDF でメモリを使い切らない */
+const MAX_RENDER_WIDTH = 900;
 /** 高精細の画面でぼやけないよう、描く解像度は画面の倍率（2 まで）を掛ける */
 const thumbScale = () => Math.min(2, Math.max(1, typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1));
+
+/** 入れ物の幅から、1行に perRow 枚並べたときのサムネイルの幅 */
+export function thumbWidthFor(containerWidth: number, perRow: number): number {
+  if (containerWidth <= 0) return THUMB_WIDTH;
+  // 入れ物の左右の余白（p-2）とスクロールバーのぶんを引く
+  return Math.max(120, Math.floor((containerWidth - 16 - 4) / perRow) - THUMB_CHROME);
+}
 
 /** 区間の見分けに使う色（区間番号の順にくり返す） */
 const SEGMENT_COLORS = [
@@ -120,7 +134,11 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
   const [ocr, setOcr] = useState<OcrState>({ state: 'idle' });
   /** 区間の点検の選択肢の絞り込み（AI-OCR で読んだ対象月を入れる。人が書き換えられる） */
   const [targetFilter, setTargetFilter] = useState('');
-  const [otherOpen, setOtherOpen] = useState(false);
+  /** プレビューの1行の枚数（K5） */
+  const [perRow, setPerRow] = useState<PerRow>(DEFAULT_PER_ROW);
+  /** プレビューの入れ物の幅（サムネイルの幅を決める） */
+  const thumbsRef = useRef<HTMLDivElement>(null);
+  const [thumbsWidth, setThumbsWidth] = useState(0);
 
   const [pdf, setPdf] = useState<LoadedPdf | null>(null);
   const [opening, setOpening] = useState(false);
@@ -128,7 +146,7 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
   const [rotations, setRotations] = useState<Record<number, number>>({});
   const [breaks, setBreaks] = useState<Set<number>>(new Set());
   const [inputs, setInputs] = useState<Record<number, SegmentInput>>({});
-  // 実施日の既定は今日（修正依頼1025 G3。先月分の報告書は『先月末』ボタンで先月の末日にする）
+  // 実施日の既定は今日（修正依頼1025 G3。先月分の報告書は『先月頭』ボタンで先月の1日にする。修正依頼1026 K2）
   const [defaultPerformedOn, setDefaultPerformedOn] = useState(today);
   const [touched, setTouched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -158,6 +176,18 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
 
   // 閉じたら pdfjs の文書を片付ける
   useEffect(() => () => pdf?.pages.destroy(), [pdf]);
+
+  // プレビューの入れ物の幅を測る（モーダルの幅・画面の幅が変わったら並べ直す）
+  useLayoutEffect(() => {
+    const el = thumbsRef.current;
+    if (!el) return;
+    setThumbsWidth(el.clientWidth);
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => setThumbsWidth(el.clientWidth));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [pdf]);
+  const thumbWidth = thumbWidthFor(thumbsWidth, perRow);
 
   // 毎月・申請不要の点検種別と号機（修正依頼1025 form G4・H1）も選択肢に反映する
   const targetOptions = useMemo(
@@ -237,7 +267,7 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
 
   /**
    * 読み取った結果を初期値にする: 建物が変わるページで区切り（区切りをまだ入れていないとき）、区間ごとに
-   * 物件・点検種別・対象月で点検が1つに決まれば選ぶ（選んである区間は変えない）。実施日が読めたら全区間の既定に入れる（読めず対象月が先月なら先月末）
+   * 物件・点検種別・対象月で点検が1つに決まれば選ぶ（選んである区間は変えない）。実施日が読めたら全区間の既定に入れる（読めず対象月が先月なら先月頭）
    */
   const applyOcr = (suggestion: OcrSuggestion, current: LoadedPdf, currentBreaks: ReadonlySet<number>) => {
     const count = current.pages.pageCount;
@@ -259,7 +289,7 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
       }
       return next;
     });
-    // 実施日が読めたらその日、読めず対象月が先月なら先月末（修正依頼1025 G3）
+    // 実施日が読めたらその日、読めず対象月が先月なら先月頭（修正依頼1025 G3・1026 K2）
     const performedDefault = suggestedDefaultPerformedOn(suggestion, today);
     if (performedDefault) setDefaultPerformedOn(performedDefault);
     if (suggestion.targetMonth) setTargetFilter(formatMonth(suggestion.targetMonth));
@@ -518,6 +548,7 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
           向きが違うページは回転ボタンで直せます（提出する PDF にも反映されます）。
         </p>
 
+        {/* 『その他ファイルアップロード』は点検登録フォームのボタンと重複するので置かない（修正依頼1026 K1） */}
         <div className="flex flex-wrap items-end gap-2">
           <div>
             <input
@@ -551,16 +582,13 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
               PDF を開いています…
             </span>
           )}
-          <Button variant="secondary" size="sm" className="text-xs" onClick={() => setOtherOpen(true)} disabled={submitting}>
-            その他ファイルアップロード
-          </Button>
           <div className="ml-auto flex items-center gap-1 text-xs text-gray-600">
             <label className="flex items-center gap-1">
               実施日（全区間の既定）
               <input
                 type="date"
                 aria-label="実施日（全区間の既定）"
-                className="rounded border border-gray-300 px-1.5 py-0.5 text-xs"
+                className="field-required rounded border border-gray-300 px-1.5 py-0.5 text-xs"
                 value={defaultPerformedOn}
                 max="9999-12-31"
                 onChange={(e) => setDefaultPerformedOn(e.target.value)}
@@ -581,28 +609,14 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
               variant="ghost"
               size="sm"
               className="px-1.5 text-xs"
-              onClick={() => setDefaultPerformedOn(lastDayOfPreviousMonth(today))}
+              onClick={() => setDefaultPerformedOn(firstDayOfPreviousMonth(today))}
               disabled={submitting}
-              title="先月の末日を入れる（先月分の報告書）"
+              title="先月の1日を入れる（先月分の報告書）"
             >
-              先月末
+              先月頭
             </Button>
           </div>
         </div>
-        <AiOcrControls
-          enabled={useAi}
-          onToggle={(checked) => {
-            setUseAi(checked);
-            if (checked && pdf) void runOcr(pdf, true, breaks);
-          }}
-          configured={ai.configured}
-          checking={ai.checking}
-          message={ai.message}
-          onReadLocal={pdf ? () => void runOcr(pdf, false, breaks) : undefined}
-          disabled={submitting || locked}
-          ocr={ocr}
-        />
-        <OcrSummary ocr={ocr} />
         {fileError && (
           <p role="alert" className="text-xs text-red-600">
             {fileError}
@@ -617,18 +631,129 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
           <p className="text-xs text-amber-800">報告書を出せる点検がありません（担当の点検が登録されていません）。</p>
         )}
 
+        {/* 上段: 区間の表（枠。見出しの行に点検の絞り込みと AI-OCR・文字情報から読み取る。修正依頼1026 K3）。5件ぶんの高さ（1行 約2rem ＋見出し）でスクロール（K4） */}
+        <section aria-label="区間" className="rounded border-2 border-emerald-500" data-testid="bulk-segments-box">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-emerald-200 bg-emerald-50/60 px-2 py-1 text-xs text-gray-600">
+            <span className="font-semibold text-gray-700">区間</span>
+            <label className="flex items-center gap-1">
+              点検の絞り込み
+              <input
+                type="search"
+                aria-label="点検の絞り込み"
+                placeholder="物件名・月（例 2026年10月）"
+                className="w-56 rounded border border-gray-300 bg-white px-1.5 py-0.5 text-xs"
+                value={targetFilter}
+                onChange={(e) => setTargetFilter(e.target.value)}
+                disabled={submitting}
+              />
+            </label>
+            {filterQuery && (
+              <>
+                <span>{filteredCount}件に絞り込み中（選んである点検は残します）</span>
+                <Button variant="ghost" size="sm" className="px-1.5 text-xs" onClick={() => setTargetFilter('')}>
+                  解除
+                </Button>
+              </>
+            )}
+            <div className="ml-auto">
+              <AiOcrControls
+                enabled={useAi}
+                onToggle={(checked) => {
+                  setUseAi(checked);
+                  if (checked && pdf) void runOcr(pdf, true, breaks);
+                }}
+                configured={ai.configured}
+                checking={ai.checking}
+                message={ai.message}
+                onReadLocal={pdf ? () => void runOcr(pdf, false, breaks) : undefined}
+                disabled={submitting || locked}
+                ocr={ocr}
+              />
+            </div>
+          </div>
+          {ocr.state === 'done' && (
+            <div className="border-b border-emerald-100 p-1">
+              <OcrSummary ocr={ocr} />
+            </div>
+          )}
+          {pdf ? (
+            <div className="max-h-[11.75rem] overflow-y-auto" data-testid="bulk-segments-scroll">
+              <table className="w-full table-fixed border-collapse text-xs">
+                <thead className="sticky top-0 z-10 bg-gray-50">
+                  <tr className="border-b border-gray-200 text-left text-gray-600">
+                    <th className="w-14 px-1 py-1 font-medium">区間</th>
+                    <th className="w-16 px-1 py-1 font-medium">ページ</th>
+                    <th className="px-1 py-1 font-medium">点検（物件・点検種別・対象月）</th>
+                    <th className="w-32 px-1 py-1 font-medium">実施日</th>
+                    <th className="w-44 px-1 py-1 font-medium">メモ</th>
+                    <th className="w-52 px-1 py-1 font-medium">結果</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {segments.map((seg) => (
+                    <SegmentRow
+                      key={seg.start}
+                      segment={seg}
+                      input={inputs[seg.start] ?? EMPTY_INPUT}
+                      defaultPerformedOn={defaultPerformedOn}
+                      today={today}
+                      groups={filteredGroups}
+                      target={targetMap.get((inputs[seg.start] ?? EMPTY_INPUT).targetKey) ?? null}
+                      reports={data.reports}
+                      contentHash={hashes[segKey(seg)] ?? null}
+                      accountVendorId={accountVendor}
+                      errors={touched ? errors[seg.start] : undefined}
+                      result={results[seg.start]}
+                      disabled={submitting || isFinished(results[seg.start])}
+                      onChange={(patch) => setInput(seg.start, patch)}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="px-2 py-2 text-xs text-gray-500">PDF を選ぶと、ここに区間が出ます。</p>
+          )}
+        </section>
+
+        {/* 下段: ページのプレビュー（枠。1行の枚数を 2/3/4 で切り替える。既定は2枚。修正依頼1026 K3・K5） */}
         {pdf && (
-          <>
-            <p className="text-xs text-gray-500">
-              ページの間の縦の帯をクリックすると区切りを入れる／外すができます。
-              {locked && '（提出済みの区間があるため、区切りと回転は変えられません）'}
-            </p>
-            <div className="flex max-h-[60vh] flex-wrap items-stretch gap-y-2 overflow-y-auto rounded border border-gray-200 bg-gray-50 p-2">
+          <section aria-label="ページのプレビュー" className="rounded border-2 border-emerald-500" data-testid="bulk-pages-box">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-emerald-200 bg-emerald-50/60 px-2 py-1 text-xs text-gray-600">
+              <span className="font-semibold text-gray-700">ページのプレビュー</span>
+              <span className="text-gray-500">
+                ページの間の縦の帯をクリックすると区切りを入れる／外すができます。
+                {locked && '（提出済みの区間があるため、区切りと回転は変えられません）'}
+              </span>
+              <div className="ml-auto flex items-center gap-1" role="group" aria-label="1行に並べる枚数">
+                <span>1行に</span>
+                {PER_ROW_OPTIONS.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    aria-pressed={perRow === n}
+                    onClick={() => setPerRow(n)}
+                    className={cn(
+                      'h-6 rounded border px-2 text-xs',
+                      perRow === n ? 'border-blue-500 bg-blue-50 font-medium text-blue-800' : 'border-gray-300 bg-white hover:bg-gray-50',
+                    )}
+                  >
+                    {n}枚
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div
+              ref={thumbsRef}
+              className="flex max-h-[60vh] flex-wrap items-stretch gap-y-2 overflow-y-auto bg-gray-50 p-2"
+              data-testid="bulk-pages"
+            >
               {Array.from({ length: pageCount }, (_, page) => {
                 const seg = segmentOfPage(page);
                 return (
                   <div key={page} className="flex items-stretch">
-                    {page > 0 && (
+                    {/* 1ページ目にも帯の幅を取って、1行の枚数どおりに並ぶようにする（1ページ目の帯は押せない） */}
+                    {page > 0 ? (
                       <button
                         type="button"
                         aria-pressed={breaks.has(page)}
@@ -653,10 +778,13 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
                             : 'bg-transparent hover:bg-blue-200 disabled:hover:bg-transparent',
                         )}
                       />
+                    ) : (
+                      <span className="mx-0.5 w-4" aria-hidden />
                     )}
                     <PageThumb
                       pages={pdf.pages}
                       page={page}
+                      width={thumbWidth}
                       rotation={rotations[page] ?? 0}
                       segmentNo={seg?.no ?? 1}
                       onRotate={(d) => rotate(page, d)}
@@ -666,72 +794,9 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
                 );
               })}
             </div>
-
-            <div className="flex flex-wrap items-center gap-1 text-xs text-gray-600">
-              <label className="flex items-center gap-1">
-                点検の絞り込み
-                <input
-                  type="search"
-                  aria-label="点検の絞り込み"
-                  placeholder="物件名・月（例 2026年10月）"
-                  className="w-64 rounded border border-gray-300 px-1.5 py-0.5 text-xs"
-                  value={targetFilter}
-                  onChange={(e) => setTargetFilter(e.target.value)}
-                  disabled={submitting}
-                />
-              </label>
-              {filterQuery && (
-                <>
-                  <span>{filteredCount}件に絞り込み中（選んである点検は残します）</span>
-                  <Button variant="ghost" size="sm" className="px-1.5 text-xs" onClick={() => setTargetFilter('')}>
-                    解除
-                  </Button>
-                </>
-              )}
-            </div>
-            <table className="w-full table-fixed border-collapse text-xs">
-              <thead>
-                <tr className="border-b border-gray-200 bg-gray-50 text-left text-gray-600">
-                  <th className="w-14 px-1 py-1 font-medium">区間</th>
-                  <th className="w-16 px-1 py-1 font-medium">ページ</th>
-                  <th className="px-1 py-1 font-medium">点検（物件・点検種別・対象月）</th>
-                  <th className="w-32 px-1 py-1 font-medium">実施日</th>
-                  <th className="w-44 px-1 py-1 font-medium">メモ</th>
-                  <th className="w-52 px-1 py-1 font-medium">結果</th>
-                </tr>
-              </thead>
-              <tbody>
-                {segments.map((seg) => (
-                  <SegmentRow
-                    key={seg.start}
-                    segment={seg}
-                    input={inputs[seg.start] ?? EMPTY_INPUT}
-                    defaultPerformedOn={defaultPerformedOn}
-                    today={today}
-                    groups={filteredGroups}
-                    target={targetMap.get((inputs[seg.start] ?? EMPTY_INPUT).targetKey) ?? null}
-                    reports={data.reports}
-                    contentHash={hashes[segKey(seg)] ?? null}
-                    accountVendorId={accountVendor}
-                    errors={touched ? errors[seg.start] : undefined}
-                    result={results[seg.start]}
-                    disabled={submitting || isFinished(results[seg.start])}
-                    onChange={(patch) => setInput(seg.start, patch)}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </>
+          </section>
         )}
       </div>
-      <OtherFileUploadModal
-        open={otherOpen}
-        onClose={() => setOtherOpen(false)}
-        properties={propertyCandidates}
-        vendors={vendorCandidates}
-        inspectionTypes={inspectionTypeLabels}
-        onUploaded={onUploaded}
-      />
       {/* 中に入れた確認ダイアログの cancel / close は外のモーダルが無視する（components/ui/Modal） */}
       <ConfirmDialog
         open={!!confirmReplace}
@@ -750,21 +815,40 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
 interface PageThumbProps {
   pages: PdfPages;
   page: number;
+  /** 画面での幅（px。1行の枚数と入れ物の幅から決める） */
+  width: number;
   rotation: number;
   segmentNo: number;
   onRotate: (delta: number) => void;
   disabled: boolean;
 }
 
-function PageThumb({ pages, page, rotation, segmentNo, onRotate, disabled }: PageThumbProps) {
+function PageThumb({ pages, page, width, rotation, segmentNo, onRotate, disabled }: PageThumbProps) {
+  const figureRef = useRef<HTMLElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [failed, setFailed] = useState(false);
+  // 見える近くまでスクロールしてから描く（大きく並べたときに全ページを一度に描いてメモリを使い切らない）
+  const [near, setNear] = useState(typeof IntersectionObserver === 'undefined');
+  useEffect(() => {
+    const el = figureRef.current;
+    if (near || !el || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) setNear(true);
+      },
+      { rootMargin: '400px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [near]);
+  // 描く幅は 50px 単位にそろえる（入れ物の幅が少し変わるたびに描き直さない）
+  const renderWidth = Math.min(MAX_RENDER_WIDTH, Math.ceil((width * thumbScale()) / 50) * 50);
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !near) return;
     let cancelled = false;
     pages
-      .render(page, rotation, canvas, Math.round(THUMB_WIDTH * thumbScale()), () => cancelled)
+      .render(page, rotation, canvas, renderWidth, () => cancelled)
       .then(() => {
         if (!cancelled) setFailed(false);
       })
@@ -776,11 +860,13 @@ function PageThumb({ pages, page, rotation, segmentNo, onRotate, disabled }: Pag
     return () => {
       cancelled = true;
     };
-  }, [pages, page, rotation]);
+  }, [pages, page, rotation, renderWidth, near]);
 
   return (
     <figure
-      className={cn('flex w-[252px] flex-col items-center gap-0.5 rounded border-2 p-1', colorOf(segmentNo))}
+      ref={figureRef}
+      className={cn('flex flex-col items-center gap-0.5 rounded border-2 p-1', colorOf(segmentNo))}
+      style={{ width: width + 12 }}
       data-testid={`bulk-page-${page + 1}`}
     >
       <div className="flex min-h-48 flex-1 items-center justify-center bg-white">
@@ -788,7 +874,7 @@ function PageThumb({ pages, page, rotation, segmentNo, onRotate, disabled }: Pag
           ref={canvasRef}
           aria-label={`${page + 1}ページ目`}
           className="block h-auto max-w-full shadow-sm"
-          style={{ width: THUMB_WIDTH }}
+          style={{ width }}
         />
         {failed && <span className="text-[10px] text-red-600">表示できません</span>}
       </div>
@@ -872,7 +958,7 @@ function SegmentRow({
         <select
           aria-label={`区間${segment.no}の点検`}
           className={cn(
-            'block w-full rounded border border-gray-300 px-1 py-0.5 text-xs',
+            'field-required block w-full rounded border border-gray-300 px-1 py-0.5 text-xs',
             errors?.target && 'border-red-500',
           )}
           value={input.targetKey}
@@ -912,7 +998,7 @@ function SegmentRow({
           type="date"
           aria-label={`区間${segment.no}の実施日`}
           className={cn(
-            'block w-full rounded border border-gray-300 px-1 py-0.5 text-xs',
+            'field-required block w-full rounded border border-gray-300 px-1 py-0.5 text-xs',
             errors?.performedOn && 'border-red-500',
             !input.performedOn && 'text-gray-500',
           )}

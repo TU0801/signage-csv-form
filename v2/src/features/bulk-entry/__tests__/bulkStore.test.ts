@@ -145,13 +145,11 @@ describe('bulkStore (v1 js/bulk-table.js / bulk-modals.js の行操作)', () => 
     expect(s().rows[0]).toMatchObject({ terminalId: '', isValid: false, errors: ['端末'] });
   });
 
-  it('typing remarks re-validates the row at once (v1 waited for another field to change)', () => {
+  it('備考を入れても目安を超えた分で行をエラーにしない（修正依頼1026 I8）', () => {
     s().addRow({ propertyCode: 'z0001A01', inspectionType: '消防設備点検' });
     const id = s().rows[0]!.id;
     s().changeRemarks(id, 'あ'.repeat(26));
-    expect(s().rows[0]).toMatchObject({ isValid: false, errors: ['備考文字数(1行25文字以下)'] });
-    s().changeRemarks(id, 'あ'.repeat(25));
-    expect(s().rows[0]!.isValid).toBe(true);
+    expect(s().rows[0]).toMatchObject({ isValid: true, errors: [], remarks: 'あ'.repeat(26) });
   });
 
   it('点検開始日を変えると、終了日が空・旧開始日と同じ・新開始日より前なら新開始日にし、手で入れた後の日は残す（B10）', () => {

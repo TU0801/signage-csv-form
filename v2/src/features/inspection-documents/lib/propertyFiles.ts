@@ -2,10 +2,11 @@ import type { DbPropertyFile, PortalInspectionRow, PropertyFileCategory } from '
 import { normalizeSearch } from '@/lib/utils';
 import type { PropertyCandidate, VendorCandidate } from './aiOcr';
 import type { ReportFilters, TreeSelection } from './documents';
+import { sanitizeFileNamePart } from './fileName';
 
 /*
  * その他ファイル（修正依頼1025 G2）の画面に依らない計算: 区分の名前・ファイルの形式の確認・点検報告書ページのツリーへの載せ方。
- * ツリー（建物 → 年 → 種別）の「種別」の段に区分名（見積書など）で並べる。年は書類の日付、無ければ登録日（日本時間）
+ * ツリー（建物 → 年 → 種別）の「種別」の段に区分名（見積書など）で並べる。年は作業実施日、無ければ登録日（日本時間）
  */
 
 export const PROPERTY_FILE_CATEGORIES: { value: PropertyFileCategory; label: string }[] = [
@@ -64,6 +65,30 @@ export function propertyFileDisplayName(name: string): string {
   return name.replace(/[<>:"/\\|?*]/g, '').trim().slice(0, 200) || 'file';
 }
 
+/**
+ * 保存するファイル名（修正依頼1026 J4）。作業実施日があれば報告書と同じ規則（DocFlow）で
+ * 「作業実施日(YYYYMMDD)_建物名_区分.拡張子」にする（複数のファイルは _1・_2… を付けて区別する）。
+ * 作業実施日が無ければ元のファイル名のまま（禁止文字だけ除く）。元のファイル名は original_name に残る
+ */
+export function buildPropertyFileName(input: {
+  docDate: string;
+  propertyName: string;
+  categoryLabel: string;
+  originalName: string;
+  index: number;
+  total: number;
+}): string {
+  if (!input.docDate) return propertyFileDisplayName(input.originalName);
+  const ext = /\.([A-Za-z0-9]+)$/.exec(input.originalName)?.[1]?.toLowerCase();
+  const base = [
+    input.docDate.replace(/-/g, ''),
+    sanitizeFileNamePart(input.propertyName) || '未設定',
+    sanitizeFileNamePart(input.categoryLabel) || 'その他',
+  ].join('_');
+  const suffix = input.total > 1 ? `_${input.index + 1}` : '';
+  return propertyFileDisplayName(`${base}${suffix}${ext ? `.${ext}` : ''}`);
+}
+
 /** 一覧から建物の候補（物件コードごとに1つ、名前順） */
 export function propertyCandidatesOf(inspections: Pick<PortalInspectionRow, 'property_code' | 'property_name'>[]): PropertyCandidate[] {
   const m = new Map<string, string>();
@@ -85,7 +110,7 @@ function jstDate(iso: string): string {
   return new Date(new Date(iso).getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
-/** ツリーの年に使う日付（書類の日付、無ければ登録日） */
+/** ツリーの年に使う日付（作業実施日、無ければ登録日） */
 export function propertyFileDate(file: Pick<DbPropertyFile, 'doc_date' | 'created_at'>): string {
   return file.doc_date ?? jstDate(file.created_at);
 }

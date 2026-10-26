@@ -1,10 +1,11 @@
 import { bytesToBase64, readWithAiOcr } from '@/lib/api/property-files';
-import type { PdfPages } from './pdfPages';
+import { openPdfPages, type PdfPages } from './pdfPages';
 import { extractRange, loadSourcePdf } from './pdfSplit';
 import {
   AI_OCR_MAX_PDF_PAGES,
   AI_OCR_MAX_TEXT_PAGES,
   hasUsableTextLayer,
+  parseDateRange,
   readFromTextLayer,
   type AiOcrRaw,
 } from './aiOcr';
@@ -37,6 +38,20 @@ export async function readPdfForOcr(pages: PdfPages, bytes: Uint8Array, useAi: b
   const head = await extractRange(source, { start: 0, end: count - 1 }, {});
   const raw = await readWithAiOcr({ mode: 'pdf', data: bytesToBase64(head) });
   return { raw, pageTexts, mode: 'pdf', pages: count };
+}
+
+/**
+ * PDF の文字情報から期間（例「2026年9月1日～2026年9月30日」）の前半の日付を読む（AI なし・費用なし）。
+ * 期間が無い・文字情報の無い PDF は null。その他ファイルの作業実施日の初期値に使う（修正依頼1026 J4）
+ */
+export async function readPeriodStartFromPdf(file: File): Promise<string | null> {
+  const pages = await openPdfPages(new Uint8Array(await file.arrayBuffer()));
+  try {
+    const texts = await pages.pageTexts(AI_OCR_MAX_TEXT_PAGES);
+    return parseDateRange(texts.join('\n'))?.start ?? null;
+  } finally {
+    pages.destroy();
+  }
 }
 
 /** 画像（JPEG・PNG）を AI で読む（文字情報が無いので AI だけ） */
