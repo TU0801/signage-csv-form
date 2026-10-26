@@ -62,6 +62,8 @@ export const RPC = {
   portalInspections: 'portal_inspections',
   portalEntries: 'portal_entries',
   portalReviewEntry: 'portal_review_entry',
+  /** 見た版（updated_at）の申請だけを承認する（修正依頼1026 I11）。scripts/fix-1026-units.sql */
+  portalApproveEntryChecked: 'portal_approve_entry_checked',
   portalRegisterReport: 'portal_register_report',
   portalUpdateReport: 'portal_update_report',
   portalReviewReport: 'portal_review_report',

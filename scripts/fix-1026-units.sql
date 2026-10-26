@@ -31,6 +31,8 @@
 --    案内文・貼紙・表示期間・端末・連絡先・表示時間・貼紙の位置だけ（物件・点検・保守会社・状態・承認の列は変えられない）。
 --    申請済みの行の更新を止めるガード（guard_entry_approval_flow）は変えず、承認の関数（portal_review_entry）と同じ印
 --    signage.portal_review をこの1文の間だけ立てて通す。貼紙のガード（guard_entry_posters）・建物追加のガードは印と関係なく働く。
+--    直した後に管理会社・管理者が古い画面のまま承認しないよう、承認は signage.portal_approve_entry_checked(申請 id, 見た updated_at)
+--    で版を比べてから portal_review_entry を呼ぶ（新しい関数。portal_review_entry は変えない）。
 --
 -- 戻し手順は末尾。
 
@@ -451,8 +453,39 @@ $function$;
 REVOKE ALL ON FUNCTION signage.portal_update_submitted_entry(uuid, jsonb) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION signage.portal_update_submitted_entry(uuid, jsonb) TO authenticated, service_role;
 
+-- 見た版の申請だけを承認する（I11 の続き）。申請済みの申請は承認前なら保守会社が直せるので、管理会社・管理者が画面で見た後に
+-- 中身が変わっていたら承認を断る（承認すると見ていない内容が ready になるため）。p_expected_updated_at は画面が読んだ updated_at。
+-- 範囲と権限は portal_review_entry と同じ判定を先に行い（範囲外の申請の updated_at を漏らさない）、行を FOR UPDATE で押さえて
+-- 版を比べてから、同じトランザクションで portal_review_entry（1023 以前。変えない）を呼ぶ。差戻しは今どおり portal_review_entry。
+CREATE OR REPLACE FUNCTION signage.portal_approve_entry_checked(p_entry_id uuid, p_expected_updated_at timestamptz)
+ RETURNS signage.signage_entries
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'signage', 'pg_temp'
+AS $function$
+DECLARE
+  e signage.signage_entries;
+BEGIN
+  SELECT * INTO e FROM signage.signage_entries WHERE id = p_entry_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION '申請が見つかりません' USING ERRCODE = 'P0002';
+  END IF;
+  IF NOT signage.is_active_admin() AND NOT (
+       signage.current_role_kind() = 'management' AND signage.property_reviewable(e.property_code)) THEN
+    RAISE EXCEPTION 'この申請を承認・差戻しする権限がありません' USING ERRCODE = '42501';
+  END IF;
+  IF e.updated_at IS DISTINCT FROM p_expected_updated_at THEN
+    RAISE EXCEPTION '申請が修正されました。最新の内容を確かめてから承認してください' USING ERRCODE = '40001';
+  END IF;
+  RETURN signage.portal_review_entry(p_entry_id, 'approve', NULL);
+END;
+$function$;
+REVOKE ALL ON FUNCTION signage.portal_approve_entry_checked(uuid, timestamptz) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION signage.portal_approve_entry_checked(uuid, timestamptz) TO authenticated, service_role;
+
 -- ============================================================
 -- 戻し手順（申請・完了連絡の台の値は消える）
+-- DROP FUNCTION IF EXISTS signage.portal_approve_entry_checked(uuid, timestamptz);
 -- DROP FUNCTION IF EXISTS signage.portal_update_submitted_entry(uuid, jsonb);
 -- DROP FUNCTION IF EXISTS signage.portal_entry_for_edit(uuid);
 -- DROP FUNCTION IF EXISTS signage.submitted_entry_editable(uuid, uuid);

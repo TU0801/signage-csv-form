@@ -106,6 +106,19 @@ export async function reviewEntry(entryId: string, action: EntryReviewAction, co
   return data as DbEntry;
 }
 
+/**
+ * 見た版の申請だけを承認する（修正依頼1026 I11）。承認前の申請は保守会社が直せるので、画面が読んだ updated_at と違えば DB が断る
+ * （portal_approve_entry_checked。範囲は portal_review_entry と同じ）。差戻しは reviewEntry のまま
+ */
+export async function approveEntryChecked(entryId: string, expectedUpdatedAt: string | null): Promise<DbEntry> {
+  const { data, error } = await supabase.rpc(RPC.portalApproveEntryChecked, {
+    p_entry_id: entryId,
+    p_expected_updated_at: expectedUpdatedAt,
+  });
+  if (error) throw error;
+  return data as DbEntry;
+}
+
 /** 範囲内の点検報告書（RLS で絞られる）。削除済みも返す（画面の「削除済みを表示」で使う） */
 export async function fetchInspectionReports(): Promise<DbInspectionReport[]> {
   const { data, error } = await supabase

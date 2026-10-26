@@ -3,8 +3,8 @@ import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
 import { useAuth } from '@/hooks/useAuth';
-import { entryErrorReason } from '@/lib/api/admin-entries';
-import { reviewEntry } from '@/lib/api/portal';
+import { entryErrorReason, STALE_ENTRY_MESSAGE } from '@/lib/api/admin-entries';
+import { approveEntryChecked, reviewEntry } from '@/lib/api/portal';
 import type { PortalEntryRow, PortalInspectionRow } from '@/types/portal';
 import { useRefetchOnVisible } from '@/features/approval/hooks/useRefetchOnVisible';
 import { ReportUploadModal } from '@/features/inspection-documents/components/ReportUploadModal';
@@ -108,13 +108,19 @@ export function InspectionPortal() {
     if (busyEntryId) return;
     setBusyEntryId(entry.id);
     try {
-      await reviewEntry(entry.id, 'approve');
+      // 見た版の申請だけを承認する（承認前の申請は保守会社が直せる。修正依頼1026 I11）
+      await approveEntryChecked(entry.id, entry.updated_at);
       addToast('承認しました', 'success');
       setDetailTarget(null);
       await data.refetch();
     } catch (err) {
       console.error('Approve failed:', err);
       addToast(`承認に失敗しました: ${entryErrorReason(err)}`, 'error');
+      // 直されていたら詳細を閉じて読み直す（古い内容のまま承認し直させない）
+      if (entryErrorReason(err) === STALE_ENTRY_MESSAGE) {
+        setDetailTarget(null);
+        void data.refetch();
+      }
       throw err;
     } finally {
       setBusyEntryId(null);

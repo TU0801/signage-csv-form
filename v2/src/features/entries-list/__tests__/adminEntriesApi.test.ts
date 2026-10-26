@@ -14,7 +14,7 @@ let result: { data: unknown; error: unknown } = { data: [], error: null };
 /** PostgREST のメソッドチェーンを記録し、await で result を返す */
 function builder() {
   const b: Record<string, unknown> = {};
-  for (const m of ['select', 'eq', 'in', 'gte', 'lte', 'order', 'update', 'delete', 'single', 'maybeSingle']) {
+  for (const m of ['select', 'eq', 'is', 'in', 'gte', 'lte', 'order', 'update', 'delete', 'single', 'maybeSingle']) {
     b[m] = (...args: unknown[]) => {
       calls.push([m, ...args]);
       return b;
@@ -65,18 +65,22 @@ describe('lib/api/admin-entries', () => {
     ]);
   });
 
-  it('approveEntry / updateEntryDisplaySettings use select().single() so a 0-row update is an error', async () => {
-    result = { data: makeEntry(), error: null };
-    await approveEntry('id-1');
+  it('approveEntry approves only the version the screen read; a 0-row update (edited since) is an error', async () => {
+    result = { data: [makeEntry()], error: null };
+    await approveEntry('id-1', '2026-10-26T01:02:03.456789+00:00');
     expect(calls).toEqual([
       ['from', 'signage_entries'],
       ['update', { status: 'ready' }],
       ['eq', 'id', 'id-1'],
+      ['eq', 'updated_at', '2026-10-26T01:02:03.456789+00:00'],
       ['select'],
-      ['single'],
     ]);
+    // 読んだ後に保守会社が直していたら（版が違い0行）、承認せずに断る（修正依頼1026 I11）
+    result = { data: [], error: null };
+    await expect(approveEntry('id-1', '2026-10-26T01:02:03.456789+00:00')).rejects.toThrow('申請が修正されました');
+  });
 
-    calls.length = 0;
+  it('updateEntryDisplaySettings uses select().single() so a 0-row update is an error', async () => {
     result = { data: null, error: { code: 'PGRST116', message: 'JSON object requested, multiple (or no) rows returned' } };
     await expect(
       updateEntryDisplaySettings('id-2', {

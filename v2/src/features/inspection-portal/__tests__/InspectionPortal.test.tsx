@@ -10,6 +10,7 @@ const portal = vi.hoisted(() => ({
   fetchPortalEntries: vi.fn(),
   fetchInspectionReports: vi.fn(),
   reviewEntry: vi.fn(async () => ({})),
+  approveEntryChecked: vi.fn(async () => ({})),
 }));
 vi.mock('@/lib/api/portal', () => portal);
 const form = vi.hoisted(() => ({ fetchCompletions: vi.fn(), fetchInspectionDates: vi.fn() }));
@@ -166,9 +167,11 @@ describe('点検一覧（InspectionPortal）', () => {
     expect(screen.getByRole('button', { name: '差戻し' })).toBeInTheDocument();
     // 承認は確認ダイアログを経る
     fireEvent.click(screen.getByRole('button', { name: '承認' }));
-    expect(portal.reviewEntry).not.toHaveBeenCalled();
+    expect(portal.approveEntryChecked).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: '承認する' }));
-    await waitFor(() => expect(portal.reviewEntry).toHaveBeenCalledWith('e1', 'approve'));
+    // 見た版（読んだ updated_at）を渡して承認する（承認前の申請は保守会社が直せる。修正依頼1026 I11）
+    await waitFor(() => expect(portal.approveEntryChecked).toHaveBeenCalledWith('e1', makeEntry().updated_at));
+    expect(portal.reviewEntry).not.toHaveBeenCalled();
   });
 
   it('点検月の無い点検: 過去に承認済みの申請があっても、新しい申請を承認の対象にする', async () => {
@@ -186,7 +189,7 @@ describe('点検一覧（InspectionPortal）', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: '承認' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: '承認' }));
     fireEvent.click(screen.getByRole('button', { name: '承認する' }));
-    await waitFor(() => expect(portal.reviewEntry).toHaveBeenCalledWith('e-new', 'approve'));
+    await waitFor(() => expect(portal.approveEntryChecked).toHaveBeenCalledWith('e-new', makeEntry().updated_at));
   });
 
   it('件数バッジとステータスの絞り込みは点検月の無い点検も対象にし、該当があれば開いて出す', async () => {

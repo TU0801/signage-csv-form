@@ -487,11 +487,13 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       const blocked = completionBlockedReason(item);
       // 申請済み（承認前）の申請は、申請者・同じ保守会社・管理者が直せる（修正依頼1026 I11）
       const draft = item.application === 'applied' ? focusEntry(item.entries) : null;
-      // 申請不要（報告書のみ）の行は日付の欄を出さないので直せない（申請は台なしの申請か、印が付く前のもの）
+      // 申請不要（報告書のみ）の行は日付の欄を出さないので直せない（申請は台なしの申請か、印が付く前のもの）。
+      // 台なしの申請（1件入力・旧来）は全部の台の行に出るので、直すのは1台目の行だけ（同じ申請を2つの行で同時に直させない）
       const canEdit =
         !!draft &&
         draft.status === 'draft' &&
         !item.reportOnly &&
+        !(item.secondary && !draft.property_unit_id) &&
         (isAdmin || draft.is_mine || (!!draft.vendor_id && draft.vendor_id === profileVendorId));
       const isEditing = !!editOf(item);
       return (

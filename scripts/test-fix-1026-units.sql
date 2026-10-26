@@ -247,9 +247,19 @@ SELECT pg_temp.check('5n 管理者は直せる',
   (SELECT remarks = '管理者' FROM signage.portal_update_submitted_entry((SELECT id FROM t_ids WHERE k = 'e1'), '{"remarks":"管理者"}')));
 
 -- 管理会社が承認した後・差戻した後は直せない
+-- 承認は見た版（updated_at）を渡す。直された後の古い版では断る（このファイルは1トランザクションなので now() は変わらない。古い版は1秒前で作る）
+SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000007');
+SELECT pg_temp.expect_error('5o0 範囲外の管理会社は版を比べる前に断られる', $q$
+  SELECT signage.portal_approve_entry_checked((SELECT id FROM t_ids WHERE k = 'e1'), now())$q$, '権限がありません');
 SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000006');
-SELECT pg_temp.check('5o 管理会社は最新の値で承認できる',
-  (SELECT status = 'ready' AND remarks = '管理者' FROM signage.portal_review_entry((SELECT id FROM t_ids WHERE k = 'e1'), 'approve')));
+SELECT pg_temp.expect_error('5o1 古い版では承認できない', $q$
+  SELECT signage.portal_approve_entry_checked((SELECT id FROM t_ids WHERE k = 'e1'), now() - interval '1 second')$q$, '申請が修正されました');
+SELECT pg_temp.check('5o2 古い版で断られた申請は申請済みのまま',
+  (SELECT status = 'draft' FROM signage.portal_entries() WHERE id = (SELECT id FROM t_ids WHERE k = 'e1')));
+SELECT pg_temp.check('5o 管理会社は最新の版で承認できる',
+  (SELECT status = 'ready' AND remarks = '管理者' FROM signage.portal_approve_entry_checked(
+     (SELECT id FROM t_ids WHERE k = 'e1'),
+     (SELECT updated_at FROM signage.portal_entries() WHERE id = (SELECT id FROM t_ids WHERE k = 'e1')))));
 SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000002');
 SELECT pg_temp.expect_error('5p 承認の後は直せない', $q$
   SELECT signage.portal_update_submitted_entry((SELECT id FROM t_ids WHERE k = 'e1'), '{"remarks":"x"}')$q$, '承認前');
@@ -264,6 +274,7 @@ SELECT pg_temp.expect_error('5r 差戻しの後は（この RPC では）直せ�
 -- ============================================================
 SELECT pg_temp.as_owner();
 SET LOCAL ROLE anon;
+SELECT pg_temp.expect_error('6a0 anon は承認できない', $q$SELECT signage.portal_approve_entry_checked(gen_random_uuid(), now())$q$, 'permission denied');
 SELECT pg_temp.expect_error('6a anon は修正できない', $q$SELECT signage.portal_update_submitted_entry(gen_random_uuid(), '{}')$q$, 'permission denied');
 SELECT pg_temp.expect_error('6b anon は完了連絡できない', $q$SELECT signage.portal_mark_completed_any_month(gen_random_uuid(), '2026-11-01', NULL)$q$, 'permission denied');
 SELECT pg_temp.expect_error('6c anon は申請の台を読めない', $q$SELECT * FROM signage.portal_entry_units()$q$, 'permission denied');

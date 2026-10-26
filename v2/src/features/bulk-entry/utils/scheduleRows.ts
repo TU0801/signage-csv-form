@@ -10,11 +10,17 @@ import type { BulkEntryRow, BulkNotice, BulkRowInput, BulkScheduleMeta } from '.
  * 予定（点検行 × 対象月）は点検一覧と同じく buildSchedule / buildUnscheduledItems で作り、表の行にする。
  */
 
-/** 読み取りの予定の行に出す申請（申請済み・差戻し中の予定）。未申請・点検月の無い点検は null */
+/**
+ * 読み取りの予定の行に出す申請（申請済み・差戻し中の予定）。未申請・点検月の無い点検は null。
+ * 承認待ちの申請があればそれ（状態「点検予定申請中」と『修正』の対象＝focusEntry と同じ申請。取込済みの申請が並びの先にあっても
+ * その値を出さない。修正依頼1026 I11）。無ければ承認済み・取込済みのうち新しいもの
+ */
 export function scheduleRowEntry(item: ScheduleItem): PortalEntryRow | null {
   // 点検月の無い点検は月をまたいでまとめた行なので、いつでも別の月の申請を足せる（読み取りにしない）
   const locked = !!item.targetMonth && item.application !== 'not_applied';
-  return locked ? (appliedEntry(item) ?? focusEntry(item.entries)) : null;
+  if (!locked) return null;
+  const focus = focusEntry(item.entries);
+  return focus?.status === 'draft' ? focus : (appliedEntry(item) ?? focus);
 }
 
 /**

@@ -545,6 +545,47 @@ describe('BulkEntryPage (v1 js/bulk.js init / adminVendorSelect)', () => {
       expect(api.createBulkEntries).not.toHaveBeenCalled();
     });
 
+    it('取込済みの申請が並びの先にあっても、行は承認待ちの申請を出し『修正』でその申請を直せる（修正依頼1026 I11）', async () => {
+      portalApi.fetchPortalEntries.mockResolvedValue([
+        makeEntry({ id: 'e-exp', status: 'exported', property_code: 'z0001A01', inspection_type: '消防設備点検', inspection_start: '2026-11-05', remarks: '出力済み' }),
+        makeEntry({ id: 'e-nov', status: 'draft', property_code: 'z0001A01', inspection_type: '消防設備点検', inspection_start: '2026-11-10', remarks: '9時〜' }),
+      ]);
+      portalApi.fetchSubmittedEntryForEdit.mockResolvedValue({
+        id: 'e-nov', status: 'draft', terminal_id: 'T-A1', inspection_start: '2026-11-10', inspection_end: null, remarks: '9時〜',
+        memo: '', announcement: '', poster_type: 'template', poster_image: null, poster_position: '2', extra_posters: [],
+        display_duration: 10, display_start_date: null, display_start_time: null, display_end_date: null, display_end_time: null,
+        emergency_contact: '',
+      });
+      renderPage();
+      await waitFor(() => expect(within(rowOf('2026年11月')).getByText('点検予定申請中')).toBeInTheDocument());
+      expect(within(rowOf('2026年11月')).getByText('9時〜')).toBeInTheDocument();
+      expect(within(rowOf('2026年11月')).queryByText('出力済み')).toBeNull();
+      fireEvent.click(within(rowOf('2026年11月')).getByRole('button', { name: '修正' }));
+      await waitFor(() => expect(within(rowOf('2026年11月')).getByLabelText('備考')).toHaveValue('9時〜'));
+      expect(portalApi.fetchSubmittedEntryForEdit).toHaveBeenCalledWith('e-nov');
+      expect(within(rowOf('2026年11月')).getByRole('button', { name: '修正をやめる' })).toBeInTheDocument();
+    });
+
+    it('台なしの申請（全部の台の行に出る）は1台目の行だけで『修正』できる（同じ申請を2つの行で直させない。修正依頼1026 I11）', async () => {
+      portalApi.fetchPortalInspectionUnits.mockResolvedValue([
+        { inspection_id: 'i1', unit_id: 'u1', unit_code: 'No1', unit_sort: 0, maintainer_id: 'v1', inspection_months: [], inspected_on: null, equipment_code: null },
+        { inspection_id: 'i1', unit_id: 'u2', unit_code: 'No2', unit_sort: 1, maintainer_id: 'v1', inspection_months: [], inspected_on: null, equipment_code: null },
+      ]);
+      portalApi.fetchPortalEntries.mockResolvedValue([
+        makeEntry({ id: 'e-all', property_code: 'z0001A01', inspection_type: '消防設備点検', inspection_start: '2026-11-10' }),
+      ]);
+      portalApi.fetchPortalEntryUnits.mockResolvedValue([]);
+      renderPage();
+      await waitFor(() => expect(screen.getAllByTestId('target-month')).toHaveLength(4));
+      const novRows = screen
+        .getAllByTestId('target-month')
+        .filter((el) => el.textContent === '2026年11月')
+        .map((el) => el.closest('tr')!);
+      expect(novRows.map((tr) => within(tr).getByText('点検予定申請中'))).toHaveLength(2);
+      expect(within(novRows[0]!).getByRole('button', { name: '修正' })).toBeInTheDocument();
+      expect(within(novRows[1]!).queryByRole('button', { name: '修正' })).toBeNull();
+    });
+
     it('点検日連絡が OFF の点検は申請不要（報告書のみ）として扱い、超過にしない（修正依頼1026）', async () => {
       portalApi.fetchNotifyOff.mockResolvedValue([{ inspection_id: 'i1', unit_id: null }]);
       renderPage();
