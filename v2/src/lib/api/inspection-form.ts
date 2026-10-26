@@ -39,7 +39,7 @@ export async function markCompleted(
   return data as DbInspectionCompletion;
 }
 
-/** 完了連絡を取り消す（連絡した保守会社と同じ保守会社か管理者）。unitId は台ごとの完了連絡の台（null は台なしの完了連絡） */
+/** 完了連絡を取り消す（台ごとの完了連絡は連絡した保守会社と同じ保守会社か管理者、台なしの完了連絡は点検行か台を保守する保守会社か管理者）。unitId は台ごとの完了連絡の台（null は台なしの完了連絡） */
 export async function unmarkCompleted(
   inspectionId: string,
   targetMonth: string,

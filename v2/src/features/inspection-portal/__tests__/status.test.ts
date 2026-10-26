@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { buildSchedule } from '../lib/schedule';
 import { buildUnscheduledItems } from '../components/UnscheduledTable';
-import { completionKey, completionMonth, inspectionStatus, itemStatus } from '../lib/status';
+import { completionKey, completionMonth, inspectionStatus, isRowCompleted, itemStatus, rowUndoCompletionUnitId } from '../lib/status';
+import type { PortalUnitRow } from '@/types/portal';
 import { makeEntry, makeInspection, makeReport } from './fixtures';
 
 const TODAY = '2026-10-21';
@@ -53,5 +54,14 @@ describe('点検のステータス（B14）', () => {
     expect(completionMonth(byStart!)).toBe('2026-07-01');
     const [none] = buildUnscheduledItems([makeInspection({ inspection_months: [] })], [], []);
     expect(completionMonth(none!)).toBeNull();
+  });
+
+  it('台ごとの行の完了が台なしの完了連絡から来ていれば、取り消しは台なし（null）で呼ぶ（修正依頼1026 再検証 X12）', () => {
+    const item = { ...novItem([]), unit: { unit_id: 'u1' } as PortalUnitRow };
+    const unitless = new Set([completionKey('i1', '2026-11-01')]);
+    expect(isRowCompleted(item, unitless)).toBe(true);
+    expect(rowUndoCompletionUnitId(item, unitless)).toBeNull();
+    // その台の完了連絡があれば台で取り消す
+    expect(rowUndoCompletionUnitId(item, new Set([completionKey('i1', '2026-11-01', 'u1')]))).toBe('u1');
   });
 });

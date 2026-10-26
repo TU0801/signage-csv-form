@@ -43,7 +43,9 @@ export function editRowInput(entry: DbEntry): BulkRowInput {
     displayStartDate:
       entry.display_start_date && entry.display_start_date !== entry.inspection_start ? entry.display_start_date : '',
     displayStartTime: entry.display_start_time ?? '',
-    displayEndDate: entry.display_end_date && entry.display_end_date !== end ? entry.display_end_date : '',
+    // 既定の表示終了日（終了日が空の申請は点検開始日で保存される）と同じなら空に戻す（点検日を直したときに追従するように）
+    displayEndDate:
+      entry.display_end_date && entry.display_end_date !== (end || entry.inspection_start || '') ? entry.display_end_date : '',
     displayEndTime: entry.display_end_time ?? '',
     emergencyContact: entry.emergency_contact ?? '',
     posterType: entry.poster_type === 'custom' ? 'custom' : 'template',

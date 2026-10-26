@@ -65,6 +65,7 @@ import {
   isRowCompleted,
   itemStatus,
   rowCompletionKey,
+  rowUndoCompletionUnitId,
 } from '@/features/inspection-portal/lib/status';
 import { buildUnscheduledItems } from '@/features/inspection-portal/components/UnscheduledTable';
 import { ApplyModal, type ApplyTarget } from '@/features/inspection-portal/components/ApplyModal';
@@ -476,10 +477,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       const key = rowCompletionKey(item);
       const hasCompletion = isRowCompleted(item, completed);
       // 取り消すのはこの行の台の完了連絡。台ごとに分ける前の台なしの完了連絡（点検の全体）ならそれを取り消す
-      const undoUnit =
-        month && item.unit?.unit_id && completed.has(completionKey(item.inspection.inspection_id, month, item.unit.unit_id))
-          ? item.unit.unit_id
-          : null;
+      const undoUnit = rowUndoCompletionUnitId(item, completed);
       const accepted = item.report?.status === 'accepted';
       const sentBack = item.application === 'sent_back' ? focusEntry(item.entries) : null;
       const busy = !!key && completingKey === key;
