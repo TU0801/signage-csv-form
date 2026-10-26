@@ -4,6 +4,7 @@ import {
   applicationState,
   buildSchedule,
   entryMatches,
+  formatInspectionMonths,
   todayJst,
   unscheduledInspections,
 } from '../lib/schedule';
@@ -199,5 +200,20 @@ describe('entryMatches', () => {
 
   it('点検の紐付けがある申請は ID と対象月だけで照合する', () => {
     expect(entryMatches(entry(), inspection({ inspection_id: 'other' }), '2026-05-01')).toBe(false);
+  });
+});
+
+describe('formatInspectionMonths（点検月の表示。修正依頼1027）', () => {
+  it('1〜12 月がそろえば印が無くても「毎月」。それ以外は上の段に奇数月・下の段に偶数月、片方が空なら1段', () => {
+    expect(formatInspectionMonths([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])).toBe('毎月');
+    expect(formatInspectionMonths([5, 11], true)).toBe('毎月');
+    expect(formatInspectionMonths([3, 6, 9, 12])).toBe('3,9\n6,12');
+    expect(formatInspectionMonths([5, 11, 5])).toBe('5,11');
+    expect(formatInspectionMonths([4, 10])).toBe('4,10');
+    expect(formatInspectionMonths([])).toBe('');
+  });
+
+  it('段の中は小さい月から並べる（保存順が 4,7,10,1 でも）', () => {
+    expect(formatInspectionMonths([4, 7, 10, 1])).toBe('1,7\n4,10');
   });
 });

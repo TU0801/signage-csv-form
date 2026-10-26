@@ -135,7 +135,7 @@ export interface BulkState {
   copyRow: (id: number) => void;
 
   toggleSelection: (id: number) => void;
-  selectAll: () => void;
+  selectAll: (ids?: number[]) => void;
   clearSelection: () => void;
   setDraggedRowId: (id: number | null) => void;
 
@@ -642,7 +642,8 @@ export const useBulkStore = create<BulkState>((set, get) => {
         return { selectedIds: next };
       }),
 
-    selectAll: () => set((s) => ({ selectedIds: new Set(s.rows.map((r) => r.id)) })),
+    // ids を渡せばその行だけ（表に出ている行。隠れた行は選ばない）
+    selectAll: (ids) => set((s) => ({ selectedIds: new Set(ids ?? s.rows.map((r) => r.id)) })),
 
     clearSelection: () => set({ selectedIds: new Set() }),
 

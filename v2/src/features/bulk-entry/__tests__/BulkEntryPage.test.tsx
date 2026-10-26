@@ -650,6 +650,7 @@ describe('BulkEntryPage (v1 js/bulk.js init / adminVendorSelect)', () => {
     it('点検日連絡が OFF の点検は申請不要（報告書のみ）として扱い、超過にしない（修正依頼1026）', async () => {
       portalApi.fetchNotifyOff.mockResolvedValue([{ inspection_id: 'i1', unit_id: null }]);
       renderPage();
+      fireEvent.click(await screen.findByRole('checkbox', { name: '申請不要も表示' }));
       fireEvent.change(await screen.findByRole('combobox', { name: '時期' }), { target: { value: 'all' } });
       await waitFor(() => expect(screen.getAllByTestId('target-month').length).toBeGreaterThanOrEqual(2));
       expect(within(rowOf('2026年11月')).getByText('申請不要')).toBeInTheDocument();
@@ -661,6 +662,7 @@ describe('BulkEntryPage (v1 js/bulk.js init / adminVendorSelect)', () => {
     it('申請不要・毎月の点検種別は毎月の行を出し、申請の欄を出さず、超過にしない（修正依頼1025 H4/G4）', async () => {
       portalApi.fetchInspectionTypeFlags.mockResolvedValue([{ inspection_type_id: 't1', report_only: true, monthly: true }]);
       renderPage();
+      fireEvent.click(await screen.findByRole('checkbox', { name: '申請不要も表示' }));
       // 4月登録 → 4〜1月の毎月（既定の時期: 過去は超過だけなので出さず、今月から今後3か月）
       await waitFor(() =>
         expect(screen.getAllByTestId('target-month').map((el) => el.textContent)).toEqual([
@@ -696,6 +698,48 @@ describe('BulkEntryPage (v1 js/bulk.js init / adminVendorSelect)', () => {
       expect(months()).toEqual(['2026年5月', '2026年11月']);
       await waitFor(() => expect(within(rowOf('2026年11月')).getByText('ﾃｽﾄ管')).toBeInTheDocument());
       expect(within(rowOf('2026年11月')).getByTitle('テスト管理')).toBeInTheDocument();
+    });
+
+    it('点検月は1〜12月がそろえば「毎月」、それ以外は奇数月と偶数月の2段で出す（修正依頼1027）', async () => {
+      portalApi.fetchPortalInspections.mockResolvedValue([
+        makeInspection({ property_code: 'z0001A01', property_name: '物件A', inspection_type_label: '消防設備点検', inspection_months: [3, 6, 9, 12] }),
+        makeInspection({
+          inspection_id: 'i2',
+          property_code: 'z0001A01',
+          property_name: '物件A',
+          inspection_type_label: '自動扉点検',
+          inspection_type_id: 't2',
+          inspection_months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+        }),
+      ]);
+      renderPage();
+      await waitFor(() => expect(screen.getAllByTestId('target-month').length).toBeGreaterThan(0));
+      const texts = screen.getAllByTestId('inspection-months').map((el) => el.textContent);
+      expect(texts).toContain('3,9\n6,12');
+      expect(texts).toContain('毎月');
+    });
+
+    it('申請不要の行は既定で出さず件数だけ知らせ、「申請不要も表示」で出す。隠した行は全て選択に入らない（修正依頼1027）', async () => {
+      portalApi.fetchPortalInspections.mockResolvedValue([
+        makeInspection({ property_code: 'z0001A01', property_name: '物件A', inspection_type_label: '消防設備点検' }),
+        makeInspection({ inspection_id: 'i2', property_code: 'z0001A01', property_name: '物件A', inspection_type_label: 'リモート点検', inspection_type_id: 't2' }),
+      ]);
+      portalApi.fetchNotifyOff.mockResolvedValue([{ inspection_id: 'i2', unit_id: null }]);
+      renderPage();
+      // i1 の 5月（超過）・11月だけ。i2 の 11月は申請不要なので隠す
+      await waitFor(() => expect(screen.getAllByTestId('target-month')).toHaveLength(2));
+      expect(screen.queryByText('申請不要')).toBeNull();
+      expect(screen.getByText('申請不要 1件を非表示')).toBeInTheDocument();
+      fireEvent.click(screen.getByTitle('すべて選択'));
+      const hidden = useBulkStore.getState().rows.find((r) => r.schedule?.reportOnly)!;
+      expect(hidden).toBeTruthy();
+      expect(useBulkStore.getState().selectedIds.has(hidden.id)).toBe(false);
+      expect(useBulkStore.getState().selectedIds.size).toBe(2);
+
+      fireEvent.click(screen.getByRole('checkbox', { name: '申請不要も表示' }));
+      await waitFor(() => expect(screen.getAllByTestId('target-month')).toHaveLength(3));
+      expect(screen.getByText('申請不要')).toBeInTheDocument();
+      expect(screen.queryByText(/件を非表示/)).toBeNull();
     });
 
     it('完了連絡は確認のうえ記録し、記録があれば点検完了と出す', async () => {

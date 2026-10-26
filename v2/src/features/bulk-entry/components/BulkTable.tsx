@@ -24,7 +24,7 @@ export interface BulkRowInfo {
   reason?: string | null;
   managementName: string;
   vendorName: string;
-  /** 点検月（例 4,7,10,1）。点検行が無ければ '' */
+  /** 点検月（formatInspectionMonths: 例「7,1」改行「4,10」／毎月）。点検行が無ければ '' */
   months: string;
   /** 検査月（例 2026年4月）。無ければ '-' */
   inspectedOn: string;
@@ -199,6 +199,8 @@ export function BulkTable({
   const allSelected = visibleRows.length > 0 && visibleRows.every((r) => selectedIds.has(r.id));
   // No は表示中の行の通し番号（時期などで隠れた予定の行は数えない。申請時のエラーの「N行目」も同じ番号）
   const visibleNo = new Map(visibleRows.map((r, i) => [r.id, i + 1]));
+  // 全て選択は表に出ている行だけ（絞り込み・申請不要で隠れた行は選ばない。修正依頼1027）
+  const selectVisible = () => selectAll(visibleRows.map((r) => r.id));
   let lastManualIndex = -1;
   rows.forEach((r, i) => {
     if (!r.schedule) lastManualIndex = i;
@@ -274,7 +276,7 @@ export function BulkTable({
           else addToast('コピーされた行がありません', 'error');
         },
       },
-      { label: '全て選択', divider: true, onClick: selectAll },
+      { label: '全て選択', divider: true, onClick: selectVisible },
       { label: '選択解除', onClick: clearSelection },
       {
         label: 'この行を削除',
@@ -304,7 +306,7 @@ export function BulkTable({
                 type="checkbox"
                 title="すべて選択"
                 checked={allSelected}
-                onChange={(e) => (e.target.checked ? selectAll() : clearSelection())}
+                onChange={(e) => (e.target.checked ? selectVisible() : clearSelection())}
                 className="h-4 w-4 rounded border-gray-300"
               />
             </th>
@@ -435,7 +437,7 @@ export function BulkTable({
                 </td>
                 <td className="cell">
                   <div className="px-1 py-1 text-xs leading-tight tabular-nums text-gray-700">
-                    <div data-testid="inspection-months">{info.months || '－'}</div>
+                    <div className="whitespace-pre-line" data-testid="inspection-months">{info.months || '－'}</div>
                     <div className="whitespace-nowrap text-[11px] text-gray-500" data-testid="inspected-on">
                       {info.inspectedOn}
                     </div>
