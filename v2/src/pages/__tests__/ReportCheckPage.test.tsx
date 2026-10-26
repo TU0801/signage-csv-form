@@ -115,4 +115,43 @@ describe('報告書確認（申請不要の点検の報告書。修正依頼1027
     fireEvent.click(within(rowOf('物件B')).getByRole('button', { name: '報告書UP' }));
     expect(await screen.findByText('報告書の提出')).toBeInTheDocument();
   });
+
+  it('対象月の選択肢は行のある最も古い月から（点検の登録月より前の月は 0件と誤読されるので出さない）', async () => {
+    portalApi.fetchPortalInspections.mockResolvedValue([
+      makeInspection({ inspection_id: 'i1', property_name: '物件A', inspection_months: ALL, schedule_from: '2026-09-01' }),
+      makeInspection({ inspection_id: 'i2', property_name: '物件B', inspection_months: ALL, schedule_from: '2026-10-01' }),
+    ]);
+    renderPage();
+    await waitFor(() => expect(screen.getByText('物件A')).toBeInTheDocument());
+    const options = within(screen.getByRole('combobox', { name: '対象月' })).getAllByRole('option');
+    expect(options.map((o) => (o as HTMLOptionElement).value)).toEqual(['2026-10-01', '2026-09-01']);
+    expect(screen.getByText(/登録月より前の月は出ません/)).toBeInTheDocument();
+    expect(screen.getByText(/点検月の無い点検は報告書が届いた月だけ/)).toBeInTheDocument();
+  });
+
+  it('台ごとの点検で2台目だけに完了連絡があっても「完了連絡あり」を出す', async () => {
+    portalApi.fetchPortalInspectionUnits.mockResolvedValue([
+      { inspection_id: 'i2', unit_id: 'u1', unit_code: 'No1', unit_sort: 0, maintainer_id: 'v1', inspection_months: [], inspected_on: null, equipment_code: null },
+      { inspection_id: 'i2', unit_id: 'u2', unit_code: 'No2', unit_sort: 1, maintainer_id: 'v1', inspection_months: [], inspected_on: null, equipment_code: null },
+    ]);
+    portalApi.fetchNotifyOff.mockResolvedValue([
+      { inspection_id: 'i1', unit_id: null },
+      { inspection_id: 'i2', unit_id: 'u2' },
+    ]);
+    formApi.fetchCompletions.mockResolvedValue([
+      { property_inspection_id: 'i2', target_month: '2026-10-01', property_unit_id: 'u2' },
+    ]);
+    renderPage();
+    await waitFor(() => expect(screen.getByText('物件B')).toBeInTheDocument());
+    expect(within(rowOf('物件B')).getByText('完了連絡あり')).toBeInTheDocument();
+  });
+
+  it('読み込みに失敗したら件数を出さず、表は「読み込めませんでした」', async () => {
+    portalApi.fetchPortalInspections.mockRejectedValue(new Error('timeout'));
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/点検の予定を読み込めませんでした/)).toBeInTheDocument());
+    expect(screen.getByTestId('report-summary')).toHaveTextContent('—');
+    expect(screen.getByText('読み込めませんでした')).toBeInTheDocument();
+    expect(screen.queryByText('読み込み中…')).toBeNull();
+  });
 });

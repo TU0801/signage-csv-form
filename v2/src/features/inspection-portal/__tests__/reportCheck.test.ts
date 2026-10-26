@@ -31,5 +31,7 @@ describe('buildReportCheckItems（報告書確認。修正依頼1027）', () => 
     );
     expect(items.map((i) => i.key).sort()).toEqual(['i1:2026-09-01', 'i1:2026-10-01', 'i2:2026-08-01']);
     expect(items.every((i) => i.reportOnly && !i.secondary)).toBe(true);
+    // まとめた台の行を全部持つ（2台目だけの完了連絡も「完了連絡あり」に出せるように）
+    expect(items.find((i) => i.key === 'i1:2026-10-01')!.unitRows.map((r) => r.unit?.unit_id)).toEqual(['u1', 'u2']);
   });
 });

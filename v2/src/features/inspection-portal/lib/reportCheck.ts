@@ -60,6 +60,9 @@ function unscheduledReportItems(
   return items;
 }
 
+/** 報告書確認の1行。代表は1台目の行。unitRows はまとめた台の行すべて（完了連絡の有無はどの台のものでも出す） */
+export type ReportCheckItem = ScheduleItem & { unitRows: ScheduleItem[] };
+
 /**
  * 申請不要の点検の行（点検行 × 対象月。今月まで）。台ごとの点検はどれかの台が申請不要なら申請不要として1行（1台目の行）にする
  */
@@ -68,21 +71,28 @@ export function buildReportCheckItems(
   entries: PortalEntryRow[],
   reports: DbInspectionReport[],
   { today, flags, unitIndex, unitVendorId, notify }: ReportCheckOptions,
-): ScheduleItem[] {
+): ReportCheckItem[] {
   const scheduled = buildSchedule(inspections, entries, reports, { today, monthsAhead: 0, flags });
   const unscheduled = unscheduledReportItems(inspections, entries, reports, { today, flags });
   const expanded = expandByUnits([...scheduled, ...unscheduled], unitIndex, unitVendorId, { notify });
   // 点検行 × 対象月ごとにまとめる（1台目の行を代表にする）
-  const groups = new Map<string, { first: ScheduleItem; reportOnly: boolean }>();
+  const groups = new Map<string, { first: ScheduleItem; rows: ScheduleItem[]; reportOnly: boolean }>();
   for (const item of expanded) {
     const key = `${item.inspection.inspection_id}:${item.targetMonth}`;
     const g = groups.get(key);
-    if (g) g.reportOnly ||= !!item.reportOnly;
-    else groups.set(key, { first: item, reportOnly: !!item.reportOnly });
+    if (g) {
+      g.rows.push(item);
+      g.reportOnly ||= !!item.reportOnly;
+    } else groups.set(key, { first: item, rows: [item], reportOnly: !!item.reportOnly });
   }
   return [...groups.values()]
     .filter((g) => g.reportOnly)
-    .map((g) => ({ ...g.first, key: `${g.first.inspection.inspection_id}:${g.first.targetMonth}`, reportOnly: true }))
+    .map(({ first, rows }) => ({
+      ...first,
+      key: `${first.inspection.inspection_id}:${first.targetMonth}`,
+      reportOnly: true,
+      unitRows: rows,
+    }))
     .sort(
       (a, b) =>
         a.inspection.property_code.localeCompare(b.inspection.property_code) ||

@@ -18,7 +18,7 @@ import { useManagementCompanies } from '@/features/single-entry/hooks/useManagem
 import { MANAGEMENT_COMPANY_NONE } from '@/features/single-entry/lib/entryLogic';
 import type { PortalInspectionRow } from '@/types/portal';
 
-/** 対象月の選択肢の数（今月から何か月さかのぼるか） */
+/** 対象月の選択肢の上限（今月から何か月さかのぼるか）。行のある最も古い月より前は出さない */
 const MONTH_OPTIONS = 12;
 const MONTH_SUFFIX = ['（今月）', '（前月）', '（前々月）'];
 
@@ -82,14 +82,18 @@ export function ReportCheckPage({ modeSwitch }: { modeSwitch?: ReactNode } = {})
     [portal.inspections, portal.entries, portal.reports, today, flags, unitIndex, isAdmin, profileVendorId, notify],
   );
 
-  const monthOptions = useMemo(
-    () =>
-      Array.from({ length: MONTH_OPTIONS }, (_, i) => {
-        const m = addMonths(currentMonth, -i);
-        return { value: m, label: `${formatMonth(m)}${MONTH_SUFFIX[i] ?? ''}` };
-      }),
-    [currentMonth],
-  );
+  // 行は点検の登録月（schedule_from）から出るので、それより前の月を選べると「0件中 0件」と出て未着が無いように見える。
+  // 選べるのは行のある最も古い月から今月まで（行が無ければ今月だけ）
+  const monthOptions = useMemo(() => {
+    const oldest = items.reduce((min, i) => (i.targetMonth < min ? i.targetMonth : min), currentMonth);
+    const options: { value: string; label: string }[] = [];
+    for (let i = 0; i < MONTH_OPTIONS; i++) {
+      const m = addMonths(currentMonth, -i);
+      if (m < oldest) break;
+      options.push({ value: m, label: `${formatMonth(m)}${MONTH_SUFFIX[i] ?? ''}` });
+    }
+    return options;
+  }, [items, currentMonth]);
   const typeOptions = useMemo(
     () => [...new Set(items.map((i) => i.inspection.inspection_type_label ?? ''))].filter(Boolean).sort(),
     [items],
@@ -167,14 +171,20 @@ export function ReportCheckPage({ modeSwitch }: { modeSwitch?: ReactNode } = {})
             className={cn(control, 'w-36')}
           />
           <span className="ml-1 whitespace-nowrap text-xs text-gray-700" data-testid="report-summary">
-            {inScope.length}件中 <b className="text-green-700">{received}件</b> 届いた（未着{' '}
-            <b className={inScope.length - received > 0 ? 'text-red-700' : ''}>{inScope.length - received}件</b>）
+            {portal.error ? (
+              '件数: —'
+            ) : (
+              <>
+                {inScope.length}件中 <b className="text-green-700">{received}件</b> 届いた（未着{' '}
+                <b className={inScope.length - received > 0 ? 'text-red-700' : ''}>{inScope.length - received}件</b>）
+              </>
+            )}
           </span>
           {portal.loading && <Spinner size="sm" />}
         </div>
         <p className="border-b border-gray-200 px-2 py-0.5 text-[11px] text-gray-500">
           申請不要の点検（点検種別が報告書のみ・点検日連絡が OFF。リモート点検など）の報告書が、対象月に届いたかを出します。
-          台ごとの点検は報告書が点検ごと（No1）なので1行です。
+          台ごとの点検は報告書が点検ごと（No1）なので1行です。点検の登録月より前の月は出ません。点検月の無い点検は報告書が届いた月だけ出ます（未着になりません）。
         </p>
         {portal.error && (
           <div className="flex items-center gap-2 border-b border-gray-200 px-3 py-1 text-xs text-red-600">
@@ -229,7 +239,7 @@ export function ReportCheckPage({ modeSwitch }: { modeSwitch?: ReactNode } = {})
                           <span className="rounded bg-red-100 px-1.5 py-px text-[11px] font-medium text-red-800 ring-1 ring-red-300">
                             未着
                           </span>
-                          {isRowCompleted(item, completed) && <span className="text-[11px] text-gray-500">完了連絡あり</span>}
+                          {item.unitRows.some((u) => isRowCompleted(u, completed)) && <span className="text-[11px] text-gray-500">完了連絡あり</span>}
                         </span>
                       )}
                     </td>
@@ -249,7 +259,7 @@ export function ReportCheckPage({ modeSwitch }: { modeSwitch?: ReactNode } = {})
               {shown.length === 0 && (
                 <tr>
                   <td colSpan={isAdmin ? 7 : 6} className="px-3 py-6 text-center text-xs text-gray-500">
-                    {portal.loaded ? '該当する点検はありません' : '読み込み中…'}
+                    {portal.error ? '読み込めませんでした' : portal.loaded ? '該当する点検はありません' : '読み込み中…'}
                   </td>
                 </tr>
               )}
