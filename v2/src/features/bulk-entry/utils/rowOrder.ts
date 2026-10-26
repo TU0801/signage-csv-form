@@ -23,7 +23,7 @@ export function nextSort(current: SortState | null, column: SortColumn): SortSta
 /** 並べ替えに使う行の情報（BulkRowInfo の一部） */
 export interface RowSortInfo {
   status?: InspectionStatus;
-  /** 点検月（例 4,7,10,1／毎月）。無ければ '' */
+  /** 点検月（formatInspectionMonths の表示。奇数月と偶数月を改行で分ける／毎月）。無ければ '' */
   months: string;
   /** 検査月（例 2026年4月）。無ければ '-' */
   inspectedOn: string;
@@ -33,7 +33,7 @@ export interface RowSortInfo {
 function monthsKey(months: string): number {
   if (months === '毎月') return 0;
   const nums = months
-    .split(',')
+    .split(/\D+/)
     .map((m) => Number(m))
     .filter((n) => n >= 1 && n <= 12);
   return nums.length ? Math.min(...nums) : 99;

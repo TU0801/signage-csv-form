@@ -49,6 +49,7 @@ import { matchTiming, TIMING_OPTIONS, type TimingFilter } from '@/features/inspe
 import {
   buildSchedule,
   focusEntry,
+  formatInspectionMonths,
   formatMonth,
   todayJst,
   typeFlagsMap,
@@ -183,6 +184,8 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
   // 点検月のみ（既定）／全ての月（点検月以外の月にも予定の行を出す。修正依頼1025 D5）
   const [allMonths, setAllMonths] = useState(false);
   const [search, setSearch] = useState('');
+  // 申請不要（報告書のみ）の予定の行も出すか（既定は出さない。修正依頼1027）
+  const [showReportOnly, setShowReportOnly] = useState(false);
   // 予定の行の並べ替え（F3。表示だけ）
   const [sort, setSort] = useState<SortState | null>(null);
   // 管理会社の略称（F5）
@@ -359,7 +362,8 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       '',
     [],
   );
-  const isVisible = useCallback(
+  // 申請不要の切り替えより前の絞り込み（時期・管理会社・検索）。隠した申請不要の件数を数えるのにも使う
+  const passesFilters = useCallback(
     (row: BulkEntryRow) => {
       if (row.schedule) {
         const item = itemsByKey.get(row.schedule.key);
@@ -384,6 +388,28 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
     },
     [itemsByKey, portal.loaded, portal.error, timing, today, managementCompanyId, managementIndex, managementOf, search, propertyNameOf],
   );
+  // 申請不要（種別の報告書のみ・点検日連絡 OFF）の予定の行か。台ごとの点検日連絡を反映した予定（itemsByKey）で見る
+  const isReportOnlyRow = useCallback(
+    (row: BulkEntryRow) => !!row.schedule && !!(itemsByKey.get(row.schedule.key)?.reportOnly ?? row.schedule.reportOnly),
+    [itemsByKey],
+  );
+  // 表示する行。申請不要の行は「申請不要も表示」のときだけ出す（修正依頼1027）。隠した行は選択・一括設定・申請・CSV の対象にならない
+  const isVisible = useCallback(
+    (row: BulkEntryRow) => passesFilters(row) && (showReportOnly || !isReportOnlyRow(row)),
+    [passesFilters, showReportOnly, isReportOnlyRow],
+  );
+  const hiddenReportOnlyCount = useMemo(
+    () => (showReportOnly ? 0 : rows.filter((r) => isReportOnlyRow(r) && passesFilters(r)).length),
+    [rows, showReportOnly, isReportOnlyRow, passesFilters],
+  );
+  const toggleShowReportOnly = (next: boolean) => {
+    setShowReportOnly(next);
+    // 隠す行の選択は外す（隠れたまま一括の操作の対象に残さない）
+    if (!next) {
+      const { rows: all, selectedIds, toggleSelection } = useBulkStore.getState();
+      all.filter((r) => selectedIds.has(r.id) && isReportOnlyRow(r)).forEach((r) => toggleSelection(r.id));
+    }
+  };
 
   // 選択中の保守会社の点検行（手で足した行を点検行に結び付ける・点検月を出すため）
   const inspectionOfManual = useCallback(
@@ -636,14 +662,14 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
           const reason = status === 'report_returned' ? item.report?.review_comment : status === 'sent_back' ? sentBack : null;
           const fullName = item.inspection.management_company_name ?? '';
           // 点検月は点検行の値（台ごとの行も同じ。行は点検行の点検月から作るので、台の点検月を出すと行の月と食い違う）。
-          // 検査月は台の値（未登録なら点検行の値）。毎月の点検種別は「毎月」（H4）
+          // 検査月は台の値（未登録なら点検行の値）。毎月の点検種別と 1〜12 月がそろう点検は「毎月」、それ以外は奇数月・偶数月の2段（H4・修正依頼1027）
           return {
             status,
             reason: reason ?? null,
             managementName: managementLabel(item.inspection.management_company_id, fullName),
             managementFullName: fullName,
             vendorName: item.inspection.vendor_name ?? '',
-            months: item.monthly ? '毎月' : item.inspection.inspection_months.join(','),
+            months: formatInspectionMonths(item.inspection.inspection_months, item.monthly),
             inspectedOn: formatInspectedOn(item.unit?.inspected_on ?? inspectedOnById.get(item.inspection.inspection_id)),
             actions: actionsOf(item),
           };
@@ -657,7 +683,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
         managementName: managementLabel(m, fullName),
         managementFullName: fullName,
         vendorName: currentVendor.name ?? '',
-        months: linked ? (flags.get(linked.inspection_type_id)?.monthly ? '毎月' : linked.inspection_months.join(',')) : '',
+        months: linked ? formatInspectionMonths(linked.inspection_months, flags.get(linked.inspection_type_id)?.monthly) : '',
         inspectedOn: formatInspectedOn(linked ? inspectedOnById.get(linked.inspection_id) : null),
       };
     },
@@ -933,6 +959,23 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
           </option>
         ))}
       </select>
+      <label
+        className="inline-flex h-7 items-center gap-1 whitespace-nowrap rounded border border-gray-300 bg-white px-1.5 text-xs text-gray-700"
+        title="点検開始日が「申請不要」の行（報告書UP・完了連絡だけの点検）も出す"
+      >
+        <input
+          type="checkbox"
+          checked={showReportOnly}
+          onChange={(e) => toggleShowReportOnly(e.target.checked)}
+          className="h-3.5 w-3.5 rounded border-gray-300"
+        />
+        申請不要も表示
+      </label>
+      {hiddenReportOnlyCount > 0 && (
+        <span className="whitespace-nowrap text-[11px] text-gray-500" data-testid="hidden-report-only">
+          申請不要 {hiddenReportOnlyCount}件を非表示
+        </span>
+      )}
       <input
         type="search"
         aria-label="物件名・コードで検索"

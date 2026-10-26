@@ -50,6 +50,25 @@ export function formatMonth(month: string): string {
   return `${month.slice(0, 4)}年${Number(month.slice(5, 7))}月`;
 }
 
+/** 1〜12 月（毎月の点検種別の点検月） */
+const EVERY_MONTH = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+/**
+ * 点検月の表示（修正依頼1027）。毎月の点検種別か 1〜12 月がそろう点検は「毎月」（印が無くても）。
+ * それ以外は上の段に奇数月・下の段に偶数月（改行で区切る。片方が空なら1段）。月の並びは登録の順のまま。
+ * 表示だけに使う（CSV・予定の組み立ては inspection_months をそのまま使う）
+ */
+export function formatInspectionMonths(months: readonly number[], monthly = false): string {
+  const unique = [...new Set(months.map(Number))];
+  if (monthly || EVERY_MONTH.every((m) => unique.includes(m))) return '毎月';
+  const odd = unique.filter((m) => m % 2 === 1);
+  const even = unique.filter((m) => m % 2 === 0);
+  return [odd, even]
+    .filter((line) => line.length > 0)
+    .map((line) => line.join(','))
+    .join('\n');
+}
+
 /** 申請の状況。approved: 承認済み（取込済みを含む）／applied: 申請済み（承認待ち）／sent_back: 差戻し／not_applied: 未申請 */
 export type ApplicationState = 'approved' | 'applied' | 'sent_back' | 'not_applied';
 
@@ -93,8 +112,6 @@ export interface InspectionTypeFlags {
 export function typeFlagsMap(rows: InspectionTypeFlagRow[]): Map<string, InspectionTypeFlags> {
   return new Map(rows.map((r) => [r.inspection_type_id, { reportOnly: !!r.report_only, monthly: !!r.monthly }]));
 }
-
-const EVERY_MONTH = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
 /** 予定を作る点検月。毎月の点検種別は 1〜12 */
 export function scheduleMonths(
