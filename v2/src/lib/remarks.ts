@@ -5,7 +5,7 @@
  */
 
 /** 入力例（一括入力・1件入力の備考の placeholder。旧システムの例） */
-export const REMARKS_PLACEHOLDER = '例) 001号機:9時30分～11時00分\n1行につき30文字程度、5行以内で入力してください';
+export const REMARKS_PLACEHOLDER = '例) 001号機:9時30分～11時00分\n1行につき25文字程度、5行以内で入力してください';
 
 /** 目安を超えているときの注意（超えていなければ null） */
 export function remarksNotice(text: string, perLine: number, maxLines: number): string | null {
