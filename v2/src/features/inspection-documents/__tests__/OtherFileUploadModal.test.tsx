@@ -106,7 +106,7 @@ describe('OtherFileUploadModal', () => {
     expect(screen.queryByTestId('other-file-1')).not.toBeInTheDocument();
   });
 
-  it('AI-OCR で画像を読み、区分・建物・書類の日付の初期値を入れ、登録後に確定した値を記録する', async () => {
+  it('AI-OCR で画像を読み、区分・建物・作業実施日の初期値を入れ、登録後に確定した値を記録する', async () => {
     api.readWithAiOcr.mockResolvedValue({
       document_type: '見積書',
       target_month_text: '',

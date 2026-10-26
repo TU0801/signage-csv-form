@@ -13,6 +13,7 @@ import { templateFileUrl } from '@/lib/templateStorage';
 import { safePosterUrl } from '@/lib/posterUrl';
 import { useAppSettings } from '@/features/single-entry/hooks/useAppSettings';
 import { noticeUsage, remarksUsage } from '@/features/single-entry/lib/entryLogic';
+import { REMARKS_PLACEHOLDER, remarksNotice } from '@/lib/remarks';
 import { resolveTemplateImageUrl } from '@/features/single-entry/lib/templateImages';
 import type { AppSettings } from '@/lib/api/single-entry';
 import type { MasterData } from '@/types/app';
@@ -187,6 +188,8 @@ function ApplyForm({
   const terminals = ctx.property ? terminalOptions(ctx.property) : inspection.terminal_ids.map(normalizeTerminalId).filter(Boolean);
   const notice = noticeUsage(values.noticeText, settings);
   const remarks = remarksUsage(values.remarks, settings);
+  // 目安を超えたら欄の下に注意（申請は止めない。1件入力・一括入力と同じ。修正依頼1026 I8）
+  const remarksWarning = remarksNotice(values.remarks, settings.remarks_chars_per_line, settings.remarks_max_lines);
 
   const handleSubmit = async () => {
     if (submitting) return;
@@ -351,12 +354,18 @@ function ApplyForm({
         <TextArea
           label="掲示備考（作業時間など）"
           rows={2}
+          placeholder={REMARKS_PLACEHOLDER}
           value={values.remarks}
           onChange={(e) => update({ ...values, remarks: e.target.value })}
         />
-        <p className={remarks.over ? 'text-xs text-red-600' : 'text-xs text-gray-400'}>
-          {remarks.lines}/{remarks.maxLines}行・1行{remarks.perLine}文字まで
-        </p>
+        <div className="flex items-start justify-between gap-2 text-xs">
+          <span className="text-amber-700" data-testid="remarks-warning">
+            {remarksWarning}
+          </span>
+          <span className={remarks.over ? 'shrink-0 font-medium text-amber-700' : 'shrink-0 text-gray-400'}>
+            {remarks.lines}/{remarks.maxLines}行・1行最長 {remarks.longest}/{remarks.perLine}字
+          </span>
+        </div>
       </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Input

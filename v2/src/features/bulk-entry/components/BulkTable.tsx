@@ -349,8 +349,9 @@ export function BulkTable({
               メモ
             </th>
             {/* 管理会社・保守会社（略称）は右側へ（I4。右端に固定の『詳細』の手前） */}
-            {showManagement && <th className={cn(th, 'w-[5rem] min-w-[5rem]')}>管理会社</th>}
-            {showVendor && <th className={cn(th, 'w-[5rem] min-w-[5rem]')}>保守会社</th>}
+            {/* 管理者のときだけ出る列。1366 幅で Windows の縦スクロールバー（約17px）が出ても横スクロールしない幅（I2） */}
+            {showManagement && <th className={cn(th, 'w-[4.25rem] min-w-[4.25rem]')}>管理会社</th>}
+            {showVendor && <th className={cn(th, 'w-[4.25rem] min-w-[4.25rem]')}>保守会社</th>}
             {/* 幅は w-* だけだと表が入れ物より広いときに縮むので min-w も付ける。詳細は横スクロールしても右端に残す */}
             <th className={cn(th, 'sticky right-0 w-[3rem] min-w-[3rem] bg-gray-50 text-center', stickyEdge)}>詳細</th>
           </tr>
@@ -445,13 +446,11 @@ export function BulkTable({
                     <div className="px-1 text-xs leading-tight" title={`${row.propertyCode} ${schedule.propertyName}`}>
                       <div className="text-gray-900">{schedule.propertyName}</div>
                       {/* 設備会社固有の No（No1・No2。保守会社が㈱BARAN のサイネージの台は端末番号）だけを出す（修正依頼1026 I6）。
-                          No の無い点検は物件コードを小さく添える（物件コードは title にもある） */}
-                      {schedule.unitCode ? (
+                          No の無い点検は何も出さない（物件コードは端末番号と同じ形のものが多いので出さない。title には残す） */}
+                      {schedule.unitCode && (
                         <div className="text-[11px] font-semibold text-red-700" data-testid="unit-code">
                           {schedule.unitCode}
                         </div>
-                      ) : (
-                        <div className="text-[11px] text-gray-500">{row.propertyCode}</div>
                       )}
                     </div>
                   ) : (
@@ -571,7 +570,7 @@ export function BulkTable({
                   {locked ? (
                     <span className={cn(cellText, 'whitespace-pre-line leading-tight text-gray-700')}>{row.remarks || '－'}</span>
                   ) : (
-                    // 2行の入力欄（スクロールバーつき。修正依頼1026 I8）。Enter は改行（次の欄へは Tab）。
+                    // 2行の入力欄（スクロールバーつき。修正依頼1026 I8）。Enter は改行（次の欄へは Alt+Enter か Tab）。
                     // 行数・1行の文字数は目安で、超えたら下に注意を出す（申請は止めない）
                     <>
                       <textarea
@@ -581,7 +580,7 @@ export function BulkTable({
                         value={row.remarks}
                         placeholder={REMARKS_PLACEHOLDER}
                         maxLength={500}
-                        title={row.remarks || REMARKS_PLACEHOLDER}
+                        title={`${row.remarks || REMARKS_PLACEHOLDER}\n（Enter で改行・Alt+Enter で次の欄）`}
                         onChange={(e) => changeRemarks(row.id, e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' && !e.altKey) return;
@@ -618,7 +617,7 @@ export function BulkTable({
                       data-col={COL.memo}
                       aria-label="メモ"
                       value={row.memo}
-                      placeholder="CSVに出ないメモ"
+                      placeholder="メモ"
                       maxLength={500}
                       title={row.memo || '点検月の変更などのメモ（CSV には出ません）'}
                       onChange={(e) => changeMemo(row.id, e.target.value)}

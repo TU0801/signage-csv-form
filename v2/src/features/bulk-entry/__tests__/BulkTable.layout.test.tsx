@@ -47,12 +47,13 @@ describe('点検登録フォームの表（修正依頼1026）', () => {
     expect(screen.getByRole('columnheader', { name: /報告書UP・/ }).querySelector('br')).not.toBeNull();
   });
 
-  it('物件の下は設備会社固有の No だけ（物件コードは出さない）。No の無い点検は物件コードを出す（I6）', () => {
+  it('物件の下は設備会社固有の No だけ（物件コードは出さない）。No の無い点検は何も出さない（I6）', () => {
     renderTable();
     const [withUnit, withoutUnit] = screen.getAllByRole('row').slice(1);
     expect(within(withUnit!).getByTestId('unit-code')).toHaveTextContent('No1');
     expect(within(withUnit!).queryByText('r0001A01')).toBeNull();
-    expect(within(withoutUnit!).getByText('120442-00')).toBeInTheDocument();
+    expect(within(withoutUnit!).queryByTestId('unit-code')).toBeNull();
+    expect(within(withoutUnit!).queryByText('120442-00')).toBeNull();
   });
 
   it('備考は2行の入力欄で、目安を超えたら下に注意を出す（行はエラーにしない）。開始日・終了日・備考は必須の色（I8・I9）', () => {
