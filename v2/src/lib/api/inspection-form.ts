@@ -21,21 +21,34 @@ export async function fetchCompletions(): Promise<DbInspectionCompletion[]> {
   return (data ?? []) as DbInspectionCompletion[];
 }
 
-/** 完了連絡を記録する（点検の保守会社と管理者。同じ点検・対象月は1件）。点検月以外の月は、毎月・申請不要の点検種別か、その月の申請があるときだけ */
-export async function markCompleted(inspectionId: string, targetMonth: string): Promise<DbInspectionCompletion> {
+/**
+ * 完了連絡を記録する（点検の保守会社と管理者。同じ点検・対象月・台は1件）。点検月以外の月は、毎月・申請不要の点検種別か、
+ * 点検日連絡が OFF か、その月の申請があるときだけ。unitId は台ごとの完了連絡の台（修正依頼1026 I7。台の保守会社だけ）
+ */
+export async function markCompleted(
+  inspectionId: string,
+  targetMonth: string,
+  unitId: string | null = null,
+): Promise<DbInspectionCompletion> {
   const { data, error } = await supabase.rpc(RPC.portalMarkCompleted, {
     p_inspection_id: inspectionId,
     p_target_month: targetMonth,
+    p_unit_id: unitId,
   });
   if (error) throw error;
   return data as DbInspectionCompletion;
 }
 
-/** 完了連絡を取り消す（連絡した保守会社と同じ保守会社か管理者） */
-export async function unmarkCompleted(inspectionId: string, targetMonth: string): Promise<boolean> {
+/** 完了連絡を取り消す（連絡した保守会社と同じ保守会社か管理者）。unitId は台ごとの完了連絡の台（null は台なしの完了連絡） */
+export async function unmarkCompleted(
+  inspectionId: string,
+  targetMonth: string,
+  unitId: string | null = null,
+): Promise<boolean> {
   const { data, error } = await supabase.rpc(RPC.portalUnmarkCompleted, {
     p_inspection_id: inspectionId,
     p_target_month: targetMonth,
+    p_unit_id: unitId,
   });
   if (error) throw error;
   return Boolean(data);

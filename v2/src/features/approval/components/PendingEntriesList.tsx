@@ -18,6 +18,7 @@ import { PendingEntryRow } from './PendingEntryRow';
 import { EntryDetailModal } from './EntryDetailModal';
 import { usePendingEntries } from '../hooks/usePendingEntries';
 import { useRefetchOnVisible } from '../hooks/useRefetchOnVisible';
+import { useUnitLabels } from '@/features/inspection-portal/hooks/useUnitLabels';
 
 type PendingConfirm =
   | { kind: 'approve'; id: string }
@@ -47,6 +48,8 @@ export function PendingEntriesList() {
     sendBackEntry,
   } = usePendingEntries();
   const lookups = useEntryLookups();
+  // 台ごとの申請の台の No（修正依頼1026 I7）。台ごとの申請があるときだけ読む
+  const unitLabels = useUnitLabels(entries.some((e) => !!e.property_unit_id));
   const { addToast } = useToast();
   // 管理会社: 承認と差戻しだけ（却下＝削除・編集は管理者だけ）
   const isManagement = useAuthStore((s) => s.profile?.role === 'management');
@@ -359,6 +362,7 @@ export function PendingEntriesList() {
                       onEdit={isManagement ? undefined : setEditEntry}
                       onSendBack={setSendBackTarget}
                       pendingBuildingName={pendingBuildingOf(entry)}
+                      unitCode={entry.property_unit_id ? (unitLabels.get(entry.property_unit_id) ?? '号機不明') : undefined}
                     />
                   ))}
                 </tbody>

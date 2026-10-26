@@ -388,7 +388,7 @@ export function BulkTable({
                   'border-b align-top',
                   // 2台目以降の行は1台目の行と続けて見えるよう上の罫線を点線に（H1）
                   schedule?.secondary && 'border-t [border-top-style:dashed]',
-                  locked && !schedule?.reportOnly && !schedule?.secondary && 'bg-gray-50',
+                  locked && !schedule?.reportOnly && 'bg-gray-50',
                   info.status === 'overdue' && !selected && 'bg-red-50/60',
                   selected && 'bg-blue-50',
                   draggedRowId === row.id && 'opacity-50',
@@ -643,13 +643,11 @@ export function BulkTable({
                     data-col={COL.detail}
                     disabled={locked}
                     title={
-                      schedule?.secondary
-                        ? '2台目以降の行は1台目の行で申請します'
-                        : schedule?.reportOnly
-                          ? '申請不要（報告書のみ）の点検です'
-                          : locked
-                            ? '申請済みの予定は詳細を変えられません'
-                            : `詳細設定\n${rowDetailSummary(row)}`
+                      schedule?.reportOnly
+                        ? '申請不要（報告書のみ）の点検です'
+                        : locked
+                          ? '申請済みの予定は詳細を変えられません'
+                          : `詳細設定\n${rowDetailSummary(row)}`
                     }
                     onClick={() => onOpenRowDetail(row.id)}
                     className={cn(

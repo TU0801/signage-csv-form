@@ -3,6 +3,8 @@ import type {
   DbInspectionReport,
   InspectionTypeFlagRow,
   ManagementCompanyRow,
+  NotifyOffRow,
+  PortalEntryUnitRow,
   ManagementCompanyShortNameRow,
   PortalEntryRow,
   PortalInspectionRow,
@@ -15,6 +17,34 @@ export async function fetchPortalInspectionUnits(): Promise<PortalUnitRow[]> {
   const { data, error } = await supabase.rpc(RPC.portalInspectionUnits);
   if (error) throw error;
   return (data ?? []) as PortalUnitRow[];
+}
+
+/** 台ごとの申請の台（修正依頼1026 I7）。範囲は portal_entries と同じ */
+export async function fetchPortalEntryUnits(): Promise<PortalEntryUnitRow[]> {
+  const { data, error } = await supabase.rpc(RPC.portalEntryUnits);
+  if (error) throw error;
+  return (data ?? []) as PortalEntryUnitRow[];
+}
+
+/** 点検日連絡が OFF の点検行・台（業務システムの notify_inspection_date。修正依頼1026）。範囲は inspection_in_scope */
+export async function fetchNotifyOff(): Promise<NotifyOffRow[]> {
+  const { data, error } = await supabase.rpc(RPC.portalInspectionNotifyOff);
+  if (error) throw error;
+  return (data ?? []) as NotifyOffRow[];
+}
+
+/** 申請済み（承認前）の申請を修正のために読む（申請者・同じ保守会社・管理者。修正依頼1026 I11） */
+export async function fetchSubmittedEntryForEdit(entryId: string): Promise<DbEntry> {
+  const { data, error } = await supabase.rpc(RPC.portalEntryForEdit, { p_entry_id: entryId });
+  if (error) throw error;
+  return data as DbEntry;
+}
+
+/** 申請済み（承認前）の申請を直す。patch は直せる列だけ（DB が列と状態・権限を確かめる）。状態は申請済みのまま */
+export async function updateSubmittedEntry(entryId: string, patch: Record<string, unknown>): Promise<DbEntry> {
+  const { data, error } = await supabase.rpc(RPC.portalUpdateSubmittedEntry, { p_entry_id: entryId, p_patch: patch });
+  if (error) throw error;
+  return data as DbEntry;
 }
 
 /** 点検種別の印（申請不要・毎月。修正依頼1025 H4/G4）。読めるのは管理者・保守会社・管理会社 */

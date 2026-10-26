@@ -13,6 +13,7 @@ import { reportEntryId, canSubmit, type PortalRole } from '../lib/actions';
 import { filterSchedule, filterUnscheduled, INITIAL_FILTERS, type PortalFilters } from '../lib/filters';
 import { buildSchedule, formatMonth, todayJst, typeFlagsMap, unscheduledInspections, type ScheduleItem } from '../lib/schedule';
 import { completionKeys, countStatuses, itemStatus } from '../lib/status';
+import { buildNotifyOffIndex, buildUnitIndex, expandByUnits } from '../lib/units';
 import { ApplyModal, type ApplyTarget } from './ApplyModal';
 import { CountBadges } from './CountBadges';
 import { EntryDetailModal, type EntryDetailTarget } from './EntryDetailModal';
@@ -67,14 +68,29 @@ export function InspectionPortal() {
 
   // 点検種別の印（毎月・申請不要は超過にしない。修正依頼1025 H4/G4）
   const flags = useMemo(() => typeFlagsMap(data.typeFlags), [data.typeFlags]);
+  // 台が2台以上の点検は台ごとの行（申請・承認・完了連絡は台ごと。修正依頼1026 I7）。点検日連絡 OFF は申請不要（修正依頼1026）
+  const unitIndex = useMemo(() => buildUnitIndex(data.units), [data.units]);
+  const notify = useMemo(() => buildNotifyOffIndex(data.notifyOff), [data.notifyOff]);
   const schedule = useMemo(
-    () => buildSchedule(data.inspections, data.entries, data.reports, { today, monthsAhead: MONTHS_AHEAD, flags }),
-    [data.inspections, data.entries, data.reports, today, flags],
+    () =>
+      expandByUnits(
+        buildSchedule(data.inspections, data.entries, data.reports, { today, monthsAhead: MONTHS_AHEAD, flags }),
+        unitIndex,
+        null,
+        { notify },
+      ),
+    [data.inspections, data.entries, data.reports, today, flags, unitIndex, notify],
   );
   // 点検月の無い点検（本番の大半）も件数バッジと申請状況の絞り込みに含める
   const unscheduledAll = useMemo(
-    () => buildUnscheduledItems(unscheduledInspections(data.inspections, flags), data.entries, data.reports, flags),
-    [data.inspections, data.entries, data.reports, flags],
+    () =>
+      expandByUnits(
+        buildUnscheduledItems(unscheduledInspections(data.inspections, flags), data.entries, data.reports, flags),
+        unitIndex,
+        null,
+        { notify },
+      ),
+    [data.inspections, data.entries, data.reports, flags, unitIndex, notify],
   );
   // ステータス（修正依頼1024 B14）。完了連絡を含めて決める
   const completed = useMemo(() => completionKeys(data.completions), [data.completions]);
@@ -105,8 +121,13 @@ export function InspectionPortal() {
     }
   };
 
+  // 台ごとの行は件名に台の No を足す（修正依頼1026 I7）
   const openDetail = (item: ScheduleItem, entry: PortalEntryRow, month: string | null) =>
-    setDetailTarget({ entry, subject: subjectOf(item.inspection, month), history: item.entries });
+    setDetailTarget({
+      entry,
+      subject: `${subjectOf(item.inspection, month)}${item.unit && item.unitCode ? `・${item.unitCode}` : ''}`,
+      history: item.entries,
+    });
 
   const sendBack = async (reason: string) => {
     if (!sendBackTarget) return;

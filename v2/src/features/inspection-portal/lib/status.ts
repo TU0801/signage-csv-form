@@ -51,13 +51,37 @@ export const STATUS_TONE: Record<InspectionStatus, string> = {
   not_applied: 'bg-gray-100 text-gray-600',
 };
 
-/** 完了連絡の照合キー（点検行 × 対象月） */
-export function completionKey(inspectionId: string, targetMonth: string): string {
-  return `${inspectionId}:${targetMonth}`;
+/** 完了連絡の照合キー（点検行 × 対象月。台ごとの完了連絡は台も。修正依頼1026 I7） */
+export function completionKey(inspectionId: string, targetMonth: string, unitId?: string | null): string {
+  return unitId ? `${inspectionId}:${targetMonth}:${unitId}` : `${inspectionId}:${targetMonth}`;
 }
 
-export function completionKeys(completions: Pick<DbInspectionCompletion, 'property_inspection_id' | 'target_month'>[]): Set<string> {
-  return new Set(completions.map((c) => completionKey(c.property_inspection_id, c.target_month)));
+export function completionKeys(
+  completions: Pick<DbInspectionCompletion, 'property_inspection_id' | 'target_month' | 'property_unit_id'>[],
+): Set<string> {
+  return new Set(completions.map((c) => completionKey(c.property_inspection_id, c.target_month, c.property_unit_id)));
+}
+
+/**
+ * 行の完了連絡のキー（その行で記録・取り消しするもの）。台ごとに分けた行は台のキー、それ以外は点検行 × 対象月。
+ * 対象月が決まらなければ null
+ */
+export function rowCompletionKey(item: Pick<ScheduleItem, 'targetMonth' | 'entries' | 'inspection' | 'unit'>): string | null {
+  const month = completionMonth(item);
+  return month ? completionKey(item.inspection.inspection_id, month, item.unit?.unit_id) : null;
+}
+
+/**
+ * 行が完了連絡済みか。台ごとの行は、その台の完了連絡か台なしの完了連絡（点検行 × 対象月の全体。台ごとに分ける前の記録）のどちらか
+ */
+export function isRowCompleted(
+  item: Pick<ScheduleItem, 'targetMonth' | 'entries' | 'inspection' | 'unit'>,
+  completed: ReadonlySet<string>,
+): boolean {
+  const month = completionMonth(item);
+  if (!month) return false;
+  if (completed.has(completionKey(item.inspection.inspection_id, month))) return true;
+  return !!item.unit?.unit_id && completed.has(completionKey(item.inspection.inspection_id, month, item.unit.unit_id));
 }
 
 /**
@@ -99,12 +123,14 @@ export function inspectionStatus(
 
 /** 行の完了連絡の有無を含めてステータスを決める */
 export function itemStatus(
-  item: Pick<ScheduleItem, 'application' | 'overdueUnapplied' | 'entries' | 'report' | 'targetMonth' | 'inspection' | 'reportOnly'>,
+  item: Pick<
+    ScheduleItem,
+    'application' | 'overdueUnapplied' | 'entries' | 'report' | 'targetMonth' | 'inspection' | 'reportOnly' | 'unit'
+  >,
   completed: ReadonlySet<string>,
   today: string,
 ): InspectionStatus {
-  const month = completionMonth(item);
-  const done = !!month && completed.has(completionKey(item.inspection.inspection_id, month));
+  const done = isRowCompleted(item, completed);
   const status = inspectionStatus(item, { completed: done, today });
   // 申請不要（報告書のみ）の点検は申請が無いので、対象月が過ぎて報告書・完了連絡が無ければ「報告書未提出」（修正依頼1025 H4/G4）
   if (item.reportOnly && status === 'not_applied' && item.targetMonth && item.targetMonth < monthOf(today)) {

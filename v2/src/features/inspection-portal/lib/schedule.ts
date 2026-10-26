@@ -79,7 +79,7 @@ export interface ScheduleItem {
   unitCode?: string | null;
   /** 台ごとに分けた行の台（H1。台が2台以上の点検だけ） */
   unit?: PortalUnitRow;
-  /** 2台目以降の行（H3: 申請・報告書UP・完了連絡は1台目の行だけ。表示だけでステータスは1台目と同じ） */
+  /** 2台目以降の行（修正依頼1026 I7: 申請・完了連絡は台ごと、報告書UP は1台目の行だけ） */
   secondary?: boolean;
 }
 
@@ -106,6 +106,11 @@ export function scheduleMonths(
 
 /** 申請として数える状態（承認待ち・承認済み・取込済み）。pending は未申請（差戻しを含む） */
 const APPLIED_STATUSES = new Set<PortalEntryRow['status']>(['draft', 'ready', 'exported']);
+
+/** 申請（承認待ち・承認済み・取込済み）があるか（点検月超過の判定） */
+export function hasAppliedEntry(entries: PortalEntryRow[]): boolean {
+  return entries.some((e) => APPLIED_STATUSES.has(e.status));
+}
 
 /** 物件コードの書式の揺れ（旧来の申請は 120410、マスタは 120410-00）を吸収する */
 export function normalizePropertyCode(code: string): string {
@@ -217,7 +222,7 @@ export function buildSchedule(
         targetMonth: m,
         timing,
         application,
-        overdueUnapplied: !noOverdue && timing === 'overdue' && !matched.some((e) => APPLIED_STATUSES.has(e.status)),
+        overdueUnapplied: !noOverdue && timing === 'overdue' && !hasAppliedEntry(matched),
         entries: matched,
         report,
         ...(flag?.reportOnly ? { reportOnly: true } : {}),
