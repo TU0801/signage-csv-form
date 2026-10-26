@@ -85,17 +85,22 @@ export function isRowCompleted(
 }
 
 /**
- * 行の完了連絡を取り消すときに渡す台。台ごとの行でその台の完了連絡があれば台、無ければ null（完了が台なしの完了連絡＝
- * 点検の全体から来ているので、台なしの方を取り消す。台なしの完了連絡はその点検か台のどれかを保守する保守会社が取り消せる。
- * 修正依頼1026 再検証 X12）
+ * 行の完了連絡を取り消すときに渡す台の並び（その行を完了にしている完了連絡すべて）。台ごとの行でその台の完了連絡があれば台、
+ * 台なしの完了連絡（点検の全体）があれば null。両方あれば両方（台が先）を取り消す。1回の取り消しで行の「点検完了」が外れるように
+ * する（修正依頼1026 後続。台なしの完了連絡はその点検か台のどれかを保守する保守会社が取り消せる。再検証 X12）
  */
-export function rowUndoCompletionUnitId(
+export function rowUndoCompletionUnitIds(
   item: Pick<ScheduleItem, 'targetMonth' | 'entries' | 'inspection' | 'unit'>,
   completed: ReadonlySet<string>,
-): string | null {
+): (string | null)[] {
   const month = completionMonth(item);
+  if (!month) return [];
+  const id = item.inspection.inspection_id;
   const unitId = item.unit?.unit_id;
-  return month && unitId && completed.has(completionKey(item.inspection.inspection_id, month, unitId)) ? unitId : null;
+  const targets: (string | null)[] = [];
+  if (unitId && completed.has(completionKey(id, month, unitId))) targets.push(unitId);
+  if (completed.has(completionKey(id, month))) targets.push(null);
+  return targets;
 }
 
 /**

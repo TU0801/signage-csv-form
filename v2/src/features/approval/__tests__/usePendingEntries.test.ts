@@ -58,7 +58,7 @@ describe('usePendingEntries (v1 admin-pending.js)', () => {
     expect(api.rejectEntry).toHaveBeenCalledWith('1');
   });
 
-  it('bulk approve sends each selected id with the version read, skips an empty selection and rethrows the first failure', async () => {
+  it('bulk approve sends each selected id with the version read, skips an empty selection and reports how many passed and failed', async () => {
     api.fetchPendingEntries.mockResolvedValue([draft('1'), draft('3')]);
     const stale = new Error('申請が修正されました。最新の内容を確かめてから承認してください');
     api.approveEntries.mockResolvedValue([
@@ -70,7 +70,11 @@ describe('usePendingEntries (v1 admin-pending.js)', () => {
 
     await act(() => result.current.approveBulk([]));
     expect(api.approveEntries).not.toHaveBeenCalled();
-    await expect(act(() => result.current.approveBulk(['1', '3']))).rejects.toBe(stale);
+    let outcome: Awaited<ReturnType<typeof result.current.approveBulk>> | undefined;
+    await act(async () => {
+      outcome = await result.current.approveBulk(['1', '3']);
+    });
+    expect(outcome).toEqual({ succeeded: 1, failed: 1, errors: [stale] });
     expect(api.approveEntries).toHaveBeenCalledWith([
       { id: '1', updatedAt: 'v-1' },
       { id: '3', updatedAt: 'v-3' },
