@@ -148,7 +148,8 @@ export function PendingEntriesList() {
     [rejectEntry, addToast],
   );
 
-  // v1: js/admin-pending.js approveSelected。建物未承認の申請は承認できないので外す（1件でも混ざると一括の更新が全部失敗する）
+  // v1: js/admin-pending.js approveSelected。建物未承認の申請は承認できないので外す（断られて失敗の知らせになるため）。
+  // 承認は版を比べて1件ずつ（修正依頼1026 I11）なので、一部だけ断られると残りは承認済みになり、断られた行は選択に残る
   const handleBulkApprove = useCallback(async () => {
     const blocked = entries.filter((e) => selected.includes(e.id) && pendingBuildingOf(e) !== undefined).map((e) => e.id);
     const ids = selected.filter((id) => !blocked.includes(id));
