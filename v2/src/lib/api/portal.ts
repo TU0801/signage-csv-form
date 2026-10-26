@@ -93,8 +93,11 @@ export async function fetchPortalEntries(): Promise<PortalEntryRow[]> {
   return (data ?? []) as PortalEntryRow[];
 }
 
-/** 承認（draft → ready）と差戻し（draft・ready → pending、理由必須）。管理会社は自社物件だけ、管理者は全件 */
-export type EntryReviewAction = 'approve' | 'send_back';
+/**
+ * 差戻し（draft・ready → pending、理由必須）。管理会社は自社物件だけ、管理者は全件。
+ * 承認はここからは出せない（DB が 42501 で断る）。見た版を渡す approveEntryChecked を使う
+ */
+export type EntryReviewAction = 'send_back';
 
 export async function reviewEntry(entryId: string, action: EntryReviewAction, comment?: string): Promise<DbEntry> {
   const { data, error } = await supabase.rpc(RPC.portalReviewEntry, {

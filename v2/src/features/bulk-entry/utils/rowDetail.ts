@@ -33,7 +33,7 @@ export function hasRowDetail(row: BulkEntryRow, defaultDisplayTime: number): boo
 
 /**
  * 詳細設定の要約（詳細ボタンの title に出す）。申請で保存される値に合わせる:
- * 表示開始日が空なら申請日、表示終了日が空なら点検終了日（それも空なら未設定）。
+ * 表示開始日が空なら申請日、表示終了日が空なら点検終了日（それも空なら点検開始日、どちらも空なら未設定）。
  * 例: 「表示期間: 申請日〜10/25(点検終了日)・位置: ②上中・表示時間: 6秒」
  */
 export function rowDetailSummary(row: BulkEntryRow): string {
@@ -42,7 +42,9 @@ export function rowDetailSummary(row: BulkEntryRow): string {
     ? shortDate(row.displayEndDate)
     : row.endDate
       ? `${shortDate(row.endDate)}(点検終了日)`
-      : '未設定';
+      : row.startDate
+        ? `${shortDate(row.startDate)}(点検開始日)`
+        : '未設定';
   // 貼り付けの8列目が数字でないと NaN のまま保存される（v1 と同じ）ので、既定に見せず不正値と出す
   const position = Number.isNaN(row.position)
     ? '不正値'

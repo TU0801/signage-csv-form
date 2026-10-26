@@ -24,6 +24,10 @@ describe('rowDetailSummary（申請で保存される値に合わせた要約）
     expect(rowDetailSummary(row({ displayStartDate: '2026-10-20' }))).toContain('表示期間: 10/20〜未設定');
   });
 
+  it('終了日も空なら、申請で保存される点検開始日を表示終了日と書く', () => {
+    expect(rowDetailSummary(row({ startDate: '2026-10-30' }))).toContain('表示期間: 申請日〜10/30(点検開始日)');
+  });
+
   it('位置が NaN（貼り付けの8列目が数字でない）なら不正値と書く', () => {
     expect(rowDetailSummary(row({ position: NaN }))).toContain('位置: 不正値');
   });

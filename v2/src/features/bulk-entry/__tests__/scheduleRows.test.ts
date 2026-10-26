@@ -123,6 +123,44 @@ describe('点検登録フォームの点検行との結び付け', () => {
 });
 
 describe('承認前の申請の修正（修正依頼1026 I11）', () => {
+  it('終了日なしで申請した点検の開始日を後ろへ直すと、表示終了日も付いてくる（保存された点検開始日を手入力とみなさない）', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-24T03:00:00Z'));
+    try {
+      const saved = {
+        terminal_id: 'T001',
+        inspection_start: '2026-10-30',
+        inspection_end: null,
+        display_start_date: null,
+        display_end_date: '2026-10-30',
+        poster_type: 'template',
+        poster_position: '2',
+      } as unknown as DbEntry;
+      const input = editRowInput(saved);
+      expect(input.displayEndDate).toBe('');
+      const row = {
+        id: 1,
+        propertyCode: '900001',
+        vendorName: '保守',
+        inspectionType: 'エレベーター定期点検',
+        showOnBoard: true,
+        isValid: true,
+        errors: [],
+        ...input,
+        startDate: '2026-11-05',
+      } as BulkEntryRow;
+      const master = {
+        properties: [],
+        vendors: [{ id: 'v1', vendorName: '保守', emergencyContact: '' }],
+        notices: [{ inspectionType: 'エレベーター定期点検', templateNo: '1', noticeText: '' }],
+      };
+      const [built] = buildBulkEntries([row], master, { id: 'v1', name: '保守' }, DEFAULT_BULK_SETTINGS);
+      expect(submittedEntryPatch({ ...built })).toMatchObject({ inspection_start: '2026-11-05', display_end_date: '2026-11-05' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('過去の1日の点検を日付に触れずに出し直しても、表示期間は逆にならず表示終了日も元のまま（R1）', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-26T03:00:00Z'));
