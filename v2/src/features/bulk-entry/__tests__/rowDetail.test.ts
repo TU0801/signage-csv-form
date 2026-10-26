@@ -65,4 +65,9 @@ describe('申請で保存される表示期間（修正依頼1024 F11）', () =>
   it('表示終了日が今日以降なら、表示開始日は今まで通り申請日（null）', () => {
     expect(submittedDisplayPeriod({ ...past, endDate: '2026-10-30' }, '2026-10-24').startDate).toBeNull();
   });
+  it('終了日が空なら表示終了日は点検開始日。開始日は今までどおり（今日以降なら申請日、過ぎていれば点検開始日）', () => {
+    const noEnd = { ...past, endDate: '' };
+    expect(submittedDisplayPeriod({ ...noEnd, startDate: '2026-10-30' }, '2026-10-24')).toMatchObject({ startDate: null, endDate: '2026-10-30' });
+    expect(submittedDisplayPeriod(noEnd, '2026-10-24')).toMatchObject({ startDate: '2026-08-20', endDate: '2026-08-20' });
+  });
 });

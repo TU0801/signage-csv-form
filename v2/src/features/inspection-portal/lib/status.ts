@@ -85,6 +85,20 @@ export function isRowCompleted(
 }
 
 /**
+ * 行の完了連絡を取り消すときに渡す台。台ごとの行でその台の完了連絡があれば台、無ければ null（完了が台なしの完了連絡＝
+ * 点検の全体から来ているので、台なしの方を取り消す。台なしの完了連絡はその点検か台のどれかを保守する保守会社が取り消せる。
+ * 修正依頼1026 再検証 X12）
+ */
+export function rowUndoCompletionUnitId(
+  item: Pick<ScheduleItem, 'targetMonth' | 'entries' | 'inspection' | 'unit'>,
+  completed: ReadonlySet<string>,
+): string | null {
+  const month = completionMonth(item);
+  const unitId = item.unit?.unit_id;
+  return month && unitId && completed.has(completionKey(item.inspection.inspection_id, month, unitId)) ? unitId : null;
+}
+
+/**
  * 完了連絡に使う対象月。予定の行はその月。点検月の無い点検の行は、紐付いた申請の対象月（無ければ点検開始日の月）。
  * どれも無ければ null（完了連絡は出せない）
  */
