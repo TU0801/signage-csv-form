@@ -12,9 +12,16 @@
 // 上限を超えて呼ばない。失敗した呼び出しも予約の行が残るので数に入る）。呼んだ後でその行にトークン数と結果を書き、
 // signage_audit_logs（監査）にも記録する。
 //
+// 接続先（2026-10-26 修正依頼1026 の後続で Vercel AI Gateway を優先に。業務システム src/lib/ocr/client.ts と同じ順）:
+//   1. AI_GATEWAY_API_KEY があれば Vercel AI Gateway（https://ai-gateway.vercel.sh、Anthropic Messages API 互換）。
+//      モデル名に anthropic/ を付ける。キーは Vercel の AI Gateway で signage 専用に発行したもの（名前 signage-ai-ocr、
+//      月 $20 の上限）。業務システムのキーは Vercel 上で値を読めないため流用していない。
+//   2. 無ければ ANTHROPIC_API_KEY で Anthropic 直。
+//
 // デプロイ（人が行う。scripts/fix-1025-reports.sql を先に適用しておく）:
-//   1. supabase secrets set ANTHROPIC_API_KEY=sk-ant-... --project-ref pdouwmjyswswfmzpfjzf
-//      （任意: AI_OCR_DAILY_LIMIT=200 AI_OCR_DAILY_LIMIT_PER_USER=50 で1日の上限を変えられる）
+//   1. supabase secrets set AI_GATEWAY_API_KEY=vck_... --project-ref pdouwmjyswswfmzpfjzf
+//      （Anthropic 直にするなら ANTHROPIC_API_KEY=sk-ant-...。
+//       任意: AI_OCR_DAILY_LIMIT=200 AI_OCR_DAILY_LIMIT_PER_USER=50 で1日の上限を変えられる）
 //   2. supabase functions deploy signage-ai-ocr --project-ref pdouwmjyswswfmzpfjzf --use-api --no-verify-jwt
 //      （JWT はゲートウェイではなく下の getUser で検証する）
 //   キーが未設定の間は status が configured=false を返し、read は 503 を返す（画面はチェックボックスを無効にする）。
@@ -30,6 +37,7 @@ const corsHeaders = {
 };
 
 const MODEL = 'claude-haiku-5-5';
+const GATEWAY_BASE_URL = 'https://ai-gateway.vercel.sh';
 /** スキャン PDF で送るページ数の上限（画面も同じ値で切り出す: aiOcr.ts の AI_OCR_MAX_PDF_PAGES） */
 const MAX_PDF_PAGES = 10;
 /** 文字で送るときのページ数・1ページの文字数・全体の文字数の上限 */
@@ -137,7 +145,9 @@ Deno.serve(async (req) => {
     return json({ error: 'リクエストが不正です' }, 400);
   }
 
-  const apiKey = Deno.env.get('ANTHROPIC_API_KEY') ?? '';
+  const gatewayKey = Deno.env.get('AI_GATEWAY_API_KEY')?.trim() ?? '';
+  const apiKey = gatewayKey || (Deno.env.get('ANTHROPIC_API_KEY')?.trim() ?? '');
+  const route = gatewayKey ? 'gateway' : 'anthropic';
   if (body.action === 'status') {
     return json({ configured: !!apiKey, model: MODEL, maxPdfPages: MAX_PDF_PAGES });
   }
@@ -218,16 +228,21 @@ Deno.serve(async (req) => {
       operation: 'AI_OCR',
       record_id: null,
       user_id: caller.id,
-      new_data: { usage_id: usageId, user_id: caller.id, mode, pages: pageCount, ...row, model: MODEL },
+      new_data: { usage_id: usageId, user_id: caller.id, mode, pages: pageCount, ...row, model: MODEL, route },
     });
     if (auditError) console.error('audit log insert failed:', auditError.message);
   };
 
   // ---- 呼び出し（再試行は最大1回） ----
-  const client = new Anthropic({ apiKey, maxRetries: 1, timeout: 90_000 });
+  const client = new Anthropic({
+    apiKey,
+    maxRetries: 1,
+    timeout: 90_000,
+    ...(route === 'gateway' ? { baseURL: GATEWAY_BASE_URL } : {}),
+  });
   try {
     const response = await client.messages.create({
-      model: MODEL,
+      model: route === 'gateway' ? `anthropic/${MODEL}` : MODEL,
       max_tokens: 8000,
       system: SYSTEM_PROMPT,
       output_config: { effort: 'low', format: { type: 'json_schema', schema: OUTPUT_SCHEMA } },
