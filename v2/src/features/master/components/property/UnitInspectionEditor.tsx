@@ -1,8 +1,7 @@
 import { Fragment } from 'react';
-import { Button } from '@/components/ui/Button';
 import type { DbVendor } from '@/types/database';
 import type { PropertyUnit, UnitInspection, UnitInspectionTypeOption } from '@/types/app';
-import { newUnitInspection } from '../../lib/propertyForm';
+import { isBlankUnitInspection, newUnitInspection } from '../../lib/propertyForm';
 import { MonthCheckboxes } from './MonthCheckboxes';
 import { sortVendors } from '@/lib/vendorOptions';
 
@@ -17,11 +16,20 @@ interface UnitInspectionEditorProps {
 
 const selectClass = 'block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm';
 
+/** 「保存すると外します」の注記の id（点検種別の欄の aria-describedby） */
+const removeNoteId = (inspectionId: string) => `unit-insp-remove-${inspectionId}`;
+
 /**
  * 台ごとの保守（業務システムで台を登録した大分類。2026-10-14）。
- * 編集できるのは既にある台の保守だけ（点検種別の追加・外す、保守会社・点検月・検査月）。
+ * 編集できるのは台の保守（点検種別を外す・保守の無い台に1つ足す、保守会社・点検月・検査月）。
  * 台そのもの（追加・削除・保守会社固有コード・設置場所・金額）は業務システムで編集する。
- * 登録済みの行の点検種別は替えられない（替えるときは外して足し直す）。
+ * 登録済みの行の点検種別は替えられない。替えるときは「（外す）」で外して保存し、その台の保守が0件になってから選ぶ行で選び直す
+ * （保守がある台に2つ目の点検種別は足せない）。
+ *
+ * 2026-10-27 修正依頼1026⑥（業務システムと同じ形）: 『＋ 点検種別』と行の『外す』ボタンは無い。
+ * - 外す: 保存済みの行の点検種別の欄で「（外す）」を選ぶ（行に remove が付く）。物件の保存で外す（unitsForSave が除き、差分で deletes になる）
+ * - 足す: 保存済みの行が無い台に、点検種別を選ぶ行を1行だけ出す。何か入れるまでは state に入れない（入れた値を全部消したら state からも消す）
+ *   その台の大分類に選べる点検種別が無ければ、選ぶ行の代わりに「保守は登録されていません」（業務システムと同じ）
  */
 // v1: js/admin-masters.js renderPropertyUnitInspections
 export function UnitInspectionEditor({
@@ -34,11 +42,25 @@ export function UnitInspectionEditor({
   const updateUnit = (unitIndex: number, inspections: UnitInspection[]) =>
     onChange(units.map((u, i) => (i === unitIndex ? { ...u, inspections } : u)));
 
-  const updateRow = (unitIndex: number, rowIndex: number, patch: Partial<UnitInspection>) =>
+  // 保守の無い台は、点検種別を選ぶ行（未保存）を1行出す。state に入れるのは何か入れたときだけ
+  const rowsOf = (unit: PropertyUnit): UnitInspection[] =>
+    unit.inspections.length > 0 ? unit.inspections : [newUnitInspection()];
+
+  const setRow = (unitIndex: number, rowIndex: number, row: UnitInspection) => {
+    const unit = units[unitIndex];
+    if (!unit) return;
     updateUnit(
       unitIndex,
-      (units[unitIndex]?.inspections ?? []).map((r, j) => (j === rowIndex ? { ...r, ...patch } : r)),
+      rowsOf(unit)
+        .map((r, j) => (j === rowIndex ? row : r))
+        .filter((r) => !isBlankUnitInspection(r)),
     );
+  };
+
+  const updateRow = (unitIndex: number, rowIndex: number, patch: Partial<UnitInspection>) => {
+    const row = units[unitIndex] && rowsOf(units[unitIndex])[rowIndex];
+    if (row) setRow(unitIndex, rowIndex, { ...row, ...patch });
+  };
 
   return (
     <div className="overflow-x-auto">
@@ -50,16 +72,16 @@ export function UnitInspectionEditor({
             <th className="cell-head font-medium text-gray-700">保守会社</th>
             <th className="cell-head font-medium text-gray-700">点検月</th>
             <th className="cell-head font-medium text-gray-700">検査月</th>
-            <th className="cell-head font-medium text-gray-700 w-12">操作</th>
           </tr>
         </thead>
         <tbody>
           {units.map((unit, unitIndex) => {
             const showCategory = unitIndex === 0 || units[unitIndex - 1]?.category_code !== unit.category_code;
             const remarks = [unit.unit_remarks, unit.unit_remarks2].filter(Boolean).join(' ／ ');
+            const rows = rowsOf(unit);
             // 台のセルは、その台の保守の行数ぶん縦に結合する（保守が無い台も1行）
             const unitCell = (
-              <td rowSpan={Math.max(1, unit.inspections.length)} className="cell align-top border-r border-gray-100">
+              <td rowSpan={rows.length} className="cell align-top border-r border-gray-100">
                 {/* 長いコード・設置場所・備考は省略し、全文は title で見せる */}
                 <div className="max-w-[16rem] truncate font-medium" title={unit.unit_code || undefined}>
                   {unit.unit_code || <span className="text-gray-400">（コードなし）</span>}
@@ -74,38 +96,30 @@ export function UnitInspectionEditor({
                     {remarks}
                   </div>
                 )}
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  type="button"
-                  className="mt-1"
-                  onClick={() => updateUnit(unitIndex, [...unit.inspections, newUnitInspection()])}
-                >
-                  ＋ 点検種別
-                </Button>
               </td>
             );
             // その台の大分類の点検種別だけを選べる
             const options = typeOptions.filter((t) => t.category_code === unit.category_code);
+            // 保守が無く、選べる点検種別も無い台は選ぶ行を出さない
+            const nothingToShow = unit.inspections.length === 0 && options.length === 0;
 
             return (
               <Fragment key={unit.unit_id}>
                 {showCategory && (
                   <tr className="bg-gray-100">
-                    <td colSpan={6} className="cell text-xs font-semibold text-gray-700">
+                    <td colSpan={5} className="cell text-xs font-semibold text-gray-700">
                       {unit.category_label || unit.category_code}
                     </td>
                   </tr>
                 )}
-                {unit.inspections.length === 0 ? (
+                {nothingToShow ? (
                   <tr className="border-b border-gray-100">
                     {unitCell}
-                    <td colSpan={5} className="cell text-gray-400">
+                    <td colSpan={4} className="cell text-gray-400">
                       保守は登録されていません
                     </td>
                   </tr>
-                ) : (
-                  unit.inspections.map((insp, rowIndex) => {
+                ) : rows.map((insp, rowIndex) => {
                     const legacy = [insp.legacy_remarks, insp.legacy_remarks2].filter(Boolean).join(' ／ ');
                     // 一覧に無い保守会社が付いている行は、その会社を選択肢に足して値を保つ
                     const vendorKnown = !insp.vendor_id || vendors.some((v) => v.id === insp.vendor_id);
@@ -118,7 +132,31 @@ export function UnitInspectionEditor({
                         <td className="cell min-w-[10rem]">
                           {insp.inspection_id ? (
                             <>
-                              {insp.inspection_type_label || '-'}
+                              {/* 保存済みの行は今の点検種別か「（外す）」だけ（点検種別は替えられない） */}
+                              <select
+                                aria-label="点検種別"
+                                aria-describedby={insp.remove ? removeNoteId(insp.inspection_id) : undefined}
+                                className={`${selectClass} font-medium ${insp.remove ? 'text-red-700' : ''}`}
+                                value={insp.remove ? 'remove' : ''}
+                                onChange={(e) => {
+                                  // 今の種別に戻したら remove をキーごと消す（開いたときと同じ形に戻す）
+                                  const { remove: _drop, ...rest } = insp;
+                                  void _drop;
+                                  setRow(
+                                    unitIndex,
+                                    rowIndex,
+                                    e.target.value === 'remove' ? { ...rest, remove: true } : rest,
+                                  );
+                                }}
+                              >
+                                <option value="">{insp.inspection_type_label || '（不明）'}</option>
+                                <option value="remove">（外す）</option>
+                              </select>
+                              {insp.remove && (
+                                <div id={removeNoteId(insp.inspection_id)} className="text-xs text-red-600">
+                                  保存すると外します。この行のほかの欄の変更は保存されません
+                                </div>
+                              )}
                               {legacy && (
                                 <div className="text-xs text-gray-500">切替前の備考: {legacy}</div>
                               )}
@@ -131,7 +169,7 @@ export function UnitInspectionEditor({
                               onChange={(e) => {
                                 const v = e.target.value;
                                 // 同じ台に同じ点検種別は1つ（送ると後の行で上書きされるだけなので、ここで弾く）
-                                if (v && unit.inspections.some((x, j) => j !== rowIndex && x.inspection_type_id === v)) {
+                                if (v && rows.some((x, j) => j !== rowIndex && x.inspection_type_id === v)) {
                                   onError('この台には同じ点検種別が既に登録されています');
                                   return;
                                 }
@@ -181,25 +219,9 @@ export function UnitInspectionEditor({
                             onChange={(e) => updateRow(unitIndex, rowIndex, { inspected_on: e.target.value || null })}
                           />
                         </td>
-                        <td className="cell">
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            type="button"
-                            onClick={() =>
-                              updateUnit(
-                                unitIndex,
-                                unit.inspections.filter((_, j) => j !== rowIndex),
-                              )
-                            }
-                          >
-                            外す
-                          </Button>
-                        </td>
                       </tr>
                     );
-                  })
-                )}
+                  })}
               </Fragment>
             );
           })}

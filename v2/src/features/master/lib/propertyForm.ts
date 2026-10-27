@@ -151,13 +151,36 @@ export function newUnitInspection(): UnitInspection {
   };
 }
 
+/** 未保存の行に何も入っていないか（点検種別・保守会社・点検月・検査月のどれも空）。保守の無い台に出す行を触っていない状態 */
+export function isBlankUnitInspection(i: UnitInspection): boolean {
+  return (
+    !i.inspection_id &&
+    !i.inspection_type_id &&
+    !i.vendor_id &&
+    (i.inspection_months ?? []).length === 0 &&
+    !i.inspected_on
+  );
+}
+
+/**
+ * 保存で送る形にする: 「（外す）」を選んだ行（remove）と、何も入っていない未保存の行を除く。
+ * 外す行を除いた台を diffUnitInspections に渡すと、開いたときにあった行が deletes に入る
+ * （『外す』ボタンで行を消していたときと同じ RPC・同じ引数。2026-10-27 修正依頼1026⑥）
+ */
+export function unitsForSave(units: PropertyUnit[]): PropertyUnit[] {
+  return units.map((u) => ({
+    ...u,
+    inspections: u.inspections.filter((i) => !i.remove && !isBlankUnitInspection(i)),
+  }));
+}
+
 /** 台ごとの保守の保存前の確認。問題があればその文言を返す。**物件の保存より前に呼ぶ** */
 // v1: js/admin-masters.js validatePropertyUnitInspections
 export function validateUnitInspections(units: PropertyUnit[]): string | null {
-  for (const unit of units) {
+  for (const unit of unitsForSave(units)) {
     const ids = unit.inspections.map((i) => i.inspection_type_id);
     if (ids.some((id) => !id)) {
-      return '台ごとの保守に、点検種別を選んでいない行があります（選ぶか、行を外してください）';
+      return '台ごとの保守に、点検種別を選んでいない行があります（点検種別を選ぶか、入れた保守会社・点検月・検査月を消してください）';
     }
     if (new Set(ids).size !== ids.length) {
       return '台ごとの保守で、同じ台に同じ点検種別が2行あります';
@@ -203,9 +226,12 @@ export async function savePropertyForm(p: SavePropertyParams): Promise<SavePrope
     errors.push(`点検情報の保存に失敗しました: ${errorText(e)}`);
   }
 
+  // 「（外す）」を選んだ行は除いて送る（差分で deletes になる）。紐付け管理にも足さない
+  const units = unitsForSave(p.units);
+
   // 台ごとの保守は、開いたときとの差分だけを送る（変えていなければ何も送らない）
   try {
-    const result = await saveUnitInspectionsToBiz(diffUnitInspections(p.originalUnits, p.units), p.profile?.role);
+    const result = await saveUnitInspectionsToBiz(diffUnitInspections(p.originalUnits, units), p.profile?.role);
     if (result.errors.length > 0) {
       console.error('Failed to save unit inspections to biz:', result.errors);
       errors.push(
@@ -220,7 +246,7 @@ export async function savePropertyForm(p: SavePropertyParams): Promise<SavePrope
   // 設備情報と台ごとの保守で選んだ保守会社を紐付け管理にも足す（0913 依頼②。追加だけで既存の紐付けは触らない）
   let added = 0;
   try {
-    const unitInspections = p.units.flatMap((u) => u.inspections);
+    const unitInspections = units.flatMap((u) => u.inspections);
     const synced = await syncBuildingVendorsFromEquipment(
       p.propertyCode,
       [...p.inspections, ...unitInspections],
