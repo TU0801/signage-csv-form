@@ -3,7 +3,6 @@ import { reportEntryId } from '@/features/inspection-portal/lib/actions';
 import {
   buildSchedule,
   formatMonth,
-  latestReport,
   monthOf,
   unscheduledInspections,
   type InspectionTypeFlags,
@@ -146,28 +145,20 @@ export function effectiveTargetMonth(target: BulkTarget, performedOn: string): s
 }
 
 /**
- * 提出するとこの区間が置き換える、提出済みの版（無ければ null）。DB の portal_register_report と同じ規則:
- * 提出する保守会社は accountVendorId（ログイン中のアカウントの保守会社＝current_vendor_id()）、無ければ
- * 同じ点検・対象月の最新の版の保守会社、それも無ければ点検行の保守会社。置き換えるのはその保守会社の版だけ
- * （台ごとに別の保守会社が居る点検で、他社の提出は置き換えない）
+ * 同じ点検・対象月に提出済みの版（提出・受領・差戻し。保守会社を問わず新しい順）。報告書は置き換えずに追加するので
+ * （修正依頼1027 決定①）、区間に「提出済みの報告書があります（追加します）」と出すために使う
  */
-export function reportToReplace(
-  reports: DbInspectionReport[],
-  target: BulkTarget,
-  performedOn: string,
-  accountVendorId: string | null,
-): DbInspectionReport | null {
+export function existingReports(reports: DbInspectionReport[], target: BulkTarget, performedOn: string): DbInspectionReport[] {
   const month = effectiveTargetMonth(target, performedOn);
-  if (!month) return null;
-  const latest = latestReport(reports, target.inspection.inspection_id, month);
-  if (!latest) return null;
-  const vendor = accountVendorId ?? latest.vendor_id ?? target.inspection.vendor_id;
-  if (latest.vendor_id === vendor) return latest;
-  return latestReport(
-    reports.filter((r) => r.vendor_id === vendor),
-    target.inspection.inspection_id,
-    month,
-  );
+  if (!month) return [];
+  return reports
+    .filter(
+      (r) =>
+        r.property_inspection_id === target.inspection.inspection_id &&
+        r.target_month === month &&
+        (r.status === 'submitted' || r.status === 'accepted' || r.status === 'returned'),
+    )
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 
 /** 同じ点検に出ている、同じ内容（SHA-256 が同じ）の報告書（削除済みは数えない。新しい順）。1件ずつの提出と一括で共有する */
@@ -203,10 +194,7 @@ export interface SegmentErrors {
   performedOn?: string;
 }
 
-/**
- * 送信前の確認。点検・実施日の未入力と、同じ点検 × 対象月を2つ以上の区間に割り当てたもの
- * （後に登録した区間が前の区間を置き換えてしまう）を区間ごとに返す
- */
+/** 送信前の確認。点検・実施日の未入力を区間ごとに返す */
 export function validateSegments(
   segments: Segment[],
   inputs: Record<number, SegmentInput>,
@@ -214,29 +202,41 @@ export function validateSegments(
   defaultPerformedOn: string,
 ): Record<number, SegmentErrors> {
   const errors: Record<number, SegmentErrors> = {};
-  const used = new Map<string, Segment[]>();
   for (const seg of segments) {
     const input = inputs[seg.start] ?? EMPTY_INPUT;
     const performedOn = effectivePerformedOn(input, defaultPerformedOn);
-    const target = targets.get(input.targetKey);
     const e: SegmentErrors = {};
-    if (!target) e.target = '点検を選んでください';
+    if (!targets.get(input.targetKey)) e.target = '点検を選んでください';
     if (!performedOn) e.performedOn = '実施日を入力してください';
-    if (target) {
-      const month = effectiveTargetMonth(target, performedOn);
-      if (month) {
-        const k = `${target.inspection.inspection_id}:${month}`;
-        used.set(k, [...(used.get(k) ?? []), seg]);
-      }
-    }
     if (e.target || e.performedOn) errors[seg.start] = e;
   }
+  return errors;
+}
+
+/**
+ * 同じ点検 × 対象月を2つ以上の区間に割り当てた区間への注意（区間の先頭ページ → 文言）。
+ * 報告書は1つの点検 × 対象月に複数持てるので止めない（修正依頼1027 決定①）。取り違えに気づけるよう知らせるだけ
+ */
+export function sharedTargetNotes(
+  segments: Segment[],
+  inputs: Record<number, SegmentInput>,
+  targets: Map<string, BulkTarget>,
+  defaultPerformedOn: string,
+): Record<number, string> {
+  const used = new Map<string, Segment[]>();
+  for (const seg of segments) {
+    const input = inputs[seg.start] ?? EMPTY_INPUT;
+    const target = targets.get(input.targetKey);
+    const month = target ? effectiveTargetMonth(target, effectivePerformedOn(input, defaultPerformedOn)) : null;
+    if (!target || !month) continue;
+    const k = `${target.inspection.inspection_id}:${month}`;
+    used.set(k, [...(used.get(k) ?? []), seg]);
+  }
+  const notes: Record<number, string> = {};
   for (const segs of used.values()) {
     if (segs.length < 2) continue;
     const nos = segs.map((s) => `区間${s.no}`).join('・');
-    for (const s of segs) {
-      errors[s.start] = { ...errors[s.start], target: `同じ点検・対象月が ${nos} に割り当てられています（1つの区間にまとめてください）` };
-    }
+    for (const s of segs) notes[s.start] = `同じ点検・対象月が ${nos} に割り当てられています（どれも別の報告書として登録されます）`;
   }
-  return errors;
+  return notes;
 }

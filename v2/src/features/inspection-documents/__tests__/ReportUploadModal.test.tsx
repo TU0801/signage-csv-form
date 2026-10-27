@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { PortalInspectionRow } from '@/types/portal';
 import { makeReport } from './fixtures';
 
@@ -7,8 +7,16 @@ const api = vi.hoisted(() => ({
   registerInspectionReport: vi.fn(),
   fetchInspectionReports: vi.fn(async () => [] as unknown[]),
   sha256Hex: vi.fn(async () => 'hash-new'),
+  updateInspectionReport: vi.fn(),
+  downloadReportBlob: vi.fn(async () => new Blob(['%PDF-1.4'], { type: 'application/pdf' })),
 }));
 vi.mock('@/lib/api/portal', () => api);
+const auth = vi.hoisted(() => ({ isAdmin: false }));
+vi.mock('@/hooks/useAuth', () => ({ useAuth: () => auth }));
+// jsdom には canvas の描画が無いので、プレビューの pdfjs は差し替える
+vi.mock('../lib/pdfPages', () => ({
+  openPdfPages: vi.fn(async () => ({ pageCount: 1, render: vi.fn(async () => {}), pageTexts: vi.fn(async () => []), destroy: vi.fn() })),
+}));
 vi.mock('@/lib/supabase', () => ({ supabase: {}, TABLES: {}, RPC: {} }));
 const toast = vi.hoisted(() => vi.fn());
 vi.mock('@/components/ui/Toast', () => ({ useToast: () => ({ addToast: toast }) }));
@@ -24,7 +32,11 @@ beforeAll(() => {
     this.removeAttribute('open');
   };
 });
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  api.fetchInspectionReports.mockResolvedValue([]);
+  auth.isAdmin = false;
+});
 
 const inspection: PortalInspectionRow = {
   inspection_id: 'pi1',
@@ -104,11 +116,45 @@ describe('ReportUploadModal', () => {
     expect(api.registerInspectionReport).not.toHaveBeenCalled();
   });
 
-  it('再提出では差戻し理由と前の版のファイル名を出す', () => {
+  it('再提出では差戻し理由を出し、登録済みの報告書は置き換えずに残る旨を出す', () => {
     setup({ previous: makeReport({ status: 'returned', review_comment: '写真が不足しています' }) });
     expect(screen.getByText('報告書の再提出')).toBeInTheDocument();
     expect(screen.getByText(/差戻し理由: 写真が不足しています/)).toBeInTheDocument();
-    expect(screen.getByText(/前の版: 20261005_テスト第一ビル_消防設備点検\.pdf/)).toBeInTheDocument();
+    expect(screen.getByText(/登録済みの報告書は置き換えず、追加します/)).toBeInTheDocument();
+  });
+
+  it('実施日の既定は行の点検開始日（修正依頼1027(1)）', () => {
+    setup({ previous: makeReport(), defaultPerformedOn: '2026-10-25' });
+    expect((screen.getByLabelText('実施日（必須）') as HTMLInputElement).value).toBe('2026-10-25');
+  });
+
+  it('同じ点検・対象月の登録済みの報告書を並べ、削除ボタンは管理者だけに出す（修正依頼1027 決定①②）', async () => {
+    const reports = [
+      makeReport({ id: 'r1', file_name: '20261005_A.pdf' }),
+      makeReport({ id: 'r2', file_name: '20261006_B.pdf', created_at: '2026-10-06T01:00:00Z' }),
+      makeReport({ id: 'r3', file_name: '20261007_削除済み.pdf', status: 'deleted' }),
+      makeReport({ id: 'r4', file_name: '20260905_別の月.pdf', target_month: '2026-09-01' }),
+    ];
+    api.fetchInspectionReports.mockResolvedValue(reports);
+    setup();
+    const list = await screen.findByRole('list', { name: '登録済みの報告書' });
+    expect(within(list).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+      expect.stringContaining('20261006_B.pdf'),
+      expect.stringContaining('20261005_A.pdf'),
+    ]);
+    expect(within(list).queryByRole('button', { name: /削除/ })).toBeNull();
+    cleanup();
+
+    auth.isAdmin = true;
+    api.updateInspectionReport.mockResolvedValue(makeReport({ id: 'r1', status: 'deleted' }));
+    const onDeleted = vi.fn();
+    setup({ onDeleted });
+    const adminList = await screen.findByRole('list', { name: '登録済みの報告書' });
+    fireEvent.click(within(adminList).getByRole('button', { name: '20261005_A.pdf を削除' }));
+    fireEvent.click(await screen.findByRole('button', { name: '削除' }));
+    await waitFor(() => expect(api.updateInspectionReport).toHaveBeenCalledWith('r1', 'delete'));
+    await waitFor(() => expect(within(adminList).queryByText('20261005_A.pdf')).toBeNull());
+    expect(onDeleted).toHaveBeenCalled();
   });
 
   it('送信の途中は Escape・× で閉じない', async () => {

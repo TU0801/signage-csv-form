@@ -9,6 +9,28 @@ beforeEach(() => {
 });
 
 describe('Modal', () => {
+  it('draggable なら見出しを引いて動かせ、開き直すと中央に戻る。指定しなければ動かない（修正依頼1027(1)）', () => {
+    const { rerender } = render(
+      <Modal open onClose={() => {}} title="報告書の再提出" draggable>
+        <p>本文</p>
+      </Modal>,
+    );
+    const dialog = () => screen.getByText('本文').closest('dialog')!;
+    const heading = screen.getByRole('heading', { name: '報告書の再提出', hidden: true });
+    fireEvent.pointerDown(heading, { clientX: 100, clientY: 100, button: 0 });
+    fireEvent.pointerMove(window, { clientX: 140, clientY: 70 });
+    fireEvent.pointerUp(window);
+    expect(dialog().style.translate).toBe('40px -30px');
+    rerender(<Modal open={false} onClose={() => {}} title="報告書の再提出" draggable><p>本文</p></Modal>);
+    rerender(<Modal open onClose={() => {}} title="報告書の再提出" draggable><p>本文</p></Modal>);
+    expect(dialog().style.translate).toBe('');
+    rerender(<Modal open onClose={() => {}} title="確認"><p>本文</p></Modal>);
+    fireEvent.pointerDown(screen.getByRole('heading', { name: '確認', hidden: true }), { clientX: 0, clientY: 0, button: 0 });
+    fireEvent.pointerMove(window, { clientX: 50, clientY: 50 });
+    fireEvent.pointerUp(window);
+    expect(dialog().style.translate).toBe('');
+  });
+
   it('背景（dialog 自身）のクリックで閉じ、中身のクリックでは閉じない（v1 の各モーダルの overlay click）', () => {
     const onClose = vi.fn();
     render(

@@ -3,7 +3,7 @@
  * pdfjs の読み込み（legacy ビルド・同梱の worker）は貼紙の PDF 変換と共用（lib/pdfjs.ts）。
  */
 import type { PDFDocumentProxy } from 'pdfjs-dist';
-import { loadPdfjs } from '@/lib/pdfjs';
+import { loadPdfjs, pdfDocumentParams } from '@/lib/pdfjs';
 
 export interface PdfPages {
   pageCount: number;
@@ -29,7 +29,7 @@ export interface PdfPages {
 /** PDF を開く。bytes は worker へ渡されて使えなくなるので、呼び出し側は写しを渡す */
 export async function openPdfPages(bytes: Uint8Array): Promise<PdfPages> {
   const pdfjs = await loadPdfjs();
-  const task = pdfjs.getDocument({ data: bytes });
+  const task = pdfjs.getDocument(pdfDocumentParams(bytes));
   const doc: PDFDocumentProxy = await task.promise;
   // 描画は1枚ずつ順に行う（大きなスキャン PDF を一度に描いてメモリを使い切らない・同じ canvas への同時描画を避ける）
   let chain: Promise<void> = Promise.resolve();

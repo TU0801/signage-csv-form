@@ -26,8 +26,8 @@ function buttons(report: DbInspectionReport, viewer: ReportViewer): string[] {
 describe('ReportRowActions（ロール別の出し分け）', () => {
   const submitted = makeReport();
 
-  it('保守会社は自社の版を編集・削除・再提出でき、受領・差戻しは出ない', () => {
-    expect(buttons(submitted, vendor)).toEqual(['開く', 'DL', '再提出', '編集', '削除']);
+  it('保守会社は自社の版を編集・再提出でき、削除（管理者だけ。修正依頼1027 決定②）・受領・差戻しは出ない', () => {
+    expect(buttons(submitted, vendor)).toEqual(['開く', 'DL', '再提出', '編集']);
     expect(buttons(submitted, otherVendor)).toEqual(['開く', 'DL']);
   });
 
@@ -40,8 +40,9 @@ describe('ReportRowActions（ロール別の出し分け）', () => {
     expect(buttons(submitted, admin)).toEqual(['開く', 'DL', '受領', '差戻し', '再提出', '編集', '削除']);
   });
 
-  it('削除済みは復元、保管庫へ移した版は開く・DL を出さない', () => {
-    expect(buttons(makeReport({ status: 'deleted' }), vendor)).toEqual(['開く', 'DL', '復元']);
+  it('削除済みの復元は管理者だけ、保管庫へ移した版は開く・DL を出さない', () => {
+    expect(buttons(makeReport({ status: 'deleted' }), admin)).toEqual(['開く', 'DL', '復元']);
+    expect(buttons(makeReport({ status: 'deleted' }), vendor)).toEqual(['開く', 'DL']);
     render(
       <ReportRowActions
         permissions={reportPermissions(makeReport({ storage_backend: 'archive' }), management)}

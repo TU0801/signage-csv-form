@@ -9,7 +9,7 @@ import type { PortalEntryRow, PortalInspectionRow } from '@/types/portal';
 import { useRefetchOnVisible } from '@/features/approval/hooks/useRefetchOnVisible';
 import { ReportUploadModal } from '@/features/inspection-documents/components/ReportUploadModal';
 import { usePortalData } from '../hooks/usePortalData';
-import { reportEntryId, canSubmit, type PortalRole } from '../lib/actions';
+import { reportDefaultPerformedOn, reportEntryId, canSubmit, type PortalRole } from '../lib/actions';
 import { filterSchedule, filterUnscheduled, INITIAL_FILTERS, type PortalFilters } from '../lib/filters';
 import { buildSchedule, formatMonth, todayJst, typeFlagsMap, unscheduledInspections, type ScheduleItem } from '../lib/schedule';
 import { completionKeys, countStatuses, itemStatus } from '../lib/status';
@@ -30,6 +30,8 @@ interface ReportTarget {
   targetMonth: string | null;
   entryId: string | null;
   previous: ScheduleItem['report'];
+  /** 実施日の既定（行の点検開始日。修正依頼1027(1)） */
+  defaultPerformedOn?: string | null;
 }
 
 interface SendBackTarget {
@@ -157,13 +159,13 @@ export function InspectionPortal() {
       inspection: item.inspection,
       targetMonth: item.targetMonth,
       entryId: reportEntryId(item),
-      // 提出中・受領済みの版があるときも置き換わる（DB が同じ点検・対象月の版を superseded にする）ので、前の版として見せる。
-      // DB が置き換えるのは同じ保守会社の版だけ（台ごとに別の会社が居る点検）なので、他社の版は前の版にしない
+      defaultPerformedOn: reportDefaultPerformedOn(item),
+      // 報告書は置き換えず追加する（修正依頼1027 決定①）。自社（管理者は全社）の版があれば再提出として開く
       previous: item.report && (isAdmin || item.report.vendor_id === vendorId) ? item.report : null,
     });
 
   // 点検月の無い点検行: 申請・報告書は月をまたいでまとめてあるので、別の月の申請を紐付けない（entryId は付けない）。
-  // 差戻しの再提出だけは元の報告書の月に揃える（実施日の月が変わっても同じ月の版として置き換わるように）
+  // 差戻しの再提出だけは元の報告書の月に揃える（実施日の月が変わっても同じ月の版として並ぶように）
   const openUnscheduledReport = (item: ScheduleItem) => {
     const previous = item.report?.status === 'returned' ? item.report : null;
     setReportTarget({ inspection: item.inspection, targetMonth: previous?.target_month ?? null, entryId: null, previous });
@@ -265,10 +267,12 @@ export function InspectionPortal() {
           targetMonth={reportTarget?.targetMonth ?? null}
           entryId={reportTarget?.entryId ?? null}
           previous={reportTarget?.previous ?? null}
+          defaultPerformedOn={reportTarget?.defaultPerformedOn ?? null}
           onUploaded={() => {
             setReportTarget(null);
             void data.refetch();
           }}
+          onDeleted={() => void data.refetch()}
         />
       )}
       <EntryDetailModal

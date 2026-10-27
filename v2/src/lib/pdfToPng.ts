@@ -1,6 +1,6 @@
 import { POSTER_PNG_SIZE } from './constants';
 import { validateImageFile } from './storage';
-import { loadPdfjs } from './pdfjs';
+import { loadPdfjs, pdfDocumentParams } from './pdfjs';
 
 /** PDF か（MIME が空のときもあるので拡張子も見る） */
 export function isPdfFile(file: Pick<File, 'type' | 'name'>): boolean {
@@ -33,7 +33,7 @@ function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob> {
 export async function pdfFirstPageToPng(file: File): Promise<{ file: File; pageCount: number }> {
   const pdfjs = await loadPdfjs();
   const data = new Uint8Array(await file.arrayBuffer());
-  const task = pdfjs.getDocument({ data });
+  const task = pdfjs.getDocument(pdfDocumentParams(data));
   const doc = await task.promise;
   try {
     const page = await doc.getPage(1);

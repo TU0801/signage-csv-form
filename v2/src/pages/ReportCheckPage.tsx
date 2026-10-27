@@ -7,7 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { cn, normalizeSearch } from '@/lib/utils';
 import { useInspectionFormStore } from '@/stores/inspectionFormStore';
 import { usePortalData } from '@/features/inspection-portal/hooks/usePortalData';
-import { reportEntryId } from '@/features/inspection-portal/lib/actions';
+import { reportDefaultPerformedOn, reportEntryId } from '@/features/inspection-portal/lib/actions';
 import { addMonths, formatDate, formatMonth, monthOf, todayJst, typeFlagsMap, type ScheduleItem } from '@/features/inspection-portal/lib/schedule';
 import { completionKeys, isRowCompleted } from '@/features/inspection-portal/lib/status';
 import { buildNotifyOffIndex, buildUnitIndex } from '@/features/inspection-portal/lib/units';
@@ -37,6 +37,8 @@ interface ReportTarget {
   targetMonth: string;
   entryId: string | null;
   previous: ScheduleItem['report'];
+  /** 実施日の既定（行の点検開始日。修正依頼1027(1)） */
+  defaultPerformedOn?: string | null;
 }
 
 /** ISO の日時 → 日本時間の日付（2026/10/06） */
@@ -119,7 +121,8 @@ export function ReportCheckPage({ modeSwitch }: { modeSwitch?: ReactNode } = {})
       inspection: item.inspection,
       targetMonth: item.targetMonth,
       entryId: reportEntryId(item),
-      // DB が置き換えるのは同じ保守会社の版だけなので、他社の版は前の版にしない（一括入力と同じ）
+      defaultPerformedOn: reportDefaultPerformedOn(item),
+      // 自社（管理者は全社）の版があれば再提出として開く（一括入力と同じ。報告書は追加。修正依頼1027 決定①）
       previous: item.report && (isAdmin || item.report.vendor_id === profileVendorId) ? item.report : null,
     });
 
@@ -274,10 +277,12 @@ export function ReportCheckPage({ modeSwitch }: { modeSwitch?: ReactNode } = {})
         targetMonth={reportTarget?.targetMonth ?? null}
         entryId={reportTarget?.entryId ?? null}
         previous={reportTarget?.previous ?? null}
+        defaultPerformedOn={reportTarget?.defaultPerformedOn ?? null}
         onUploaded={() => {
           setReportTarget(null);
           void portal.refetch();
         }}
+        onDeleted={() => void portal.refetch()}
       />
     </div>
   );

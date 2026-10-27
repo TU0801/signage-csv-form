@@ -73,18 +73,19 @@ async function setup() {
   });
   await screen.findByTestId('bulk-page-4');
   // 選択肢（点検一覧）の読み込みを待つ
-  await screen.findAllByRole('option', { name: /テスト第二マンション/ });
+  await waitFor(() => expect(api.fetchPortalEntries).toHaveBeenCalled());
   return { onUploaded, onClose };
 }
 
-const pick = (no: number, name: RegExp) => {
-  const select = screen.getByRole('combobox', { name: `区間${no}の点検` }) as HTMLSelectElement;
-  const option = within(select).getByRole('option', { name }) as HTMLOptionElement;
-  fireEvent.change(select, { target: { value: option.value } });
+/** 区間の点検を「検索して選ぶ」欄で選ぶ（修正依頼1027(4)） */
+const pick = async (no: number, name: RegExp) => {
+  fireEvent.click(screen.getByRole('combobox', { name: `区間${no}の点検` }));
+  fireEvent.click(await screen.findByRole('option', { name }));
 };
 
 describe('BulkReportUploadModal', { timeout: 20000 }, () => {
-  it('ページの間を押して区間を分け、同じ点検を2区間に割り当てると送らない', async () => {
+  it('ページの間を押して区間を分け、同じ点検を2区間に割り当てると注意を出して両方送る（修正依頼1027 決定①）', async () => {
+    api.registerInspectionReport.mockResolvedValue(makeReport({ file_name: 'a.pdf' }));
     await setup();
     expect(screen.getAllByTestId(/^bulk-segment-/)).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: '2ページと3ページの間で区切る' }));
@@ -92,11 +93,22 @@ describe('BulkReportUploadModal', { timeout: 20000 }, () => {
     expect(within(screen.getByTestId('bulk-segment-2')).getByText('p.3-4')).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('実施日（全区間の既定）'), { target: { value: '2026-10-05' } });
-    pick(1, /テスト第一マンション/);
-    pick(2, /テスト第一マンション/);
+    await pick(1, /テスト第一マンション/);
+    await pick(2, /テスト第一マンション/);
+    expect(screen.getAllByText(/同じ点検・対象月が 区間1・区間2 に割り当てられています（どれも別の報告書として登録されます）/)).toHaveLength(2);
     fireEvent.click(screen.getByRole('button', { name: '2区間を提出する' }));
-    expect(await screen.findAllByText(/同じ点検・対象月が 区間1・区間2 に割り当てられています/)).toHaveLength(2);
-    expect(api.registerInspectionReport).not.toHaveBeenCalled();
+    await waitFor(() => expect(api.registerInspectionReport).toHaveBeenCalledTimes(2));
+  });
+
+  it('区間の点検は文字を打って絞り込んで選べる（修正依頼1027(4)）', async () => {
+    await setup();
+    const box = screen.getByRole('combobox', { name: '区間1の点検' });
+    fireEvent.click(box);
+    fireEvent.change(box, { target: { value: '第二' } });
+    const options = await screen.findAllByRole('option');
+    expect(options.map((o) => o.textContent)).toEqual([expect.stringMatching(/テスト第二マンション/)]);
+    fireEvent.click(options[0]!);
+    expect((box as HTMLInputElement).value).toMatch(/テスト第二マンション/);
   });
 
   it('区間ごとに切り出して順に登録し、途中で失敗しても残りを続けて結果を区間ごとに出す', async () => {
@@ -107,8 +119,8 @@ describe('BulkReportUploadModal', { timeout: 20000 }, () => {
     fireEvent.click(screen.getByRole('button', { name: '1ページと2ページの間で区切る' }));
     fireEvent.click(screen.getByRole('button', { name: '1ページ目を右に90度回す' }));
     fireEvent.change(screen.getByLabelText('実施日（全区間の既定）'), { target: { value: '2026-10-05' } });
-    pick(1, /テスト第一マンション/);
-    pick(2, /テスト第二マンション/);
+    await pick(1, /テスト第一マンション/);
+    await pick(2, /テスト第二マンション/);
     fireEvent.change(screen.getByLabelText('区間2のメモ'), { target: { value: '2号機' } });
     fireEvent.click(screen.getByRole('button', { name: '2区間を提出する' }));
 
@@ -135,7 +147,7 @@ describe('BulkReportUploadModal', { timeout: 20000 }, () => {
     api.registerInspectionReport.mockImplementationOnce(() => new Promise((r) => (resolve = r)));
     const { onClose } = await setup();
     fireEvent.change(screen.getByLabelText('実施日（全区間の既定）'), { target: { value: '2026-10-05' } });
-    pick(1, /テスト第一マンション/);
+    await pick(1, /テスト第一マンション/);
     fireEvent.click(screen.getByRole('button', { name: '1区間を提出する' }));
     await waitFor(() => expect(api.registerInspectionReport).toHaveBeenCalledTimes(1));
 
@@ -157,7 +169,7 @@ describe('BulkReportUploadModal', { timeout: 20000 }, () => {
     api.registerInspectionReport.mockRejectedValueOnce({ message: '通信に失敗しました' });
     await setup();
     fireEvent.change(screen.getByLabelText('実施日（全区間の既定）'), { target: { value: '2026-10-05' } });
-    pick(1, /テスト第一マンション/);
+    await pick(1, /テスト第一マンション/);
     fireEvent.click(screen.getByRole('button', { name: '1区間を提出する' }));
     expect(await within(screen.getByTestId('bulk-segment-1')).findByText(/失敗:/)).toBeInTheDocument();
 
@@ -177,7 +189,7 @@ describe('BulkReportUploadModal', { timeout: 20000 }, () => {
     expect(screen.queryByText(/実施日が未来の日付です/)).toBeNull();
   });
 
-  it('同じ点検・対象月に提出済みの報告書があれば、区間に置き換えると出し、送信前に件数を確かめる', async () => {
+  it('同じ点検・対象月に提出済みの報告書があれば、区間に追加すると出し、送信前に件数を確かめる（修正依頼1027 決定①）', async () => {
     const live = makeReport({
       property_inspection_id: 'i1',
       target_month: '2026-10-01',
@@ -189,15 +201,15 @@ describe('BulkReportUploadModal', { timeout: 20000 }, () => {
     api.registerInspectionReport.mockResolvedValue(makeReport({ file_name: 'a.pdf' }));
     await setup();
     fireEvent.change(screen.getByLabelText('実施日（全区間の既定）'), { target: { value: '2026-10-05' } });
-    pick(1, /テスト第一マンション/);
+    await pick(1, /テスト第一マンション/);
     expect(
-      within(screen.getByTestId('bulk-segment-1')).getByText(/提出済みの報告書を置き換えます（20261001_テスト第一マンション_前の版\.pdf）/),
+      within(screen.getByTestId('bulk-segment-1')).getByText(/提出済みの報告書があります（追加で登録します。20261001_テスト第一マンション_前の版\.pdf）/),
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '1区間を提出する' }));
     expect(await screen.findByText(/1件の区間は、同じ点検・対象月に提出済みの報告書があります/)).toBeInTheDocument();
     expect(api.registerInspectionReport).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: '置き換えて提出する' }));
+    fireEvent.click(screen.getByRole('button', { name: '追加で提出する' }));
     expect(await within(screen.getByTestId('bulk-segment-1')).findByText(/提出しました/)).toBeInTheDocument();
     expect(api.registerInspectionReport).toHaveBeenCalledTimes(1);
   });
@@ -208,19 +220,19 @@ describe('BulkReportUploadModal', { timeout: 20000 }, () => {
     ]);
     await setup();
     fireEvent.change(screen.getByLabelText('実施日（全区間の既定）'), { target: { value: '2026-10-05' } });
-    pick(1, /テスト第一マンション/);
+    await pick(1, /テスト第一マンション/);
     // 割り当てた時点で区間を切り出してハッシュを見比べ、提出の前から「送りません」と出す（置き換えの注意は出さない。修正依頼1024 本番確認）
     expect(
       await within(screen.getByTestId('bulk-segment-1')).findByText('同じ内容の報告書が提出済みです（送りません）'),
     ).toBeInTheDocument();
-    expect(within(screen.getByTestId('bulk-segment-1')).queryByText(/提出済みの報告書を置き換えます/)).toBeNull();
+    expect(within(screen.getByTestId('bulk-segment-1')).queryByText(/提出済みの報告書があります/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '1区間を提出する' }));
     // 確認の前にハッシュを見比べるので、送らない区間は置き換えの確認に数えない（この区間だけなら確認を出さない）
     expect(
       await within(screen.getByTestId('bulk-segment-1')).findByText('同じ内容の報告書が提出済みです（送っていません）'),
     ).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '置き換えて提出する' })).toBeNull();
-    expect(within(screen.getByTestId('bulk-segment-1')).queryByText(/提出済みの報告書を置き換えます/)).toBeNull();
+    expect(screen.queryByRole('button', { name: '追加で提出する' })).toBeNull();
+    expect(within(screen.getByTestId('bulk-segment-1')).queryByText(/提出済みの報告書があります/)).toBeNull();
     expect(api.registerInspectionReport).not.toHaveBeenCalled();
     expect(toast).toHaveBeenCalledWith('同じ内容の報告書が提出済みのため、1件とも送っていません', 'info');
     // 済みの区間なので、もう一度送るボタンは出ない
@@ -233,7 +245,7 @@ describe('BulkReportUploadModal', { timeout: 20000 }, () => {
     ]);
     await setup();
     fireEvent.change(screen.getByLabelText('実施日（全区間の既定）'), { target: { value: '2026-10-05' } });
-    pick(1, /テスト第一マンション/);
+    await pick(1, /テスト第一マンション/);
     // 10月分の版は無いので置き換えの確認は出ない
     fireEvent.click(screen.getByRole('button', { name: '1区間を提出する' }));
     expect(
@@ -249,9 +261,9 @@ describe('BulkReportUploadModal', { timeout: 20000 }, () => {
     api.registerInspectionReport.mockResolvedValue(makeReport({ file_name: 'a.pdf' }));
     await setup();
     fireEvent.change(screen.getByLabelText('実施日（全区間の既定）'), { target: { value: '2026-10-05' } });
-    pick(1, /テスト第一マンション/);
+    await pick(1, /テスト第一マンション/);
     fireEvent.click(screen.getByRole('button', { name: '1区間を提出する' }));
-    fireEvent.click(await screen.findByRole('button', { name: '置き換えて提出する' }));
+    fireEvent.click(await screen.findByRole('button', { name: '追加で提出する' }));
     expect(await within(screen.getByTestId('bulk-segment-1')).findByText(/提出しました/)).toBeInTheDocument();
     expect(api.registerInspectionReport).toHaveBeenCalledTimes(1);
   });
@@ -302,10 +314,10 @@ describe('BulkReportUploadModal', { timeout: 20000 }, () => {
     fireEvent.click(screen.getByRole('button', { name: '文字情報から読み取る（AI なし）' }));
     expect(await screen.findByTestId('ocr-summary')).toBeInTheDocument();
     await waitFor(() => expect(screen.getAllByTestId(/^bulk-segment-/)).toHaveLength(2));
-    const select1 = screen.getByRole('combobox', { name: '区間1の点検' }) as HTMLSelectElement;
-    const select2 = screen.getByRole('combobox', { name: '区間2の点検' }) as HTMLSelectElement;
-    expect(select1.selectedOptions[0]?.textContent).toMatch(/テスト第一マンション/);
-    expect(select2.selectedOptions[0]?.textContent).toMatch(/テスト第二マンション/);
+    const select1 = screen.getByRole('combobox', { name: '区間1の点検' }) as HTMLInputElement;
+    const select2 = screen.getByRole('combobox', { name: '区間2の点検' }) as HTMLInputElement;
+    expect(select1.value).toMatch(/テスト第一マンション/);
+    expect(select2.value).toMatch(/テスト第二マンション/);
     expect((screen.getByLabelText('実施日（全区間の既定）') as HTMLInputElement).value).toBe('2026-10-05');
     expect(ocrApi.readWithAiOcr).not.toHaveBeenCalled();
   });
