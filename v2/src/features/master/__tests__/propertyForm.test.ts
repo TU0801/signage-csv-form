@@ -113,7 +113,7 @@ describe('property form helpers (v1 js/admin-masters.js)', () => {
   it('validateUnitInspections rejects unselected and duplicated types', () => {
     expect(validateUnitInspections([unit([insp()])])).toBeNull();
     expect(validateUnitInspections([unit([insp(), insp({ inspection_id: undefined, inspection_type_id: '' })])])).toBe(
-      '台ごとの保守に、点検種別を選んでいない行があります（点検種別を選ぶか、入れた保守会社・点検月・検査月を消してください）',
+      '台ごとの保守に、点検種別を選んでいない行があります（点検種別を選ぶか、入れた保守会社・点検月・検査月・点検日連絡・インターバル・請求月を戻してください）',
     );
     // 何も入っていない未保存の行と「（外す）」を選んだ行は数えない
     expect(
@@ -184,7 +184,17 @@ describe('savePropertyForm (v1 handleMasterFormSubmit)', () => {
     // 前の『外す』（行を消す）と『＋ 点検種別』（newUnitInspection の行を足して種別を選ぶ）の差分
     const before = diffUnitInspections([unit([insp()]), empty], [unit([]), { ...empty, inspections: [picked] }]);
     expect(before).toEqual({
-      upserts: [{ unit_id: 'u2', inspection_type_id: 'remote', vendor_id: 'v9', inspection_months: [], inspected_on: null }],
+      // 新しい行は点検日連絡・インターバル・請求月を既定で埋めて送る（修正依頼1027(7)。名前が無いので点検日連絡は ON）
+      upserts: [
+        {
+          unit_id: 'u2',
+          inspection_type_id: 'remote',
+          vendor_id: 'v9',
+          inspection_months: [],
+          inspected_on: null,
+          schedule: { notify_inspection_date: true, interval_months: 12, billing_months: [] },
+        },
+      ],
       deletes: [{ inspection_id: 'ui1' }],
     });
     expect(saveUnitInspectionsToBiz).toHaveBeenCalledWith(before, undefined);

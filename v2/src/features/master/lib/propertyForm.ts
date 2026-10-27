@@ -8,6 +8,7 @@ import { syncBuildingVendorsFromEquipment } from '@/lib/api/relationships';
 import type { DbProfile, Terminal } from '@/types/database';
 import type { PropertyInspection, PropertyUnit, UnitInspection, UnitInspectionTypeOption } from '@/types/app';
 import type { RpcMasterPropertyManagementCompanyRow } from '@/types/rpc';
+import { scheduleKey } from '@/lib/inspectionSchedule';
 
 /** 一覧の端末欄（先頭4台の端末ID、5台以上は「...」、末尾に台数） */
 // v1: js/admin-masters.js renderProperties（terminalDisplay）
@@ -31,6 +32,7 @@ export function cloneUnits(units: PropertyUnit[] | undefined): PropertyUnit[] {
     inspections: (u.inspections || []).map((i) => ({
       ...i,
       inspection_months: Array.isArray(i.inspection_months) ? [...i.inspection_months] : [],
+      ...(Array.isArray(i.billing_months) ? { billing_months: [...i.billing_months] } : {}),
     })),
   }));
 }
@@ -45,6 +47,7 @@ function inspectionKey(rows: PropertyInspection[]): string {
       r.remarks ?? '',
       r.remarks2 ?? '',
       r.inspected_on ? String(r.inspected_on).slice(0, 7) : '',
+      scheduleKey(r),
     ]),
   );
 }
@@ -151,14 +154,20 @@ export function newUnitInspection(): UnitInspection {
   };
 }
 
-/** 未保存の行に何も入っていないか（点検種別・保守会社・点検月・検査月のどれも空）。保守の無い台に出す行を触っていない状態 */
+/**
+ * 未保存の行に何も入っていないか（点検種別・保守会社・点検月・検査月・点検日連絡・インターバル・請求月のどれも触っていない）。
+ * 保守の無い台に出す行を触っていない状態。点検日連絡・インターバルは既定を画面に出すだけで、触るまでは undefined
+ */
 export function isBlankUnitInspection(i: UnitInspection): boolean {
   return (
     !i.inspection_id &&
     !i.inspection_type_id &&
     !i.vendor_id &&
     (i.inspection_months ?? []).length === 0 &&
-    !i.inspected_on
+    !i.inspected_on &&
+    i.notify_inspection_date === undefined &&
+    i.interval_months === undefined &&
+    (i.billing_months ?? []).length === 0
   );
 }
 
@@ -180,7 +189,7 @@ export function validateUnitInspections(units: PropertyUnit[]): string | null {
   for (const unit of unitsForSave(units)) {
     const ids = unit.inspections.map((i) => i.inspection_type_id);
     if (ids.some((id) => !id)) {
-      return '台ごとの保守に、点検種別を選んでいない行があります（点検種別を選ぶか、入れた保守会社・点検月・検査月を消してください）';
+      return '台ごとの保守に、点検種別を選んでいない行があります（点検種別を選ぶか、入れた保守会社・点検月・検査月・点検日連絡・インターバル・請求月を戻してください）';
     }
     if (new Set(ids).size !== ids.length) {
       return '台ごとの保守で、同じ台に同じ点検種別が2行あります';

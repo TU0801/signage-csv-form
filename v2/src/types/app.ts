@@ -22,6 +22,15 @@ export interface PropertyInspection {
    * **undefined は「読めていない」**（RPC property_inspection_dates が失敗した・読み込む画面でない）で、保存時に送らない（消さない）
    */
   inspected_on?: string | null;
+  /**
+   * 点検日連絡・インターバル・請求月（biz の点検の行の3列。業務システム 修正依頼1026。2026-10-27 修正依頼1027(7)）。
+   * **undefined は「読めていない」**（RPC master_inspection_schedules が失敗した、または新しい行でまだ既定のまま）で、保存時に送らない／既定で埋める
+   */
+  notify_inspection_date?: boolean;
+  /** インターバル（か月。1〜120）。null は未入力 */
+  interval_months?: number | null;
+  /** 請求月（1〜12 の昇順）。空は毎月 */
+  billing_months?: number[];
 }
 
 /** 台ごとの保守の1行（v1 overlayUnitInspections の unit.inspections の1要素） */
@@ -36,6 +45,15 @@ export interface UnitInspection {
   inspected_on: string | null;
   legacy_remarks: string;
   legacy_remarks2: string;
+  /**
+   * 点検日連絡・インターバル・請求月（biz の点検の行の3列。業務システム 修正依頼1026。2026-10-27 修正依頼1027(7)）。
+   * **undefined は「読めていない」**（RPC master_inspection_schedules が失敗した、または新しい行でまだ既定のまま）で、保存時に送らない／既定で埋める
+   */
+  notify_inspection_date?: boolean;
+  /** インターバル（か月。1〜120）。null は未入力 */
+  interval_months?: number | null;
+  /** 請求月（1〜12 の昇順）。空は毎月 */
+  billing_months?: number[];
   /**
    * 画面だけの印（DB には無い）。保存済みの行の点検種別の欄で「（外す）」を選んだ。物件の保存で外す（2026-10-27 修正依頼1026⑥）。
    * 今の種別に戻したらキーごと消す（開いたときと同じ形に戻して「変更あり」を下ろす）

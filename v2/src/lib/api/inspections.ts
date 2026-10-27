@@ -1,5 +1,7 @@
 import { RPC, supabase } from '@/lib/supabase';
 import { inspectionRpc } from './scopedRpc';
+import { setInspectionSchedule } from './propertyMaster';
+import { scheduleForSave, scheduleKey, type ScheduleValues } from '@/lib/inspectionSchedule';
 import type {
   PropertyInspection,
   PropertyUnit,
@@ -83,6 +85,13 @@ export async function saveInspectionsToBiz(
       });
       if (dateError) throw dateError;
     }
+    // 点検日連絡・インターバル・請求月も upsert の引数に無いので、戻り値の点検行 id で別に書く（修正依頼1027(7)）。
+    // 読めていない保存済みの行（undefined）は送らない。新しい行は既定（種別の名前・12か月・毎月）で埋める
+    const isNew = !current.some((r) => r.inspection_type_id === e.inspection_type_id);
+    const schedule = scheduleForSave(e, isNew, undefined);
+    if (schedule && inspectionId) {
+      await setInspectionSchedule('property', String(inspectionId), schedule);
+    }
   }
   return { saved: list.length };
 }
@@ -133,6 +142,8 @@ export interface UnitInspectionUpsert {
   inspection_months: number[];
   /** 月初の日付（YYYY-MM-01）。RPC は date で受けるので YYYY-MM のままでは通らない */
   inspected_on: string | null;
+  /** 点検日連絡・インターバル・請求月。null は送らない（読めていない保存済みの行）。修正依頼1027(7) */
+  schedule?: ScheduleValues | null;
 }
 
 export interface UnitInspectionDiff {
@@ -167,11 +178,13 @@ export function diffUnitInspections(
       const months = normalizeMonths(i.inspection_months);
       const inspectedMonth = normalizeInspectedMonth(i.inspected_on);
       const old = before.get(key);
+      // 点検日連絡・インターバル・請求月だけを変えた行も送る（修正依頼1027(7)）
       if (
         old &&
         (old.vendor_id || null) === (i.vendor_id || null) &&
         normalizeMonths(old.inspection_months).join(',') === months.join(',') &&
-        normalizeInspectedMonth(old.inspected_on) === inspectedMonth
+        normalizeInspectedMonth(old.inspected_on) === inspectedMonth &&
+        scheduleKey(old) === scheduleKey(i)
       ) {
         return;
       }
@@ -182,6 +195,9 @@ export function diffUnitInspections(
         inspection_months: months,
         inspected_on: inspectedMonth ? `${inspectedMonth}-01` : null,
       });
+      // 3項目は送るときだけキーを持つ（読めていない保存済みの行は送らない）
+      const schedule = scheduleForSave(i, !old, i.inspection_type_label);
+      if (schedule) upserts[upserts.length - 1]!.schedule = schedule;
     }),
   );
 
@@ -217,23 +233,35 @@ export async function saveUnitInspectionsToBiz(
   const rpcNames = inspectionRpc(role);
   let saved = 0;
   const errors: string[] = [];
-  const run = async (fn: string, args: Record<string, unknown>) => {
-    const { error } = await supabase.rpc(fn, args);
-    if (error) errors.push(unitInspectionErrorMessage(error));
-    else saved += 1;
+  const run = async (fn: string, args: Record<string, unknown>): Promise<unknown> => {
+    const { data, error } = await supabase.rpc(fn, args);
+    if (error) {
+      errors.push(unitInspectionErrorMessage(error));
+      return null;
+    }
+    saved += 1;
+    return data;
   };
 
   for (const d of diff.deletes || []) {
     await run(rpcNames.deleteUnitInspection, { p_id: d.inspection_id });
   }
   for (const u of diff.upserts || []) {
-    await run(rpcNames.upsertUnitInspection, {
+    const id = await run(rpcNames.upsertUnitInspection, {
       p_unit_id: u.unit_id,
       p_inspection_type_id: u.inspection_type_id,
       p_maintainer_id: u.vendor_id,
       p_inspection_months: u.inspection_months,
       p_inspected_on: u.inspected_on,
     });
+    // 点検日連絡・インターバル・請求月は upsert の戻り値の台の保守の id で続けて書く（修正依頼1027(7)）
+    if (id && u.schedule) {
+      try {
+        await setInspectionSchedule('unit', String(id), u.schedule);
+      } catch (e) {
+        errors.push(unitInspectionErrorMessage(e as { code?: string; message?: string }));
+      }
+    }
   }
   return { saved, errors };
 }

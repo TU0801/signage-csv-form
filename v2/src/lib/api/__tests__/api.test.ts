@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { normalizeTerminalId, toTerminal } from '@/lib/terminal';
-import { diffUnitInspections, saveInspectionsToBiz, unitManagedTypeIds } from '../inspections';
+import { diffUnitInspections, saveInspectionsToBiz, saveUnitInspectionsToBiz, unitManagedTypeIds } from '../inspections';
 import { rpcAllRows, overlayInspections } from '../masterData';
 import { addBuildingVendor, BUILDING_REQUEST_DUPLICATE_MESSAGE, getAssignedBuildings } from '../relationships';
 import type { MasterProperty, PropertyUnit } from '@/types/app';
@@ -24,6 +24,8 @@ vi.mock('@/lib/supabase', () => ({
     inspectionsForProperty: 'inspections_for_property',
     upsertPropertyInspection: 'upsert_property_inspection',
     setPropertyInspectionInspectedOn: 'set_property_inspection_inspected_on',
+    upsertUnitInspection: 'upsert_unit_inspection',
+    setInspectionSchedule: 'set_inspection_schedule',
   },
 }));
 
@@ -73,6 +75,24 @@ describe('diffUnitInspections (v1 relationships.js)', () => {
     expect(diffUnitInspections(original, unit([]))).toEqual({
       upserts: [],
       deletes: [{ inspection_id: 'i1' }],
+    });
+  });
+
+  // 修正依頼1027(7): 点検日連絡・インターバル・請求月だけを変えた行も送り、upsert が返した台の保守の id で書く
+  it('sends a row whose only change is 点検日連絡・インターバル・請求月 and writes them with the id upsert returns', async () => {
+    const before = row({ notify_inspection_date: true, interval_months: null, billing_months: [] });
+    const after = row({ notify_inspection_date: false, interval_months: 24, billing_months: [4, 1] });
+    const diff = diffUnitInspections(unit([before]), unit([after]));
+    expect(diff.upserts).toHaveLength(1);
+    mockRpc.mockReset();
+    mockRpc.mockResolvedValue({ data: 'ui-9', error: null });
+    await expect(saveUnitInspectionsToBiz(diff)).resolves.toEqual({ saved: 1, errors: [] });
+    expect(mockRpc).toHaveBeenLastCalledWith('set_inspection_schedule', {
+      p_kind: 'unit',
+      p_inspection_id: 'ui-9',
+      p_notify_inspection_date: false,
+      p_interval_months: 24,
+      p_billing_months: [1, 4],
     });
   });
 

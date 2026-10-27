@@ -79,3 +79,21 @@ export interface RpcPropertyManagementCompanyRow {
   management_company_id: string | null;
   management_company_name: string | null;
 }
+
+/** RPC master_property_codes の行（修正依頼1027(7)）。en_no はマンションコード（補助）＝ biz.properties.en_no（空は null） */
+export interface RpcMasterPropertyCodeRow {
+  property_code: string;
+  biz_property_id: string;
+  en_no: string | null;
+}
+
+/** RPC master_inspection_schedules の行（修正依頼1027(7)）。kind は物件単位（property）か台ごと（unit） */
+export interface RpcInspectionScheduleRow {
+  kind: 'property' | 'unit';
+  inspection_id: string;
+  property_code: string;
+  inspection_type_id: string;
+  notify_inspection_date: boolean;
+  interval_months: number | null;
+  billing_months: number[] | null;
+}
