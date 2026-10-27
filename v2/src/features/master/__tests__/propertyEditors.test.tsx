@@ -137,7 +137,7 @@ describe('UnitInspectionEditor (v1 台ごとの保守。2026-10-27 修正依頼1
 
     const typeSelect = screen.getByLabelText('点検種別') as HTMLSelectElement;
     expect(Array.from(typeSelect.options).map((o) => o.text)).toEqual(['エレベーター点検', '（外す）']);
-    expect(screen.queryByText('保存すると外します')).toBeNull();
+    expect(screen.queryByText(/保存すると外します/)).toBeNull();
     fireEvent.change(typeSelect, { target: { value: 'remove' } });
     expect(onChange).toHaveBeenLastCalledWith([unitOf('u1', [{ ...saved, remove: true }])]);
 
@@ -150,7 +150,7 @@ describe('UnitInspectionEditor (v1 台ごとの保守。2026-10-27 修正依頼1
         onError={vi.fn()}
       />,
     );
-    expect(screen.getByText('保存すると外します')).toBeInTheDocument();
+    expect(screen.getByText('保存すると外します。この行のほかの欄の変更は保存されません')).toBeInTheDocument();
     // 今の種別に戻すと remove のキーごと消える（開いたときと同じ形）
     fireEvent.change(screen.getByLabelText('点検種別'), { target: { value: '' } });
     const last = onChange.mock.lastCall?.[0] as PropertyUnit[];
@@ -184,5 +184,10 @@ describe('UnitInspectionEditor (v1 台ごとの保守。2026-10-27 修正依頼1
     // 選び直して空にすると、何も入っていない行は state から消える
     fireEvent.change(screen.getAllByLabelText('点検種別')[1]!, { target: { value: '' } });
     expect(onChange).toHaveBeenLastCalledWith([unitOf('u1', [saved]), unitOf('u2', [])]);
+  });
+  it('shows 「保守は登録されていません」 instead of a pick row when the unit has no rows and its category has no type', () => {
+    renderEditor([{ ...unitOf('u2', []), category_code: 'escalator', category_label: 'エスカレーター' }]);
+    expect(screen.queryByLabelText('点検種別')).toBeNull();
+    expect(screen.getByText('保守は登録されていません')).toBeInTheDocument();
   });
 });

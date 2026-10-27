@@ -21,13 +21,15 @@ const removeNoteId = (inspectionId: string) => `unit-insp-remove-${inspectionId}
 
 /**
  * 台ごとの保守（業務システムで台を登録した大分類。2026-10-14）。
- * 編集できるのは既にある台の保守だけ（点検種別の追加・外す、保守会社・点検月・検査月）。
+ * 編集できるのは台の保守（点検種別を外す・保守の無い台に1つ足す、保守会社・点検月・検査月）。
  * 台そのもの（追加・削除・保守会社固有コード・設置場所・金額）は業務システムで編集する。
- * 登録済みの行の点検種別は替えられない（替えるときは外して足し直す）。
+ * 登録済みの行の点検種別は替えられない。替えるときは「（外す）」で外して保存し、その台の保守が0件になってから選ぶ行で選び直す
+ * （保守がある台に2つ目の点検種別は足せない）。
  *
  * 2026-10-27 修正依頼1026⑥（業務システムと同じ形）: 『＋ 点検種別』と行の『外す』ボタンは無い。
  * - 外す: 保存済みの行の点検種別の欄で「（外す）」を選ぶ（行に remove が付く）。物件の保存で外す（unitsForSave が除き、差分で deletes になる）
  * - 足す: 保存済みの行が無い台に、点検種別を選ぶ行を1行だけ出す。何か入れるまでは state に入れない（入れた値を全部消したら state からも消す）
+ *   その台の大分類に選べる点検種別が無ければ、選ぶ行の代わりに「保守は登録されていません」（業務システムと同じ）
  */
 // v1: js/admin-masters.js renderPropertyUnitInspections
 export function UnitInspectionEditor({
@@ -98,6 +100,8 @@ export function UnitInspectionEditor({
             );
             // その台の大分類の点検種別だけを選べる
             const options = typeOptions.filter((t) => t.category_code === unit.category_code);
+            // 保守が無く、選べる点検種別も無い台は選ぶ行を出さない
+            const nothingToShow = unit.inspections.length === 0 && options.length === 0;
 
             return (
               <Fragment key={unit.unit_id}>
@@ -108,7 +112,14 @@ export function UnitInspectionEditor({
                     </td>
                   </tr>
                 )}
-                {rows.map((insp, rowIndex) => {
+                {nothingToShow ? (
+                  <tr className="border-b border-gray-100">
+                    {unitCell}
+                    <td colSpan={4} className="cell text-gray-400">
+                      保守は登録されていません
+                    </td>
+                  </tr>
+                ) : rows.map((insp, rowIndex) => {
                     const legacy = [insp.legacy_remarks, insp.legacy_remarks2].filter(Boolean).join(' ／ ');
                     // 一覧に無い保守会社が付いている行は、その会社を選択肢に足して値を保つ
                     const vendorKnown = !insp.vendor_id || vendors.some((v) => v.id === insp.vendor_id);
@@ -143,7 +154,7 @@ export function UnitInspectionEditor({
                               </select>
                               {insp.remove && (
                                 <div id={removeNoteId(insp.inspection_id)} className="text-xs text-red-600">
-                                  保存すると外します
+                                  保存すると外します。この行のほかの欄の変更は保存されません
                                 </div>
                               )}
                               {legacy && (
