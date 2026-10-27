@@ -346,6 +346,8 @@ export function ResubmitForm({
       status={<Badge variant="warning">申請差戻し</Badge>}
       inspectionType={{}}
       showMemo
+      // 表示時間・位置は既定（②上中）と違うときだけ開く（表示時間は申請に入った秒数のまま出す）
+      initiallyOpen={{ layout: form.position !== '2' }}
       header={header}
       footer={
         <div className="flex justify-end gap-2 border-t border-gray-200 pt-2">

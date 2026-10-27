@@ -231,6 +231,8 @@ function PendingEntryEditDialog({
         }}
         registrant={{ email: emailOf(entry.user_id), at: formatJaDateTime(entry.created_at) }}
         showMemo
+        // 申請済みの行は表示期間に日付が入っている（申請日など）ので畳んでおき、注意があるときだけ開く。位置は既定と違うときだけ開く
+        initiallyOpen={{ period: !!warning, layout: initial.position !== '2' }}
         header={
           <dl className="grid grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)] gap-x-2 gap-y-0.5 rounded border border-gray-200 bg-gray-50 px-2 py-1 text-xs">
             <dt className="text-gray-500">物件</dt>

@@ -75,6 +75,11 @@ interface BasicEntryFormProps {
   header?: ReactNode;
   /** 下端のボタン */
   footer: ReactNode;
+  /**
+   * 表示期間・表示時間と位置を最初から開いておくか（省略すると既定と違う値のときだけ開く）。
+   * 申請済みの行は表示期間に日付が入っているので、呼び出し側が決める
+   */
+  initiallyOpen?: { period?: boolean; layout?: boolean };
 }
 
 // 幅を含まない基本の見た目。cn は結合だけなので w-full と w-24 を並べると CSS の並び順で w-full が勝つ（幅は使う側で 1 つだけ付ける）
@@ -107,6 +112,7 @@ export function BasicEntryForm({
   showMemo,
   header,
   footer,
+  initiallyOpen,
 }: BasicEntryFormProps) {
   const uid = useId();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -115,10 +121,14 @@ export function BasicEntryForm({
   const { noticeText, contact, posterImage, extraPosters, position, displayTime } = values;
 
   // 表示期間は既定（空・点検期間のまま）なら畳む
-  const [periodOpen, setPeriodOpen] = useState(() => hasCustomDisplayPeriod({ ...values, startDate, endDate }));
+  const [periodOpen, setPeriodOpen] = useState(
+    () => initiallyOpen?.period ?? hasCustomDisplayPeriod({ ...values, startDate, endDate }),
+  );
   // 表示時間と貼紙表示位置は既定で自動設定される項目なので畳む（修正依頼1025 F7）。既定と違う値なら開いておく
   const [layoutOpen, setLayoutOpen] = useState(
-    () => position !== '2' || (!!values.displayTime && Number(values.displayTime) !== displayTimeDefault),
+    () =>
+      initiallyOpen?.layout ??
+      (position !== '2' || (!!values.displayTime && Number(values.displayTime) !== displayTimeDefault)),
   );
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
