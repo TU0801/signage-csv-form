@@ -349,8 +349,10 @@ export function ResubmitForm({
       // 表示時間・位置は既定（②上中）と違うときだけ開く（表示時間は申請に入った秒数のまま出す）
       initiallyOpen={{ layout: form.position !== '2' }}
       header={header}
+      // ボタンは本文のスクロールの下端に貼り付ける（1366×768 でもスクロールせずに押せるように。Modal は2段上の ApplyModal が持つ）。
+      // -bottom-3 は Modal の本文の下の余白（py-3）の分。0 だと余白の帯に下の本文が透けて見える
       footer={
-        <div className="flex justify-end gap-2 border-t border-gray-200 pt-2">
+        <div className="sticky -bottom-3 z-10 flex justify-end gap-2 border-t border-gray-200 bg-white py-2">
           <Button variant="secondary" size="sm" onClick={onClose} disabled={submitting}>
             キャンセル
           </Button>

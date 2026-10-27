@@ -82,7 +82,7 @@ export function PasteModal({ open, onClose, onImport, onDownloadTemplate }: Past
             Excelでコピーしたデータをそのまま貼り付けるか、Excelファイルを選んでください。
             <br />
             <small className="text-gray-500">
-              ヘッダー行（「物件コード」等）がある場合は自動でスキップされます。開始日・終了日・備考がどれも空の行は取り込みません。
+              ヘッダー行（「物件コード」等）がある場合は自動でスキップされます。開始日・終了日・備考・案内文がどれも空の行は取り込みません。
             </small>
           </p>
           <div className="flex shrink-0 items-center gap-1.5">

@@ -33,6 +33,7 @@ const type = (name: string, templateNo: string, text: string): DbInspectionType 
 const TYPES = [
   type('エレベーター定期点検', 'elevator_inspection', 'エレベーターが止まります。'),
   type('消防設備点検', 'fire_inspection', '火災報知器が鳴ります。'),
+  type('テンプレート無し点検', '', ''),
 ];
 
 function open(over = {}) {
@@ -99,6 +100,16 @@ describe('PendingEntryEditModal（承認待ちの編集を基本フォームで�
       '2026-10-26T00:00:00+00:00',
     );
     expect(onSaved).toHaveBeenCalled();
+  });
+
+  it('テンプレートNoの無い点検種別に変えると保存・承認を止め、点検予定に紐付いた申請は種別が申請時と違うと知らせる', () => {
+    open({ property_inspection_id: '2b84a9bd-b98e-4332-bd19-2973387bc13c' });
+    fireEvent.change(screen.getByLabelText('点検種別'), { target: { value: 'テンプレート無し点検' } });
+    expect(screen.getByText(/申請時の点検種別（エレベーター定期点検）と違います/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '保存して承認' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    expect(api.updatePendingEntry).not.toHaveBeenCalled();
+    expect(toast.addToast).toHaveBeenCalledWith(expect.stringContaining('テンプレートNoがありません'), 'error');
   });
 
   it('「保存して承認」は同じ更新で状態を承認済み（ready）にする（版は開いたときの updated_at）', async () => {

@@ -74,10 +74,11 @@ export function Modal({
     if (e.target instanceof Element && e.target.closest('button')) return; // × は押せるままにする
     e.preventDefault();
     const start = { x: e.clientX - offset.x, y: e.clientY - offset.y };
+    // 枠（見出しから footer のボタンまで）が画面の外へ出ないよう、動かせる量を「画面 − 枠」の半分までに抑える
+    const rect = dialogRef.current?.getBoundingClientRect();
+    const limitX = Math.max(0, (window.innerWidth - (rect?.width ?? 0)) / 2);
+    const limitY = Math.max(0, (window.innerHeight - (rect?.height ?? 0)) / 2);
     const move = (ev: PointerEvent) => {
-      // 見出しが画面の外へ出切らないよう、動かせる量を画面の大きさで抑える
-      const limitX = window.innerWidth / 2;
-      const limitY = window.innerHeight / 2;
       setOffset({
         x: Math.max(-limitX, Math.min(limitX, ev.clientX - start.x)),
         y: Math.max(-limitY, Math.min(limitY, ev.clientY - start.y)),

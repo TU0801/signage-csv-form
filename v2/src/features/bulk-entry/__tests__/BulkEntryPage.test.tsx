@@ -830,6 +830,26 @@ describe('BulkEntryPage (v1 js/bulk.js init / adminVendorSelect)', () => {
       expect(useBulkStore.getState().rows.filter((r) => !r.schedule)).toHaveLength(0);
     });
 
+    it('Excel取込で予定の行に入れるとき、案内文・表示位置の列があればそれも入れる（1027 より前の手の行と同じ）', async () => {
+      portalApi.fetchPortalInspections.mockResolvedValue([
+        makeInspection({ property_code: 'z0009A01', property_name: '紐付けなし物件', inspection_type_label: '消防設備点検' }),
+      ]);
+      renderPage();
+      await waitFor(() => expect(screen.getAllByTestId('target-month')).toHaveLength(2));
+      fireEvent.click(screen.getByRole('button', { name: 'Excelから取込' }));
+      fireEvent.change(screen.getByPlaceholderText('ここにExcelからコピーしたデータを貼り付け...'), {
+        target: {
+          value:
+            '物件名\t点検種別\t開始日\t終了日\t備考\t案内文\t表示位置\n紐付けなし物件\t消防設備点検\t2026/11/10\t2026/11/11\t午前\t取込の案内文\t4',
+        },
+      });
+      fireEvent.click(screen.getByRole('button', { name: '取り込む' }));
+      const nov = rowOf('2026年11月');
+      await waitFor(() => expect(within(nov).getByLabelText('点検開始日')).toHaveValue('2026-11-10'));
+      const row = useBulkStore.getState().rows.find((r) => r.schedule && r.startDate === '2026-11-10')!;
+      expect(row).toMatchObject({ noticeText: '取込の案内文', position: 4 });
+    });
+
     it('完了連絡は確認のうえ記録し、記録があれば点検完了と出す', async () => {
       formApi.markCompleted.mockResolvedValue({});
       renderPage();

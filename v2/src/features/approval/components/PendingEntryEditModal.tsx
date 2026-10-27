@@ -159,6 +159,11 @@ function PendingEntryEditDialog({
       addToast('追加の貼紙画像を選択してください', 'error');
       return;
     }
+    // テンプレートNoの無い点検種別は貼紙を作れない（CSV のテンプレートNoが空になる）ので、保存も承認もさせない
+    if (!templateNo) {
+      addToast(`点検種別「${values.inspectionType}」にテンプレートNoがありません。別の点検種別を選んでください`, 'error');
+      return;
+    }
     const seconds = parseInt(values.displayTime);
     if (!(seconds >= 1 && seconds <= DISPLAY_TIME_MAX)) {
       addToast(`表示時間は1〜${DISPLAY_TIME_MAX}秒で入力してください`, 'error');
@@ -204,6 +209,25 @@ function PendingEntryEditDialog({
       className="max-w-4xl"
       dirty={dirty}
       busy={saving !== null}
+      footer={
+        <>
+          <Button variant="secondary" type="button" onClick={onClose} disabled={saving !== null}>
+            キャンセル
+          </Button>
+          <Button variant="primary" type="button" onClick={() => void save(false)} disabled={busy}>
+            {saving === 'save' ? '保存中...' : '保存'}
+          </Button>
+          <Button
+            variant="success"
+            type="button"
+            onClick={() => void save(true)}
+            disabled={busy || !!approveBlockedReason}
+            title={approveBlockedReason}
+          >
+            {saving === 'approve' ? '承認中...' : '保存して承認'}
+          </Button>
+        </>
+      }
     >
       <BasicEntryForm
         values={values}
@@ -227,7 +251,11 @@ function PendingEntryEditDialog({
         status={<Badge variant="warning">{entryApprovalLabel(entry.status)}</Badge>}
         inspectionType={{
           options: typeOptions,
-          note: entry.property_inspection_id ? '点検予定に紐付いた申請です。点検種別を変えても紐付けは変わりません' : undefined,
+          note: !entry.property_inspection_id
+            ? undefined
+            : values.inspectionType !== initial.inspectionType
+              ? `点検予定に紐付いた申請です。申請時の点検種別（${initial.inspectionType}）と違います。紐付けた点検予定は変わりません`
+              : '点検予定に紐付いた申請です。点検種別を変えても紐付けは変わりません',
         }}
         registrant={{ email: emailOf(entry.user_id), at: formatJaDateTime(entry.created_at) }}
         showMemo
@@ -256,25 +284,8 @@ function PendingEntryEditDialog({
             )}
           </dl>
         }
-        footer={
-          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 pt-2">
-            <Button variant="secondary" type="button" onClick={onClose} disabled={saving !== null}>
-              キャンセル
-            </Button>
-            <Button variant="primary" type="button" onClick={() => void save(false)} disabled={busy}>
-              {saving === 'save' ? '保存中...' : '保存'}
-            </Button>
-            <Button
-              variant="success"
-              type="button"
-              onClick={() => void save(true)}
-              disabled={busy || !!approveBlockedReason}
-              title={approveBlockedReason}
-            >
-              {saving === 'approve' ? '承認中...' : '保存して承認'}
-            </Button>
-          </div>
-        }
+        // ボタンはスクロールしない Modal の footer に置く（1366×768 でもスクロールせずに押せるように）
+        footer={null}
       />
     </Modal>
   );

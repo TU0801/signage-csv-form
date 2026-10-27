@@ -889,6 +889,9 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
         store.changeStartDate(t.id, r.startDate!);
         if (r.endDate) store.updateRow(t.id, { endDate: r.endDate });
         if (r.remarks) store.changeRemarks(t.id, r.remarks);
+        // 案内文・表示位置の列を足した貼り付けでは、手の行と同じくそれも入れる（空・既定の位置2 は予定の行の値のまま）
+        if (r.noticeText) store.updateRow(t.id, { noticeText: r.noticeText });
+        if (r.position !== undefined && r.position !== 2) store.updateRow(t.id, { position: r.position });
       }
       filled++;
     }
@@ -908,8 +911,8 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
     if (blankCount > 0) {
       addToast(
         parsed.length > 0
-          ? `開始日・終了日・備考が空の${blankCount}行は取り込みませんでした`
-          : `取り込む行がありませんでした（開始日・終了日・備考が空の${blankCount}行は取り込みません）`,
+          ? `開始日・終了日・備考・案内文が空の${blankCount}行は取り込みませんでした`
+          : `取り込む行がありませんでした（開始日・終了日・備考・案内文が空の${blankCount}行は取り込みません）`,
         'info',
       );
     }

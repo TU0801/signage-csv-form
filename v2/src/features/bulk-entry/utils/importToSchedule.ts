@@ -6,7 +6,8 @@ import type { BulkEntryRow, BulkRowInput } from '../types';
  * 並べるので、物件・点検種別が同じで、点検開始日の月が対象月の予定の行があれば、手の行を足さずにその行へ日付・備考を入れる。
  * 担当の点検でも物件の紐付け（signage_building_vendors）が無い物件は手の行の物件の候補に無く、手の行では申請できないため。
  * 対象月の行が無ければ点検月未登録（対象月なし）の行。台ごとの行は全部の台に入れる。
- * 申請済み・差戻し中・申請不要（locked）の行には入れない。どれも無ければ空（今までどおり手の行を足す）
+ * 申請済み・申請不要（locked）の行には入れない。『修正』で開いた承認前の申請の行（editEntryId。locked ではない）には入れる
+ * （その行で申請し直すとその申請が直る。外すと同じ点検の手の行が増え、申請が二重になるため）。どれも無ければ空（今までどおり手の行を足す）
  */
 export function scheduleTargetsFor(rows: BulkEntryRow[], input: BulkRowInput): BulkEntryRow[] {
   if (!input.startDate || !input.inspectionType) return [];
