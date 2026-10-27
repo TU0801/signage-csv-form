@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { PropertyInspectionEditor } from '../components/property/PropertyInspectionEditor';
 import { UnitInspectionEditor } from '../components/property/UnitInspectionEditor';
+import { newUnitInspection } from '../lib/propertyForm';
 import type { DbInspectionType, DbVendor } from '@/types/database';
 import type { PropertyUnit } from '@/types/app';
 
@@ -94,66 +95,94 @@ describe('PropertyInspectionEditor pending input', () => {
   });
 });
 
-describe('UnitInspectionEditor (v1 台ごとの保守)', () => {
-  const units: PropertyUnit[] = [
-    {
-      unit_id: 'u1',
-      category_code: 'elevator',
-      category_label: 'エレベーター',
-      unit_code: 'E-1',
-      unit_location: '',
-      unit_remarks: '',
-      unit_remarks2: '',
-      inspections: [
-        {
-          inspection_id: 'ui1',
-          inspection_type_id: 'elev',
-          inspection_type_label: 'エレベーター点検',
-          vendor_id: 'gone',
-          vendor_name: '旧B社',
-          inspection_months: [4],
-          inspected_on: '2026-04-01',
-          legacy_remarks: '',
-          legacy_remarks2: '',
-        },
-        {
-          inspection_type_id: '',
-          inspection_type_label: '',
-          vendor_id: null,
-          vendor_name: '',
-          inspection_months: [],
-          inspected_on: null,
-          legacy_remarks: '',
-          legacy_remarks2: '',
-        },
-      ],
-    },
+describe('UnitInspectionEditor (v1 台ごとの保守。2026-10-27 修正依頼1026⑥ の形)', () => {
+  const saved = {
+    inspection_id: 'ui1',
+    inspection_type_id: 'elev',
+    inspection_type_label: 'エレベーター点検',
+    vendor_id: 'gone',
+    vendor_name: '旧B社',
+    inspection_months: [4],
+    inspected_on: '2026-04-01',
+    legacy_remarks: '',
+    legacy_remarks2: '',
+  };
+  const unitOf = (unit_id: string, inspections: PropertyUnit['inspections']): PropertyUnit => ({
+    unit_id,
+    category_code: 'elevator',
+    category_label: 'エレベーター',
+    unit_code: unit_id === 'u1' ? 'E-1' : 'E-2',
+    unit_location: '',
+    unit_remarks: '',
+    unit_remarks2: '',
+    inspections,
+  });
+  const typeOptions = [
+    { category_code: 'elevator', inspection_type_id: 'elev', inspection_type_label: 'エレベーター点検', sort: 1 },
+    { category_code: 'elevator', inspection_type_id: 'remote', inspection_type_label: 'リモート点検', sort: 2 },
+    { category_code: 'parking', inspection_type_id: 'park', inspection_type_label: '駐車場点検', sort: 3 },
   ];
-
-  it('keeps an unlisted vendor selectable and rejects the same type twice on one unit', () => {
-    const onChange = vi.fn();
-    const onError = vi.fn();
+  const renderEditor = (units: PropertyUnit[], onChange = vi.fn()) =>
     render(
-      <UnitInspectionEditor
-        units={units}
-        onChange={onChange}
-        typeOptions={[
-          { category_code: 'elevator', inspection_type_id: 'elev', inspection_type_label: 'エレベーター点検', sort: 1 },
-          { category_code: 'parking', inspection_type_id: 'park', inspection_type_label: '駐車場点検', sort: 2 },
-        ]}
-        vendors={vendors}
-        onError={onError}
-      />,
+      <UnitInspectionEditor units={units} onChange={onChange} typeOptions={typeOptions} vendors={vendors} onError={vi.fn()} />,
     );
-    const vendorSelects = screen.getAllByLabelText('保守会社') as HTMLSelectElement[];
-    expect(vendorSelects[0]?.value).toBe('gone');
+
+  it('has no 『＋ 点検種別』『外す』 buttons; a saved row offers only its type or （外す）, and （外す） is marked for save', () => {
+    const onChange = vi.fn();
+    const { rerender } = renderEditor([unitOf('u1', [saved])], onChange);
+    expect(screen.queryByRole('button')).toBeNull();
+    // 一覧に無い保守会社も選択肢に残す
+    expect((screen.getByLabelText('保守会社') as HTMLSelectElement).value).toBe('gone');
     expect(screen.getByRole('option', { name: '旧B社' })).toBeInTheDocument();
 
-    // 新しい行の選択肢は台の大分類の種別だけ
     const typeSelect = screen.getByLabelText('点検種別') as HTMLSelectElement;
-    expect(Array.from(typeSelect.options).map((o) => o.value)).toEqual(['', 'elev']);
-    fireEvent.change(typeSelect, { target: { value: 'elev' } });
-    expect(onError).toHaveBeenCalledWith('この台には同じ点検種別が既に登録されています');
-    expect(onChange).not.toHaveBeenCalled();
+    expect(Array.from(typeSelect.options).map((o) => o.text)).toEqual(['エレベーター点検', '（外す）']);
+    expect(screen.queryByText('保存すると外します')).toBeNull();
+    fireEvent.change(typeSelect, { target: { value: 'remove' } });
+    expect(onChange).toHaveBeenLastCalledWith([unitOf('u1', [{ ...saved, remove: true }])]);
+
+    rerender(
+      <UnitInspectionEditor
+        units={[unitOf('u1', [{ ...saved, remove: true }])]}
+        onChange={onChange}
+        typeOptions={typeOptions}
+        vendors={vendors}
+        onError={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('保存すると外します')).toBeInTheDocument();
+    // 今の種別に戻すと remove のキーごと消える（開いたときと同じ形）
+    fireEvent.change(screen.getByLabelText('点検種別'), { target: { value: '' } });
+    const last = onChange.mock.lastCall?.[0] as PropertyUnit[];
+    expect(last[0]?.inspections[0]).toEqual(saved);
+    expect('remove' in (last[0]?.inspections[0] ?? {})).toBe(false);
+  });
+
+  it('shows one row to pick a type on a unit with no saved rows, and keeps it out of state until something is chosen', () => {
+    const onChange = vi.fn();
+    const { rerender } = renderEditor([unitOf('u1', [saved]), unitOf('u2', [])], onChange);
+    const typeSelects = screen.getAllByLabelText('点検種別') as HTMLSelectElement[];
+    expect(typeSelects).toHaveLength(2);
+    // 台の大分類の種別だけ
+    expect(Array.from(typeSelects[1]!.options).map((o) => o.value)).toEqual(['', 'elev', 'remote']);
+    fireEvent.change(typeSelects[1]!, { target: { value: 'remote' } });
+    // 前の『＋ 点検種別』と同じ形の行（newUnitInspection）に種別を入れたもの
+    expect(onChange).toHaveBeenLastCalledWith([
+      unitOf('u1', [saved]),
+      unitOf('u2', [{ ...newUnitInspection(), inspection_type_id: 'remote' }]),
+    ]);
+
+    rerender(
+      <UnitInspectionEditor
+        units={[unitOf('u1', [saved]), unitOf('u2', [{ ...newUnitInspection(), inspection_type_id: 'remote' }])]}
+        onChange={onChange}
+        typeOptions={typeOptions}
+        vendors={vendors}
+        onError={vi.fn()}
+      />,
+    );
+    // 選び直して空にすると、何も入っていない行は state から消える
+    fireEvent.change(screen.getAllByLabelText('点検種別')[1]!, { target: { value: '' } });
+    expect(onChange).toHaveBeenLastCalledWith([unitOf('u1', [saved]), unitOf('u2', [])]);
   });
 });

@@ -22,7 +22,9 @@ const {
   inspectionsChanged,
   propertyListSummary,
   managementCompanyMap,
+  newUnitInspection,
 } = await import('../lib/propertyForm');
+const { diffUnitInspections } = await import('@/lib/api/inspections');
 
 const insp = (over: Partial<UnitInspection> = {}): UnitInspection => ({
   inspection_id: 'ui1',
@@ -111,8 +113,14 @@ describe('property form helpers (v1 js/admin-masters.js)', () => {
   it('validateUnitInspections rejects unselected and duplicated types', () => {
     expect(validateUnitInspections([unit([insp()])])).toBeNull();
     expect(validateUnitInspections([unit([insp(), insp({ inspection_id: undefined, inspection_type_id: '' })])])).toBe(
-      '台ごとの保守に、点検種別を選んでいない行があります（選ぶか、行を外してください）',
+      '台ごとの保守に、点検種別を選んでいない行があります（点検種別を選ぶか、入れた保守会社・点検月・検査月を消してください）',
     );
+    // 何も入っていない未保存の行と「（外す）」を選んだ行は数えない
+    expect(
+      validateUnitInspections([
+        unit([insp({ remove: true }), insp({ inspection_id: undefined, inspection_type_id: '', vendor_id: null, inspection_months: [], inspected_on: null })]),
+      ]),
+    ).toBeNull();
     expect(validateUnitInspections([unit([insp(), insp({ inspection_id: undefined })])])).toBe(
       '台ごとの保守で、同じ台に同じ点検種別が2行あります',
     );
@@ -162,6 +170,27 @@ describe('savePropertyForm (v1 handleMasterFormSubmit)', () => {
     const [, rows, profile] = syncBuildingVendorsFromEquipment.mock.calls[0] as [string, { vendor_id: string }[], unknown];
     expect(rows.map((r) => r.vendor_id)).toEqual(['v2', 'v3']);
     expect(profile).toEqual({ id: 'admin-1' });
+  });
+
+  // 2026-10-27 修正依頼1026⑥: 『外す』『＋ 点検種別』ボタンを無くしても、外す・足すは前と同じ RPC に同じ引数で届く
+  it('sends a row marked （外す） as the same delete the 『外す』 button made, and a row picked on an empty unit as an upsert', async () => {
+    const empty = { ...unit([]), unit_id: 'u2' };
+    const picked = { ...newUnitInspection(), inspection_type_id: 'remote', vendor_id: 'v9' };
+    await savePropertyForm({
+      ...base,
+      originalUnits: [unit([insp()]), empty],
+      units: [unit([insp({ remove: true, vendor_id: 'v3' })]), { ...empty, inspections: [picked] }],
+    });
+    // 前の『外す』（行を消す）と『＋ 点検種別』（newUnitInspection の行を足して種別を選ぶ）の差分
+    const before = diffUnitInspections([unit([insp()]), empty], [unit([]), { ...empty, inspections: [picked] }]);
+    expect(before).toEqual({
+      upserts: [{ unit_id: 'u2', inspection_type_id: 'remote', vendor_id: 'v9', inspection_months: [], inspected_on: null }],
+      deletes: [{ inspection_id: 'ui1' }],
+    });
+    expect(saveUnitInspectionsToBiz).toHaveBeenCalledWith(before, undefined);
+    // 外す行の保守会社は紐付け管理に足さない
+    const [, rows] = syncBuildingVendorsFromEquipment.mock.calls[0] as [string, { vendor_id: string }[]];
+    expect(rows.map((r) => r.vendor_id)).toEqual(['v2', 'v9']);
   });
 
   it('keeps going after biz failures and returns their messages', async () => {

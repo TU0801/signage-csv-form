@@ -36,6 +36,11 @@ export interface UnitInspection {
   inspected_on: string | null;
   legacy_remarks: string;
   legacy_remarks2: string;
+  /**
+   * 画面だけの印（DB には無い）。保存済みの行の点検種別の欄で「（外す）」を選んだ。物件の保存で外す（2026-10-27 修正依頼1026⑥）。
+   * 今の種別に戻したらキーごと消す（開いたときと同じ形に戻して「変更あり」を下ろす）
+   */
+  remove?: true;
 }
 
 /** 台（v1 overlayUnitInspections の prop.units の1要素） */
