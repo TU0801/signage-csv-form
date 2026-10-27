@@ -811,6 +811,25 @@ describe('BulkEntryPage (v1 js/bulk.js init / adminVendorSelect)', () => {
       expect(saver.saveAs.mock.calls[0]![1]).toBe('20261021_A社略_一括点検日入力テンプレート.xlsx');
     });
 
+    it('Excel取込は、物件・点検種別・対象月が合う点検予定の行に入れる（紐付けの無い物件でも。修正依頼1027 (2)）', async () => {
+      portalApi.fetchPortalInspections.mockResolvedValue([
+        makeInspection({ property_code: 'z0009A01', property_name: '紐付けなし物件', inspection_type_label: '消防設備点検' }),
+      ]);
+      renderPage();
+      await waitFor(() => expect(screen.getAllByTestId('target-month')).toHaveLength(2));
+      fireEvent.click(screen.getByRole('button', { name: 'Excelから取込' }));
+      fireEvent.change(screen.getByPlaceholderText('ここにExcelからコピーしたデータを貼り付け...'), {
+        target: { value: '物件名\t点検種別\t開始日\t終了日\t備考\n紐付けなし物件\t消防設備点検\t2026/11/10\t2026/11/11\t午前' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: '取り込む' }));
+      const nov = rowOf('2026年11月');
+      await waitFor(() => expect(within(nov).getByLabelText('点検開始日')).toHaveValue('2026-11-10'));
+      expect(within(nov).getByLabelText('点検終了日')).toHaveValue('2026-11-11');
+      expect(within(nov).getByLabelText('備考')).toHaveValue('午前');
+      // 手の行は足さない
+      expect(useBulkStore.getState().rows.filter((r) => !r.schedule)).toHaveLength(0);
+    });
+
     it('完了連絡は確認のうえ記録し、記録があれば点検完了と出す', async () => {
       formApi.markCompleted.mockResolvedValue({});
       renderPage();

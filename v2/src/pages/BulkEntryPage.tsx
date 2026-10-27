@@ -23,6 +23,7 @@ import { SaveTemplateModal } from '@/features/bulk-entry/modals/SaveTemplateModa
 import { ManageTemplateModal } from '@/features/bulk-entry/modals/ManageTemplateModal';
 import { BulkApplyModal } from '@/features/bulk-entry/modals/BulkApplyModal';
 import { parseExcelPaste } from '@/features/bulk-entry/utils/parseExcelPaste';
+import { scheduleTargetsFor } from '@/features/bulk-entry/utils/importToSchedule';
 import { buildTemplateRows, downloadTemplateXlsx, templateFilename } from '@/features/bulk-entry/utils/bulkTemplateXlsx';
 import {
   buildFilterOptions,
@@ -869,13 +870,37 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       addToast('データを入力してください', 'error');
       return false;
     }
-    const { rows: parsed, unresolvedCount, unresolvedNames, errorCount, blankCount } = parseExcelPaste(
-      raw,
-      useBulkStore.getState().masterData.properties,
-    );
-    parsed.forEach((r) => addRow(r));
+    const { rows: parsed, errorCount, blankCount } = parseExcelPaste(raw, useBulkStore.getState().masterData.properties);
+    // 物件・点検種別・対象月が合う点検予定の行があれば、その行に日付・備考を入れる（修正依頼1027 (2)。テンプレートの行は
+    // 担当の点検なので、紐付けの無い物件でも予定の行で申請できる）。無ければ今までどおり手の行を足す
+    let filled = 0;
+    const added: typeof parsed = [];
+    for (const r of parsed) {
+      const store = useBulkStore.getState();
+      const targets = scheduleTargetsFor(store.rows, r);
+      if (targets.length === 0) {
+        added.push(r);
+        continue;
+      }
+      for (const t of targets) {
+        store.changeStartDate(t.id, r.startDate!);
+        if (r.endDate) store.updateRow(t.id, { endDate: r.endDate });
+        if (r.remarks) store.changeRemarks(t.id, r.remarks);
+      }
+      filled++;
+    }
+    added.forEach((r) => addRow(r));
+    const unresolvedNames = [...new Set(added.filter((r) => r.pastedPropertyName).map((r) => r.pastedPropertyName!))];
+    const unresolvedCount = added.filter((r) => r.pastedPropertyName).length;
     setShowPaste(false);
-    if (parsed.length > 0) addToast(`${parsed.length}件のデータを取り込みました`, 'success');
+    if (parsed.length > 0) {
+      addToast(
+        filled > 0
+          ? `${parsed.length}件のデータを取り込みました（点検予定の行に${filled}件・追加した行${added.length}件）`
+          : `${parsed.length}件のデータを取り込みました`,
+        'success',
+      );
+    }
     // テンプレートで日付を入れなかった物件の行（修正依頼1027 (2)）
     if (blankCount > 0) {
       addToast(
