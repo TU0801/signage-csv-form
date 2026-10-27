@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, cleanup } from '@testing-library/react';
 import { makeEntry } from '@/features/entries-list/__tests__/fixtures';
 
 const auth = vi.hoisted(() => ({ state: { profile: null as { role: string } | null } }));
@@ -26,13 +26,20 @@ vi.mock('@/lib/api/property-requests', () => ({
 }));
 vi.mock('../hooks/useRefetchOnVisible', () => ({ useRefetchOnVisible: () => {} }));
 vi.mock('@/features/entries-list/hooks/useEntryLookups', () => ({
-  useEntryLookups: () => ({ propertyNames: new Map(), emailOf: () => '-', displayDefault: undefined }),
+  useEntryLookups: () => ({
+    propertyNames: new Map(),
+    emailOf: () => '-',
+    displayDefault: undefined,
+    inspectionTypes: [],
+    templateImages: [],
+    vendors: [],
+  }),
 }));
 vi.mock('@/components/ui/Toast', () => ({ useToast: () => ({ addToast: vi.fn() }) }));
 vi.mock('@/components/ui/ConfirmDialog', () => ({ ConfirmDialog: () => null }));
 vi.mock('@/features/inspection-portal/components/SendBackDialog', () => ({ SendBackDialog: () => null }));
 vi.mock('../components/EntryDetailModal', () => ({ EntryDetailModal: () => null }));
-vi.mock('@/features/entries-list/components/EntryEditModal', () => ({ EntryEditModal: () => null }));
+vi.mock('../components/PendingEntryEditModal', () => ({ PendingEntryEditModal: () => null }));
 vi.mock('@/lib/api/portal', () => ({
   fetchPortalInspectionUnits: async () => [
     { inspection_id: 'i1', unit_id: 'u1', unit_code: 'No1', unit_sort: 1, maintainer_id: null, inspection_months: [], inspected_on: null, equipment_code: null },
@@ -80,6 +87,23 @@ describe('PendingEntriesList の号機（修正依頼1026 I7）', () => {
     expect(await screen.findByText('No2')).toBeInTheDocument();
     expect(screen.getAllByTestId('unit-code')).toHaveLength(1);
     pending.extra = [];
+    auth.state.profile = null;
+  });
+});
+
+describe('PendingEntriesList の列と操作（修正依頼1027(3) 決定③）', () => {
+  it('『表示期間』の列を出さない。管理者は『詳細』を出さず『編集』だけ、管理会社は編集できないので『詳細』を残す', () => {
+    auth.state.profile = { role: 'admin' };
+    render(<PendingEntriesList />);
+    expect(screen.queryByRole('columnheader', { name: '表示期間' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '詳細' })).toBeNull();
+    expect(screen.getByRole('button', { name: '編集' })).toBeInTheDocument();
+    cleanup();
+
+    auth.state.profile = { role: 'management' };
+    render(<PendingEntriesList />);
+    expect(screen.getByRole('button', { name: '詳細' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '編集' })).toBeNull();
     auth.state.profile = null;
   });
 });

@@ -17,8 +17,9 @@ interface PendingEntryRowProps {
   onApprove: (id: string) => void;
   /** 却下（削除）。管理会社には渡さない（削除できないため） */
   onReject?: (id: string) => void;
-  onViewDetail: (entry: DbEntry) => void;
-  /** 編集。管理会社には渡さない（申請の内容を直接は変えられないため） */
+  /** 詳細。管理者には渡さない（編集の基本フォームで内容を見る。修正依頼1027(3) 決定③）。管理会社は編集できないので詳細で見る */
+  onViewDetail?: (entry: DbEntry) => void;
+  /** 編集（基本フォーム）。管理会社には渡さない（申請の内容を直接は変えられないため） */
   onEdit?: (entry: DbEntry) => void;
   /** 差戻し（管理会社） */
   onSendBack?: (entry: DbEntry) => void;
@@ -106,15 +107,19 @@ export function PendingEntryRow({
         </div>
       </td>
       <td className={nowrap}>{formatJaDate(entry.inspection_start)}</td>
-      <td className={nowrap}>{formatJaDate(entry.inspection_end)}</td>
-      {/* 表示期間（掲出日）。終了が開始より前・すでに過ぎているものは承認前に気づけるよう赤くする */}
-      <td
-        className={periodWarning ? `${nowrap} font-medium text-red-600` : nowrap}
-        title={periodWarning ?? undefined}
-      >
-        {formatJaDate(entry.display_start_date)}〜{formatJaDate(entry.display_end_date)}
-        {/* 理由は2行目に短く出す（1行に並べると列が広がり、ほかの列が横スクロールに押し出される）。全文は title */}
-        {periodWarning && <div className="text-xs">{periodWarningShort(periodWarning)}</div>}
+      <td className={nowrap}>
+        {formatJaDate(entry.inspection_end)}
+        {/* 表示期間の列は出さない（修正依頼1027(3)。内容は編集・詳細で見る）。終了が開始より前・すでに過ぎているものは承認前に気づけるよう
+            ここに短く出す（全文と表示期間は title） */}
+        {periodWarning && (
+          <div
+            className="text-xs font-medium text-red-600"
+            title={`表示期間 ${formatJaDate(entry.display_start_date)}〜${formatJaDate(entry.display_end_date)}: ${periodWarning}`}
+            data-testid="period-warning"
+          >
+            表示期間: {periodWarningShort(periodWarning)}
+          </div>
+        )}
       </td>
       <td className={td}>
         {entry.remarks ? (
@@ -139,9 +144,11 @@ export function PendingEntryRow({
       <td className={actions}>
         {/* ボタン（28px）は上下 2px をセルの余白に重ねて、行の高さを 33px に抑える */}
         <div className="-my-0.5 flex items-center gap-1">
-          <Button size="sm" variant="ghost" onClick={() => onViewDetail(entry)}>
-            詳細
-          </Button>
+          {onViewDetail && (
+            <Button size="sm" variant="ghost" onClick={() => onViewDetail(entry)}>
+              詳細
+            </Button>
+          )}
           {onEdit && (
             <Button size="sm" variant="ghost" onClick={() => onEdit(entry)}>
               編集

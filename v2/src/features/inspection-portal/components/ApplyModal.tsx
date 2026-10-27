@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -24,14 +24,12 @@ import {
   initialApplyValues,
   startOutsideTargetMonth,
   terminalOptions,
-  toResubmitPatch,
-  valuesFromDbEntry,
   withEndDate,
   withStartDate,
   type ApplyContext,
   type ApplyValues,
 } from '../lib/applyForm';
-import { fetchEntryForEdit, resubmitEntry } from '../lib/entryApi';
+import { ResubmitForm } from './ResubmitForm';
 import { formatMonth, monthOf, todayJst } from '../lib/schedule';
 
 /** 申請を開く対象（点検一覧の1行） */
@@ -77,7 +75,14 @@ export function ApplyModal({ target, onClose, onApplied, userId, isAdmin, profil
   };
 
   return (
-    <Modal open={!!target} onClose={close} title={title} className="max-w-2xl" dirty={dirty}>
+    <Modal
+      open={!!target}
+      onClose={close}
+      title={title}
+      // 差戻しの修正は基本フォーム（プレビュー付き）なので広く取る
+      className={target?.resubmit && (target.resubmit.is_mine || isAdmin) ? 'max-w-4xl' : 'max-w-2xl'}
+      dirty={dirty}
+    >
       {target && !ready && (
         <div className="flex justify-center py-6">
           <Spinner />
@@ -154,35 +159,12 @@ function ApplyForm({
     // 物件マスタで引けない点検物件は RPC の端末 ID の先頭
     return ctx.property ? initial : { ...initial, terminalId: normalizeTerminalId(inspection.terminal_ids[0] ?? '') };
   });
-  const [loadingEntry, setLoadingEntry] = useState(!!resubmit);
-  // 再申請では保守会社名を書き換えない（toResubmitPatch）ので、表示も元の申請の保守会社名にする
-  const [existingVendorName, setExistingVendorName] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   // 他の方が作った差戻しは直せない（RLS）ので、新しい申請として出す
   const canEditExisting = !!resubmit && (resubmit.is_mine || isAdmin);
-  // 追加貼紙（1件入力・一括入力で画像を付けた申請）の差戻し。このモーダルは貼紙を選べないので、貼紙は元の追加画像のまま出す
+  // 追加貼紙（1件入力・一括入力で画像を付けた申請）の差戻しを新しい申請として出すとき、貼紙は元の追加画像のまま出す
   const customPoster = resubmit?.poster_type === 'custom' ? resubmit : null;
   const customPosterUrl = safePosterUrl(customPoster?.poster_image);
-
-  useEffect(() => {
-    if (!resubmit || !canEditExisting) return;
-    let cancelled = false;
-    fetchEntryForEdit(resubmit.id)
-      .then((row) => {
-        if (cancelled) return;
-        setValues(valuesFromDbEntry(row, defaultMonth));
-        setExistingVendorName(row.vendor_name ?? '');
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) addToast(`申請を読み込めませんでした: ${errorMessage(err)}`, 'error');
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingEntry(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [resubmit, canEditExisting, defaultMonth, addToast]);
 
   const update = (next: ApplyValues) => {
     setValues(next);
@@ -191,6 +173,24 @@ function ApplyForm({
 
   // 物件マスタで引けない（保守会社の担当物件表に無い）点検物件は、RPC が返す端末 ID を使う
   const terminals = ctx.property ? terminalOptions(ctx.property) : inspection.terminal_ids.map(normalizeTerminalId).filter(Boolean);
+  // 自分の（管理者は誰のでも）差戻しを直すときは、一括入力の詳細設定と同じ基本フォーム（修正依頼1027(3) 決定③）
+  if (resubmit && canEditExisting) {
+    return (
+      <ResubmitForm
+        resubmit={resubmit}
+        targetMonth={target.targetMonth}
+        ctx={ctx}
+        master={master}
+        settings={settings}
+        terminals={terminals}
+        userId={userId}
+        onClose={onClose}
+        onApplied={onApplied}
+        onDirty={onDirty}
+      />
+    );
+  }
+
   const notice = noticeUsage(values.noticeText, settings);
   const remarks = remarksUsage(values.remarks, settings);
   // 目安を超えたら欄の下に注意（申請は止めない。1件入力・一括入力と同じ。修正依頼1026 I8）
@@ -210,28 +210,19 @@ function ApplyForm({
     }
     setSubmitting(true);
     try {
-      if (resubmit && canEditExisting) {
-        // 直せる欄だけを書き換える（貼紙・保守会社などは元の申請のまま）
-        await resubmitEntry(
-          resubmit.id,
-          toResubmitPatch(result.row, { terminal: terminals.length > 1, targetMonth: !target.targetMonth }),
-        );
-        addToast('再申請しました', 'success');
-      } else {
-        // 他の方の追加貼紙の差戻しを新しい申請として出すときも、貼紙は元の追加画像を使う
-        await insertEntries([
-          customPoster
-            ? {
-                ...result.row,
-                poster_type: 'custom',
-                poster_image: customPoster.poster_image,
-                template_no: customPoster.template_no ?? '',
-                inspection_type: customPoster.inspection_type,
-              }
-            : result.row,
-        ]);
-        addToast('申請しました', 'success');
-      }
+      // 他の方の追加貼紙の差戻しを新しい申請として出すときも、貼紙は元の追加画像を使う
+      await insertEntries([
+        customPoster
+          ? {
+              ...result.row,
+              poster_type: 'custom',
+              poster_image: customPoster.poster_image,
+              template_no: customPoster.template_no ?? '',
+              inspection_type: customPoster.inspection_type,
+            }
+          : result.row,
+      ]);
+      addToast('申請しました', 'success');
       onApplied();
       onClose();
     } catch (err) {
@@ -241,14 +232,6 @@ function ApplyForm({
       setSubmitting(false);
     }
   };
-
-  if (loadingEntry && canEditExisting) {
-    return (
-      <div className="flex justify-center py-6">
-        <Spinner />
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-2 text-sm">
@@ -260,7 +243,7 @@ function ApplyForm({
         <dt className="text-gray-500">点検種別</dt>
         <dd>{inspection.inspection_type_label ?? '（未設定）'}</dd>
         <dt className="text-gray-500">保守会社</dt>
-        <dd>{(existingVendorName ?? ctx.vendor?.vendor_name) || <span className="text-red-600">未設定</span>}</dd>
+        <dd>{ctx.vendor?.vendor_name || <span className="text-red-600">未設定</span>}</dd>
         {customPoster ? (
           <>
             <dt className="text-gray-500">貼紙</dt>
@@ -393,7 +376,7 @@ function ApplyForm({
           キャンセル
         </Button>
         <Button size="sm" onClick={handleSubmit} disabled={submitting}>
-          {submitting ? '送信中…' : canEditExisting ? '再申請する' : '申請する'}
+          {submitting ? '送信中…' : '申請する'}
         </Button>
       </div>
     </div>
