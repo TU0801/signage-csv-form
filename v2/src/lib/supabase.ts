@@ -123,6 +123,8 @@ export const RPC = {
   portalPropertyFileTargets: 'portal_property_file_targets',
   ocrRecordCorrections: 'ocr_record_corrections',
   ocrCorrectionDictionary: 'ocr_correction_dictionary',
+  /** 一括入力テンプレートの保守会社の略称と、点検種別の並び（業務システムの設備の並び。修正依頼1027 (2)。scripts/fix-1027-bulk.sql） */
+  bulkTemplateInfo: 'bulk_template_info',
 } as const;
 
 /** Storage のバケット */
