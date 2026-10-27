@@ -144,10 +144,24 @@ describe('PropertiesMaster', () => {
   });
 
 
+  // 修正依頼1027(7): 『物件コード』→『マンションコード』、『マンションコード（補助）』（業務システムの en_no）を一覧と編集に出す
+  it('shows マンションコード and its 補助 in the list and the edit form', () => {
+    data.properties = [{ ...property, en_no: '0023' }];
+    render(<PropertiesMaster />);
+    expect(screen.getByRole('columnheader', { name: 'マンションコード' })).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'マンションコード（補助）' })).toBeTruthy();
+    expect(screen.queryByRole('columnheader', { name: '物件コード' })).toBeNull();
+    expect(screen.getByText('0023')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '編集' }));
+    const sub = screen.getByLabelText('マンションコード（補助）') as HTMLInputElement;
+    expect(sub.value).toBe('0023');
+    expect(sub.readOnly).toBe(true);
+  });
+
   it('opens 編集 with read-only code, name and terminals', () => {
     render(<PropertiesMaster />);
     fireEvent.click(screen.getByRole('button', { name: '編集' }));
-    const code = screen.getByLabelText('物件コード') as HTMLInputElement;
+    const code = screen.getByLabelText('マンションコード') as HTMLInputElement;
     const name = screen.getByLabelText('物件名') as HTMLInputElement;
     expect(code.value).toBe('z0023A01');
     expect(code.readOnly).toBe(true);

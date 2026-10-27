@@ -7,6 +7,12 @@ import type { PropertyInspection } from '@/types/app';
 import { MonthCheckboxes } from './MonthCheckboxes';
 import { sortVendors } from '@/lib/vendorOptions';
 import { formatInspectedOn } from '@/features/bulk-entry/utils/scheduleRows';
+import {
+  billingMonthsLabel,
+  DEFAULT_INTERVAL_MONTHS,
+  defaultNotifyFor,
+  parseIntervalMonths,
+} from '@/lib/inspectionSchedule';
 
 interface PropertyInspectionEditorProps {
   value: PropertyInspection[];
@@ -31,6 +37,13 @@ interface RowForm {
   remarks2: string;
   /** 検査月の入力欄の値（YYYY-MM。空は未登録） */
   inspected_on: string;
+  /** 点検日連絡。null は「触っていない」（追加は種別の名前で決める既定、編集は元の行の値） */
+  notify: boolean | null;
+  /** インターバルの入力欄の値（か月。空は未入力） */
+  interval: string;
+  billing_months: number[];
+  /** 編集中の行の3項目が読めていない（入力欄を止め、保存で送らない） */
+  scheduleUnread: boolean;
 }
 
 const EMPTY_FORM: RowForm = {
@@ -40,7 +53,12 @@ const EMPTY_FORM: RowForm = {
   remarks: '',
   remarks2: '',
   inspected_on: '',
+  notify: null,
+  interval: String(DEFAULT_INTERVAL_MONTHS),
+  billing_months: [],
+  scheduleUnread: false,
 };
+const UNREAD_TITLE = '点検日連絡・インターバル・請求月を読み込めなかったため、ここでは変更できません（業務システムで変更してください）';
 
 /** 入力欄に表へ入れていない値があるか（編集中の行、または何か1つでも入れた追加欄） */
 function hasPendingRow(form: RowForm, editingIndex: number | null): boolean {
@@ -51,7 +69,10 @@ function hasPendingRow(form: RowForm, editingIndex: number | null): boolean {
     form.inspection_months.length > 0 ||
     !!form.remarks ||
     !!form.remarks2 ||
-    !!form.inspected_on
+    !!form.inspected_on ||
+    form.notify !== null ||
+    form.interval !== String(DEFAULT_INTERVAL_MONTHS) ||
+    form.billing_months.length > 0
   );
 }
 
@@ -107,6 +128,10 @@ export function PropertyInspectionEditor({
       remarks: row.remarks ?? '',
       remarks2: row.remarks2 ?? '',
       inspected_on: row.inspected_on ? String(row.inspected_on).slice(0, 7) : '',
+      notify: row.notify_inspection_date ?? null,
+      interval: row.interval_months == null ? '' : String(row.interval_months),
+      billing_months: Array.isArray(row.billing_months) ? row.billing_months.map(Number) : [],
+      scheduleUnread: row.notify_inspection_date === undefined,
     });
   };
 
@@ -131,7 +156,21 @@ export function PropertyInspectionEditor({
     // 検査月は月初の日付で持つ（DB と同じ形）。空欄のままで、元の行の検査月が読めていない（undefined）ときは undefined のまま
     // （保存で送らない。空欄を「消す」にすると、読めなかっただけの値を消してしまう）
     const previous = editingIndex !== null ? value[editingIndex]?.inspected_on : null;
+    const interval = parseIntervalMonths(form.interval);
+    if (interval.error) {
+      onError(interval.error);
+      return;
+    }
+    // 点検日連絡・インターバル・請求月（修正依頼1027(7)）。編集中の行で読めていなければ持たない（保存で送らない）
+    const schedule = form.scheduleUnread
+      ? {}
+      : {
+          notify_inspection_date: form.notify ?? defaultNotifyFor(typeName(form.inspection_type_id)),
+          interval_months: interval.value,
+          billing_months: form.billing_months,
+        };
     const row: PropertyInspection = {
+      ...schedule,
       inspection_type_id: form.inspection_type_id,
       vendor_id: form.vendor_id || null,
       inspection_months: form.inspection_months,
@@ -176,14 +215,27 @@ export function PropertyInspectionEditor({
                   key={row.inspection_type_id || index}
                   className={cn('border-b border-gray-100', index === editingIndex && 'bg-amber-50')}
                 >
-                  <td className="cell">{typeName(row.inspection_type_id)}</td>
+                  <td className="cell">
+                    {typeName(row.inspection_type_id)}
+                    {row.notify_inspection_date === false && (
+                      <div className="text-[11px] text-amber-700">点検日連絡なし（報告書のみ）</div>
+                    )}
+                  </td>
                   <td className="cell">{vendorName(row.vendor_id)}</td>
                   <td className="cell">
                     {row.inspection_months.length
                       ? row.inspection_months.map((m) => `${m}月`).join(', ')
                       : '-'}
+                    {row.billing_months !== undefined && (
+                      <div className="text-[11px] text-gray-500">請求月: {billingMonthsLabel(row.billing_months)}</div>
+                    )}
                   </td>
-                  <td className="cell whitespace-nowrap tabular-nums">{formatInspectedOn(row.inspected_on)}</td>
+                  <td className="cell whitespace-nowrap tabular-nums">
+                    {formatInspectedOn(row.inspected_on)}
+                    {row.interval_months != null && (
+                      <div className="text-[11px] text-gray-500">インターバル {row.interval_months}か月</div>
+                    )}
+                  </td>
                   <td className="cell">{row.remarks}</td>
                   <td className="cell">{row.remarks2}</td>
                   <td className="cell">
@@ -226,6 +278,19 @@ export function PropertyInspectionEditor({
                 </option>
               ))}
             </select>
+            <label
+              className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-gray-700"
+              title={form.scheduleUnread ? UNREAD_TITLE : '設備点検管理システムで点検日を連絡（申請）する点検か。外すと申請不要（報告書のみ）。リモート点検・警備は既定で外れます'}
+            >
+              <input
+                type="checkbox"
+                className="h-3.5 w-3.5"
+                checked={form.notify ?? defaultNotifyFor(typeName(form.inspection_type_id))}
+                disabled={form.scheduleUnread}
+                onChange={(e) => setForm({ ...form, notify: e.target.checked })}
+              />
+              点検日連絡
+            </label>
           </div>
           <div className="space-y-0.5">
             <label htmlFor="prop-equipment-vendor" className={labelClass}>
@@ -252,6 +317,17 @@ export function PropertyInspectionEditor({
               onChange={(months) => setForm({ ...form, inspection_months: months })}
               suffix="月"
             />
+            <span className={labelClass}>
+              請求月 <span className="font-normal text-gray-400">空は毎月</span>
+            </span>
+            <fieldset disabled={form.scheduleUnread} title={form.scheduleUnread ? UNREAD_TITLE : undefined}>
+              <MonthCheckboxes
+                label="請求月"
+                value={form.billing_months}
+                onChange={(months) => setForm({ ...form, billing_months: months })}
+                suffix="月"
+              />
+            </fieldset>
           </div>
         </div>
         <div className="grid gap-x-3 gap-y-2 sm:grid-cols-[auto_1fr_1fr_auto] sm:items-end">
@@ -266,6 +342,23 @@ export function PropertyInspectionEditor({
               value={form.inspected_on}
               onChange={(e) => setForm({ ...form, inspected_on: e.target.value })}
             />
+            <label className="mt-0.5 flex items-center gap-1 whitespace-nowrap text-[11px] font-medium text-gray-600">
+              インターバル
+              <input
+                type="number"
+                min={1}
+                max={120}
+                step={1}
+                aria-label="インターバル（か月）"
+                className="w-14 rounded-md border border-gray-300 px-1 py-0.5 text-right text-sm"
+                placeholder={String(DEFAULT_INTERVAL_MONTHS)}
+                value={form.interval}
+                disabled={form.scheduleUnread}
+                title={form.scheduleUnread ? UNREAD_TITLE : undefined}
+                onChange={(e) => setForm({ ...form, interval: e.target.value })}
+              />
+              か月
+            </label>
           </div>
           <Input
             label="備考"

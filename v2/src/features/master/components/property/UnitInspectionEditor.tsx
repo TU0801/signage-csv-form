@@ -4,6 +4,7 @@ import type { PropertyUnit, UnitInspection, UnitInspectionTypeOption } from '@/t
 import { isBlankUnitInspection, newUnitInspection } from '../../lib/propertyForm';
 import { MonthCheckboxes } from './MonthCheckboxes';
 import { sortVendors } from '@/lib/vendorOptions';
+import { DEFAULT_INTERVAL_MONTHS, defaultNotifyFor, parseIntervalMonths } from '@/lib/inspectionSchedule';
 
 interface UnitInspectionEditorProps {
   units: PropertyUnit[];
@@ -15,13 +16,28 @@ interface UnitInspectionEditorProps {
 }
 
 const selectClass = 'block w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm';
+const subLabelClass = 'mt-1 flex items-center gap-1 whitespace-nowrap text-[11px] font-medium text-gray-600';
+const UNREAD_TITLE = '点検日連絡・インターバル・請求月を読み込めなかったため、ここでは変更できません（業務システムで変更してください）';
+
+/**
+ * 新しい行は、点検日連絡・インターバルが既定（種別の名前で決まる・12か月）と同じなら値を持たない（触っていない扱い）。
+ * 持たせると、保守の無い台の選ぶ行が開いただけで「入力あり」になり、保存が「点検種別を選んでいない行」で止まる
+ */
+function dropDefaults(row: UnitInspection): UnitInspection {
+  if (row.inspection_id) return row;
+  const next = { ...row };
+  if (next.notify_inspection_date === defaultNotifyFor(next.inspection_type_label)) delete next.notify_inspection_date;
+  if (next.interval_months === DEFAULT_INTERVAL_MONTHS) delete next.interval_months;
+  return next;
+}
 
 /** 「保存すると外します」の注記の id（点検種別の欄の aria-describedby） */
 const removeNoteId = (inspectionId: string) => `unit-insp-remove-${inspectionId}`;
 
 /**
  * 台ごとの保守（業務システムで台を登録した大分類。2026-10-14）。
- * 編集できるのは台の保守（点検種別を外す・保守の無い台に1つ足す、保守会社・点検月・検査月）。
+ * 編集できるのは台の保守（点検種別を外す・保守の無い台に1つ足す、保守会社・点検月・検査月・点検日連絡・インターバル・請求月）。
+ * 2026-10-27 修正依頼1027(7): 業務システムの「サイネージを編集」と同じ並び（点検種別の下に点検日連絡、点検月の下に請求月、検査月の下にインターバル）。
  * 台そのもの（追加・削除・保守会社固有コード・設置場所・金額）は業務システムで編集する。
  * 登録済みの行の点検種別は替えられない。替えるときは「（外す）」で外して保存し、その台の保守が0件になってから選ぶ行で選び直す
  * （保守がある台に2つ目の点検種別は足せない）。
@@ -52,7 +68,7 @@ export function UnitInspectionEditor({
     updateUnit(
       unitIndex,
       rowsOf(unit)
-        .map((r, j) => (j === rowIndex ? row : r))
+        .map((r, j) => (j === rowIndex ? dropDefaults(row) : r))
         .filter((r) => !isBlankUnitInspection(r)),
     );
   };
@@ -123,6 +139,18 @@ export function UnitInspectionEditor({
                     const legacy = [insp.legacy_remarks, insp.legacy_remarks2].filter(Boolean).join(' ／ ');
                     // 一覧に無い保守会社が付いている行は、その会社を選択肢に足して値を保つ
                     const vendorKnown = !insp.vendor_id || vendors.some((v) => v.id === insp.vendor_id);
+                    // 保存済みの行で3項目が読めていなければ触らせない（送らないので、変えても保存されない）
+                    const scheduleUnread = !!insp.inspection_id && insp.notify_inspection_date === undefined;
+                    const notify = insp.notify_inspection_date ?? defaultNotifyFor(insp.inspection_type_label);
+                    // 新しい行は既定 12（触るまで値を持たない）。保存済みで未入力の行は空のまま（placeholder 12）
+                    const interval =
+                      insp.interval_months === undefined
+                        ? insp.inspection_id
+                          ? ''
+                          : String(DEFAULT_INTERVAL_MONTHS)
+                        : insp.interval_months === null
+                          ? ''
+                          : String(insp.interval_months);
                     return (
                       <tr
                         key={insp.inspection_id ?? `new-${rowIndex}`}
@@ -173,7 +201,11 @@ export function UnitInspectionEditor({
                                   onError('この台には同じ点検種別が既に登録されています');
                                   return;
                                 }
-                                updateRow(unitIndex, rowIndex, { inspection_type_id: v });
+                                // 名前も持つ（点検日連絡の既定を種別の名前で決める。業務システムと同じ）
+                                updateRow(unitIndex, rowIndex, {
+                                  inspection_type_id: v,
+                                  inspection_type_label: options.find((t) => t.inspection_type_id === v)?.inspection_type_label ?? '',
+                                });
                               }}
                             >
                               <option value="">選択...</option>
@@ -183,6 +215,20 @@ export function UnitInspectionEditor({
                                 </option>
                               ))}
                             </select>
+                          )}
+                          {!insp.remove && (
+                            <label className={subLabelClass} title={scheduleUnread ? UNREAD_TITLE : '設備点検管理システムで点検日を連絡（申請）する点検か。外すと申請不要（報告書のみ）。リモート点検・警備は既定で外れます'}>
+                              <input
+                                type="checkbox"
+                                className="h-3.5 w-3.5"
+                                checked={notify}
+                                disabled={scheduleUnread}
+                                onChange={(e) =>
+                                  updateRow(unitIndex, rowIndex, { notify_inspection_date: e.target.checked })
+                                }
+                              />
+                              点検日連絡
+                            </label>
                           )}
                         </td>
                         <td className="cell min-w-[10rem]">
@@ -203,12 +249,25 @@ export function UnitInspectionEditor({
                             ))}
                           </select>
                         </td>
-                        <td className="cell min-w-[12rem]">
+                        <td className="cell">
                           <MonthCheckboxes
+                            stacked
                             label="点検月"
                             value={insp.inspection_months}
                             onChange={(months) => updateRow(unitIndex, rowIndex, { inspection_months: months })}
                           />
+                          {/* 請求月（月次用）。空は毎月 */}
+                          <div className={subLabelClass}>
+                            請求月 <span className="font-normal text-gray-400">空は毎月</span>
+                          </div>
+                          <fieldset disabled={scheduleUnread} title={scheduleUnread ? UNREAD_TITLE : undefined}>
+                            <MonthCheckboxes
+                              stacked
+                              label="請求月"
+                              value={insp.billing_months ?? []}
+                              onChange={(months) => updateRow(unitIndex, rowIndex, { billing_months: months })}
+                            />
+                          </fieldset>
                         </td>
                         <td className="cell">
                           <input
@@ -218,6 +277,31 @@ export function UnitInspectionEditor({
                             value={insp.inspected_on ? String(insp.inspected_on).slice(0, 7) : ''}
                             onChange={(e) => updateRow(unitIndex, rowIndex, { inspected_on: e.target.value || null })}
                           />
+                          {/* インターバル（検査の周期）。新しく足す行の既定 12 か月 */}
+                          <label className={subLabelClass} title={scheduleUnread ? UNREAD_TITLE : undefined}>
+                            インターバル
+                            <input
+                              type="number"
+                              min={1}
+                              max={120}
+                              step={1}
+                              aria-label="インターバル（か月）"
+                              className="w-14 rounded-md border border-gray-300 px-1 py-0.5 text-right text-sm"
+                              placeholder={String(DEFAULT_INTERVAL_MONTHS)}
+                              value={interval}
+                              disabled={scheduleUnread}
+                              onChange={(e) => {
+                                const parsed = parseIntervalMonths(e.target.value);
+                                // 範囲外・小数は入れない（業務システムと同じ 1〜120 の整数）
+                                if (parsed.error) {
+                                  onError(parsed.error);
+                                  return;
+                                }
+                                updateRow(unitIndex, rowIndex, { interval_months: parsed.value });
+                              }}
+                            />
+                            か月
+                          </label>
                         </td>
                       </tr>
                     );
