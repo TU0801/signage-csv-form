@@ -1,4 +1,13 @@
-import { useCallback, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
+import {
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+  type TextareaHTMLAttributes,
+} from 'react';
 import { useBulkStore } from '@/stores/bulkStore';
 import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/utils';
@@ -14,6 +23,8 @@ import { nextSort, orderRows, type SortColumn, type SortState } from '../utils/r
 import { discardUnheldRowImages, rowPosterImages } from '../utils/discardRowImages';
 import { ContextMenu } from './ContextMenu';
 import { SearchableSelect } from './SearchableSelect';
+import { ValueFilterPopover, type FilterOption } from './ValueFilterPopover';
+import { FILTER_COLUMN_LABEL, type ColumnFilters, type FilterColumn } from '../utils/columnFilters';
 import type { BulkEntryRow } from '../types';
 
 /** 行ごとに画面側（点検の予定・管理会社の索引）から引く表示用の情報 */
@@ -49,6 +60,12 @@ interface BulkTableProps {
   /** 予定の行の並べ替え（修正依頼1025 F3。null = 並べ替えなし） */
   sort?: SortState | null;
   onSortChange?: (sort: SortState | null) => void;
+  /** 見出しの🔍の抽出（物件・点検種別・備考・メモ。修正依頼1027 (6)）。無ければ🔍を出さない */
+  columnFilters?: ColumnFilters;
+  /** 抽出を決める（values が空なら外す） */
+  onColumnFilterChange?: (column: FilterColumn, values: string[]) => void;
+  /** その列の候補（ほかの絞り込みを通った行の値と数） */
+  filterOptionsOf?: (column: FilterColumn) => FilterOption[];
 }
 
 const cellInputBase = 'block h-7 w-full rounded border px-2 py-0 text-sm focus:border-blue-500 focus:outline-none';
@@ -72,7 +89,74 @@ const SORT_LABEL: Record<SortColumn, string> = {
   status: 'ステータス',
   targetMonth: 'No（対象月）',
   months: '点検月・検査月',
+  startDate: '点検開始日',
+  endDate: '点検終了日',
 };
+
+/**
+ * 中身の高さに合わせて伸びる入力欄（備考・メモ。修正依頼1027 (6)）。行の高さは一番高い欄に合わせて広がる。
+ * rows は空のときの高さ（それより縮まない）
+ */
+function AutoGrowTextarea({ value, className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement> & { value: string }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    // scrollHeight は枠線を含まないので上下の枠（1px ずつ）を足す
+    if (el.scrollHeight > 0) el.style.height = `${el.scrollHeight + 2}px`;
+  }, [value]);
+  return <textarea ref={ref} value={value} className={cn('resize-none overflow-hidden', className)} {...props} />;
+}
+
+/**
+ * 見出しの🔍と、抽出中の印・解除ボタン（修正依頼1027 (6)）。選んでいる間は「物件抽出中」と ✕ を出す
+ */
+function ColumnFilterControl({
+  column,
+  filters,
+  onChange,
+  optionsOf,
+}: {
+  column: FilterColumn;
+  filters?: ColumnFilters;
+  onChange?: (column: FilterColumn, values: string[]) => void;
+  optionsOf?: (column: FilterColumn) => FilterOption[];
+}) {
+  if (!onChange || !optionsOf) return null;
+  const label = FILTER_COLUMN_LABEL[column];
+  const selected = filters?.[column]?.values ?? [];
+  return (
+    <span className="ml-0.5 inline-flex items-center gap-0.5 align-middle font-normal">
+      <ValueFilterPopover
+        trigger={<span aria-hidden>🔍</span>}
+        title={`${label}で抽出（一覧から選ぶ・文字で探す。複数選べます）`}
+        getOptions={() => optionsOf(column)}
+        selected={selected}
+        onApply={(values) => onChange(column, values)}
+        searchPlaceholder={`${label}を文字で探す`}
+      />
+      {selected.length > 0 && (
+        <span
+          className="inline-flex items-center gap-0.5 whitespace-nowrap rounded bg-blue-600 py-px pl-1 pr-0.5 text-[10px] leading-tight text-white"
+          title={selected.join('\n')}
+          data-testid={`filter-active-${column}`}
+        >
+          {label}抽出中
+          <button
+            type="button"
+            className="rounded px-0.5 hover:bg-blue-800"
+            aria-label={`${label}の抽出を解除`}
+            title={`${label}の抽出を解除`}
+            onClick={() => onChange(column, [])}
+          >
+            ✕
+          </button>
+        </span>
+      )}
+    </span>
+  );
+}
 
 /** 並べ替えの見出し（押すたびに 昇順 → 降順 → 解除。修正依頼1025 F3） */
 function SortButton({
@@ -146,7 +230,18 @@ export function BulkTable({
   showVendor,
   sort = null,
   onSortChange,
+  columnFilters,
+  onColumnFilterChange,
+  filterOptionsOf,
 }: BulkTableProps) {
+  const filterControl = (column: FilterColumn) => (
+    <ColumnFilterControl
+      column={column}
+      filters={columnFilters}
+      onChange={onColumnFilterChange}
+      optionsOf={filterOptionsOf}
+    />
+  );
   const { addToast } = useToast();
   const rows = useBulkStore((s) => s.rows);
   const masterData = useBulkStore((s) => s.masterData);
@@ -335,20 +430,37 @@ export function BulkTable({
                 点検月<div className={subHead}>検査月</div>
               </SortButton>
             </th>
+            {/* 物件・点検種別・備考・メモは見出しの🔍で抽出（修正依頼1027 (6)） */}
             <th className={cn(th, 'w-[16rem] min-w-[8.5rem]')}>
-              物件<span className="text-red-500">*</span>
+              <span className="whitespace-nowrap">
+                物件<span className="text-red-500">*</span>
+              </span>
+              {filterControl('property')}
             </th>
             {/* 点検種別は狭くして折り返す（I5） */}
             <th className={cn(th, 'w-[6.5rem] min-w-[6.5rem]')}>
-              点検種別<span className="text-red-500">*</span>
+              <span className="whitespace-nowrap">
+                点検種別<span className="text-red-500">*</span>
+              </span>
+              {filterControl('inspectionType')}
             </th>
-            {/* 日付の列は狭く（F6。yyyy/mm/dd とカレンダーのボタンが入る幅） */}
-            <th className={cn(th, 'w-[6.5rem] min-w-[6.5rem]')}>点検開始日</th>
-            <th className={cn(th, 'w-[6.5rem] min-w-[6.5rem]')}>点検終了日</th>
-            {/* 備考は幅を広く・2行の入力欄（I8） */}
-            <th className={cn(th, 'w-[28rem] min-w-[15rem]')}>備考（作業時間を記載下さい）</th>
-            <th className={cn(th, 'w-[5rem] min-w-[5rem]')} title="CSV には出ません（点検月の変更などの覚え書き）">
-              メモ
+            {/* 日付の列は狭く（F6。yyyy/mm/dd とカレンダーのボタンが入る幅）。▲▼で並べ替え（修正依頼1027 (6)） */}
+            <th className={cn(th, 'w-[6.5rem] min-w-[6.5rem]')}>
+              <SortButton column="startDate" sort={sort} onSortChange={onSortChange}>
+                点検開始日
+              </SortButton>
+            </th>
+            <th className={cn(th, 'w-[6.5rem] min-w-[6.5rem]')}>
+              <SortButton column="endDate" sort={sort} onSortChange={onSortChange}>
+                点検終了日
+              </SortButton>
+            </th>
+            {/* 備考は幅を広く。入力欄は中身に合わせて伸びる（I8・修正依頼1027 (6)） */}
+            <th className={cn(th, 'w-[28rem] min-w-[15rem]')}>
+              備考（作業時間を記載下さい）{filterControl('remarks')}
+            </th>
+            <th className={cn(th, 'w-[5rem] min-w-[5rem]')}>
+              <span title="CSV には出ません（点検月の変更などの覚え書き）">メモ</span>{filterControl('memo')}
             </th>
             {/* 管理会社・保守会社（略称）は右側へ（I4。右端に固定の『詳細』の手前） */}
             {/* 管理者のときだけ出る列。1366 幅で Windows の縦スクロールバー（約17px）が出ても横スクロールしない幅（I2） */}
@@ -572,10 +684,10 @@ export function BulkTable({
                   {locked ? (
                     <span className={cn(cellText, 'whitespace-pre-line leading-tight text-gray-700')}>{row.remarks || '－'}</span>
                   ) : (
-                    // 2行の入力欄（スクロールバーつき。修正依頼1026 I8）。Enter は改行（次の欄へは Alt+Enter か Tab）。
-                    // 行数・1行の文字数は目安で、超えたら下に注意を出す（申請は止めない）
+                    // 空のときは2行（修正依頼1026 I8）。中身に合わせて伸び、行の高さも合わせて広がる（修正依頼1027 (6)）。
+                    // Enter は改行（次の欄へは Alt+Enter か Tab）。行数・1行の文字数は目安で、超えたら下に注意を出す（申請は止めない）
                     <>
-                      <textarea
+                      <AutoGrowTextarea
                         data-col={COL.remarks}
                         aria-label="備考"
                         rows={2}
@@ -589,7 +701,7 @@ export function BulkTable({
                           handleCellKeyDown(e, index, COL.remarks);
                         }}
                         className={cn(
-                          'block w-full resize-y overflow-y-auto rounded border px-1.5 py-0.5 text-xs leading-snug focus:border-blue-500 focus:outline-none',
+                          'block w-full rounded border px-1.5 py-0.5 text-xs leading-snug focus:border-blue-500 focus:outline-none',
                           'placeholder:text-[11px]',
                           remarksWarning ? 'border-amber-400' : 'border-gray-300',
                           'field-required',
@@ -606,25 +718,30 @@ export function BulkTable({
                 <td className="cell">
                   {locked ? (
                     // 申請に保存したメモを読み取りで出す（B12。読めるのは自分の申請と管理者）
+                    // 全文を折り返して出す（行の高さは一番高い欄に合わせる。修正依頼1027 (6)）
                     row.memo ? (
-                      <span className={cn(cellText, 'max-w-[5rem] truncate')} title={row.memo}>
+                      <span
+                        className="block max-w-[5rem] whitespace-pre-line break-all px-1 py-1 text-xs leading-tight"
+                        title={row.memo}
+                      >
                         {row.memo}
                       </span>
                     ) : (
                       <span className={cn(cellText, 'text-gray-400')}>－</span>
                     )
                   ) : (
-                    <input
-                      type="text"
+                    // 1行の入力欄だが、狭い列で折り返した中身に合わせて伸びる（Enter は今までどおり次の欄へ）
+                    <AutoGrowTextarea
                       data-col={COL.memo}
                       aria-label="メモ"
+                      rows={1}
                       value={row.memo}
                       placeholder="メモ"
                       maxLength={500}
                       title={row.memo || '点検月の変更などのメモ（CSV には出ません）'}
                       onChange={(e) => changeMemo(row.id, e.target.value)}
                       onKeyDown={(e) => handleCellKeyDown(e, index, COL.memo)}
-                      className={cellInput()}
+                      className="block min-h-7 w-full break-all rounded border border-gray-300 px-1.5 py-1 text-xs leading-snug focus:border-blue-500 focus:outline-none"
                     />
                   )}
                 </td>

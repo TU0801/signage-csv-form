@@ -76,9 +76,8 @@ const looksLikeDate = (s: string | undefined) => formatDateForInput(s?.trim() ||
  * どの行でも決まらなければ新5列（今のテンプレート書式）。
  * 新5列で開始日が空・終了日だけの行（cols[3] だけが日付）は cols[2] が空なので旧6列とはみなさない。
  */
-function detectLayout(lines: string[], terminalIds: Set<string>): ColumnMap {
-  for (const line of lines) {
-    const cols = line.split('\t');
+function detectLayout(lines: string[][], terminalIds: Set<string>): ColumnMap {
+  for (const cols of lines) {
     const c1 = cols[1]?.trim() || '';
     if (c1 !== '' && terminalIds.has(c1)) return LEGACY_LAYOUT;
     if (!looksLikeDate(cols[1]) && looksLikeDate(cols[2])) return NEW_LAYOUT;
@@ -103,6 +102,11 @@ export interface PasteResult {
   unresolvedNames: string[];
   /** 物件・端末・点検種別がどれも無く、空白でもない行の数（飛ばす） */
   errorCount: number;
+  /**
+   * 新5列で、開始日・終了日・備考・案内文がどれも空の行の数（飛ばす）。一括入力テンプレートは担当の物件を全部並べるので、
+   * 日付を入れなかった物件の行は取り込まない（修正依頼1027 (2)）。旧6列（v1 互換）は今までどおり取り込む
+   */
+  blankCount: number;
 }
 
 /** YYYY/M/D・YYYY-M-D を YYYY-MM-DD にする。読めなければ空。v1: js/bulk-modals.js formatDateForInput */
@@ -126,11 +130,11 @@ export function formatDateForInput(dateStr: string): string {
  * v1: js/bulk-modals.js importFromPaste（旧6列）
  */
 export function parseExcelPaste(raw: string, properties: BulkProperty[]): PasteResult {
-  const lines = raw.split(/\r?\n/);
-  while (lines.length > 0 && lines[lines.length - 1]!.trim() === '') lines.pop();
+  const lines = splitTsv(raw);
+  while (lines.length > 0 && lines[lines.length - 1]!.every((c) => c.trim() === '')) lines.pop();
 
   let startIndex = 0;
-  const firstCols = (lines[0] || '').split('\t');
+  const firstCols = lines[0] || [];
   const firstColLower = (firstCols[0] || '').toLowerCase().trim();
   const secondColLower = (firstCols[1] || '').toLowerCase().trim();
   const isHeaderRow = HEADER_KEYWORDS.some(
@@ -147,17 +151,28 @@ export function parseExcelPaste(raw: string, properties: BulkProperty[]): PasteR
   const rows: BulkRowInput[] = [];
   let errorCount = 0;
   let unresolvedCount = 0;
+  let blankCount = 0;
   const unresolvedNames: string[] = [];
 
   for (let i = startIndex; i < lines.length; i++) {
-    const line = lines[i]!;
-    const cols = line.split('\t');
+    const cols = lines[i]!;
     const propValue = cell(cols, 'property');
     const terminalId = cell(cols, 'terminal');
     const inspectionType = cell(cols, 'inspectionType');
 
     if (!propValue && !terminalId && !inspectionType) {
-      if (line.trim() !== '') errorCount++;
+      if (cols.some((c) => c.trim() !== '')) errorCount++;
+      continue;
+    }
+    // 新5列で入力する欄がどれも空の行（テンプレートで日付を入れなかった物件）は飛ばす
+    if (
+      columns.terminal === undefined &&
+      !cell(cols, 'startDate') &&
+      !cell(cols, 'endDate') &&
+      !cell(cols, 'remarks') &&
+      !cell(cols, 'noticeText')
+    ) {
+      blankCount++;
       continue;
     }
 
@@ -183,35 +198,108 @@ export function parseExcelPaste(raw: string, properties: BulkProperty[]): PasteR
     });
   }
 
-  return { rows, unresolvedCount, unresolvedNames, errorCount };
+  return { rows, unresolvedCount, unresolvedNames, errorCount, blankCount };
 }
 
-/** テンプレート書式の例の行（備考は作業時間の書き方の例） */
+const isBreak = (ch: string | undefined) => ch === '\t' || ch === '\n' || ch === '\r';
+
+/**
+ * タブ区切りのテキストを行・セルに分ける。Excel のコピーと同じく、改行・タブ・" を含むセルは "…" で囲み、中の " は "" にしたものとして読む
+ * （備考を2行にしたセルを貼っても行がずれない）。閉じの " の直後がタブ・改行・終わりでなければ囲みとみなさず、" はそのままの文字
+ */
+export function splitTsv(raw: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let i = 0;
+  const n = raw.length;
+  for (;;) {
+    let value: string | null = null;
+    if (raw[i] === '"') {
+      let j = i + 1;
+      let text = '';
+      while (j < n) {
+        if (raw[j] === '"') {
+          if (raw[j + 1] === '"') {
+            text += '"';
+            j += 2;
+            continue;
+          }
+          if (j + 1 >= n || isBreak(raw[j + 1])) value = text.replace(/\r\n/g, '\n');
+          break;
+        }
+        text += raw[j];
+        j++;
+      }
+      if (value !== null) i = j + 1;
+    }
+    if (value === null) {
+      const start = i;
+      while (i < n && !isBreak(raw[i])) i++;
+      value = raw.slice(start, i);
+    }
+    row.push(value);
+    if (i >= n) {
+      rows.push(row);
+      return rows;
+    }
+    if (raw[i] === '\t') {
+      i++;
+      continue;
+    }
+    i += raw[i] === '\r' && raw[i + 1] === '\n' ? 2 : 1;
+    rows.push(row);
+    row = [];
+    if (i >= n) return rows;
+  }
+}
+
+/** TSV の1セル（改行・タブ・" を含むときは Excel のコピーと同じく "…" で囲む） */
+function tsvCell(value: string): string {
+  return /[\t\n\r"]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+/** SheetJS のセル（使う項目だけ） */
+interface SheetCell {
+  t: string;
+  v?: unknown;
+  w?: string;
+  z?: string | number;
+}
+
+/**
+ * Excel ファイル（.xlsx など）の最初のシートを、貼り付けと同じタブ区切りのテキストにする（修正依頼1027 (2)）。
+ * 日付のセルは表示の書式に関わらず YYYY/M/D にする（formatDateForInput が読める形）。
+ * 一括入力テンプレートの隠しシート（点検種別の選択肢）は2枚目なので読まない
+ */
+export async function excelFileToTsv(data: ArrayBuffer): Promise<string> {
+  const XLSX = await import('xlsx');
+  const wb = XLSX.read(data, { type: 'array', cellNF: true });
+  const ws = wb.Sheets[wb.SheetNames[0] ?? ''];
+  if (!ws || !ws['!ref']) return '';
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  const lines: string[] = [];
+  for (let r = range.s.r; r <= range.e.r; r++) {
+    const cells: string[] = [];
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const cellObj = ws[XLSX.utils.encode_cell({ r, c })] as SheetCell | undefined;
+      let text = '';
+      if (cellObj && cellObj.v !== undefined && cellObj.v !== null) {
+        if (cellObj.t === 'n' && cellObj.z !== undefined && XLSX.SSF.is_date(cellObj.z)) {
+          const d = XLSX.SSF.parse_date_code(Number(cellObj.v));
+          text = `${d.y}/${d.m}/${d.d}`;
+        } else {
+          text = cellObj.t === 's' ? String(cellObj.v) : (cellObj.w ?? String(cellObj.v));
+        }
+      }
+      cells.push(tsvCell(text));
+    }
+    lines.push(cells.join('\t'));
+  }
+  return lines.join('\n');
+}
+
+/** 取込の説明（Excelから取込の「列の順序」）に出す例の行（備考は作業時間の書き方の例） */
 export const PASTE_TEMPLATE_EXAMPLES: string[][] = [
   ['アソシアグロッツォ天神サウス', 'エレベーター定期点検', '2025/1/15', '2025/1/15', '10:00～12:00'],
   ['アソシアグロッツォタイムズスイート博多', '消防設備点検', '2025/2/1', '2025/2/3', 'No2号機11:00～12:00'],
 ];
-
-/** テンプレート書式のシート（見出し1行 + 例2行）。日付は formatDateForInput が読める YYYY/M/D の文字列 */
-export function buildPasteTemplateSheet(): string[][] {
-  return [[...PASTE_COLUMNS], ...PASTE_TEMPLATE_EXAMPLES.map((r) => [...r])];
-}
-
-/**
- * テンプレート書式（一括入力テンプレート.xlsx）をダウンロードする。
- * v1: js/bulk-modals.js downloadExcelTemplate（v1 は CSV・6列）
- */
-export async function downloadPasteTemplate(): Promise<void> {
-  const XLSX = await import('xlsx');
-  const ws = XLSX.utils.aoa_to_sheet(buildPasteTemplateSheet());
-  ws['!cols'] = [
-    { wch: 36 }, // 物件名
-    { wch: 22 }, // 点検種別
-    { wch: 12 }, // 開始日
-    { wch: 12 }, // 終了日
-    { wch: 30 }, // 備考
-  ];
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, '一括入力');
-  XLSX.writeFile(wb, '一括入力テンプレート.xlsx');
-}
