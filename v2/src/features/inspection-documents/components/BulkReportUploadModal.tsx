@@ -3,11 +3,11 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { useToast } from '@/components/ui/Toast';
 import { cn, normalizeSearch } from '@/lib/utils';
 import { fetchInspectionReports, registerInspectionReport, sha256Hex } from '@/lib/api/portal';
 import { recordCorrections } from '@/lib/api/property-files';
-import { useAuth } from '@/hooks/useAuth';
 import type { DbInspectionReport } from '@/types/portal';
 import { entryErrorReason } from '@/lib/api/admin-entries';
 import { usePortalData } from '@/features/inspection-portal/hooks/usePortalData';
@@ -26,7 +26,8 @@ import {
   effectiveTargetMonth,
   identicalLiveReport,
   pageLabel,
-  reportToReplace,
+  existingReports,
+  sharedTargetNotes,
   toggleBreak,
   validateSegments,
   type BulkTarget,
@@ -124,8 +125,6 @@ interface LoadedPdf {
 function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUploadModalProps) {
   const { addToast } = useToast();
   const data = usePortalData();
-  // 提出する保守会社は DB 側でアカウントの保守会社（current_vendor_id()）になる。画面で選んだ保守会社（vendorId）ではない
-  const accountVendor = useAuth().vendorId ?? null;
   const today = todayJst();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const ai = useAiOcr();
@@ -151,7 +150,7 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
   const [touched, setTouched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [results, setResults] = useState<Record<number, SegmentResult>>({});
-  /** 提出済みの報告書を置き換える区間があるときの確認（送信前に読み直した報告書の一覧を持つ） */
+  /** 提出済みの報告書がある点検へ追加する区間があるときの確認（送信前に読み直した報告書の一覧を持つ。修正依頼1027 決定①） */
   const [confirmReplace, setConfirmReplace] = useState<{
     count: number;
     reports: DbInspectionReport[];
@@ -159,8 +158,8 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
   } | null>(null);
   /**
    * 切り出した区間の SHA-256（segKey → ハッシュ）。点検を割り当てた区間は、提出を待たずに切り出して計算する。
-   * 同じ内容の報告書が提出済みの区間は送らないので、区間に「送りません」と出し、「置き換えます」の注意から外す
-   * （修正依頼1024 本番確認: 提出の前は同じ内容でも「置き換えます」と出ていた）。回転・PDF を変えると中身が変わるので消す
+   * 同じ内容の報告書が提出済みの区間は送らないので、区間に「送りません」と出し、「提出済みの報告書があります」の注意から外す
+   * （修正依頼1024 本番確認: 提出の前は同じ内容でも注意が出ていた）。回転・PDF を変えると中身が変わるので消す
    */
   const [hashes, setHashes] = useState<Record<string, string>>({});
   /** 切り出した区間（segKey → PDF とハッシュ）。提出のときにもう一度切り出さないよう使い回す */
@@ -223,6 +222,11 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
   const segments = useMemo(() => buildSegments(pageCount, breaks), [pageCount, breaks]);
   const errors = useMemo(
     () => validateSegments(segments, inputs, targetMap, defaultPerformedOn),
+    [segments, inputs, targetMap, defaultPerformedOn],
+  );
+  // 同じ点検・対象月を2つ以上の区間に割り当てたときの注意（止めない。修正依頼1027 決定①）
+  const sharedNotes = useMemo(
+    () => sharedTargetNotes(segments, inputs, targetMap, defaultPerformedOn),
     [segments, inputs, targetMap, defaultPerformedOn],
   );
   const segmentOfPage = (page: number) => segments.find((s) => page >= s.start && page <= s.end);
@@ -386,7 +390,7 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
       addToast('直す必要がある区間があります（赤字の区間を確かめてください）', 'error');
       return;
     }
-    // 置き換える版と同じ内容かを見比べるので、送る直前の報告書の一覧で数える（開いた後にほかの人が出した版も入れる）
+    // 提出済みの版と同じ内容かを見比べるので、送る直前の報告書の一覧で数える（開いた後にほかの人が出した版も入れる）
     setSubmitting(true);
     let latest: DbInspectionReport[];
     try {
@@ -396,7 +400,7 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
       addToast(`提出前の確認に失敗しました: ${entryErrorReason(err)}`, 'error');
       return;
     }
-    // 同じ内容で送らない区間は置き換えないので、確認の前に区間を切り出してハッシュを見比べる（割り当てた時点で済んでいれば使い回す）
+    // 同じ内容で送らない区間は確認に数えないので、確認の前に区間を切り出してハッシュを見比べる（割り当てた時点で済んでいれば使い回す）
     try {
       sourceRef.current ??= loadSourcePdf(pdf.bytes);
       await sourceRef.current;
@@ -426,7 +430,7 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
       const hash = prepared.get(segKey(seg))?.hash;
       const month = effectiveTargetMonth(target, performedOn);
       if (hash && identicalLiveReport(latest, target.inspection.inspection_id, month, hash)) return false;
-      return !!reportToReplace(latest, target, performedOn, accountVendor);
+      return existingReports(latest, target, performedOn).length > 0;
     }).length;
     if (replacing > 0) {
       setConfirmReplace({ count: replacing, reports: latest, prepared });
@@ -701,8 +705,8 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
                       target={targetMap.get((inputs[seg.start] ?? EMPTY_INPUT).targetKey) ?? null}
                       reports={data.reports}
                       contentHash={hashes[segKey(seg)] ?? null}
-                      accountVendorId={accountVendor}
                       errors={touched ? errors[seg.start] : undefined}
+                      sharedNote={sharedNotes[seg.start] ?? null}
                       result={results[seg.start]}
                       disabled={submitting || isFinished(results[seg.start])}
                       onChange={(patch) => setInput(seg.start, patch)}
@@ -804,9 +808,9 @@ function BulkReportUploadDialog({ onClose, vendorId, onUploaded }: BulkReportUpl
         onConfirm={() => {
           if (confirmReplace) void send(confirmReplace.reports, confirmReplace.prepared);
         }}
-        title="提出済みの報告書を置き換えます"
-        message={`${confirmReplace?.count ?? 0}件の区間は、同じ点検・対象月に提出済みの報告書があります。\n提出すると前の版は「置き換え済み」になります（同じ内容の区間は数えていません。送りません）。\nこのまま提出しますか？`}
-        confirmLabel="置き換えて提出する"
+        title="提出済みの報告書があります"
+        message={`${confirmReplace?.count ?? 0}件の区間は、同じ点検・対象月に提出済みの報告書があります。\n提出すると報告書が追加されます（前の版はそのまま残ります。同じ内容の区間は数えていません。送りません）。\nこのまま提出しますか？`}
+        confirmLabel="追加で提出する"
       />
     </Modal>
   );
@@ -918,11 +922,11 @@ interface SegmentRowProps {
   groups: [string, BulkTarget[]][];
   target: BulkTarget | null;
   reports: DbInspectionReport[];
-  /** 提出の前に切り出したこの区間の SHA-256（まだなら null）。同じ内容の報告書が提出済みなら送らないので置き換えの注意を出さない */
+  /** 提出の前に切り出したこの区間の SHA-256（まだなら null）。同じ内容の報告書が提出済みなら送らないので「提出済みの報告書があります」を出さない */
   contentHash: string | null;
-  /** ログイン中のアカウントの保守会社（管理者は null）。置き換える版の判定に使う */
-  accountVendorId: string | null;
   errors: { target?: string; performedOn?: string } | undefined;
+  /** 同じ点検・対象月をほかの区間にも割り当てたときの注意（止めない） */
+  sharedNote: string | null;
   result: SegmentResult | undefined;
   disabled: boolean;
   onChange: (patch: Partial<SegmentInput>) => void;
@@ -937,8 +941,8 @@ function SegmentRow({
   target,
   reports,
   contentHash,
-  accountVendorId,
   errors,
+  sharedNote,
   result,
   disabled,
   onChange,
@@ -947,7 +951,13 @@ function SegmentRow({
   const month = target ? effectiveTargetMonth(target, performedOn) : null;
   const identical =
     target && contentHash ? identicalLiveReport(reports, target.inspection.inspection_id, month, contentHash) : null;
-  const previous = target && !identical ? reportToReplace(reports, target, performedOn, accountVendorId) : null;
+  const existing = target && !identical ? existingReports(reports, target, performedOn) : [];
+  // 文字を打って絞り込める選択肢（修正依頼1027(4)）。上の「点検の絞り込み」で隠れた点検も、選んであれば残す
+  const options = useMemo<ComboboxOption[]>(() => {
+    const list = groups.flatMap(([group, items]) => items.map((t) => ({ value: t.key, label: t.label, group })));
+    if (target && !list.some((o) => o.value === target.key)) list.unshift({ value: target.key, label: target.label, group: target.group });
+    return list;
+  }, [groups, target]);
   return (
     <tr className="border-b border-gray-100 align-top" data-testid={`bulk-segment-${segment.no}`}>
       <td className="px-1 py-1">
@@ -955,32 +965,23 @@ function SegmentRow({
       </td>
       <td className="px-1 py-1 text-gray-700">{pageLabel(segment)}</td>
       <td className="px-1 py-1">
-        <select
+        <Combobox
           aria-label={`区間${segment.no}の点検`}
-          className={cn(
-            'field-required block w-full rounded border border-gray-300 px-1 py-0.5 text-xs',
-            errors?.target && 'border-red-500',
-          )}
+          className={cn('field-required py-0.5 text-xs', errors?.target && 'border-red-500')}
           value={input.targetKey}
+          options={options}
+          placeholder="点検を選んでください（文字を打つと絞り込めます）"
           disabled={disabled}
-          onChange={(e) => onChange({ targetKey: e.target.value })}
-        >
-          <option value="">点検を選んでください</option>
-          {groups.map(([group, items]) => (
-            <optgroup key={group} label={group}>
-              {items.map((t) => (
-                <option key={t.key} value={t.key}>
-                  {t.label}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
+          onChange={(value) => onChange({ targetKey: value })}
+        />
         {target && (
           <p className="mt-0.5 text-[11px] text-gray-500">
             対象月: {month ? formatMonth(month) : '（実施日の月）'}
-            {previous && (
-              <span className="ml-1 text-amber-700">提出済みの報告書を置き換えます（{previous.file_name}）</span>
+            {existing.length > 0 && (
+              <span className="ml-1 text-amber-700">
+                提出済みの報告書があります（追加で登録します。{existing[0]!.file_name}
+                {existing.length > 1 ? ` ほか${existing.length - 1}件` : ''}）
+              </span>
             )}
             {identical && !result && (
               <span className="ml-1 text-gray-700">
@@ -991,6 +992,7 @@ function SegmentRow({
             )}
           </p>
         )}
+        {sharedNote && !result && <p className="mt-0.5 text-[11px] text-amber-700">{sharedNote}</p>}
         {errors?.target && <p className="mt-0.5 text-[11px] text-red-600">{errors.target}</p>}
       </td>
       <td className="px-1 py-1">

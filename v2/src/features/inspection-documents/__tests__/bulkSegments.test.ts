@@ -5,8 +5,9 @@ import {
   UNSCHEDULED_GROUP,
   buildSegments,
   buildTargets,
+  existingReports,
   identicalLiveReport,
-  reportToReplace,
+  sharedTargetNotes,
   toggleBreak,
   validateSegments,
 } from '../lib/bulkSegments';
@@ -86,25 +87,22 @@ describe('validateSegments', () => {
     expect(validateSegments(segs.slice(0, 1), { 0: { targetKey: 'i1:2026-09-01', performedOn: '', note: '' } }, map, '2026-09-10')).toEqual({});
   });
 
-  it('同じ点検・対象月を2つの区間に割り当てたら両方を止める（点検月未登録は実施日の月で比べる）', () => {
-    const errors = validateSegments(
-      segs,
-      {
-        0: { targetKey: 'i1:2026-09-01', performedOn: '', note: '' },
-        1: { targetKey: 'i1:2026-09-01', performedOn: '', note: '' },
-        2: { targetKey: 'i2:none', performedOn: '2026-08-03', note: '' },
-        3: { targetKey: 'i2:none', performedOn: '2026-09-03', note: '' },
-      },
-      map,
-      '2026-09-10',
-    );
-    expect(Object.keys(errors).map(Number)).toEqual([0, 1]);
-    expect(errors[0]!.target).toContain('区間1・区間2');
+  it('同じ点検・対象月を2つの区間に割り当てても止めず、両方に「どちらも登録」と出す（点検月未登録は実施日の月で比べる。修正依頼1027 決定①）', () => {
+    const inputs = {
+      0: { targetKey: 'i1:2026-09-01', performedOn: '', note: '' },
+      1: { targetKey: 'i1:2026-09-01', performedOn: '', note: '' },
+      2: { targetKey: 'i2:none', performedOn: '2026-08-03', note: '' },
+      3: { targetKey: 'i2:none', performedOn: '2026-09-03', note: '' },
+    };
+    expect(validateSegments(segs, inputs, map, '2026-09-10')).toEqual({});
+    const notes = sharedTargetNotes(segs, inputs, map, '2026-09-10');
+    expect(Object.keys(notes).map(Number)).toEqual([0, 1]);
+    expect(notes[0]).toContain('区間1・区間2');
   });
 });
 
-describe('reportToReplace', () => {
-  it('DB と同じく、提出する保守会社（アカウントの会社、無ければ最新の版の会社）の提出済みの版だけを置き換える', () => {
+describe('existingReports', () => {
+  it('同じ点検・対象月の提出済みの版を、保守会社を問わず新しい順に返す（置き換えずに追加するので。修正依頼1027 決定①）', () => {
     const target = {
       key: 'i1:2026-11-01',
       inspection: makeInspection({ inspection_id: 'i1', vendor_id: 'v1', unit_vendor_ids: ['v2'] }),
@@ -120,14 +118,9 @@ describe('reportToReplace', () => {
       makeReport({ ...base, id: 'gone', vendor_id: 'v1', status: 'superseded', created_at: '2026-11-03T00:00:00Z' }),
       makeReport({ ...base, id: 'other-month', vendor_id: 'v1', target_month: '2026-05-01' }),
     ];
-    // 保守会社 v1 のアカウント: 他社（v2）の新しい版ではなく自社の版
-    expect(reportToReplace(reports, target, '2026-11-10', 'v1')?.id).toBe('old-v1');
-    // 管理者（アカウントの会社なし）: 最新の版の会社（v2）の版
-    expect(reportToReplace(reports, target, '2026-11-10', null)?.id).toBe('new-v2');
-    // 提出済みの版の無い会社
-    expect(reportToReplace(reports, target, '2026-11-10', 'v3')).toBeNull();
-    // 同じ点検でも別の月の版は置き換えない
-    expect(reportToReplace(reports, { ...target, targetMonth: '2026-12-01' }, '2026-12-10', 'v1')).toBeNull();
+    expect(existingReports(reports, target, '2026-11-10').map((r) => r.id)).toEqual(['new-v2', 'old-v1']);
+    // 同じ点検でも別の月の版は数えない
+    expect(existingReports(reports, { ...target, targetMonth: '2026-12-01' }, '2026-12-10')).toEqual([]);
   });
 });
 

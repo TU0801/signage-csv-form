@@ -103,10 +103,11 @@ describe('RowDetailModal（修正依頼1024 B18）', () => {
     expect(entry).toMatchObject({ display_start_date: todayUtc(), display_end_date: '2026-11-03' });
   });
 
-  it('表示期間を開くと点検期間が入り、書き換えた連絡先と画面図で選んだ位置を保存する', () => {
+  it('表示期間を開くと表示開始日は今日・表示終了日は点検終了日が入り（触らなければ既定のまま＝申請日）、書き換えた連絡先と画面図で選んだ位置を保存する（修正依頼1027(3)）', () => {
     const id = setup();
     fireEvent.click(screen.getByRole('button', { name: /表示期間/ }));
-    expect(screen.getByLabelText('表示開始日')).toHaveValue('2026-11-02');
+    expect(screen.getByLabelText('表示開始日')).toHaveValue(todayUtc());
+    expect(screen.getByLabelText('表示終了日')).toHaveValue('2026-11-03');
     fireEvent.change(screen.getByLabelText('連絡先'), { target: { value: '03-1111-2222' } });
     // 表示時間・貼紙表示位置は畳んである（修正依頼1025 F7）
     fireEvent.click(screen.getByRole('button', { name: /表示時間・貼紙表示位置/ }));
@@ -114,8 +115,8 @@ describe('RowDetailModal（修正依頼1024 B18）', () => {
     expect(screen.getByRole('radio', { name: /④中央/ })).toBeChecked();
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
     expect(rowOf(id)).toMatchObject({
-      displayStartDate: '2026-11-02',
-      displayEndDate: '2026-11-03',
+      displayStartDate: '',
+      displayEndDate: '',
       emergencyContact: '03-1111-2222',
       position: 4,
     });

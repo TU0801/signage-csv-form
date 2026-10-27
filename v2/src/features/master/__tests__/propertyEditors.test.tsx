@@ -166,10 +166,10 @@ describe('UnitInspectionEditor (v1 台ごとの保守。2026-10-27 修正依頼1
     // 台の大分類の種別だけ
     expect(Array.from(typeSelects[1]!.options).map((o) => o.value)).toEqual(['', 'elev', 'remote']);
     fireEvent.change(typeSelects[1]!, { target: { value: 'remote' } });
-    // 前の『＋ 点検種別』と同じ形の行（newUnitInspection）に種別を入れたもの
+    // 前の『＋ 点検種別』と同じ形の行（newUnitInspection）に種別と名前を入れたもの（名前は点検日連絡の既定に使う。修正依頼1027(7)）
     expect(onChange).toHaveBeenLastCalledWith([
       unitOf('u1', [saved]),
-      unitOf('u2', [{ ...newUnitInspection(), inspection_type_id: 'remote' }]),
+      unitOf('u2', [{ ...newUnitInspection(), inspection_type_id: 'remote', inspection_type_label: 'リモート点検' }]),
     ]);
 
     rerender(
@@ -185,6 +185,27 @@ describe('UnitInspectionEditor (v1 台ごとの保守。2026-10-27 修正依頼1
     fireEvent.change(screen.getAllByLabelText('点検種別')[1]!, { target: { value: '' } });
     expect(onChange).toHaveBeenLastCalledWith([unitOf('u1', [saved]), unitOf('u2', [])]);
   });
+  // 修正依頼1027(7): 業務システムの「サイネージを編集」と同じ3項目（点検日連絡・請求月・インターバル）
+  it('edits 点検日連絡・請求月・インターバル per row; a new リモート点検 row defaults 点検日連絡 OFF and interval 12', () => {
+    const onChange = vi.fn();
+    const remoteRow = { ...newUnitInspection(), inspection_type_id: 'remote', inspection_type_label: 'リモート点検' };
+    renderEditor(
+      [unitOf('u1', [{ ...saved, notify_inspection_date: true, interval_months: null, billing_months: [] }]), unitOf('u2', [remoteRow])],
+      onChange,
+    );
+    const notify = screen.getAllByLabelText('点検日連絡') as HTMLInputElement[];
+    expect(notify.map((n) => n.checked)).toEqual([true, false]);
+    const intervals = screen.getAllByLabelText('インターバル（か月）') as HTMLInputElement[];
+    // 保存済みで未入力は空（placeholder 12）、新しい行は既定 12
+    expect(intervals.map((i) => i.value)).toEqual(['', '12']);
+    fireEvent.change(intervals[0]!, { target: { value: '24' } });
+    expect((onChange.mock.lastCall?.[0] as PropertyUnit[])[0]?.inspections[0]?.interval_months).toBe(24);
+    fireEvent.click(screen.getAllByRole('group', { name: '請求月' })[0]!.querySelector('input[value="4"]')!);
+    expect((onChange.mock.lastCall?.[0] as PropertyUnit[])[0]?.inspections[0]?.billing_months).toEqual([4]);
+    fireEvent.click(notify[0]!);
+    expect((onChange.mock.lastCall?.[0] as PropertyUnit[])[0]?.inspections[0]?.notify_inspection_date).toBe(false);
+  });
+
   it('shows 「保守は登録されていません」 instead of a pick row when the unit has no rows and its category has no type', () => {
     renderEditor([{ ...unitOf('u2', []), category_code: 'escalator', category_label: 'エスカレーター' }]);
     expect(screen.queryByLabelText('点検種別')).toBeNull();

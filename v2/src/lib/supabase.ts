@@ -102,6 +102,12 @@ export const RPC = {
   /** マスター管理の物件の検査月（管理者・管理会社は自社物件）。書き込みは upsert の戻り値の点検行 id で */
   propertyInspectionDates: 'property_inspection_dates',
   setPropertyInspectionInspectedOn: 'set_property_inspection_inspected_on',
+  /** マスター管理の物件（修正依頼1027(7)。scripts/fix-1027-master.sql）: マンションコード（補助）、点検日連絡・インターバル・請求月の読み書き、物件の削除 */
+  masterPropertyCodes: 'master_property_codes',
+  masterInspectionSchedules: 'master_inspection_schedules',
+  setInspectionSchedule: 'set_inspection_schedule',
+  masterPropertyLinks: 'master_property_links',
+  deleteMasterProperty: 'delete_master_property',
   /** 使われていない貼紙画像の一覧（管理者だけ。修正依頼1024 後続 orphan。scripts/fix-1024-followups-orphan.sql） */
   orphanPosterImages: 'orphan_poster_images',
   /** 点検登録フォーム（修正依頼1025 form）。号機（台）と設備会社固有コード、管理会社の略称。scripts/fix-1025-form.sql */
@@ -123,6 +129,8 @@ export const RPC = {
   portalPropertyFileTargets: 'portal_property_file_targets',
   ocrRecordCorrections: 'ocr_record_corrections',
   ocrCorrectionDictionary: 'ocr_correction_dictionary',
+  /** 一括入力テンプレートの保守会社の略称と、点検種別の並び（業務システムの設備の並び。修正依頼1027 (2)。scripts/fix-1027-bulk.sql） */
+  bulkTemplateInfo: 'bulk_template_info',
 } as const;
 
 /** Storage のバケット */

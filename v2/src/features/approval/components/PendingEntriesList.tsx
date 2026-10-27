@@ -8,7 +8,6 @@ import { useAuthStore } from '@/stores/authStore';
 import { SendBackDialog } from '@/features/inspection-portal/components/SendBackDialog';
 import { entryErrorReason, STALE_ENTRY_MESSAGE } from '@/lib/api/admin-entries';
 import { bulkApproveMessage } from '../lib/bulkApproveMessage';
-import { EntryEditModal } from '@/features/entries-list/components/EntryEditModal';
 import { useEntryLookups } from '@/features/entries-list/hooks/useEntryLookups';
 import { NAME_COL } from '@/features/entries-list/lib/tableColumns';
 import { formatJaDate } from '@/features/entries-list/lib/entries';
@@ -17,6 +16,7 @@ import { fetchPropertyRequestsByIds } from '@/lib/api/property-requests';
 import { isProvisionalCode } from '@/features/building-requests/lib/provisional';
 import { PendingEntryRow } from './PendingEntryRow';
 import { EntryDetailModal } from './EntryDetailModal';
+import { PendingEntryEditModal } from './PendingEntryEditModal';
 import { usePendingEntries } from '../hooks/usePendingEntries';
 import { useRefetchOnVisible } from '../hooks/useRefetchOnVisible';
 import { useUnitLabels } from '@/features/inspection-portal/hooks/useUnitLabels';
@@ -34,7 +34,7 @@ const th = 'cell-head font-medium text-gray-500';
 // 操作の列は右端に固定する（PendingEntryRow の操作セルと対）
 const thActions = `${th} sticky right-0 bg-gray-50 shadow-[inset_1px_0_0_var(--color-gray-200)]`;
 
-/** データ承認待ち（申請済み = draft）。編集して保存すると承認になる */
+/** データ承認待ち（申請済み = draft）。管理者は編集（基本フォーム）で直し、「保存して承認」で承認もできる */
 // v1: js/admin-pending.js / admin.html #approval-data
 export function PendingEntriesList() {
   const {
@@ -55,6 +55,7 @@ export function PendingEntriesList() {
   const { addToast } = useToast();
   // 管理会社: 承認と差戻しだけ（却下＝削除・編集は管理者だけ）
   const isManagement = useAuthStore((s) => s.profile?.role === 'management');
+  const userId = useAuthStore((s) => s.user?.id ?? null);
   const [sendBackTarget, setSendBackTarget] = useState<DbEntry | null>(null);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -348,7 +349,6 @@ export function PendingEntriesList() {
                     <th className={`${th} ${NAME_COL.inspectionType}`}>点検種別</th>
                     <th className={th}>点検開始日</th>
                     <th className={th}>点検終了日</th>
-                    <th className={th}>表示期間</th>
                     <th className={`${th} ${NAME_COL.remarks}`}>備考</th>
                     <th className={`${th} ${NAME_COL.vendor}`}>保守会社</th>
                     <th className={th}>登録日時</th>
@@ -367,7 +367,7 @@ export function PendingEntriesList() {
                       onToggleSelect={handleToggleSelect}
                       onApprove={(id) => setConfirm({ kind: 'approve', id })}
                       onReject={isManagement ? undefined : (id) => setConfirm({ kind: 'reject', id })}
-                      onViewDetail={setDetailEntry}
+                      onViewDetail={isManagement ? setDetailEntry : undefined}
                       onEdit={isManagement ? undefined : setEditEntry}
                       onSendBack={setSendBackTarget}
                       pendingBuildingName={pendingBuildingOf(entry)}
@@ -381,7 +381,8 @@ export function PendingEntriesList() {
         </CardContent>
       </Card>
 
-      {/* 承認待ちから開いた詳細は、そのまま承認・却下・編集へ進める（確認ダイアログは一覧の行と同じ） */}
+      {/* 詳細は管理会社だけ（編集できないため）。そのまま承認・差戻しへ進める（確認ダイアログは一覧の行と同じ）。
+          管理者は『詳細』を出さず、『編集』の基本フォームで内容を見る（修正依頼1027(3) 決定③） */}
       <EntryDetailModal
         entry={detailEntry}
         onClose={() => setDetailEntry(null)}
@@ -394,22 +395,6 @@ export function PendingEntriesList() {
             : (e) => {
                 setDetailEntry(null);
                 setConfirm({ kind: 'approve', id: e.id });
-              }
-        }
-        onReject={
-          isManagement
-            ? undefined
-            : (e) => {
-                setDetailEntry(null);
-                setConfirm({ kind: 'reject', id: e.id });
-              }
-        }
-        onEdit={
-          isManagement
-            ? undefined
-            : (e) => {
-                setDetailEntry(null);
-                setEditEntry(e);
               }
         }
         onSendBack={(e) => {
@@ -425,13 +410,20 @@ export function PendingEntriesList() {
         onConfirm={(reason) => (sendBackTarget ? handleSendBack(sendBackTarget, reason) : Promise.resolve())}
       />
 
-      <EntryEditModal
+      <PendingEntryEditModal
         entry={editEntry}
-        mode="pending"
         onClose={() => setEditEntry(null)}
         onSaved={fetchPendingEntries}
+        userId={userId}
         propertyNames={lookups.propertyNames}
+        emailOf={lookups.emailOf}
+        inspectionTypes={lookups.inspectionTypes}
+        templateImages={lookups.templateImages}
+        vendors={lookups.vendors}
         displayDefault={lookups.displayDefault}
+        approveBlockedReason={
+          editEntry && pendingBuildingOf(editEntry) !== undefined ? '建物が承認されるまで承認できません' : undefined
+        }
       />
 
       <ConfirmDialog

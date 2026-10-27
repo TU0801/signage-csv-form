@@ -7,7 +7,7 @@ import { resolveDisplayDefault } from '../lib/entries';
  * 一覧・承認待ち・詳細・編集で共通に引く表示用の値（物件名・登録者メール・表示時間の既定）
  */
 export function useEntryLookups() {
-  const { properties, vendors } = useMasterData();
+  const { properties, vendors, inspectionTypes, templateImages } = useMasterData();
   const [emails, setEmails] = useState<Map<string, string>>(new Map());
   const [displayTimeDefault, setDisplayTimeDefault] = useState<string | undefined>(undefined);
 
@@ -41,6 +41,9 @@ export function useEntryLookups() {
   return {
     properties,
     vendors,
+    // 承認待ちの編集（基本フォーム）で点検種別を選び直し、テンプレートを引く（修正依頼1027(3)）
+    inspectionTypes,
+    templateImages,
     propertyNames,
     emailOf,
     displayTimeDefault,

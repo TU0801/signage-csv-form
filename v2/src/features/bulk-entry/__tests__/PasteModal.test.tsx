@@ -3,18 +3,7 @@ import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/re
 import { ToastProvider } from '@/components/ui/Toast';
 import { PasteModal } from '../modals/PasteModal';
 
-const xlsx = vi.hoisted(() => ({
-  aoa: vi.fn((rows: string[][]) => ({ rows }) as Record<string, unknown>),
-  writeFile: vi.fn(),
-}));
-vi.mock('xlsx', () => ({
-  utils: {
-    aoa_to_sheet: xlsx.aoa,
-    book_new: () => ({ sheets: [] as unknown[] }),
-    book_append_sheet: (wb: { sheets: unknown[] }, ws: unknown) => wb.sheets.push(ws),
-  },
-  writeFile: xlsx.writeFile,
-}));
+const onDownloadTemplate = vi.fn(async () => {});
 
 beforeEach(() => {
   // jsdom の <dialog> は showModal/close を持たない。開いた状態にして中身を読めるようにする
@@ -34,17 +23,15 @@ afterEach(() => {
 const renderModal = () =>
   render(
     <ToastProvider>
-      <PasteModal open onClose={() => {}} onImport={() => true} />
+      <PasteModal open onClose={() => {}} onImport={() => true} onDownloadTemplate={onDownloadTemplate} />
     </ToastProvider>,
   );
 
 describe('PasteModal（Excel 取込）', () => {
-  it('『テンプレート書式DL』で一括入力テンプレート.xlsx（5列）を出す', async () => {
+  it('『テンプレートDL』で画面の一括入力テンプレート（担当の物件入り）を出す（修正依頼1027 (2)）', async () => {
     renderModal();
-    fireEvent.click(screen.getByRole('button', { name: 'テンプレート書式DL' }));
-    await waitFor(() => expect(xlsx.writeFile).toHaveBeenCalledTimes(1));
-    expect(xlsx.writeFile.mock.calls[0]![1]).toBe('一括入力テンプレート.xlsx');
-    expect(xlsx.aoa.mock.calls[0]![0][0]).toEqual(['物件名', '点検種別', '開始日', '終了日', '備考']);
+    fireEvent.click(screen.getByRole('button', { name: 'テンプレートDL' }));
+    await waitFor(() => expect(onDownloadTemplate).toHaveBeenCalledTimes(1));
   });
 
   it('列一覧は A〜E で、備考欄に作業時間の書き方を出し、端末ID の注記は無い', () => {

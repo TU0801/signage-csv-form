@@ -66,6 +66,11 @@ export function reportEntryId(item: Pick<ScheduleItem, 'entries' | 'inspection'>
   return entry && entry.property_inspection_id === item.inspection.inspection_id ? entry.id : null;
 }
 
+/** 報告書の実施日の既定（修正依頼1027(1)）: 行の申請の点検開始日（承認待ち・承認済みの申請、無ければ状態を決めた申請）。無ければ null */
+export function reportDefaultPerformedOn(item: Pick<ScheduleItem, 'entries' | 'inspection'>): string | null {
+  return (appliedEntry(item) ?? focusEntry(item.entries))?.inspection_start || null;
+}
+
 export function rowActions(
   item: Pick<ScheduleItem, 'application' | 'entries' | 'reportOnly'>,
   role: PortalRole,

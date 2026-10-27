@@ -5,7 +5,7 @@ import { propertyFileMime } from '../lib/propertyFiles';
 
 /*
  * 選んだファイルのプレビュー（その他ファイルアップロード。修正依頼1026 J3。DocFlow と同じく左にプレビュー、右に入力欄）。
- * PDF は1ページ目から縦に並べ（多いときは先頭の数ページ）、画像はそのまま、Excel・Word・PowerPoint はファイル名だけ。
+ * PDF は1ページ目から縦に並べ（多いときは先頭の数ページ。残りはボタンで出す）、画像はそのまま、Excel・Word・PowerPoint はファイル名だけ。
  */
 
 /** 描くページの上限（大きなスキャン PDF で描画を待たせない） */
@@ -79,6 +79,8 @@ function ImagePreview({ file }: { file: File }) {
 function PdfPreview({ file, width }: { file: File; width: number }) {
   const [pages, setPages] = useState<PdfPages | null>(null);
   const [failed, setFailed] = useState(false);
+  /** 6ページ目以降も出す（修正依頼1027(5)。既定は先頭の数ページだけ） */
+  const [showAll, setShowAll] = useState(false);
   useEffect(() => {
     let cancelled = false;
     let opened: PdfPages | null = null;
@@ -107,7 +109,7 @@ function PdfPreview({ file, width }: { file: File; width: number }) {
         プレビューを準備しています…
       </span>
     );
-  const count = Math.min(pages.pageCount, MAX_PREVIEW_PAGES);
+  const count = showAll ? pages.pageCount : Math.min(pages.pageCount, MAX_PREVIEW_PAGES);
   const pageWidth = Math.max(160, width - 20);
   return (
     <>
@@ -115,7 +117,19 @@ function PdfPreview({ file, width }: { file: File; width: number }) {
         <PdfPageCanvas key={i} pages={pages} index={i} width={pageWidth} />
       ))}
       {pages.pageCount > count && (
-        <p className="text-[11px] text-gray-500">ほか {pages.pageCount - count} ページ（先頭の {count} ページを表示）</p>
+        <p className="flex flex-wrap items-center justify-center gap-x-2 text-[11px] text-gray-500">
+          <span>
+            ほか {pages.pageCount - count} ページ（先頭の {count} ページを表示）
+          </span>
+          {/* 描画は1枚ずつ順に行うので、多くても画面は固まらない */}
+          <button
+            type="button"
+            className="rounded border border-gray-300 bg-white px-1.5 py-0.5 text-[11px] text-blue-700 hover:bg-blue-50"
+            onClick={() => setShowAll(true)}
+          >
+            残り {pages.pageCount - count} ページを表示
+          </button>
+        </p>
       )}
     </>
   );

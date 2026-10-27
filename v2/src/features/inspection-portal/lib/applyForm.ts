@@ -1,10 +1,11 @@
 import { EntryStatus, PosterType } from '@/lib/constants';
 import type { AppSettings, EntryInsertRow } from '@/lib/api/single-entry';
 import type { MasterProperty } from '@/types/app';
-import type { DbEntry, DbInspectionType, DbVendor } from '@/types/database';
+import type { DbInspectionType, DbVendor } from '@/types/database';
 import type { PortalInspectionRow } from '@/types/portal';
 import { buildLocalEntry, DEFAULT_FRAME_NO, toInsertRow } from '@/features/single-entry/lib/entryLogic';
 import type { SingleEntryValues } from '@/features/single-entry/types';
+import { followEndDate } from '@/lib/inspectionDates';
 import { monthOf } from './schedule';
 
 /*
@@ -72,26 +73,14 @@ export function initialApplyValues(targetMonth: string, ctx: Pick<ApplyContext, 
   };
 }
 
-/** 差戻された申請を直すときの初期値（今の申請の値） */
-export function valuesFromDbEntry(entry: DbEntry, fallbackMonth: string): ApplyValues {
-  return {
-    targetMonth: entry.target_month ?? fallbackMonth,
-    terminalId: entry.terminal_id ?? '',
-    startDate: entry.inspection_start ?? '',
-    // 終了日を省いた申請は開始日と同じ日で保存される（buildApplyRow）。そのまま読むと開始日だけ後ろへ直したときに
-    // 「終了日は開始日より後に」で止まるので、1日の点検は終了日を空に戻す（保存時にまた開始日が入る）
-    endDate: entry.inspection_end && entry.inspection_end !== entry.inspection_start ? entry.inspection_end : '',
-    noticeText: entry.announcement ?? '',
-    remarks: entry.remarks ?? '',
-    displayStartDate: entry.display_start_date ?? '',
-    displayEndDate: entry.display_end_date ?? '',
-  };
-}
-
-/** 点検開始日を変えたとき: 表示開始日は追従、終了日が空なら表示終了日も同じ日（1件入力と同じ） */
+/**
+ * 点検開始日を変えたとき: 表示開始日は追従。点検終了日は一括入力と同じ規則で合わせ（followEndDate。修正依頼1027(3)）、
+ * 終了日が変わった・空なら表示終了日も合わせる
+ */
 export function withStartDate(v: ApplyValues, startDate: string): ApplyValues {
-  const next = { ...v, startDate, displayStartDate: startDate };
-  if (!v.endDate) next.displayEndDate = startDate;
+  const endDate = followEndDate(v.startDate, v.endDate, startDate);
+  const next = { ...v, startDate, endDate, displayStartDate: startDate };
+  if (!v.endDate || endDate !== v.endDate) next.displayEndDate = endDate || startDate;
   return next;
 }
 

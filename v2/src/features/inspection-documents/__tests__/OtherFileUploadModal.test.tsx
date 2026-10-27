@@ -74,18 +74,29 @@ describe('OtherFileUploadModal', () => {
         ],
       },
     });
+    // 作業実施日が空なので今日の日付が入り（修正依頼1027(5)）、保存する名前は「作業実施日_建物名_区分」になる
+    await waitFor(() => expect((screen.getByLabelText('作業実施日') as HTMLInputElement).value).not.toBe(''));
     fireEvent.click(screen.getByRole('button', { name: '2件を登録する' }));
     await waitFor(() => expect(api.registerPropertyFile).toHaveBeenCalledTimes(2));
     expect(api.registerPropertyFile.mock.calls[0]![0]).toMatchObject({
       propertyCode: '900002-00',
       category: 'other',
       categoryNote: '管理規約',
-      fileName: '規約.pdf',
+      fileName: expect.stringMatching(/^\d{8}_テスト第二マンション_その他（管理規約）_1\.pdf$/),
     });
     const second = api.registerPropertyFile.mock.calls[1]![0] as { file: File };
     expect(second.file.type).toBe('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     await waitFor(() => expect(onUploaded).toHaveBeenCalled());
     expect(screen.getAllByText('登録しました')).toHaveLength(2);
+  });
+
+  it('AI-OCR を使わずにファイルを追加して作業実施日が空なら、今日の日付を入れる（修正依頼1027(5)）', async () => {
+    render(<OtherFileUploadModal open onClose={vi.fn()} properties={properties} />);
+    fireEvent.change(screen.getByTestId('other-file-input'), {
+      target: { files: [new File(['x'], '見積.xlsx', { type: '' })] },
+    });
+    const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Tokyo' }).format(new Date());
+    await waitFor(() => expect((screen.getByLabelText('作業実施日') as HTMLInputElement).value).toBe(today));
   });
 
   it('建物の選択肢に、DB の置ける建物（点検行の無い自社物件）も出す', async () => {

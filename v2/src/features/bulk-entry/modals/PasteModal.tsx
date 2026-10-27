@@ -1,14 +1,16 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
-import { downloadPasteTemplate, PASTE_COLUMNS, PASTE_TEMPLATE_EXAMPLES } from '../utils/parseExcelPaste';
+import { excelFileToTsv, PASTE_COLUMNS, PASTE_TEMPLATE_EXAMPLES } from '../utils/parseExcelPaste';
 
 interface PasteModalProps {
   open: boolean;
   onClose: () => void;
   /** 取り込む。空なら false を返してモーダルを開いたままにする */
   onImport: (text: string) => boolean;
+  /** 一括入力テンプレート（担当の物件を全部入れた xlsx）をダウンロードする（修正依頼1027 (2)） */
+  onDownloadTemplate: () => Promise<void>;
 }
 
 const EXAMPLE = PASTE_TEMPLATE_EXAMPLES[0]!;
@@ -21,8 +23,10 @@ const REMARKS_HINT = '作業時間を記載下さい（例: 10:00～12:00 / No2�
  * Excel からの貼り付け（5列。旧6列〔B列が端末ID〕も読む）。ヘッダー行は自動で飛ばす。
  * v1: bulk.html #pasteModal / js/bulk-modals.js openPasteModal / importFromPaste / downloadExcelTemplate
  */
-export function PasteModal({ open, onClose, onImport }: PasteModalProps) {
+export function PasteModal({ open, onClose, onImport, onDownloadTemplate }: PasteModalProps) {
   const [text, setText] = useState('');
+  const [downloading, setDownloading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
   const { addToast } = useToast();
 
   const handleClose = () => {
@@ -35,9 +39,26 @@ export function PasteModal({ open, onClose, onImport }: PasteModalProps) {
   };
 
   const handleDownloadTemplate = () => {
-    downloadPasteTemplate().catch(() => {
-      addToast('テンプレート書式をダウンロードできませんでした', 'error');
-    });
+    setDownloading(true);
+    onDownloadTemplate()
+      .catch((err) => {
+        console.error('Template download failed:', err);
+        addToast('テンプレートをダウンロードできませんでした', 'error');
+      })
+      .finally(() => setDownloading(false));
+  };
+
+  // Excel ファイルを選ぶと、最初のシートを貼り付けと同じ形で欄に入れる（取り込む前に中身を見られる）
+  const handleFile = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      setText(await excelFileToTsv(await file.arrayBuffer()));
+    } catch (err) {
+      console.error('Excel read failed:', err);
+      addToast('Excelファイルを読み込めませんでした', 'error');
+    } finally {
+      if (fileRef.current) fileRef.current.value = '';
+    }
   };
 
   return (
@@ -58,18 +79,39 @@ export function PasteModal({ open, onClose, onImport }: PasteModalProps) {
       <div className="space-y-3">
         <div className="flex items-start justify-between gap-3">
           <p className="text-sm text-gray-600">
-            Excelでコピーしたデータをそのまま貼り付けてください。
+            Excelでコピーしたデータをそのまま貼り付けるか、Excelファイルを選んでください。
             <br />
-            <small className="text-gray-500">ヘッダー行（「物件コード」等）がある場合は自動でスキップされます。</small>
+            <small className="text-gray-500">
+              ヘッダー行（「物件コード」等）がある場合は自動でスキップされます。開始日・終了日・備考・案内文がどれも空の行は取り込みません。
+            </small>
           </p>
-          <Button
-            size="sm"
-            variant="secondary"
-            title="Excelのテンプレート書式（一括入力テンプレート.xlsx）をダウンロード"
-            onClick={handleDownloadTemplate}
-          >
-            テンプレート書式DL
-          </Button>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Button
+              size="sm"
+              variant="secondary"
+              title="担当の物件と点検種別を入れた一括入力テンプレート（Excel）をダウンロード"
+              onClick={handleDownloadTemplate}
+              disabled={downloading}
+            >
+              テンプレートDL
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              title="Excelファイル（一括入力テンプレートなど）の最初のシートを読み込む"
+              onClick={() => fileRef.current?.click()}
+            >
+              Excelファイルを選ぶ
+            </Button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+              className="hidden"
+              aria-label="Excelファイル"
+              onChange={(e) => void handleFile(e.target.files?.[0])}
+            />
+          </div>
         </div>
 
         <textarea

@@ -6,7 +6,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { useToast } from '@/components/ui/Toast';
 import { useAuth } from '@/hooks/useAuth';
 import { downloadCsv, copyCsvToClipboard } from '@/lib/csv';
-import { createBulkEntries } from '@/lib/api/bulk-entry';
+import { createBulkEntries, fetchBulkTemplateInfo, type BulkTemplateInfo } from '@/lib/api/bulk-entry';
 import { fetchEntryMemos, markCompleted, unmarkCompleted } from '@/lib/api/inspection-form';
 import { entryErrorReason } from '@/lib/api/admin-entries';
 import { cn, normalizeSearch } from '@/lib/utils';
@@ -23,6 +23,17 @@ import { SaveTemplateModal } from '@/features/bulk-entry/modals/SaveTemplateModa
 import { ManageTemplateModal } from '@/features/bulk-entry/modals/ManageTemplateModal';
 import { BulkApplyModal } from '@/features/bulk-entry/modals/BulkApplyModal';
 import { parseExcelPaste } from '@/features/bulk-entry/utils/parseExcelPaste';
+import { scheduleTargetsFor } from '@/features/bulk-entry/utils/importToSchedule';
+import { buildTemplateRows, downloadTemplateXlsx, templateFilename } from '@/features/bulk-entry/utils/bulkTemplateXlsx';
+import {
+  buildFilterOptions,
+  matchesColumnFilters,
+  columnValue,
+  type ColumnFilters,
+  type FilterColumn,
+} from '@/features/bulk-entry/utils/columnFilters';
+import { ValueFilterPopover } from '@/features/bulk-entry/components/ValueFilterPopover';
+import { StatusBadge } from '@/features/inspection-portal/components/StatusBadge';
 import { bulkCsvFilename, generateBulkCsv } from '@/features/bulk-entry/utils/bulkCsv';
 import { buildBulkEntries } from '@/features/bulk-entry/utils/buildBulkEntries';
 import { errorLabel, firstError } from '@/features/bulk-entry/utils/columns';
@@ -44,7 +55,7 @@ import {
 import type { BulkEntryRow } from '@/features/bulk-entry/types';
 import { usePortalData } from '@/features/inspection-portal/hooks/usePortalData';
 import { inspectionsOfVendor } from '@/features/inspection-portal/lib/inspectionLink';
-import { completionBlockedReason, reportEntryId } from '@/features/inspection-portal/lib/actions';
+import { completionBlockedReason, reportDefaultPerformedOn, reportEntryId } from '@/features/inspection-portal/lib/actions';
 import { matchTiming, TIMING_OPTIONS, type TimingFilter } from '@/features/inspection-portal/lib/filters';
 import {
   buildSchedule,
@@ -58,7 +69,7 @@ import {
 } from '@/features/inspection-portal/lib/schedule';
 import { buildNotifyOffIndex, buildUnitIndex, expandByUnits } from '@/features/inspection-portal/lib/units';
 import { useManagementShortNames } from '@/features/inspection-portal/hooks/useManagementShortNames';
-import { orderRows, type SortState } from '@/features/bulk-entry/utils/rowOrder';
+import { DEFAULT_STATUS_PRIORITY, orderRows, type SortState } from '@/features/bulk-entry/utils/rowOrder';
 import {
   completionKey,
   completionKeys,
@@ -67,6 +78,8 @@ import {
   itemStatus,
   rowCompletionKey,
   rowUndoCompletionUnitIds,
+  STATUS_LABEL,
+  type InspectionStatus,
 } from '@/features/inspection-portal/lib/status';
 import { buildUnscheduledItems } from '@/features/inspection-portal/components/UnscheduledTable';
 import { ApplyModal, type ApplyTarget } from '@/features/inspection-portal/components/ApplyModal';
@@ -111,6 +124,8 @@ interface ReportTarget {
   targetMonth: string | null;
   entryId: string | null;
   previous: ScheduleItem['report'];
+  /** 実施日の既定（行の点検開始日。修正依頼1027(1)） */
+  defaultPerformedOn?: string | null;
 }
 
 /** 最初のエラーのセルへスクロールしてフォーカスする（B7） */
@@ -184,8 +199,13 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
   // 点検月のみ（既定）／全ての月（点検月以外の月にも予定の行を出す。修正依頼1025 D5）
   const [allMonths, setAllMonths] = useState(false);
   const [search, setSearch] = useState('');
-  // 申請不要（報告書のみ）の予定の行も出すか（既定は出さない。修正依頼1027）
-  const [showReportOnly, setShowReportOnly] = useState(false);
+  // 申請不要（報告書のみ）の予定の行を隠すか（既定は隠す。修正依頼1027 (3)「☑申請不要 デフォルトON」）
+  const [hideReportOnly, setHideReportOnly] = useState(true);
+  const showReportOnly = !hideReportOnly;
+  // タグ（ステータス）で絞る（空 = すべて。修正依頼1027 (3)）。手で足した行は隠さない
+  const [statusFilter, setStatusFilter] = useState<InspectionStatus[]>([]);
+  // 見出しの🔍の抽出（物件・点検種別・備考・メモ。修正依頼1027 (6)）
+  const [columnFilters, setColumnFilters] = useState<ColumnFilters>({});
   // 予定の行の並べ替え（F3。表示だけ）
   const [sort, setSort] = useState<SortState | null>(null);
   // 管理会社の略称（F5）
@@ -362,8 +382,16 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       '',
     [],
   );
-  // 申請不要の切り替えより前の絞り込み（時期・管理会社・検索）。隠した申請不要の件数を数えるのにも使う
-  const passesFilters = useCallback(
+  // 予定の行のステータス（タグ）。手で足した行と、予定の読み込み前の行は無し
+  const statusOf = useCallback(
+    (row: BulkEntryRow): InspectionStatus | undefined => {
+      const item = row.schedule ? itemsByKey.get(row.schedule.key) : undefined;
+      return item ? itemStatus(item, completed, today) : undefined;
+    },
+    [itemsByKey, completed, today],
+  );
+  // 時期・管理会社・検索の絞り込み（タグ・見出しの抽出・申請不要の切り替えより前）
+  const passesBaseFilters = useCallback(
     (row: BulkEntryRow) => {
       if (row.schedule) {
         const item = itemsByKey.get(row.schedule.key);
@@ -388,12 +416,29 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
     },
     [itemsByKey, portal.loaded, portal.error, timing, today, managementCompanyId, managementIndex, managementOf, search, propertyNameOf],
   );
+  // タグの絞り込み（予定の行だけ。選んだタグの行だけ出す）
+  const passesStatusFilter = useCallback(
+    (row: BulkEntryRow) => {
+      if (statusFilter.length === 0 || !row.schedule) return true;
+      const status = statusOf(row);
+      return !!status && statusFilter.includes(status);
+    },
+    [statusFilter, statusOf],
+  );
+  // 申請不要の切り替えより前の絞り込み（時期・管理会社・検索・タグ・見出しの抽出）。隠した申請不要の件数を数えるのにも使う
+  const passesFilters = useCallback(
+    (row: BulkEntryRow) =>
+      passesBaseFilters(row) &&
+      passesStatusFilter(row) &&
+      matchesColumnFilters(row, columnFilters, propertyNameOf(row)),
+    [passesBaseFilters, passesStatusFilter, columnFilters, propertyNameOf],
+  );
   // 申請不要（種別の報告書のみ・点検日連絡 OFF）の予定の行か。台ごとの点検日連絡を反映した予定（itemsByKey）で見る
   const isReportOnlyRow = useCallback(
     (row: BulkEntryRow) => !!row.schedule && !!(itemsByKey.get(row.schedule.key)?.reportOnly ?? row.schedule.reportOnly),
     [itemsByKey],
   );
-  // 表示する行。申請不要の行は「申請不要も表示」のときだけ出す（修正依頼1027）。隠した行は選択・一括設定・申請・CSV の対象にならない
+  // 表示する行。申請不要の行は「申請不要を隠す」を外したときだけ出す（修正依頼1027）。隠した行は選択・一括設定・申請・CSV の対象にならない
   const isVisible = useCallback(
     (row: BulkEntryRow) => passesFilters(row) && (showReportOnly || !isReportOnlyRow(row)),
     [passesFilters, showReportOnly, isReportOnlyRow],
@@ -402,14 +447,70 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
     () => (showReportOnly ? 0 : rows.filter((r) => isReportOnlyRow(r) && passesFilters(r)).length),
     [rows, showReportOnly, isReportOnlyRow, passesFilters],
   );
-  const toggleShowReportOnly = (next: boolean) => {
-    setShowReportOnly(next);
+  const toggleHideReportOnly = (hide: boolean) => {
+    setHideReportOnly(hide);
     // 隠す行の選択は外す（隠れたまま一括の操作の対象に残さない）
-    if (!next) {
+    if (hide) {
       const { rows: all, selectedIds, toggleSelection } = useBulkStore.getState();
       all.filter((r) => selectedIds.has(r.id) && isReportOnlyRow(r)).forEach((r) => toggleSelection(r.id));
     }
   };
+
+  // 見出しの🔍の候補: ほかの絞り込み（その列の抽出を除く）を通った行の値と数
+  const filterOptionsOf = useCallback(
+    (column: FilterColumn) =>
+      buildFilterOptions(
+        useBulkStore
+          .getState()
+          .rows.filter(
+            (r) =>
+              passesBaseFilters(r) &&
+              passesStatusFilter(r) &&
+              (showReportOnly || !isReportOnlyRow(r)) &&
+              matchesColumnFilters(r, columnFilters, propertyNameOf(r), column),
+          ),
+        column,
+        propertyNameOf,
+      ),
+    [passesBaseFilters, passesStatusFilter, showReportOnly, isReportOnlyRow, columnFilters, propertyNameOf],
+  );
+  // 抽出を決める。選んだときに当てはまった行は、あとで備考・メモを書き換えても出したままにする
+  const changeColumnFilter = useCallback(
+    (column: FilterColumn, values: string[]) => {
+      setColumnFilters((prev) => {
+        const next = { ...prev };
+        if (values.length === 0) {
+          delete next[column];
+          return next;
+        }
+        const matched = new Set(
+          useBulkStore
+            .getState()
+            .rows.filter((r) => values.includes(columnValue(r, column, propertyNameOf(r))))
+            .map((r) => r.id),
+        );
+        next[column] = { values, matched };
+        return next;
+      });
+    },
+    [propertyNameOf],
+  );
+  // タグの候補（タグの絞り込みを除くほかの絞り込みを通った予定の行のステータスと数）
+  const statusOptions = useCallback(() => {
+    const counts = new Map<InspectionStatus, number>();
+    for (const r of useBulkStore.getState().rows) {
+      if (!r.schedule || !passesBaseFilters(r) || !matchesColumnFilters(r, columnFilters, propertyNameOf(r))) continue;
+      if (!showReportOnly && isReportOnlyRow(r)) continue;
+      const s = statusOf(r);
+      if (s) counts.set(s, (counts.get(s) ?? 0) + 1);
+    }
+    return DEFAULT_STATUS_PRIORITY.map((s) => ({
+      value: s,
+      label: <StatusBadge status={s} />,
+      searchText: STATUS_LABEL[s],
+      count: counts.get(s) ?? 0,
+    }));
+  }, [passesBaseFilters, columnFilters, propertyNameOf, showReportOnly, isReportOnlyRow, statusOf]);
 
   // 選択中の保守会社の点検行（手で足した行を点検行に結び付ける・点検月を出すため）
   const inspectionOfManual = useCallback(
@@ -433,7 +534,8 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
         inspection: item.inspection,
         targetMonth: item.targetMonth,
         entryId: reportEntryId(item),
-        // DB が置き換えるのは同じ保守会社の版だけなので、他社の版は前の版にしない（点検一覧と同じ）
+        defaultPerformedOn: reportDefaultPerformedOn(item),
+        // 自社（管理者は全社）の版があれば再提出として開く（点検一覧と同じ。報告書は追加。修正依頼1027 決定①）
         previous: item.report && (isAdmin || item.report.vendor_id === profileVendorId) ? item.report : null,
       });
     },
@@ -771,13 +873,49 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       addToast('データを入力してください', 'error');
       return false;
     }
-    const { rows: parsed, unresolvedCount, unresolvedNames, errorCount } = parseExcelPaste(
-      raw,
-      useBulkStore.getState().masterData.properties,
-    );
-    parsed.forEach((r) => addRow(r));
+    const { rows: parsed, errorCount, blankCount } = parseExcelPaste(raw, useBulkStore.getState().masterData.properties);
+    // 物件・点検種別・対象月が合う点検予定の行があれば、その行に日付・備考を入れる（修正依頼1027 (2)。テンプレートの行は
+    // 担当の点検なので、紐付けの無い物件でも予定の行で申請できる）。無ければ今までどおり手の行を足す
+    let filled = 0;
+    const added: typeof parsed = [];
+    for (const r of parsed) {
+      const store = useBulkStore.getState();
+      const targets = scheduleTargetsFor(store.rows, r);
+      if (targets.length === 0) {
+        added.push(r);
+        continue;
+      }
+      for (const t of targets) {
+        store.changeStartDate(t.id, r.startDate!);
+        if (r.endDate) store.updateRow(t.id, { endDate: r.endDate });
+        if (r.remarks) store.changeRemarks(t.id, r.remarks);
+        // 案内文・表示位置の列を足した貼り付けでは、手の行と同じくそれも入れる（空・既定の位置2 は予定の行の値のまま）
+        if (r.noticeText) store.updateRow(t.id, { noticeText: r.noticeText });
+        if (r.position !== undefined && r.position !== 2) store.updateRow(t.id, { position: r.position });
+      }
+      filled++;
+    }
+    added.forEach((r) => addRow(r));
+    const unresolvedNames = [...new Set(added.filter((r) => r.pastedPropertyName).map((r) => r.pastedPropertyName!))];
+    const unresolvedCount = added.filter((r) => r.pastedPropertyName).length;
     setShowPaste(false);
-    if (parsed.length > 0) addToast(`${parsed.length}件のデータを取り込みました`, 'success');
+    if (parsed.length > 0) {
+      addToast(
+        filled > 0
+          ? `${parsed.length}件のデータを取り込みました（点検予定の行に${filled}件・追加した行${added.length}件）`
+          : `${parsed.length}件のデータを取り込みました`,
+        'success',
+      );
+    }
+    // テンプレートで日付を入れなかった物件の行（修正依頼1027 (2)）
+    if (blankCount > 0) {
+      addToast(
+        parsed.length > 0
+          ? `開始日・終了日・備考・案内文が空の${blankCount}行は取り込みませんでした`
+          : `取り込む行がありませんでした（開始日・終了日・備考・案内文が空の${blankCount}行は取り込みません）`,
+        'info',
+      );
+    }
     if (unresolvedCount > 0) {
       // どの名前が合わなかったかを並べる（行の物件セルにも「未一致: ○○」と出る）
       addToast(
@@ -788,6 +926,38 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
     if (errorCount > 0) addToast(`${errorCount}件の不正な行をスキップしました`, 'error');
     return true;
   };
+
+  // 一括入力テンプレート（Excel）。選択中の保守会社の点検が登録されている物件を全部入れる（修正依頼1027 (2)）。
+  // 申請不要（点検種別の報告書のみ・点検行の点検日連絡 OFF）の点検は日付を入れないので入れない。
+  // 略称と設備の並びは DB（bulk_template_info）から。読めなければ保守会社名・点検種別の名前の順で作る
+  const handleDownloadTemplate = useCallback(async () => {
+    if (isAdmin && !currentVendor.id) {
+      addToast('ヘッダーで保守会社を選んでください', 'error');
+      return;
+    }
+    if (!portal.loaded) {
+      addToast('点検の予定を読み込み中です。少し待ってからもう一度押してください', 'error');
+      return;
+    }
+    let info: BulkTemplateInfo = { short_name: null, inspection_ids: [] };
+    try {
+      info = await fetchBulkTemplateInfo(isAdmin ? currentVendor.id : null);
+    } catch (err) {
+      console.error('Failed to load template info:', err);
+    }
+    const rows = buildTemplateRows(
+      vendorInspections.filter(
+        (i) => !flags.get(i.inspection_type_id)?.reportOnly && !notifyIndex.inspections.has(i.inspection_id),
+      ),
+      info.inspection_ids,
+    );
+    if (rows.length === 0) {
+      addToast('点検が登録されている物件がありません', 'error');
+      return;
+    }
+    await downloadTemplateXlsx(rows, templateFilename(info.short_name || currentVendor.name || '', todayJst()));
+    addToast(`テンプレートをダウンロードしました（${rows.length}物件）`, 'success');
+  }, [isAdmin, currentVendor.id, currentVendor.name, portal.loaded, vendorInspections, flags, notifyIndex, addToast]);
 
   // v1: js/bulk-modals.js applyTemplate（点検予定の行は残す）
   const handleApplyTemplate = async (id: string) => {
@@ -961,28 +1131,51 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       </select>
       <label
         className="inline-flex h-7 items-center gap-1 whitespace-nowrap rounded border border-gray-300 bg-white px-1.5 text-xs text-gray-700"
-        title="点検開始日が「申請不要」の行（報告書UP・完了連絡だけの点検）も出す"
+        title="点検開始日が「申請不要」の行（報告書UP・完了連絡だけの点検）を隠す。外すと出す"
       >
         <input
           type="checkbox"
-          checked={showReportOnly}
-          onChange={(e) => toggleShowReportOnly(e.target.checked)}
+          checked={hideReportOnly}
+          onChange={(e) => toggleHideReportOnly(e.target.checked)}
           className="h-3.5 w-3.5 rounded border-gray-300"
         />
-        申請不要も表示
+        申請不要を隠す
       </label>
       {hiddenReportOnlyCount > 0 && (
         <span className="whitespace-nowrap text-[11px] text-gray-500" data-testid="hidden-report-only">
           申請不要 {hiddenReportOnlyCount}件を非表示
         </span>
       )}
+      {/* タグ（ステータス）で絞る（修正依頼1027 (3)）。複数選べる。手で足した行は隠さない */}
+      <span className="inline-flex h-7 items-center gap-0.5 rounded border border-gray-300 bg-white px-1 text-xs text-gray-700">
+        <ValueFilterPopover
+          trigger={<span className="px-0.5 text-xs">タグ{statusFilter.length > 0 ? `: ${statusFilter.length}件` : ': すべて'} ▾</span>}
+          title="タグ（ステータス）で絞り込む（選んだタグの行だけ表示。複数選べます）"
+          triggerClassName="h-6"
+          getOptions={statusOptions}
+          selected={statusFilter}
+          onApply={(values) => setStatusFilter(values as InspectionStatus[])}
+          searchable={false}
+        />
+        {statusFilter.length > 0 && (
+          <button
+            type="button"
+            className="rounded px-0.5 text-gray-500 hover:bg-gray-100"
+            aria-label="タグの絞り込みを解除"
+            title={`タグの絞り込みを解除（${statusFilter.map((s) => STATUS_LABEL[s]).join('・')}）`}
+            onClick={() => setStatusFilter([])}
+          >
+            ✕
+          </button>
+        )}
+      </span>
       <input
         type="search"
-        aria-label="物件名・コードで検索"
-        placeholder="物件名・コード"
+        aria-label="物件名・マンションコードで検索"
+        placeholder="物件名・マンションコード"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        className="h-7 w-36 rounded border border-gray-300 bg-white px-1.5 text-xs"
+        className="h-7 w-40 rounded border border-gray-300 bg-white px-1.5 text-xs"
       />
       {portal.loading && <Spinner size="sm" />}
     </>
@@ -1101,6 +1294,9 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
               showVendor={isAdmin}
               sort={sort}
               onSortChange={setSort}
+              columnFilters={columnFilters}
+              onColumnFilterChange={changeColumnFilter}
+              filterOptionsOf={filterOptionsOf}
             />
           )}
         </div>
@@ -1121,7 +1317,12 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
         selectedCount={visibleSelectedCount}
         hiddenSelectedCount={selectedCount - visibleSelectedCount}
       />
-      <PasteModal open={showPaste} onClose={() => setShowPaste(false)} onImport={handleImport} />
+      <PasteModal
+        open={showPaste}
+        onClose={() => setShowPaste(false)}
+        onImport={handleImport}
+        onDownloadTemplate={handleDownloadTemplate}
+      />
       <RowDetailModal open={detailRowId !== null} onClose={() => setDetailRowId(null)} rowId={detailRowId} />
       <SaveTemplateModal
         open={showSaveTemplate}
@@ -1153,10 +1354,12 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
         targetMonth={reportTarget?.targetMonth ?? null}
         entryId={reportTarget?.entryId ?? null}
         previous={reportTarget?.previous ?? null}
+        defaultPerformedOn={reportTarget?.defaultPerformedOn ?? null}
         onUploaded={() => {
           setReportTarget(null);
           void portal.refetch();
         }}
+        onDeleted={() => void portal.refetch()}
       />
       <BulkReportUploadModal
         open={showBulkReport}

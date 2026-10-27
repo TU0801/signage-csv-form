@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildPasteTemplateSheet, parseExcelPaste, PASTE_COLUMNS } from '../utils/parseExcelPaste';
+import { parseExcelPaste, PASTE_COLUMNS } from '../utils/parseExcelPaste';
 import type { BulkProperty } from '../types';
 
 /** 1024 の新5列（物件名 / 点検種別 / 開始日 / 終了日 / 備考）。旧6列の互換は paste-parity.test.ts */
@@ -119,16 +119,18 @@ describe('Excel 取込（新5列）', () => {
     expect(noDates).toMatchObject({ terminalId: 'T-A1', inspectionType: 'EV' });
   });
 
-  it('テンプレート書式は5列（端末ID なし・見出しは「備考」のまま）で、備考の例は作業時間', () => {
-    const sheet = buildPasteTemplateSheet();
-    expect(sheet[0]).toEqual(['物件名', '点検種別', '開始日', '終了日', '備考']);
-    expect(sheet[0]).toEqual([...PASTE_COLUMNS]);
-    expect(sheet.slice(1).map((r) => r[4])).toEqual(['10:00～12:00', 'No2号機11:00～12:00']);
-    // 書式をそのまま貼っても読める（日付は YYYY/M/D）
-    const { rows } = parseExcelPaste(sheet.map((r) => r.join('\t')).join('\n'), properties);
-    expect(rows.map((r) => [r.inspectionType, r.startDate, r.remarks])).toEqual([
-      ['エレベーター定期点検', '2025-01-15', '10:00～12:00'],
-      ['消防設備点検', '2025-02-01', 'No2号機11:00～12:00'],
-    ]);
+  it('テンプレートを貼ると、開始日・終了日・備考が空の物件の行は飛ばし、"…" で囲んだ2行の備考は1つのセルで読む（修正依頼1027 (2)）', () => {
+    expect(PASTE_COLUMNS).toEqual(['物件名', '点検種別', '開始日', '終了日', '備考']);
+    // Excel のコピーは改行を含むセルを "…" で囲む
+    const paste = [
+      PASTE_COLUMNS.join('\t'),
+      '物件A\tエレベーター定期点検\t\t\t',
+      '物件B\t消防設備点検\t2026/11/5\t2026/11/5\t"No1号機 9:00～\n""午後""も作業"',
+    ].join('\r\n');
+    const { rows, blankCount, errorCount } = parseExcelPaste(paste, properties);
+    expect(blankCount).toBe(1);
+    expect(errorCount).toBe(0);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ propertyCode: '120442-00', startDate: '2026-11-05', remarks: 'No1号機 9:00～\n"午後"も作業' });
   });
 });

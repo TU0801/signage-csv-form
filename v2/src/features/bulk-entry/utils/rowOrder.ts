@@ -5,9 +5,25 @@ import type { BulkEntryRow } from '../types';
  * 点検登録フォーム（一括入力）の表の並べ替え（修正依頼1025 F3）。
  * 並べ替えるのは点検予定の行だけで、手で足した行は常に上にまとめて置く（ステータスも対象月も無いため）。
  * 並べ替えは表示だけ（ストアの rows は触らない）。No と申請エラーの「N行目」はこの並びの通し番号。
+ * 見出しで並べ替えていないとき（既定）は、手当ての要るタグ（点検月超過・申請差戻しなど）の付いた予定の行を上に置く（修正依頼1027 (3)）。
  */
 
-export type SortColumn = 'status' | 'targetMonth' | 'months';
+export type SortColumn = 'status' | 'targetMonth' | 'months' | 'startDate' | 'endDate';
+
+/**
+ * 既定の並び（見出しで並べ替えていないとき）のステータスの順。手当ての要るもの（超過・差戻し・報告書の未提出）→
+ * 進行中（申請中・報告書提出済）→ 点検完了 → 未申請（灰色の、タグの無い状態）。同じステータスの中は元の並び（対象月の順）
+ */
+export const DEFAULT_STATUS_PRIORITY: InspectionStatus[] = [
+  'overdue',
+  'sent_back',
+  'report_returned',
+  'report_missing',
+  'applying',
+  'report_submitted',
+  'completed',
+  'not_applied',
+];
 export interface SortState {
   column: SortColumn;
   dir: 'asc' | 'desc';
@@ -62,8 +78,23 @@ function compare(
       const kb = ib.inspectedOn === '-' ? '' : ib.inspectedOn;
       return ka.localeCompare(kb, 'ja', { numeric: true });
     }
+    case 'startDate':
+      return a.startDate.localeCompare(b.startDate);
+    case 'endDate':
+      return a.endDate.localeCompare(b.endDate);
   }
 }
+
+/** 日付の列で、値が空の行（未入力）は昇順でも降順でも最後 */
+function emptyLast(a: BulkEntryRow, b: BulkEntryRow, column: SortColumn): number {
+  if (column !== 'startDate' && column !== 'endDate') return 0;
+  return Number(!a[column]) - Number(!b[column]);
+}
+
+const priorityOf = (status: InspectionStatus | undefined) => {
+  const i = status ? DEFAULT_STATUS_PRIORITY.indexOf(status) : -1;
+  return i === -1 ? DEFAULT_STATUS_PRIORITY.length : i;
+};
 
 /**
  * 表に出す行の並び。表示する行だけを、手で足した行 → 点検予定の行の順に並べ、予定の行は sort で並べ替える。
@@ -79,7 +110,6 @@ export function orderRows(
   const visible = rows.filter(isVisible);
   const manual = visible.filter((r) => !r.schedule);
   const schedule = visible.filter((r) => r.schedule);
-  if (!sort) return [...manual, ...schedule];
   const groups: BulkEntryRow[][] = [];
   for (const r of schedule) {
     const last = groups[groups.length - 1];
@@ -87,9 +117,15 @@ export function orderRows(
     else groups.push([r]);
   }
   const info = new Map(groups.map((g) => [g[0]!.id, sortInfoOf(g[0]!)]));
+  if (!sort) {
+    // 既定: タグ（ステータス）の優先度の順。同じなら元の並び
+    groups.sort((ga, gb) => priorityOf(info.get(ga[0]!.id)!.status) - priorityOf(info.get(gb[0]!.id)!.status));
+    return [...manual, ...groups.flat()];
+  }
   const sign = sort.dir === 'asc' ? 1 : -1;
   groups.sort(
     (ga, gb) =>
+      emptyLast(ga[0]!, gb[0]!, sort.column) ||
       sign * compare(ga[0]!, gb[0]!, info.get(ga[0]!.id)!, info.get(gb[0]!.id)!, sort.column),
   );
   return [...manual, ...groups.flat()];

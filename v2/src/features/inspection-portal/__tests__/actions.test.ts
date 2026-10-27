@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { completionBlockedReason, reportEntryId, rowActions } from '../lib/actions';
+import { completionBlockedReason, reportDefaultPerformedOn, reportEntryId, rowActions } from '../lib/actions';
 import { makeEntry, makeInspection } from './fixtures';
 
 const vendor = { isAdmin: false, isManagement: false };
@@ -64,6 +64,14 @@ describe('報告書に渡す申請 id（修正依頼1024 F3）', () => {
     const inspection = makeInspection();
     expect(reportEntryId({ inspection, entries: [makeEntry({ id: 'linked' })] })).toBe('linked');
     expect(reportEntryId({ inspection, entries: [makeEntry({ id: 'legacy', property_inspection_id: null, target_month: null })] })).toBeNull();
+  });
+});
+
+describe('報告書の実施日の既定（修正依頼1027(1)）', () => {
+  it('行の申請（承認待ち・承認済み）の点検開始日。申請が無ければ null', () => {
+    const inspection = makeInspection();
+    expect(reportDefaultPerformedOn({ inspection, entries: [makeEntry({ inspection_start: '2026-10-25' })] })).toBe('2026-10-25');
+    expect(reportDefaultPerformedOn({ inspection, entries: [] })).toBeNull();
   });
 });
 

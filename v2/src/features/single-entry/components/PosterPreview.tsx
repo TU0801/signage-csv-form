@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { computePosterSize } from '../lib/entryLogic';
 import './posterPreview.css';
 
@@ -16,6 +16,11 @@ interface PosterPreviewProps {
   remarks: string;
   vendorName: string;
   emergencyContact: string;
+  /**
+   * 重ねる文字の倍率（既定 1）。詳細設定のような狭い枠で読めるよう大きくする（修正依頼1027(3)）。
+   * 欄に収まらないときは、その欄だけ 1 まで縮める（はみ出して切れないように）
+   */
+  textScale?: number;
 }
 
 const NO_EXTRAS: readonly string[] = [];
@@ -64,8 +69,10 @@ export function PosterPreview({
   remarks,
   vendorName,
   emergencyContact,
+  textScale = 1,
 }: PosterPreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const [size, setSize] = useState<{ url: string; width: number; height: number } | null>(null);
 
@@ -101,6 +108,21 @@ export function PosterPreview({
       ro?.disconnect();
     };
   }, [fit, hasFrame]);
+
+  // 倍率を上げたとき、欄に収まらない文字はその欄だけ縮める（0.1 刻みで 1 まで）。文字・枠の幅が変わるたびに測り直す
+  const fittedWidth = size?.width ?? 0;
+  useLayoutEffect(() => {
+    const overlay = overlayRef.current;
+    if (!overlay || textScale <= 1) return;
+    for (const el of Array.from(overlay.children) as HTMLElement[]) {
+      let scale = textScale;
+      el.style.removeProperty('--ts');
+      while (scale > 1 && (el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1)) {
+        scale = Math.max(1, Math.round((scale - 0.1) * 10) / 10);
+        el.style.setProperty('--ts', String(scale));
+      }
+    }
+  }, [textScale, noticeText, dateText, remarks, vendorName, emergencyContact, fittedWidth]);
 
   if (isCustom) {
     return (
@@ -143,6 +165,7 @@ export function PosterPreview({
         width: `${fitted.width}px`,
         height: `${fitted.height}px`,
         '--pw': fitted.width,
+        ...(textScale !== 1 ? { '--ts': textScale } : {}),
       } as React.CSSProperties)
     : undefined;
 
@@ -161,7 +184,7 @@ export function PosterPreview({
           alt={templateNo}
           onLoad={fit}
         />
-        <div className="se-poster-overlay">
+        <div ref={overlayRef} className="se-poster-overlay">
           <div className="se-poster-notice-text">{noticeText}</div>
           <div className="se-poster-date-text">{dateText}</div>
           <div className="se-poster-remarks-text">{remarks}</div>

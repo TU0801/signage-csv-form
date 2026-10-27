@@ -117,7 +117,10 @@ export interface BulkState {
   insertRowAt: (index: number) => void;
   removeRows: (ids: number[]) => void;
   /** 物件・端末・点検種別・点検終了日の変更（変更後に検証する） */
-  updateRow: (id: number, patch: Partial<Pick<BulkEntryRow, 'terminalId' | 'inspectionType' | 'endDate'>>) => void;
+  updateRow: (
+    id: number,
+    patch: Partial<Pick<BulkEntryRow, 'terminalId' | 'inspectionType' | 'endDate' | 'noticeText' | 'position'>>,
+  ) => void;
   /** 物件を変える。外した管理会社のライブラリの貼紙の枚数を返す（物件が変わったときだけ。ユーザー決定3） */
   changeProperty: (id: number, propertyCode: string) => number;
   changeStartDate: (id: number, startDate: string) => void;

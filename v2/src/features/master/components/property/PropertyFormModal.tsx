@@ -3,7 +3,9 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { unitManagedTypeIds } from '@/lib/api/inspections';
+import { deleteMasterProperty, fetchPropertyLinks, propertyLinkParts } from '@/lib/api/propertyMaster';
 import { useAuthStore } from '@/stores/authStore';
 import type { DbInspectionType, DbVendor } from '@/types/database';
 import type { PropertyInspection, PropertyUnit, UnitInspectionTypeOption } from '@/types/app';
@@ -33,9 +35,15 @@ interface PropertyFormModalProps {
 }
 
 /**
- * 物件の編集モーダル。**物件コード・物件名・端末は読み取り専用**で、保存するのは設備情報（点検）と台ごとの保守だけ
+ * 物件の編集モーダル。**マンションコード（signage の物件コード）・補助・物件名・端末は読み取り専用**で、保存するのは設備情報（点検）と台ごとの保守だけ
  * （2026-10-15。物件の正本は業務システムの物件で、biz のトリガーが signage_master_properties へ写す）。開くたびに作り直す（呼ぶ側が開いているときだけ描画し、key を物件ごとに変える）ので、
  * 編集中の状態（設備情報の編集位置など）が別の物件に持ち越されない。
+ *
+ * 2026-10-27 修正依頼1027(7):
+ * - 『物件コード』の表記を『マンションコード』に、『マンションコード（補助）』（業務システムの物件の en_no）を読み取りで出す
+ * - 業務システムの「サイネージを編集」と同じ並び・項目: 台ごとの保守を先に、点検日連絡・インターバル・請求月を足す（契約・料金は出さない）
+ * - 『削除』（管理者だけ）: 紐付けが無ければ設備点検管理システムから物件を外す（業務システムの物件は残り、連携が外れる）。
+ *   紐付けがあれば「紐づけありの為、削除できません」と件数を出す（判定は DB の delete_master_property がもう一度行う）
  */
 // v1: js/admin-masters.js openMasterModal('property') / handleMasterFormSubmit / admin.html #propertyFields（v1.29.1 のレイアウト）
 export function PropertyFormModal({
@@ -64,6 +72,11 @@ export function PropertyFormModal({
   // 設備情報の入力欄に「追加」「更新」を押していない値があるか（保存では送られないので止める）
   const [draftPending, setDraftPending] = useState(false);
   const [saving, setSaving] = useState(false);
+  // 削除（管理者だけ）。blocked は紐付けがあって消せない理由、confirmDelete は確認の表示
+  const isAdmin = profile?.role === 'admin';
+  const [checkingDelete, setCheckingDelete] = useState(false);
+  const [deleteBlocked, setDeleteBlocked] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // 閉じる（Esc・背景・×）前に破棄を確かめる。フッターの「キャンセル」は明示的な破棄なので確かめない
   const dirty =
@@ -76,7 +89,7 @@ export function PropertyFormModal({
     // 物件コードは英数字（z0023A01 等）もあるので文字列のまま扱う（DB も text 型。v1.32.0）
     const propertyCode = property.property_code.trim();
     if (!propertyCode) {
-      showError('物件コードがありません');
+      showError('マンションコードがありません');
       return;
     }
     // 保存は表の行だけを送る。入力欄に残った値を黙って捨てない
@@ -119,7 +132,47 @@ export function PropertyFormModal({
     }
   };
 
+  // 『削除』: 先に紐付けの件数を読み、あれば止める。無ければ確認を出す
+  const handleDeleteClick = async () => {
+    setDeleteBlocked(null);
+    setCheckingDelete(true);
+    try {
+      const parts = propertyLinkParts(await fetchPropertyLinks(property.property_code));
+      if (parts.length > 0) {
+        const message = `紐づけありの為、削除できません（${parts.join('・')}）`;
+        setDeleteBlocked(message);
+        showError(message);
+        return;
+      }
+      setConfirmDelete(true);
+    } catch (err) {
+      console.error('Failed to check property links:', err);
+      showError(`削除できるかを確かめられませんでした: ${errorMessage(err)}`);
+    } finally {
+      setCheckingDelete(false);
+    }
+  };
+
+  const runDelete = async () => {
+    setCheckingDelete(true);
+    try {
+      await deleteMasterProperty(property.property_code);
+      addToast('物件を削除しました（業務システムの物件は残り、設備点検管理システムとの連携を外しました）', 'success');
+      onClose();
+      onSaved();
+    } catch (err) {
+      console.error('Failed to delete property:', err);
+      // 確かめた後に紐付けができたときは DB が断る（文言はそのまま出す）
+      const message = errorMessage(err);
+      if (message.includes('紐づけあり')) setDeleteBlocked(message);
+      showError(message);
+    } finally {
+      setCheckingDelete(false);
+    }
+  };
+
   return (
+    <>
     <Modal
       open
       onClose={onClose}
@@ -129,6 +182,18 @@ export function PropertyFormModal({
       // 保存・キャンセルは本文のスクロールの外に置く。フォームの外になるので form 属性で送信先を結ぶ
       footer={
         <>
+          {/* 削除は管理者だけ（管理会社は削除できない。DB も断る） */}
+          {isAdmin && (
+            <Button
+              variant="danger"
+              type="button"
+              className="mr-auto"
+              disabled={saving || checkingDelete}
+              onClick={() => void handleDeleteClick()}
+            >
+              削除
+            </Button>
+          )}
           <Button variant="secondary" type="button" onClick={onClose}>
             キャンセル
           </Button>
@@ -140,20 +205,38 @@ export function PropertyFormModal({
     >
       <form id="property-form" onSubmit={handleSubmit} className="space-y-3">
         <p className="text-sm text-gray-500">
-          物件コード・物件名・端末は業務システム（BARAN業務リスト）の物件で編集します（
-          <a href={BIZ_PROPERTIES_URL} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
-            物件一覧を開く
+          マンションコード・補助・物件名・端末は業務システム（BARAN業務リスト）の物件で編集します（
+          <a
+            href={property.biz_property_id ? `${BIZ_PROPERTIES_URL}/${property.biz_property_id}` : BIZ_PROPERTIES_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 underline"
+          >
+            {property.biz_property_id ? '業務システムでこの物件を開く' : '物件一覧を開く'}
           </a>
-          ）。ここで保存するのは設備情報（点検）と台ごとの保守だけです。
+          ）。ここで保存するのは台ごとの保守と設備情報（点検）だけです。
         </p>
-        {/* FHD（2xl）では物件コード・物件名・端末リストを1行に並べる */}
-        <div className="grid gap-x-3 gap-y-2 sm:grid-cols-2 2xl:grid-cols-3">
+        {deleteBlocked && (
+          <p role="alert" className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-sm text-red-700">
+            {deleteBlocked}
+          </p>
+        )}
+        {/* マンションコード・補助・物件名・端末リスト（FHD では1行） */}
+        <div className="grid gap-x-3 gap-y-2 sm:grid-cols-[10rem_10rem_1fr] 2xl:grid-cols-[10rem_10rem_1fr_1fr]">
           <Input
-            label="物件コード"
+            label="マンションコード"
             id="property-code"
             readOnly
             className="bg-gray-50 text-gray-700"
             value={property.property_code}
+          />
+          <Input
+            label="マンションコード（補助）"
+            id="property-en-no"
+            readOnly
+            className="bg-gray-50 text-gray-700"
+            placeholder="—"
+            value={property.en_no ?? ''}
           />
           <Input
             label="物件名"
@@ -162,30 +245,17 @@ export function PropertyFormModal({
             className="bg-gray-50 text-gray-700"
             value={property.property_name}
           />
-          <div className="sm:col-span-2 2xl:col-span-1">
+          <div className="sm:col-span-3 2xl:col-span-1">
             <TerminalList value={property.terminals} />
           </div>
         </div>
-
-        <section className="space-y-2 border-t border-gray-200 pt-3">
-          <h3 className="text-sm font-semibold text-gray-900">設備情報</h3>
-          <PropertyInspectionEditor
-            value={inspections}
-            onChange={setInspections}
-            inspectionTypes={inspectionTypes}
-            excludedTypeIds={managedTypeIds}
-            vendors={vendors}
-            onError={showError}
-            onDraftChange={setDraftPending}
-          />
-        </section>
 
         {/* 台がある物件のときだけ出す */}
         {units.length > 0 && (
           <section className="space-y-2 border-t border-gray-200 pt-3">
             <h3 className="text-sm font-semibold text-gray-900">台ごとの保守</h3>
             <p className="text-sm text-gray-500">
-              台を登録した設備の保守は、台ごとに編集します（上の設備情報の表には出ません）。台の追加・削除、保守会社固有コード・設置場所・金額の変更は業務システムで行います（
+              台を登録した設備の保守は、台ごとに編集します（下の設備情報の表には出ません）。台の追加・削除、保守会社固有コード・設置場所・金額の変更は業務システムで行います（
               <a
                 href={BIZ_PROPERTIES_URL}
                 target="_blank"
@@ -205,7 +275,37 @@ export function PropertyFormModal({
             />
           </section>
         )}
+        <section className="space-y-2 border-t border-gray-200 pt-3">
+          <h3 className="text-sm font-semibold text-gray-900">設備情報</h3>
+          <PropertyInspectionEditor
+            value={inspections}
+            onChange={setInspections}
+            inspectionTypes={inspectionTypes}
+            excludedTypeIds={managedTypeIds}
+            vendors={vendors}
+            onError={showError}
+            onDraftChange={setDraftPending}
+          />
+        </section>
+
       </form>
     </Modal>
+    <ConfirmDialog
+      open={confirmDelete}
+      onClose={() => setConfirmDelete(false)}
+      onConfirm={() => void runDelete()}
+      title="物件の削除"
+      message={`「${property.property_code} ${property.property_name}」を設備点検管理システムから削除します。業務システムの物件は残り、設備点検管理システムとの連携が外れます（もう一度出すときは、業務システムの物件で設備点検管理システムの物件コードを入れ直します）。この操作は元に戻せません。`}
+      confirmLabel="削除"
+      variant="danger"
+    />
+    </>
   );
+}
+
+function errorMessage(e: unknown): string {
+  if (e && typeof e === 'object' && 'message' in e && (e as { message?: unknown }).message) {
+    return String((e as { message: unknown }).message);
+  }
+  return String(e);
 }

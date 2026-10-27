@@ -56,6 +56,7 @@ npm run deps:circular                  # 循環依存チェック
 - `version.js` — バージョン表示
 
 **物件マスタの正本は業務システム（biz.properties）**（2026-10-15〜）: 物件の追加・削除・コード・名前・端末は biz で編集し、biz のトリガーが `signage_master_properties` へ写す。v1・v2 とも物件の表へは書かず、物件モーダルの保存は点検と台ごとの保守の RPC、それに保守会社の紐付け（`signage_building_vendors`）へ無いものを足すことだけ。
+例外（2026-10-28 ユーザー了承、修正依頼1027(7)）: マスター管理の『削除』は管理者だけの RPC `delete_master_property` で、紐付け（申請・報告書・保守会社の紐付け・ファイル・点検・台）が1件も無い物件に限り、signage の物件の行を消し、`biz.properties` の `signage_property_id`・`signage_property_code` の2列だけを null にする（業務システムの物件は残り、その後 biz 側で削除できる）。
 
 **既知の循環依存**: `supabase/master-data.js` ↔ `supabase/relationships.js`（dynamic importで回避中）
 
