@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { DEFAULT_APP_SETTINGS } from '@/lib/api/single-entry';
 import type { MasterData } from '@/types/app';
 import { makeEntry, makeInspection } from './fixtures';
+import { todayJst } from '../lib/schedule';
 
 const api = vi.hoisted(() => ({ insertEntries: vi.fn(async () => []) }));
 vi.mock('@/lib/api/single-entry', async (orig) => ({
@@ -86,6 +87,8 @@ describe('ApplyModal（点検ポータルの申請）', () => {
     // 案内文は点検種別の既定文で埋まっている
     expect(screen.getByLabelText('案内文')).toHaveValue('エレベーターの点検を行います。');
     fireEvent.change(screen.getByLabelText('点検開始日 *'), { target: { value: '2026-11-10' } });
+    // 点検終了日も合わせる（一括入力と同じ連動。修正依頼1027(3)）
+    expect(screen.getByLabelText('点検終了日')).toHaveValue('2026-11-10');
     fireEvent.click(screen.getByRole('button', { name: '申請する' }));
 
     await waitFor(() => expect(api.insertEntries).toHaveBeenCalledTimes(1));
@@ -219,7 +222,7 @@ describe('ApplyModal（点検ポータルの申請）', () => {
       />,
     );
     expect(await screen.findByLabelText('点検開始日 *')).toHaveValue('2026-11-03');
-    expect(screen.getByRole('img', { name: '追加画像' })).toHaveAttribute('src', image);
+    expect(screen.getByRole('img', { name: '追加の貼紙' })).toHaveAttribute('src', image);
     expect(screen.queryByText('テンプレートNo')).toBeNull();
     // 保守会社の表示も、保存される元の申請の保守会社名（アカウントの保守会社「テスト保守」ではない）
     expect(screen.getByText('三菱電機ビルソリューションズ')).toBeInTheDocument();
@@ -234,5 +237,47 @@ describe('ApplyModal（点検ポータルの申請）', () => {
     for (const col of ['poster_type', 'poster_image', 'template_no', 'vendor_name', 'emergency_contact', 'inspection_type', 'vendor_id']) {
       expect(patch).not.toHaveProperty(col);
     }
+  });
+
+  it('差戻しの再申請: 点検開始日を入れると点検終了日も合わせ（一括入力と同じ）、表示開始日の既定は今日・表示終了日は点検終了日（修正依頼1027(3)）', async () => {
+    entryApi.fetchEntryForEdit.mockResolvedValue({
+      id: 'e9',
+      terminal_id: 'T-1',
+      inspection_start: '2026-11-03',
+      inspection_end: '2026-11-03',
+      announcement: '案内',
+      remarks: '',
+      // 前の画面が点検開始日を表示開始日に入れていた申請
+      display_start_date: '2026-11-03',
+      display_end_date: '2026-11-03',
+      target_month: '2026-11-01',
+      poster_type: 'template',
+      poster_position: '2',
+      display_duration: 6,
+    });
+    render(
+      <ApplyModal
+        target={{ inspection: makeInspection(), targetMonth: '2026-11-01', resubmit: makeEntry({ id: 'e9', status: 'pending' }) }}
+        onClose={vi.fn()}
+        onApplied={vi.fn()}
+        userId="u1"
+        isAdmin={false}
+        profileVendorId="v1"
+      />,
+    );
+    expect(await screen.findByLabelText('点検終了日')).toHaveValue('2026-11-03');
+    fireEvent.change(screen.getByLabelText('点検開始日 *'), { target: { value: '2026-11-20' } });
+    expect(screen.getByLabelText('点検終了日')).toHaveValue('2026-11-20');
+    fireEvent.click(screen.getByRole('button', { name: '再申請する' }));
+
+    await waitFor(() => expect(entryApi.resubmitEntry).toHaveBeenCalledTimes(1));
+    const [, patch] = entryApi.resubmitEntry.mock.calls[0] as unknown as [string, Record<string, unknown>];
+    expect(patch).toMatchObject({
+      inspection_start: '2026-11-20',
+      inspection_end: '2026-11-20',
+      display_start_date: todayJst(),
+      display_end_date: '2026-11-20',
+      status: 'draft',
+    });
   });
 });

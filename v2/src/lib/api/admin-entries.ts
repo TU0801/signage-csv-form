@@ -83,6 +83,24 @@ export async function approveEntry(id: string, expectedUpdatedAt: string | null)
   return row;
 }
 
+/**
+ * 承認待ちの申請を管理者が基本フォームで直す（修正依頼1027(3) 決定③）。patch は変えた列だけ。approve なら同じ更新で承認済み（ready）にする。
+ * 承認と同じく、画面が読んだ版（updated_at）の申請だけを更新する（保守会社が直した後なら断る＝見ていない内容を上書き・承認しない）
+ */
+export async function updatePendingEntry(
+  id: string,
+  patch: Partial<DbEntry>,
+  expectedUpdatedAt: string | null,
+): Promise<DbEntry> {
+  const base = supabase.from(TABLES.entries).update(patch).eq('id', id).eq('status', 'draft');
+  const query = expectedUpdatedAt === null ? base.is('updated_at', null) : base.eq('updated_at', expectedUpdatedAt);
+  const { data, error } = await query.select();
+  if (error) throw error;
+  const row = (data ?? [])[0] as DbEntry | undefined;
+  if (!row) throw new Error(STALE_ENTRY_MESSAGE);
+  return row;
+}
+
 // v1: js/supabase/approval.js approveEntries（v1 は1回の更新。版を1件ずつ比べるので1件ずつ承認し、全件の結果を待つ）
 export async function approveEntries(
   targets: { id: string; updatedAt: string | null }[],
