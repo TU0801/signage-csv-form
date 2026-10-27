@@ -8,8 +8,10 @@
 -- 1. 報告書は1つの点検 × 対象月に複数持てる（決定①）。portal_register_report が同じ保守会社の前の版を superseded に
 --    していた UPDATE を外し、再提出は「追加」にする。要らない版は管理者が削除する（2）。
 --    既に superseded になっている過去の版はそのまま（戻さない）。
+--    同じ storage_path の生きた行（削除済み以外）があれば登録を断る（置き換えをやめたので二重の行が残らないように）。
 -- 2. 報告書の削除は管理者だけ（決定②）。portal_update_report の delete を管理者だけにする。復元も管理者だけにする
 --    （保守会社が管理者の削除を取り消せないように）。編集（edit）は今どおり（保守会社は自社の版で受領前のもの）。
+--    権限の判定は coalesce で NULL を「権限なし」に倒す（無効・プロファイル無しのユーザーが他社の版を編集できた穴を塞ぐ）。
 
 SET lock_timeout = '5s';
 
@@ -39,6 +41,12 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM storage.objects o WHERE o.bucket_id = 'inspection-reports' AND o.name = p_storage_path
                  AND (o.owner_id IS NULL OR o.owner_id = auth.uid()::text)) THEN
     RAISE EXCEPTION 'ファイルのアップロードが完了していません' USING ERRCODE = '22023';
+  END IF;
+  -- 再提出は追加になったので、同じファイルを2回登録すると生きた行が2つ同じファイルを指す。画面は毎回新しい置き場所を使うので、
+  -- ここで止まるのは作った呼び出しだけ
+  IF EXISTS (SELECT 1 FROM signage.signage_inspection_reports r0
+              WHERE r0.storage_path = p_storage_path AND r0.status <> 'deleted') THEN
+    RAISE EXCEPTION 'このファイルは登録済みです' USING ERRCODE = '22023';
   END IF;
   IF p_entry_id IS NOT NULL AND NOT EXISTS (
        SELECT 1 FROM signage.signage_entries e WHERE e.id = p_entry_id AND e.property_inspection_id = p_inspection_id) THEN
@@ -103,15 +111,18 @@ BEGIN
     RAISE EXCEPTION '報告書が見つかりません' USING ERRCODE = 'P0002';
   END IF;
   -- 管理者以外は自社が提出した報告書だけ（同じ点検に台ごとの別の保守会社が居ても、他社の版は触らせない）
-  IF NOT signage.is_active_admin()
-     AND NOT (signage.current_role_kind() = 'user' AND r.vendor_id IS NOT NULL AND r.vendor_id = signage.current_vendor_id()) THEN
+  -- 無効・プロファイル無しのユーザーでは current_role_kind()・current_vendor_id() が NULL になり、式全体が NULL で
+  -- IF を素通りしていた。coalesce で「判定できないときは権限なし」にする。
+  IF NOT coalesce(signage.is_active_admin(), false)
+     AND NOT coalesce(signage.current_role_kind() = 'user' AND r.vendor_id IS NOT NULL
+                      AND r.vendor_id = signage.current_vendor_id(), false) THEN
     RAISE EXCEPTION 'この報告書を変更する権限がありません' USING ERRCODE = '42501';
   END IF;
   -- 削除・復元は管理者だけ（修正依頼1027 決定②）
-  IF NOT signage.is_active_admin() AND p_action IN ('delete', 'restore') THEN
+  IF NOT coalesce(signage.is_active_admin(), false) AND p_action IN ('delete', 'restore') THEN
     RAISE EXCEPTION '報告書の削除・復元は管理者だけができます' USING ERRCODE = '42501';
   END IF;
-  IF NOT signage.is_active_admin() AND r.status = 'accepted' THEN
+  IF NOT coalesce(signage.is_active_admin(), false) AND r.status = 'accepted' THEN
     RAISE EXCEPTION '受領済みの報告書は変更できません（再提出してください）' USING ERRCODE = '42501';
   END IF;
 

@@ -22,7 +22,8 @@
 --    紐付け（申請・報告書・保守会社の紐付け〔削除済みを除く〕・物件のファイル・設備〔旧〕・業務システムの点検・台）が1件でもあれば断る。
 --    signage_property_code も null にする（残すと biz.sync_property_to_signage が次の更新で同じコードの物件を作り直す）。
 --    SECURITY DEFINER（所有者 postgres）の中なので、biz.guard_signage_link / guard_signage_code / signage.block_property_direct_write は通る。
---    管理者だけ（管理会社は削除できない）。
+--    管理者だけ（管理会社は削除できない）。削除済みの保守会社の紐付け（status='deleted'）はこのとき一緒に消す。
+--    業務システムへ書くのは biz.properties の signage_property_id・signage_property_code の2列だけ（CLAUDE.md の「物件の表へは書かない」の例外。本番適用前にユーザーの了承が要る）。
 
 SET lock_timeout = '5s';
 
@@ -263,6 +264,9 @@ BEGIN
      SET signage_property_id = NULL,
          signage_property_code = NULL
    WHERE signage_property_id = v_id;
+  -- 削除済みの保守会社の紐付け（数えていない分）も消す。残すと、業務システムが後で同じコードの物件を出したときに付き直り、
+  -- 付け直しで重複キーのエラーになる（CLAUDE.md の soft-delete の注意）
+  DELETE FROM signage.signage_building_vendors WHERE property_code = p_property_code AND status = 'deleted';
   DELETE FROM signage.signage_master_properties WHERE id = v_id;
   RETURN true;
 END;

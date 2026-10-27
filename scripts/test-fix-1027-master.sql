@@ -163,6 +163,8 @@ SELECT pg_temp.check('signage の行が消えた',
 SELECT pg_temp.check('業務システムの物件は残り、リンクとコードが外れた',
   (SELECT signage_property_id IS NULL AND signage_property_code IS NULL AND active
      FROM biz.properties WHERE id = 'e0000000-0000-4000-8000-0000000010d7'));
+SELECT pg_temp.check('削除済みの保守会社の紐付けも消えた（同じコードの物件が後でできても付き直らない）',
+  NOT EXISTS (SELECT 1 FROM signage.signage_building_vendors WHERE property_code = 'T1027DEL-01'));
 -- 業務システムで物件を更新しても作り直されない
 UPDATE biz.properties SET name = '削除試験マンション2' WHERE id = 'e0000000-0000-4000-8000-0000000010d7';
 SELECT pg_temp.check('業務システムの更新で作り直されない',

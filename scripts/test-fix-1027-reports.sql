@@ -64,6 +64,10 @@ INSERT INTO t_ids SELECT 'b', (signage.portal_register_report('2b84a9bd-b98e-433
   '20310211_試験_1027.pdf', '2b84a9bd-b98e-4332-bd19-2973387bc13c/t1027-b.pdf', 'b.pdf', 10, 'hash-b')).id;
 SELECT pg_temp.check('2件とも提出のまま（置き換え済みにならない）',
   (SELECT count(*) FROM signage.signage_inspection_reports r JOIN t_ids t ON t.id = r.id WHERE r.status = 'submitted') = 2);
+-- 同じファイル（storage_path）をもう一度登録すると断る（追加になったので、二重に生きた行ができないように）
+SELECT pg_temp.expect_error('同じファイルの二重登録',
+  $q$SELECT signage.portal_register_report('2b84a9bd-b98e-4332-bd19-2973387bc13c', '2031-02-01', '2031-02-12',
+    '20310212_試験_1027.pdf', '2b84a9bd-b98e-4332-bd19-2973387bc13c/t1027-a.pdf', 'a.pdf', 10, 'hash-a')$q$, '登録済み');
 
 -- ============================================================
 -- 2. 保守会社は削除・復元できない。編集は今どおりできる
@@ -89,7 +93,21 @@ SELECT pg_temp.check('もう一方の版は提出のまま',
   (SELECT status FROM signage.signage_inspection_reports WHERE id = (SELECT id FROM t_ids WHERE k = 'b')) = 'submitted');
 
 -- ============================================================
--- 4. anon は実行できない
+-- 4. 無効ユーザー（a..03）・プロファイル無し（a..04）は他社の版も自社の版も編集できない
+--    （current_role_kind()・current_vendor_id() が NULL になっても権限の判定を素通りしない）
+-- ============================================================
+SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000004');
+SELECT pg_temp.expect_error('プロファイル無しの編集',
+  format('SELECT signage.portal_update_report(%L, ''edit'', p_note => ''改ざん'')', (SELECT id FROM t_ids WHERE k = 'b')), '権限がありません');
+SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000003');
+SELECT pg_temp.expect_error('無効ユーザーの編集',
+  format('SELECT signage.portal_update_report(%L, ''edit'', p_note => ''改ざん'')', (SELECT id FROM t_ids WHERE k = 'b')), '権限がありません');
+SELECT pg_temp.as_owner();
+SELECT pg_temp.check('版 b の備考は変わっていない',
+  (SELECT note FROM signage.signage_inspection_reports WHERE id = (SELECT id FROM t_ids WHERE k = 'b')) IS NULL);
+
+-- ============================================================
+-- 5. anon は実行できない
 -- ============================================================
 SELECT pg_temp.as_owner();
 SELECT pg_temp.check('anon に実行権が無い',
