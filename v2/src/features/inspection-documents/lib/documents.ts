@@ -33,7 +33,7 @@ export interface ReportFilters {
   /** '' は提出・受領・差戻しのすべて */
   status: '' | 'submitted' | 'accepted' | 'returned';
   showDeleted: boolean;
-  /** 再提出で置き換えられた旧版も出す */
+  /** 再提出で置き換えられた旧版も出す（修正依頼1027 以降は置き換えないので、それより前の版だけ） */
   showSuperseded: boolean;
   /** 実施日の期間（YYYY-MM-DD、空なら制限なし） */
   from: string;
@@ -305,7 +305,8 @@ export interface ReportPermissions {
 
 /**
  * portal_update_report と同じ判定: 管理者は全件、保守会社は自社（vendor_id）の版だけで受領済みは変えられない。
- * 受領・差戻しは管理会社と管理者（portal_review_report）。再提出は書ける人が置き換え前の版に対して行う
+ * 削除・復元は管理者だけ。
+ * 受領・差戻しは管理会社と管理者（portal_review_report）。再提出（追加の提出）は書ける人が行う
  */
 export function reportPermissions(report: DbInspectionReport, viewer: ReportViewer): ReportPermissions {
   const live = LIVE_STATUSES.includes(report.status);
@@ -316,8 +317,9 @@ export function reportPermissions(report: DbInspectionReport, viewer: ReportView
   return {
     canOpen: report.storage_backend === 'supabase',
     canEdit: writable && live && !lockedByAcceptance,
-    canDelete: writable && report.status !== 'deleted' && !lockedByAcceptance,
-    canRestore: writable && report.status === 'deleted',
+    // 削除・復元は管理者だけ（修正依頼1027 決定②。DB の portal_update_report も管理者だけ）
+    canDelete: viewer.isAdmin && report.status !== 'deleted',
+    canRestore: viewer.isAdmin && report.status === 'deleted',
     canAccept: reviewer && live && report.status !== 'accepted',
     canReturn: reviewer && live && report.status !== 'returned',
     // 業務システムで点検行が消された版は、出し直す先の点検を選べないので再提出を出さない

@@ -9,7 +9,7 @@ import { useToast } from '@/components/ui/Toast';
 import { useAuth } from '@/hooks/useAuth';
 import { downloadCsv } from '@/lib/csv';
 import { entryErrorReason } from '@/lib/api/admin-entries';
-import { reportSignedUrl, reviewInspectionReport, updateInspectionReport } from '@/lib/api/portal';
+import { downloadReportBlob, reportSignedUrl, reviewInspectionReport, updateInspectionReport } from '@/lib/api/portal';
 import { deletePropertyFile, propertyFileSignedUrl } from '@/lib/api/property-files';
 import { todayJst } from '@/features/inspection-portal/lib/schedule';
 import { useInspectionDocuments } from '../hooks/useInspectionDocuments';
@@ -25,6 +25,7 @@ import {
   type TreeSelection,
 } from '../lib/documents';
 import { downloadReportsZip } from '../lib/zip';
+import { showPdfInTab, withPdfTitle } from '../lib/pdfTab';
 import { ReportTree } from './ReportTree';
 import { ReportFiltersBar } from './ReportFiltersBar';
 import { ReportsTable } from './ReportsTable';
@@ -151,16 +152,16 @@ export function InspectionDocuments() {
   const handleAction = async (report: DbInspectionReport, action: ReportAction) => {
     switch (action) {
       case 'open': {
-        // 署名 URL を待つ間にポップアップブロックされないよう、先に空のタブを開いておく
+        // 取り出しを待つ間にポップアップブロックされないよう、先に空のタブを開いておく
         const tab = window.open('', '_blank');
         try {
-          const url = await reportSignedUrl(report);
           if (tab) {
             // 開いた先からこの画面を操作させない（noopener を付けると空タブの参照が取れないので後から切る）
             tab.opener = null;
-            tab.location.href = url;
-          }
-          else window.open(url, '_blank', 'noopener');
+            tab.document.title = report.file_name;
+            // タブの名前を報告書のファイル名にする（署名付き URL を直接開くとランダムな英数字の名前になる。修正依頼1027(2)）
+            showPdfInTab(tab, await withPdfTitle(await downloadReportBlob(report), report.file_name), report.file_name);
+          } else window.open(await reportSignedUrl(report), '_blank', 'noopener');
         } catch (err) {
           tab?.close();
           failToast('報告書を開くの', err);
@@ -467,8 +468,9 @@ export function InspectionDocuments() {
         targetMonth={resubmit?.report.target_month ?? null}
         entryId={resubmit?.report.entry_id ?? null}
         previous={resubmit?.report ?? null}
-        // 再提出は前の版を置き換え済みにするので、1行の差し替えでなく読み直す
+        // 再提出は報告書が1件増える（修正依頼1027 決定①）ので、1行の差し替えでなく読み直す
         onUploaded={() => void reload()}
+        onDeleted={() => void reload()}
       />
       <ConfirmDialog
         open={!!deletingFile}

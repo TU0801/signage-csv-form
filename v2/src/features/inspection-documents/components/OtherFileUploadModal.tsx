@@ -155,13 +155,18 @@ function OtherFileUploadDialog({
     setFiles(next);
     // AI-OCR は最初のファイルで読む（1つの建物・区分の書類をまとめて登録する前提）
     if (useAi && ai.configured && files.length === 0 && list[0]) void runOcr(list[0], true);
-    // AI を使わないときも、最初の PDF の文字情報に期間があれば前半の日付を作業実施日の初期値にする（費用なし。修正依頼1026 J4）
-    else if (files.length === 0 && !docDate && list[0] && propertyFileMime(list[0].name) === 'application/pdf') {
-      void readPeriodStartFromPdf(list[0])
-        .then((start) => {
-          if (start) setDocDate((cur) => cur || start);
-        })
-        .catch((err: unknown) => console.error('Period read failed:', err));
+    // AI を使わないときも、最初の PDF の文字情報に期間があれば前半の日付を作業実施日の初期値にする（費用なし。修正依頼1026 J4）。
+    // 期間が無い・PDF でないときは今日の日付にする（修正依頼1027(5)。入れてある日付は変えない）
+    else if (files.length === 0 && !docDate && list[0]) {
+      const today = todayJst();
+      if (propertyFileMime(list[0].name) === 'application/pdf') {
+        void readPeriodStartFromPdf(list[0])
+          .then((start) => setDocDate((cur) => cur || start || today))
+          .catch((err: unknown) => {
+            console.error('Period read failed:', err);
+            setDocDate((cur) => cur || today);
+          });
+      } else setDocDate(today);
     }
   };
 

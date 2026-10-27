@@ -8,6 +8,7 @@ import { useToast } from '@/components/ui/Toast';
 import { updateInspectionReport } from '@/lib/api/portal';
 import { entryErrorReason } from '@/lib/api/admin-entries';
 import { buildReportFileName, isGeneratedFileName, normalizeEditedFileName } from '../lib/fileName';
+import { StoredReportPreview } from './StoredReportPreview';
 
 interface ReportEditModalProps {
   report: DbInspectionReport | null;
@@ -18,7 +19,8 @@ interface ReportEditModalProps {
 /**
  * 報告書の項目の修正（実施日・対象月・ファイル名・メモ）。表示名だけを変え、Storage のキーは変えない。
  * 同じ名前があれば DB 側で _2 などを付ける。
- * 実施日を変えたら名前の日付がずれないよう作り直す。ただし手で直した名前は黙って消さず、作り直すかを聞く
+ * 実施日を変えたら名前の日付がずれないよう作り直す。ただし手で直した名前は黙って消さず、作り直すかを聞く。
+ * 左に登録済みのファイルのプレビューを出す（建物の取り違えに気づけるように。修正依頼1027(2)。AI-OCR は使わない）
  */
 export function ReportEditModal({ report, onClose, onSaved }: ReportEditModalProps) {
   const { addToast } = useToast();
@@ -122,8 +124,8 @@ export function ReportEditModal({ report, onClose, onSaved }: ReportEditModalPro
       open={!!report}
       onClose={onClose}
       title="報告書の編集"
-      // 長いファイル名（建物名・点検種別は各50文字まで）が欄に収まるよう広げる
-      className="max-w-2xl"
+      // 左にプレビュー、右に入力欄。長いファイル名（建物名・点検種別は各50文字まで）が欄に収まるよう広げる
+      className="max-w-5xl"
       dirty={dirty && !saving}
       footer={
         <>
@@ -137,77 +139,92 @@ export function ReportEditModal({ report, onClose, onSaved }: ReportEditModalPro
       }
     >
       {report && (
-        <div className="space-y-2 text-sm">
-          <p className="text-xs text-gray-500">
-            {report.property_name}・{report.inspection_type_label}
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            <Input
-              label="実施日"
-              id="report-edit-performed-on"
-              type="date"
-              value={performedOn}
-              onChange={(e) => handlePerformedOnChange(e.target.value)}
-            />
-            <Input
-              label="対象月"
-              id="report-edit-target-month"
-              type="month"
-              value={targetMonth}
-              onChange={(e) => setTargetMonth(e.target.value)}
-            />
-          </div>
-          <div className="space-y-0.5">
-            {/* 名前は長いので欄を全幅にし、作り直すボタンは下に置く */}
-            <Input
-              label="ファイル名"
-              id="report-edit-file-name"
-              value={fileName}
-              onChange={(e) => {
-                setFileName(e.target.value);
-                setNameTouched(true);
-              }}
-            />
-            {renameProposal && renameProposal !== fileName && (
-              <div
-                role="status"
-                className="flex flex-wrap items-center gap-1 rounded bg-amber-50 px-1.5 py-1 text-xs text-amber-900"
-              >
-                <span className="min-w-0 break-all">
-                  実施日を変えました。手で直したファイル名を「{renameProposal}」に作り直しますか？
-                </span>
-                <Button variant="secondary" size="sm" type="button" className="text-xs" onClick={regenerateName}>
-                  作り直す
-                </Button>
+        <div className="grid gap-3 text-sm md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <StoredReportPreview report={report} />
+          <div className="min-w-0 space-y-2">
+            <p className="text-xs text-gray-500">
+              {report.property_name}・{report.inspection_type_label}
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <Input
+                label="実施日"
+                id="report-edit-performed-on"
+                type="date"
+                value={performedOn}
+                onChange={(e) => handlePerformedOnChange(e.target.value)}
+              />
+              <Input
+                label="対象月"
+                id="report-edit-target-month"
+                type="month"
+                value={targetMonth}
+                onChange={(e) => setTargetMonth(e.target.value)}
+              />
+            </div>
+            <div className="space-y-0.5">
+              {/* 名前は長いので欄を全幅にし、作り直すボタンは下に置く */}
+              <Input
+                label="ファイル名"
+                id="report-edit-file-name"
+                value={fileName}
+                onChange={(e) => {
+                  setFileName(e.target.value);
+                  setNameTouched(true);
+                }}
+              />
+              {renameProposal && renameProposal !== fileName && (
+                <div
+                  role="status"
+                  className="flex flex-wrap items-center gap-1 rounded bg-amber-50 px-1.5 py-1 text-xs text-amber-900"
+                >
+                  <span className="min-w-0 break-all">
+                    実施日を変えました。手で直したファイル名を「{renameProposal}」に作り直しますか？
+                  </span>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    type="button"
+                    className="text-xs"
+                    onClick={regenerateName}
+                  >
+                    作り直す
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    type="button"
+                    className="text-xs"
+                    onClick={() => setRenameProposal(null)}
+                  >
+                    このまま
+                  </Button>
+                </div>
+              )}
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
-                  variant="ghost"
+                  variant="secondary"
                   size="sm"
                   type="button"
                   className="text-xs"
-                  onClick={() => setRenameProposal(null)}
+                  disabled={!performedOn}
+                  onClick={regenerateName}
                 >
-                  このまま
+                  ファイル名を作り直す
                 </Button>
+                <p className="text-xs text-gray-400">
+                  実施日を変えると名前の日付も作り直します（手で直した名前は、作り直すかを確かめます）。
+                </p>
               </div>
-            )}
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                type="button"
-                className="text-xs"
-                disabled={!performedOn}
-                onClick={regenerateName}
-              >
-                ファイル名を作り直す
-              </Button>
-              <p className="text-xs text-gray-400">
-                実施日を変えると名前の日付も作り直します（手で直した名前は、作り直すかを確かめます）。
-              </p>
             </div>
+            <TextArea
+              label="メモ"
+              id="report-edit-note"
+              rows={2}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+            />
+            {error && <p className="text-xs text-red-600">{error}</p>}
           </div>
-          <TextArea label="メモ" id="report-edit-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
-          {error && <p className="text-xs text-red-600">{error}</p>}
         </div>
       )}
     </Modal>

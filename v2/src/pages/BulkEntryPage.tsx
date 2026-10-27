@@ -44,7 +44,7 @@ import {
 import type { BulkEntryRow } from '@/features/bulk-entry/types';
 import { usePortalData } from '@/features/inspection-portal/hooks/usePortalData';
 import { inspectionsOfVendor } from '@/features/inspection-portal/lib/inspectionLink';
-import { completionBlockedReason, reportEntryId } from '@/features/inspection-portal/lib/actions';
+import { completionBlockedReason, reportDefaultPerformedOn, reportEntryId } from '@/features/inspection-portal/lib/actions';
 import { matchTiming, TIMING_OPTIONS, type TimingFilter } from '@/features/inspection-portal/lib/filters';
 import {
   buildSchedule,
@@ -111,6 +111,8 @@ interface ReportTarget {
   targetMonth: string | null;
   entryId: string | null;
   previous: ScheduleItem['report'];
+  /** 実施日の既定（行の点検開始日。修正依頼1027(1)） */
+  defaultPerformedOn?: string | null;
 }
 
 /** 最初のエラーのセルへスクロールしてフォーカスする（B7） */
@@ -433,7 +435,8 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
         inspection: item.inspection,
         targetMonth: item.targetMonth,
         entryId: reportEntryId(item),
-        // DB が置き換えるのは同じ保守会社の版だけなので、他社の版は前の版にしない（点検一覧と同じ）
+        defaultPerformedOn: reportDefaultPerformedOn(item),
+        // 自社（管理者は全社）の版があれば再提出として開く（点検一覧と同じ。報告書は追加。修正依頼1027 決定①）
         previous: item.report && (isAdmin || item.report.vendor_id === profileVendorId) ? item.report : null,
       });
     },
@@ -1153,10 +1156,12 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
         targetMonth={reportTarget?.targetMonth ?? null}
         entryId={reportTarget?.entryId ?? null}
         previous={reportTarget?.previous ?? null}
+        defaultPerformedOn={reportTarget?.defaultPerformedOn ?? null}
         onUploaded={() => {
           setReportTarget(null);
           void portal.refetch();
         }}
+        onDeleted={() => void portal.refetch()}
       />
       <BulkReportUploadModal
         open={showBulkReport}

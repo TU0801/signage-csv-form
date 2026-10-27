@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { pushTopLayerHost, removeTopLayerHost } from './topLayerHost';
 
@@ -21,6 +21,11 @@ interface ModalProps {
    * （確認も出さない）。footer のボタンは呼び出し側で無効にする
    */
   busy?: boolean;
+  /**
+   * 見出しを引いてモーダルを動かせるようにする（後ろの表を見ながら入力するもの。修正依頼1027(1) 報告書の再提出）。
+   * 既定は false（動かない）。開くたびに中央へ戻す
+   */
+  draggable?: boolean;
 }
 
 /** 開いたときにフォーカスする欄。[data-autofocus] が無ければ本文の最初の入力欄（チェックボックス等は除く） */
@@ -32,7 +37,17 @@ const FIRST_FIELD =
  * 中央に出すモーダル（<dialog> の showModal）。見出し・本文（スクロール）・footer（固定）の 3 段。
  * 開くと本文の [data-autofocus] か最初の入力欄にフォーカスする。dirty で閉じる前の破棄確認を出す。
  */
-export function Modal({ open, onClose, title, children, footer, className, dirty = false, busy = false }: ModalProps) {
+export function Modal({
+  open,
+  onClose,
+  title,
+  children,
+  footer,
+  className,
+  dirty = false,
+  busy = false,
+  draggable = false,
+}: ModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const backToEditRef = useRef<HTMLButtonElement>(null);
@@ -43,10 +58,38 @@ export function Modal({ open, onClose, title, children, footer, className, dirty
   const discardedRef = useRef(false);
   // 開き直したら前回の確認は消す（effect で setState しないよう描画中に合わせる）
   const [prevOpen, setPrevOpen] = useState(open);
+  /** 見出しを引いて動かした量（中央からのずれ。draggable のときだけ） */
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
   if (open !== prevOpen) {
     setPrevOpen(open);
-    if (open) setConfirming(false);
+    if (open) {
+      setConfirming(false);
+      setOffset({ x: 0, y: 0 });
+    }
   }
+
+  // 見出しを押したところから、離すまで window で動きを追う（速く動かして見出しから外れても付いてくる）
+  const startDrag = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!draggable || e.button !== 0) return;
+    if (e.target instanceof Element && e.target.closest('button')) return; // × は押せるままにする
+    e.preventDefault();
+    const start = { x: e.clientX - offset.x, y: e.clientY - offset.y };
+    const move = (ev: PointerEvent) => {
+      // 見出しが画面の外へ出切らないよう、動かせる量を画面の大きさで抑える
+      const limitX = window.innerWidth / 2;
+      const limitY = window.innerHeight / 2;
+      setOffset({
+        x: Math.max(-limitX, Math.min(limitX, ev.clientX - start.x)),
+        y: Math.max(-limitY, Math.min(limitY, ev.clientY - start.y)),
+      });
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -132,6 +175,8 @@ export function Modal({ open, onClose, title, children, footer, className, dirty
       }}
       // m-auto: preflight と親の space-y-* が dialog 既定の margin:auto を消すので中央寄せを明示する
       // max-w-lg は呼び出し側が max-w-* を渡さないときだけ（cn は結合のみで、両方あると CSS の並び順で max-w-lg が勝つ）
+      // 動かした量は translate で中央（m-auto）からずらす
+      style={draggable && (offset.x || offset.y) ? { translate: `${offset.x}px ${offset.y}px` } : undefined}
       className={cn(
         'm-auto rounded-lg shadow-xl backdrop:bg-black/50 p-0 w-full',
         !/(^|\s)max-w-/.test(className ?? '') && 'max-w-lg',
@@ -143,7 +188,14 @@ export function Modal({ open, onClose, title, children, footer, className, dirty
           高さの上限は dialog の UA 既定（100% - 2em - 6px）より小さくし、dialog 自体はスクロールさせない */}
       <div className="relative flex max-h-[calc(100dvh-2.5rem)] flex-col">
         {title && (
-          <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-4 py-2">
+          <div
+            className={cn(
+              'flex shrink-0 items-center justify-between border-b border-gray-200 px-4 py-2',
+              draggable && 'cursor-move select-none touch-none',
+            )}
+            onPointerDown={draggable ? startDrag : undefined}
+            title={draggable ? '見出しを引いて動かせます' : undefined}
+          >
             <h2 className="text-base font-semibold text-gray-900">{title}</h2>
             <button
               type="button"

@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { makePropertyFile, makeReport } from './fixtures';
 
@@ -9,6 +9,7 @@ const api = vi.hoisted(() => ({
   reportSignedUrl: vi.fn(),
   reviewInspectionReport: vi.fn(),
   updateInspectionReport: vi.fn(),
+  downloadReportBlob: vi.fn(),
 }));
 vi.mock('@/lib/api/portal', () => api);
 const fileApi = vi.hoisted(() => ({
@@ -64,6 +65,23 @@ describe('InspectionDocuments', () => {
     expect(screen.queryByText('a.pdf')).toBeNull();
     expect(screen.queryByText('c.pdf')).toBeNull();
     expect(screen.getByRole('button', { name: 'すべての報告書を表示' })).toBeInTheDocument();
+  });
+
+  it('『開く』は報告書のファイル名をタブの名前にして PDF を出す（修正依頼1027(2) 文字化け）', async () => {
+    api.fetchInspectionReports.mockResolvedValue([makeReport({ id: 'a', file_name: '20261026_テスト第一ビル_消防設備点検.pdf' })]);
+    api.downloadReportBlob.mockResolvedValue(new Blob(['%PDF-1.4'], { type: 'application/pdf' }));
+    const tabDoc = document.implementation.createHTMLDocument('');
+    const tab = { document: tabDoc, opener: {}, location: { href: '' }, close: vi.fn() };
+    const open = vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
+    URL.createObjectURL = vi.fn(() => 'blob:report-a');
+    renderAt('/portal/documents');
+    const row = (await screen.findByText('20261026_テスト第一ビル_消防設備点検.pdf')).closest('tr')!;
+    fireEvent.click(within(row).getByRole('button', { name: '開く' }));
+    await waitFor(() => expect(tabDoc.querySelector('iframe')?.getAttribute('src')).toBe('blob:report-a'));
+    expect(tabDoc.title).toBe('20261026_テスト第一ビル_消防設備点検.pdf');
+    expect(tab.opener).toBeNull();
+    expect(api.reportSignedUrl).not.toHaveBeenCalled();
+    open.mockRestore();
   });
 
   it('読み込みに失敗したら「該当なし」ではなく失敗と再読み込みを出し、トーストは出さない', async () => {
