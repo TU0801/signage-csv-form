@@ -210,7 +210,7 @@ function applyKey(row: BulkEntryRow): { inspectionId: string; month: string | nu
 /**
  * 『申請する』の前に、修正中の行の付け替え先と重なる申請を止める（修正依頼1029 決定④の検証の指摘）。
  * 付け替え先の行が詳細設定を保存した時点では空でも、その後に入力して一緒に申請すると、同じ点検・同じ月の申請が2件になるため。
- * 重なりは同じ点検・同じ対象月で、台が同じかどちらかが台なし（台なしの申請は全部の台に効く。DB の guard_entry_unit_duplicate と同じ）。
+ * 重なりは同じ点検・同じ対象月で、台が同じかどちらかが台なし（台なしの申請は全部の台に効く。付け替えの DB の確かめ portal_update_submitted_entry と同じ。新しい申請の二重は DB では止めないので、ここが止める）。
  * targets は『申請する』の対象の行（isApplyTarget）。重なる行があれば、付け替えた行でない方の行と理由を返す
  */
 export function relinkConflict(targets: readonly BulkEntryRow[]): { rowId: number; message: string } | null {
