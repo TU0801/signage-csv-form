@@ -1,19 +1,20 @@
 /**
  * 点検の行の3項目（業務システム 修正依頼1026 の src/lib/inspections/schedule-fields.ts と同じ決まり。2026-10-27 修正依頼1027(7)）:
  * - 点検日連絡（notify_inspection_date）: 設備点検管理システムで点検日を連絡（申請）する点検か。既定 ON。
- *   『リモート点検』『警備』は**新しく足すときの既定**が OFF（訪問しないので点検日の連絡は無く、報告書だけ）。保存済みの行は保存された値のまま
+ *   『リモート点検』『警備』を含む種別と『デジタルサイネージ点検』（2026-10-29 修正依頼1029 D3 で追加）は**新しく足すときの既定**が OFF
+ *   （点検日の連絡は無く、報告書だけ）。保存済みの行は保存された値のまま
  * - インターバル（interval_months）: 検査の周期（か月）。1〜120。空は未入力（新しく足す行の既定は 12）
  * - 請求月（billing_months）: 月次用の 1〜12。空なら毎月扱い
  */
 
 /** 点検日連絡の既定が OFF になる点検種別の名前（業務システムと同じ判定） */
-const NOTIFY_OFF_LABEL = /(リモート点検|警備)/;
+const NOTIFY_OFF_LABEL = /(リモート点検|警備)|^デジタルサイネージ点検$/;
 
 /** インターバルの既定（か月）。新しく足す行の初期値（保存済みで未入力の行は空のまま・placeholder に出すだけ） */
 export const DEFAULT_INTERVAL_MONTHS = 12;
 const INTERVAL_MAX = 120;
 
-/** 新しく足す行の点検日連絡の既定。点検種別の名前が『リモート点検』『警備』を含めば OFF */
+/** 新しく足す行の点検日連絡の既定。点検種別の名前が『リモート点検』『警備』を含むか『デジタルサイネージ点検』そのものなら OFF */
 export function defaultNotifyFor(typeLabel: string | null | undefined): boolean {
   return !NOTIFY_OFF_LABEL.test(typeLabel ?? '');
 }
