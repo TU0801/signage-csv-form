@@ -66,7 +66,7 @@ const TYPES = [
   type('インターホン点検', 'intercom', ''),
 ];
 
-function open(over = {}) {
+function open(over = {}, scope = SCOPE) {
   const onSaved = vi.fn();
   const onClose = vi.fn();
   const entry = makeEntry({
@@ -89,7 +89,7 @@ function open(over = {}) {
       inspectionTypes={TYPES}
       templateImages={[]}
       vendors={[{ id: 'V1', vendor_name: '山田エレベーター', emergency_contact: '' }]}
-      typeScope={SCOPE}
+      typeScope={scope}
       displayDefault={6}
     />,
   );
@@ -161,6 +161,18 @@ describe('PendingEntryEditModal（承認待ちの編集を基本フォームで�
     );
     const [, patch] = api.updatePendingEntry.mock.calls[0] as unknown as [string, Record<string, unknown>];
     expect(patch).not.toHaveProperty('property_unit_id');
+  });
+
+  it('付け替え先が2台以上の点検で申請の台がその点検に無いときは保存させない（台なしの申請を台ごとの点検に付けない。修正依頼1029）', () => {
+    const unit = SCOPE.units[0]!;
+    open({ property_inspection_id: 'i-ev', vendor_id: 'V1', property_unit_id: null }, {
+      ...SCOPE,
+      units: [unit, { ...unit, unit_id: 'u-2', unit_code: 'No2', unit_sort: 2 }],
+    });
+    fireEvent.change(screen.getByLabelText('点検種別'), { target: { value: '消防設備点検' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    expect(toast.addToast).toHaveBeenCalledWith(expect.stringContaining('台ごとの点検'), 'error');
+    expect(api.updatePendingEntry).not.toHaveBeenCalled();
   });
 
   it('「保存して承認」は同じ更新で状態を承認済み（ready）にする（版は開いたときの updated_at）', async () => {

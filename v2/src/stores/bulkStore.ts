@@ -134,6 +134,15 @@ export interface BulkState {
    * （targetId）へ移す。targetId が null なら新しい種別の手入力の行として表の上に足す。元の予定の行の入力は空に戻す
    */
   moveScheduleInput: (sourceId: number, targetId: number | null, detail: BulkRowDetail & { inspectionType: string }) => void;
+  /**
+   * 申請済みの申請を修正している行（schedule.editEntryId）の点検種別を詳細設定で変えたとき（修正依頼1029 決定④）。行の点検種別と
+   * 付け替える点検（relink）を入れる。relink が null なら元の点検の種別に戻した（付け替えない）。行は元の予定の行のまま
+   */
+  retypeEditRow: (
+    id: number,
+    detail: BulkRowDetail & { inspectionType: string },
+    relink: { inspectionId: string; unitId: string | null } | null,
+  ) => void;
   /** 選んだ行に同じ値を入れる（patch に無い項目は行ごとの値のまま） */
   applyToRows: (ids: number[], patch: BulkRowsPatch) => void;
   reorderRows: (draggedId: number, targetId: number) => void;
@@ -360,6 +369,7 @@ export const useBulkStore = create<BulkState>((set, get) => {
                 posterImage: '',
                 extraPosters: undefined,
                 position: 2,
+                relink: undefined,
               })
             : r,
         ),
@@ -590,6 +600,17 @@ export const useBulkStore = create<BulkState>((set, get) => {
     // 点検予定の行の点検種別は点検行で決まっているので変えない（変えるときは moveScheduleInput。修正依頼1029）
     applyRowDetail: (id, detail) => {
       mapRow(id, (r) => validate(r.schedule ? { ...r, ...detail, inspectionType: r.inspectionType } : { ...r, ...detail }));
+      get().triggerAutoSave();
+    },
+
+    retypeEditRow: (id, detail, relink) => {
+      mapRow(id, (r) => {
+        if (!r.schedule?.editEntryId) return r;
+        const next: BulkEntryRow = { ...r, ...detail };
+        if (relink) next.relink = relink;
+        else delete next.relink;
+        return validate(next);
+      });
       get().triggerAutoSave();
     },
 

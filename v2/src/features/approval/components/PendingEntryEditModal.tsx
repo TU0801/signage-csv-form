@@ -180,6 +180,17 @@ function PendingEntryEditDialog({
       }
     : null;
 
+  // 付け替え先が2台以上の点検で、申請の台がその点検に無い（台を決められない）ときは保存させない。管理者の更新は台の決まり
+  // （guard_entry_unit の2台以上は台ごと）を通らないので、ここで止めないと台なしの申請が台ごとの点検に付く（修正依頼1029）
+  const relinkError =
+    relink && !relink.unitId && typeScope
+      ? typeScope.units.filter((u) => u.inspection_id === relink.inspectionId && u.unit_id).length >= 2
+        ? `「${values.inspectionType}」は台ごとの点検で、どの台の申請か決められません。保守会社に台ごとの申請をしてもらってください`
+        : null
+      : values.inspectionType !== initial.inspectionType && entry.property_inspection_id && typeScope && !relink
+        ? `この保守会社に「${values.inspectionType}」の点検が無いため、紐付けを付け替えられません`
+        : null;
+
   const { uploading, uploadFile, keep } = usePosterUploads({
     userId,
     // 申請が持っていた画像は消さない（ほかの申請・未使用画像の整理に任せる）。消すのは開いている間にアップロードして使わなかった分だけ
@@ -209,6 +220,10 @@ function PendingEntryEditDialog({
     // テンプレートNoの無い点検種別は貼紙を作れない（CSV のテンプレートNoが空になる）ので、保存も承認もさせない
     if (!templateNo) {
       addToast(`点検種別「${values.inspectionType}」にテンプレートNoがありません。別の点検種別を選んでください`, 'error');
+      return;
+    }
+    if (relinkError) {
+      addToast(relinkError, 'error');
       return;
     }
     const seconds = parseInt(values.displayTime);

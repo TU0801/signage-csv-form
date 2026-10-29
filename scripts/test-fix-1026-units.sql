@@ -256,9 +256,13 @@ SELECT pg_temp.expect_error('5d 申請済みの行の直接の更新は今どお
   UPDATE signage.signage_entries SET remarks = 'x' WHERE id = (SELECT id FROM t_ids WHERE k = 'e1')$q$, '申請済み・承認済み');
 SELECT pg_temp.expect_error('5e 状態は直せない', $q$
   SELECT signage.portal_update_submitted_entry((SELECT id FROM t_ids WHERE k = 'e1'), '{"status":"ready"}')$q$, '修正できません: status');
-SELECT pg_temp.expect_error('5f 物件・点検・台は直せない', $q$
+-- 修正依頼1029 決定④ から点検・台は直せる（scripts/fix-1029-detail.sql）。他社が保守する台へは今も付け替えられない
+SELECT pg_temp.expect_error('5f 台は他社が保守する台へは付け替えられない', $q$
   SELECT signage.portal_update_submitted_entry((SELECT id FROM t_ids WHERE k = 'e1'),
-         '{"property_unit_id":"b0000000-0000-4000-8000-000000000002"}')$q$, '修正できません');
+         '{"property_unit_id":"b0000000-0000-4000-8000-000000000002"}')$q$, '担当外の台');
+SELECT pg_temp.expect_error('5f2 物件は直せない', $q$
+  SELECT signage.portal_update_submitted_entry((SELECT id FROM t_ids WHERE k = 'e1'),
+         '{"property_code":"120410-00"}')$q$, '修正できません');
 SELECT pg_temp.expect_error('5g 点検開始日は空にできない', $q$
   SELECT signage.portal_update_submitted_entry((SELECT id FROM t_ids WHERE k = 'e1'), '{"inspection_start":null}')$q$, '点検開始日');
 SELECT pg_temp.expect_error('5h 貼紙のガードは働く（他の方の画像は使えない）', $q$

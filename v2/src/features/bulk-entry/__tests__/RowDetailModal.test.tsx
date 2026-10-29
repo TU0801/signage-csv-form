@@ -5,6 +5,7 @@ import { ToastProvider } from '@/components/ui/Toast';
 import { useBulkStore, resetBulkSession } from '@/stores/bulkStore';
 import { RowDetailModal, type RowDetailContext } from '../modals/RowDetailModal';
 import { buildBulkEntries } from '../utils/buildBulkEntries';
+import { submittedEntryPatch } from '../utils/scheduleRows';
 import { todayUtc } from '@/lib/utils';
 import { createMemoryStorage } from './memoryStorage';
 
@@ -284,12 +285,13 @@ describe('RowDetailModal の追記表示と点検種別の変更（修正依頼1
     store.setCurrentVendor(VENDOR);
   }
 
-  const scheduleInput = (inspectionId: string, label: string, locked = false) => ({
+  const scheduleInput = (inspectionId: string, label: string, locked = false, editEntryId?: string) => ({
     meta: {
       key: `${inspectionId}:2026-11-01`,
       inspectionId,
       targetMonth: '2026-11-01',
       locked,
+      ...(editEntryId ? { editEntryId } : {}),
       propertyName: '物件A',
       terminalIds: ['T-A1'],
     },
@@ -383,5 +385,51 @@ describe('RowDetailModal の追記表示と点検種別の変更（修正依頼1
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
     expect(await screen.findByText(/申請済みです。点検種別は変えられません/)).toBeInTheDocument();
     expect(rowOf(ev!.id).startDate).toBe('2026-11-05');
+  });
+
+  it('申請済みの申請を修正している行でも自社の担当種別へ変えられ、『申請する』の修正で点検種別・テンプレートNo・紐付ける点検を送る（決定④）', () => {
+    const store = useBulkStore.getState();
+    store.syncScheduleRows([scheduleInput('i-ev', 'エレベーター定期点検', false, 'entry-1'), scheduleInput('i-remote', 'リモート点検')]);
+    const [ev, remote] = useBulkStore.getState().rows;
+    store.changeStartDate(ev!.id, '2026-11-05');
+    renderModal(ev!.id, { status: 'applying', inspections: INSPECTIONS, editEntryUnitId: null });
+    const select = screen.getByLabelText('点検種別') as HTMLSelectElement;
+    expect([...select.options].map((o) => o.value)).toEqual(['エレベーター定期点検', 'リモート点検']);
+    fireEvent.change(select, { target: { value: 'リモート点検' } });
+    expect(screen.getByTestId('template-no')).toHaveTextContent('remote_check');
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    // 行は元の予定の行のまま（入力も残す）。移し先の行は触らない
+    expect(rowOf(ev!.id)).toMatchObject({
+      inspectionType: 'リモート点検',
+      startDate: '2026-11-05',
+      noticeText: '遠隔で点検します',
+      relink: { inspectionId: 'i-remote', unitId: null },
+    });
+    expect(rowOf(remote!.id).startDate).toBe('');
+    const patch = submittedEntryPatch(
+      { ...entryOf(ev!.id) },
+      { inspection_type: 'エレベーター定期点検', property_inspection_id: 'i-ev' },
+      rowOf(ev!.id).relink,
+    );
+    expect(patch).toMatchObject({
+      inspection_type: 'リモート点検',
+      template_no: 'remote_check',
+      property_inspection_id: 'i-remote',
+      property_unit_id: null,
+      inspection_start: '2026-11-05',
+    });
+    expect(patch).not.toHaveProperty('target_month');
+  });
+
+  it('修正中の行で、その種別の点検にこの月の予定の行が無ければ変えずに理由を知らせる', async () => {
+    const store = useBulkStore.getState();
+    store.syncScheduleRows([scheduleInput('i-ev', 'エレベーター定期点検', false, 'entry-1')]);
+    const [ev] = useBulkStore.getState().rows;
+    renderModal(ev!.id, { status: 'applying', inspections: INSPECTIONS, editEntryUnitId: null });
+    fireEvent.change(screen.getByLabelText('点検種別'), { target: { value: 'リモート点検' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    expect(await screen.findByText(/この月の予定が無いため、点検種別は変えられません/)).toBeInTheDocument();
+    expect(rowOf(ev!.id).inspectionType).toBe('エレベーター定期点検');
+    expect(rowOf(ev!.id).relink).toBeUndefined();
   });
 });

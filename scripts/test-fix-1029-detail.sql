@@ -174,4 +174,104 @@ BEGIN
   RAISE NOTICE 'OK';
 END $$;
 
+-- 申請済み（承認前）の申請の修正で点検種別・テンプレートNo・紐付けを直す（portal_update_submitted_entry。ユーザー決定④）
+-- 上で足した消防設備の台 FIRE-1（c..01 が保守）で、c..01 は物件 e..01 の消防設備点検（2124…）も担当。
+-- 申請 d..04: user@ のエレベーター定期点検（2b84…）・2026年12月・承認待ち（draft）
+SELECT pg_temp.as_owner();
+INSERT INTO signage.signage_entries (id, user_id, property_code, terminal_id, vendor_name, vendor_id, inspection_type, template_no,
+                                     property_inspection_id, target_month, status, inspection_start)
+VALUES ('d1029000-0000-4000-8000-000000000004', 'a0000000-0000-4000-8000-000000000002', '120409-00', '', '検証エレベーター保守株式会社',
+        'c0000000-0000-4000-8000-000000000001', 'エレベーター定期点検', 'elevator_inspection',
+        '2b84a9bd-b98e-4332-bd19-2973387bc13c', '2026-12-01', 'draft', '2026-12-03');
+
+DO $$
+DECLARE
+  r signage.signage_entries;
+  v_fire constant text := '2124a983-8f13-4323-9eea-67f36bedf3d3';
+BEGIN
+  -- REST の anon は呼べない
+  IF has_function_privilege('anon', 'signage.portal_update_submitted_entry(uuid, jsonb)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'anon が portal_update_submitted_entry を呼べる';
+  END IF;
+  PERFORM pg_temp.act_as('a0000000-0000-4000-8000-000000000002');
+  -- 担当外の種別（定期清掃は c..03 の点検）へは、その種別の点検に紐付けても変えられない
+  PERFORM pg_temp.expect_denied($q$
+    SELECT signage.portal_update_submitted_entry('d1029000-0000-4000-8000-000000000004',
+      '{"inspection_type":"定期清掃","template_no":"cleaning","property_inspection_id":"4343bb34-0832-4275-a507-6d18115ec3e5"}')$q$,
+    '42501', 'RPC 担当外の種別へ');
+  -- テンプレートNo が種別のものでない
+  PERFORM pg_temp.expect_denied($q$
+    SELECT signage.portal_update_submitted_entry('d1029000-0000-4000-8000-000000000004',
+      '{"inspection_type":"消防設備点検","template_no":"cleaning","property_inspection_id":"2124a983-8f13-4323-9eea-67f36bedf3d3"}')$q$,
+    '22023', 'RPC テンプレートNo の食い違い');
+  -- 種別だけ変えて紐付けを前の点検のままにする
+  PERFORM pg_temp.expect_denied($q$
+    SELECT signage.portal_update_submitted_entry('d1029000-0000-4000-8000-000000000004',
+      '{"inspection_type":"消防設備点検","template_no":"fire_inspection"}')$q$,
+    '22023', 'RPC 紐付けと種別の食い違い');
+  -- 別の物件の点検（T1024-01 の c..01 のエレベーター定期点検）へは付け替えられない
+  PERFORM pg_temp.expect_denied($q$
+    SELECT signage.portal_update_submitted_entry('d1029000-0000-4000-8000-000000000004',
+      '{"property_inspection_id":"fde97cc9-6848-4660-a8c2-e8382185092e"}')$q$,
+    '22023', 'RPC 別の物件の点検へ');
+  -- 紐付けを外せない
+  PERFORM pg_temp.expect_denied($q$
+    SELECT signage.portal_update_submitted_entry('d1029000-0000-4000-8000-000000000004', '{"property_inspection_id":null}')$q$,
+    '22023', 'RPC 紐付けを外す');
+  -- 台は付け替え先の点検の台だけ（EV-1 はエレベーターの台）
+  PERFORM pg_temp.expect_denied($q$
+    SELECT signage.portal_update_submitted_entry('d1029000-0000-4000-8000-000000000004',
+      '{"inspection_type":"消防設備点検","template_no":"fire_inspection","property_inspection_id":"2124a983-8f13-4323-9eea-67f36bedf3d3",
+        "property_unit_id":"b0000000-0000-4000-8000-000000000001"}')$q$,
+    '22023', 'RPC 別の点検の台');
+  -- 他社（user-b・c..03）は user@ の申請を直せない
+  PERFORM pg_temp.act_as('a0000000-0000-4000-8000-000000000005');
+  PERFORM pg_temp.expect_denied($q$
+    SELECT signage.portal_update_submitted_entry('d1029000-0000-4000-8000-000000000004',
+      '{"inspection_type":"消防設備点検","template_no":"fire_inspection","property_inspection_id":"2124a983-8f13-4323-9eea-67f36bedf3d3"}')$q$,
+    '42501', 'RPC 他社の申請');
+
+  -- 付け替え先の点検・同じ月に承認待ちの申請があれば断る（二重の申請にしない）
+  PERFORM pg_temp.as_owner();
+  INSERT INTO signage.signage_entries (id, user_id, property_code, terminal_id, vendor_name, vendor_id, inspection_type, template_no,
+                                       property_inspection_id, target_month, status, inspection_start)
+  VALUES ('d1029000-0000-4000-8000-000000000005', 'a0000000-0000-4000-8000-000000000002', '120409-00', '', '検証エレベーター保守株式会社',
+          'c0000000-0000-4000-8000-000000000001', '消防設備点検', 'fire_inspection', v_fire::uuid, '2026-12-01', 'draft', '2026-12-04');
+  PERFORM pg_temp.act_as('a0000000-0000-4000-8000-000000000002');
+  PERFORM pg_temp.expect_denied($q$
+    SELECT signage.portal_update_submitted_entry('d1029000-0000-4000-8000-000000000004',
+      '{"inspection_type":"消防設備点検","template_no":"fire_inspection","property_inspection_id":"2124a983-8f13-4323-9eea-67f36bedf3d3"}')$q$,
+    '22023', 'RPC 付け替え先の月に申請がある');
+  PERFORM pg_temp.as_owner();
+  DELETE FROM signage.signage_entries WHERE id = 'd1029000-0000-4000-8000-000000000005';
+
+  -- 付け替え先が2台以上の点検なら台を決める（台なしは断る）
+  INSERT INTO biz.property_units (id, property_id, category_code, unit_code)
+  VALUES ('b1029000-0000-4000-8000-000000000002', 'e0000000-0000-4000-8000-000000000001', 'fire_inspection', 'FIRE-2');
+  INSERT INTO biz.property_unit_inspections (unit_id, inspection_type_id, maintainer_id)
+  VALUES ('b1029000-0000-4000-8000-000000000002', 'f0000000-0000-4000-8000-000000000002', 'c0000000-0000-4000-8000-000000000001')
+  ON CONFLICT (unit_id, inspection_type_id) DO UPDATE SET maintainer_id = EXCLUDED.maintainer_id;
+  PERFORM pg_temp.act_as('a0000000-0000-4000-8000-000000000002');
+  PERFORM pg_temp.expect_denied($q$
+    SELECT signage.portal_update_submitted_entry('d1029000-0000-4000-8000-000000000004',
+      '{"inspection_type":"消防設備点検","template_no":"fire_inspection","property_inspection_id":"2124a983-8f13-4323-9eea-67f36bedf3d3"}')$q$,
+    '22023', 'RPC 2台以上の点検に台なし');
+
+  -- 担当の種別へ、その種別のテンプレートNo・その種別の点検・自社の台で付け替えると通り、承認待ちのまま
+  r := signage.portal_update_submitted_entry('d1029000-0000-4000-8000-000000000004',
+    jsonb_build_object('inspection_type', '消防設備点検', 'template_no', 'fire_inspection', 'property_inspection_id', v_fire,
+                       'property_unit_id', 'b1029000-0000-4000-8000-000000000001', 'remarks', '種別を変えた'));
+  IF r.inspection_type <> '消防設備点検' OR r.template_no <> 'fire_inspection' OR r.property_inspection_id::text <> v_fire
+     OR r.property_unit_id::text <> 'b1029000-0000-4000-8000-000000000001' OR r.status <> 'draft'
+     OR r.target_month <> '2026-12-01' OR r.remarks <> '種別を変えた' THEN
+    RAISE EXCEPTION '付け替えの結果が違う: %', row_to_json(r);
+  END IF;
+  -- 監査ログに残る（audit_trigger は今どおり）
+  PERFORM pg_temp.as_owner();
+  IF NOT EXISTS (SELECT 1 FROM signage.signage_audit_logs WHERE record_id::text = 'd1029000-0000-4000-8000-000000000004' AND operation = 'UPDATE') THEN
+    RAISE EXCEPTION '修正が監査ログに残らない';
+  END IF;
+  RAISE NOTICE 'RPC ok';
+END $$;
+
 ROLLBACK;

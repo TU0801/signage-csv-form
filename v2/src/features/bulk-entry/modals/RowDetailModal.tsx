@@ -13,7 +13,7 @@ import { StatusBadge } from '@/features/inspection-portal/components/StatusBadge
 import type { InspectionStatus } from '@/features/inspection-portal/lib/status';
 import { BasicEntryForm, normalizePosition, type BasicFormValues } from '../components/BasicEntryForm';
 import { usePosterUploads } from '../hooks/usePosterUploads';
-import { retypeTarget, vendorTypeOptions, type ScopeInspection } from '../utils/typeScope';
+import { editRetypeTarget, retypeTarget, vendorTypeOptions, type ScopeInspection } from '../utils/typeScope';
 import type { BulkEntryRow, BulkMasterData } from '../types';
 
 /** 行の詳細設定に足して出すもの（修正依頼1029。画面側が予定・申請から決める） */
@@ -24,6 +24,8 @@ export interface RowDetailContext {
   registrant?: { email: string; at: string };
   /** 選択中の保守会社が担当する点検行（選べる点検種別と、予定の行の移し先を決める） */
   inspections: readonly ScopeInspection[];
+  /** 修正している申請の台（property_unit_id。台なしは null）。点検種別を変えたときの付け替え先の台を決める */
+  editEntryUnitId?: string | null;
 }
 
 interface RowDetailModalProps {
@@ -80,6 +82,7 @@ function RowDetailForm({
   const { addToast } = useToast();
   const applyRowDetail = useBulkStore((s) => s.applyRowDetail);
   const moveScheduleInput = useBulkStore((s) => s.moveScheduleInput);
+  const retypeEditRow = useBulkStore((s) => s.retypeEditRow);
   const currentVendor = useBulkStore((s) => s.currentVendor);
   const userId = useBulkStore((s) => s.userId);
   const displayTimeMax = Number(useBulkStore((s) => s.appSettings.display_time_max) || 30);
@@ -112,8 +115,8 @@ function RowDetailForm({
   const templateNo = noticeOf(values.inspectionType)?.templateNo ?? '';
   const typeChanged = values.inspectionType !== row.inspectionType;
 
-  // 選べる点検種別: その物件で自社が担当する点検種別だけ（ユーザー決定④）。申請済みの申請を修正している行は変えられない
-  // （申請の点検・種別の付け替えは修正の対象外。取り下げて申請し直す）
+  // 選べる点検種別: その物件で自社が担当する点検種別だけ（ユーザー決定④）。申請済みの申請を修正している行も同じで、
+  // 変えると『申請する』でその申請の点検種別・テンプレートNo・紐付ける点検を直す（portal_update_submitted_entry）
   const options = vendorTypeOptions(
     context?.inspections ?? [],
     row.propertyCode,
@@ -121,13 +124,14 @@ function RowDetailForm({
     masterData.notices.map((n) => n.inspectionType),
   );
   const editing = !!row.schedule?.editEntryId;
-  const typeNote = editing
-    ? '申請済みの申請を修正中のため、点検種別は変えられません'
-    : options.length === 0
+  const typeNote =
+    options.length === 0
       ? 'この物件に自社が担当する点検（業務システム）が無いため、点検種別はここでは変えられません'
-      : row.schedule && typeChanged
-        ? `保存すると「${values.inspectionType}」の点検の行へ移します（紐付ける点検も変わります）`
-        : undefined;
+      : editing && typeChanged
+        ? `『申請する』で申請の点検種別を「${values.inspectionType}」に直し、紐付ける点検も「${values.inspectionType}」の点検へ付け替えます`
+        : row.schedule && typeChanged
+          ? `保存すると「${values.inspectionType}」の点検の行へ移します（紐付ける点検も変わります）`
+          : undefined;
 
   const changeValues = (patch: Partial<BasicFormValues>) =>
     setValues((prev) => {
@@ -179,6 +183,29 @@ function RowDetailForm({
       addToast('詳細設定を保存しました', 'success');
       return;
     }
+    // 申請済みの申請を修正している行は、行はそのままで付け替える点検を決めておく（『申請する』で申請を直す。決定④）
+    if (editing) {
+      const target = editRetypeTarget(
+        useBulkStore.getState().rows,
+        row,
+        values.inspectionType,
+        context?.inspections ?? [],
+        context?.editEntryUnitId ?? null,
+      );
+      if (target.kind === 'error') {
+        addToast(target.message, 'error');
+        return;
+      }
+      keep([isCustom ? values.posterImage : '', ...values.extraPosters.map((x) => x.image_url)]);
+      retypeEditRow(
+        row.id,
+        { ...detail, inspectionType: values.inspectionType },
+        target.kind === 'link' ? { inspectionId: target.inspectionId, unitId: target.unitId } : null,
+      );
+      onClose();
+      addToast('詳細設定を保存しました。『申請する』で申請の点検種別も直します', 'success');
+      return;
+    }
     // 点検種別を変えた（修正依頼1029）。手入力の行はそのまま変える（申請のときに物件・種別・点検開始日の月で点検に結び付く）。
     // 点検予定の行は、新しい種別の点検の同じ月の予定の行へ入力を移す（無ければ手入力の行にする）
     if (!row.schedule) {
@@ -220,7 +247,7 @@ function RowDetailForm({
         templateName: templateDisplayName(templateNo, values.inspectionType, templateImages),
       }}
       status={<StatusBadge status={context?.status ?? 'not_applied'} />}
-      inspectionType={{ options: editing || options.length === 0 ? undefined : options, note: typeNote }}
+      inspectionType={{ options: options.length === 0 ? undefined : options, note: typeNote }}
       registrant={context?.registrant}
       displayTimeMax={displayTimeMax}
       displayTimeDefault={displayTimeDefault}

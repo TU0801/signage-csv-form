@@ -421,6 +421,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
           }
         : undefined,
       inspections: vendorInspections,
+      editEntryUnitId: detailEdit?.property_unit_id ?? null,
     }),
     [detailRow, detailEdit, statusOf, user?.id, user?.email, registrantEmails, vendorInspections],
   );
@@ -1060,7 +1061,9 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       const news = targets.filter((r) => !r.schedule?.editEntryId);
       for (const row of edits) {
         const [built] = buildBulkEntries([row], masterData, vendor, appSettings, vendorInspections);
-        if (built) await updateSubmittedEntry(row.schedule!.editEntryId!, submittedEntryPatch({ ...built }));
+        // 詳細設定で点検種別を変えた行は、点検種別・テンプレートNo・紐付ける点検も直す（修正依頼1029 決定④）
+        const original = editing.get(row.schedule!.key) ?? null;
+        if (built) await updateSubmittedEntry(row.schedule!.editEntryId!, submittedEntryPatch({ ...built }, original, row.relink));
       }
       if (news.length > 0) {
         await createBulkEntries(buildBulkEntries(news, masterData, vendor, appSettings, vendorInspections), userId ?? '');
