@@ -236,7 +236,15 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
     sourcesRef.current = sources;
     baseStatesRef.current = baseStates;
   }, [docs, sources, baseStates]);
-  useEffect(() => () => Object.values(docsRef.current).forEach((d) => d.destroy()), []);
+  // 閉じた後に届いた非同期の結果（空白ページの検出など）を捨てるための印
+  const closedRef = useRef(false);
+  useEffect(() => {
+    closedRef.current = false;
+    return () => {
+      closedRef.current = true;
+      Object.values(docsRef.current).forEach((d) => d.destroy());
+    };
+  }, []);
 
   const sourceMap = useMemo(() => Object.fromEntries(sources.map((s) => [s.id, s])), [sources]);
   const rows = useMemo(() => buildRows(sources), [sources]);
@@ -509,8 +517,8 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
         if (!ctx || canvas.width === 0 || canvas.height === 0) continue;
         if (isBlankPixels(ctx.getImageData(0, 0, canvas.width, canvas.height).data)) blank.push(p);
       }
-      // 探している間に外したファイルには何も言わない
-      if (docsRef.current[id] !== pages) return;
+      // 探している間に外したファイル・閉じた画面には何も言わない
+      if (closedRef.current || docsRef.current[id] !== pages) return;
       // 削除の印がもう付いているページは数えない（押し直しで同じページを「削除しました」と言わない）
       const added = blank.filter((p) => !source.removed.has(p));
       if (added.length > 0) updateSource(id, (s) => ({ ...s, removed: new Set([...s.removed, ...added]) }));
@@ -524,7 +532,8 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
       setBlankNotes((prev) => ({ ...prev, [id]: note }));
       addToast(note, 'info');
     } catch (err) {
-      if (docsRef.current[id] !== pages) return;
+      // 閉じたときは pdfjs の文書を片付けるので、探している途中なら失敗する。閉じた後には知らせない
+      if (closedRef.current || docsRef.current[id] !== pages) return;
       console.error('Blank page scan failed:', err);
       // 上のお知らせは4秒で消えるので、ファイルの欄にも残す（修正依頼1029 本番確認(4) の検証）
       const note = `空白ページを探せませんでした: ${entryErrorReason(err)}`;

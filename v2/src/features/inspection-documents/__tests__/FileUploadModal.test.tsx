@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, configure, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, configure, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { makeInspection } from '@/features/inspection-portal/__tests__/fixtures';
 import { makeReport } from './fixtures';
 import { openPdfPages } from '../lib/pdfPages';
@@ -323,6 +323,25 @@ describe('FileUploadModal（修正依頼1029(1) ファイルのアップロー�
     await screen.findByTestId(/^upload-page-f\d+-3$/);
     fireEvent.click(screen.getByRole('button', { name: '空白ページを削除' }));
     expect(await within(screen.getByTestId('upload-source')).findByText(/^空白ページを探せませんでした/)).toBeInTheDocument();
+  });
+
+  it('空白ページを探している途中で閉じたときは、閉じた後に失敗を知らせない', async () => {
+    let fail: (err: Error) => void = () => {};
+    vi.mocked(openPdfPages).mockResolvedValueOnce({
+      pageCount: 4,
+      render: vi.fn(async () => {}),
+      pageTexts: vi.fn(() => new Promise<string[]>((_, reject) => { fail = reject; })),
+      destroy: vi.fn(),
+    });
+    await open({ kind: 'bulk' });
+    addFiles(new File(['%PDF-1.4'], '20261025_テスト第一マンション_エレベーター定期点検.pdf', { type: 'application/pdf' }));
+    await screen.findByTestId(/^upload-page-f\d+-3$/);
+    fireEvent.click(screen.getByRole('button', { name: '空白ページを削除' }));
+    toast.mockClear();
+    cleanup();
+    fail(new Error('文書は片付けられました'));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(toast).not.toHaveBeenCalledWith(expect.stringMatching(/^空白ページを探せませんでした/), 'error');
   });
 
   it('空白ページにもう削除の印が付いていれば、そう出す。ページの「戻す」でその文言は消す', async () => {
