@@ -187,4 +187,6 @@ export interface DbPropertyFile {
   status: 'active' | 'deleted';
   created_at: string;
   updated_at: string;
+  /** 見ている人が削除できるか（一覧の計算列。DB の property_file_can_delete。修正依頼1029） */
+  can_delete?: boolean;
 }

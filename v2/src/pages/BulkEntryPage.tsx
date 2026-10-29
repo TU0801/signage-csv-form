@@ -18,12 +18,15 @@ import { BulkToolbar } from '@/features/bulk-entry/components/BulkToolbar';
 import { BulkTable, type BulkRowInfo } from '@/features/bulk-entry/components/BulkTable';
 import { BulkFooter } from '@/features/bulk-entry/components/BulkFooter';
 import { PasteModal } from '@/features/bulk-entry/modals/PasteModal';
-import { RowDetailModal } from '@/features/bulk-entry/modals/RowDetailModal';
+import { RowDetailModal, type RowDetailContext } from '@/features/bulk-entry/modals/RowDetailModal';
+import { fetchProfileEmails } from '@/features/relationships/api';
+import { formatJaDateTime } from '@/features/entries-list/lib/entries';
 import { SaveTemplateModal } from '@/features/bulk-entry/modals/SaveTemplateModal';
 import { ManageTemplateModal } from '@/features/bulk-entry/modals/ManageTemplateModal';
 import { BulkApplyModal } from '@/features/bulk-entry/modals/BulkApplyModal';
 import { parseExcelPaste } from '@/features/bulk-entry/utils/parseExcelPaste';
 import { scheduleTargetsFor } from '@/features/bulk-entry/utils/importToSchedule';
+import { relinkConflict } from '@/features/bulk-entry/utils/typeScope';
 import { buildTemplateRows, downloadTemplateXlsx, templateFilename } from '@/features/bulk-entry/utils/bulkTemplateXlsx';
 import {
   buildFilterOptions,
@@ -83,9 +86,7 @@ import {
 } from '@/features/inspection-portal/lib/status';
 import { buildUnscheduledItems } from '@/features/inspection-portal/components/UnscheduledTable';
 import { ApplyModal, type ApplyTarget } from '@/features/inspection-portal/components/ApplyModal';
-import { ReportUploadModal } from '@/features/inspection-documents/components/ReportUploadModal';
-import { BulkReportUploadModal } from '@/features/inspection-documents/components/BulkReportUploadModal';
-import { OtherFileUploadModal } from '@/features/inspection-documents/components/OtherFileUploadModal';
+import { FileUploadModal } from '@/features/inspection-documents/components/FileUploadModal';
 import { BuildingRequestModal } from '@/features/building-requests/components/BuildingRequestModal';
 import { useProvisionalBuildings } from '@/features/building-requests/hooks/useProvisionalBuildings';
 import { isProvisionalCode, provisionalCode } from '@/features/building-requests/lib/provisional';
@@ -390,6 +391,42 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
     },
     [itemsByKey, completed, today],
   );
+  // 行の詳細設定に足して出すもの（修正依頼1029）: ステータス・登録者と登録日時（申請済みの申請を修正している行）・担当の点検行
+  const detailRow = detailRowId === null ? undefined : rows.find((r) => r.id === detailRowId);
+  const detailEdit = detailRow?.schedule?.editEntryId ? (editing.get(detailRow.schedule.key) ?? null) : null;
+  // 登録者のメール: 自分の申請は自分のメール。管理者は申請者のプロファイルを読む（保守会社のアカウントは自分のプロファイルしか読めない）
+  const [registrantEmails, setRegistrantEmails] = useState<ReadonlyMap<string, string>>(() => new Map());
+  const detailAuthor = detailEdit?.user_id ?? null;
+  useEffect(() => {
+    if (!isAdmin || !detailAuthor || detailAuthor === user?.id || registrantEmails.has(detailAuthor)) return;
+    let cancelled = false;
+    fetchProfileEmails([detailAuthor])
+      .then((m) => {
+        if (!cancelled) setRegistrantEmails((prev) => new Map([...prev, ...m]));
+      })
+      .catch((err) => console.error('Failed to load registrant email:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, detailAuthor, user?.id, registrantEmails]);
+  const detailContext = useMemo<RowDetailContext>(
+    () => ({
+      status: detailRow ? statusOf(detailRow) : undefined,
+      registrant: detailEdit
+        ? {
+            email:
+              detailEdit.user_id && detailEdit.user_id === user?.id
+                ? (user?.email ?? '－')
+                : (registrantEmails.get(detailEdit.user_id ?? '') ?? '－'),
+            at: formatJaDateTime(detailEdit.created_at),
+          }
+        : undefined,
+      inspections: vendorInspections,
+      editEntryUnitId: detailEdit?.property_unit_id ?? null,
+    }),
+    [detailRow, detailEdit, statusOf, user?.id, user?.email, registrantEmails, vendorInspections],
+  );
+
   // 時期・管理会社・検索の絞り込み（タグ・見出しの抽出・申請不要の切り替えより前）
   const passesBaseFilters = useCallback(
     (row: BulkEntryRow) => {
@@ -511,6 +548,15 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       count: counts.get(s) ?? 0,
     }));
   }, [passesBaseFilters, columnFilters, propertyNameOf, showReportOnly, isReportOnlyRow, statusOf]);
+
+  // タグのバッジ（修正依頼1029。件数のあるタグと選んでいるタグだけ並べ、押すとそのタグだけを表示。複数選べる・もう一度押すと外す）。
+  // statusOptions はストアの行を読むので、行が変わったら数え直す
+  const statusBadges = useMemo(
+    () => (void rows, statusOptions().filter((o) => o.count > 0 || statusFilter.includes(o.value))),
+    [statusOptions, statusFilter, rows],
+  );
+  const toggleStatus = (s: InspectionStatus) =>
+    setStatusFilter((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
 
   // 選択中の保守会社の点検行（手で足した行を点検行に結び付ける・点検月を出すため）
   const inspectionOfManual = useCallback(
@@ -1007,6 +1053,12 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       focusErrorCell(first.rowId, first.col);
       return;
     }
+    // 修正中の行の付け替え先（詳細設定で点検種別を変えた行。修正依頼1029 決定④）と同じ点検・月の行を一緒に申請させない（二重の申請になる）
+    const conflict = relinkConflict(targets);
+    if (conflict) {
+      showSaveError(conflict.message, conflict.rowId);
+      return;
+    }
     const hidden = all.filter((r) => isApplyTarget(r) && !isVisible(r)).length;
     setSaving(true);
     try {
@@ -1016,7 +1068,9 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       const news = targets.filter((r) => !r.schedule?.editEntryId);
       for (const row of edits) {
         const [built] = buildBulkEntries([row], masterData, vendor, appSettings, vendorInspections);
-        if (built) await updateSubmittedEntry(row.schedule!.editEntryId!, submittedEntryPatch({ ...built }));
+        // 詳細設定で点検種別を変えた行は、点検種別・テンプレートNo・紐付ける点検も直す（修正依頼1029 決定④）
+        const original = editing.get(row.schedule!.key) ?? null;
+        if (built) await updateSubmittedEntry(row.schedule!.editEntryId!, submittedEntryPatch({ ...built }, original, row.relink));
       }
       if (news.length > 0) {
         await createBulkEntries(buildBulkEntries(news, masterData, vendor, appSettings, vendorInspections), userId ?? '');
@@ -1169,6 +1223,30 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
           </button>
         )}
       </span>
+      {statusBadges.length > 0 && (
+        <span className="inline-flex flex-wrap items-center gap-1" role="group" aria-label="タグで絞り込む">
+          {statusBadges.map((o) => {
+            const on = statusFilter.includes(o.value);
+            return (
+              <button
+                key={o.value}
+                type="button"
+                aria-pressed={on}
+                aria-label={`${STATUS_LABEL[o.value]} ${o.count}件`}
+                title={on ? `「${STATUS_LABEL[o.value]}」の絞り込みを外す` : `「${STATUS_LABEL[o.value]}」の行だけ表示`}
+                onClick={() => toggleStatus(o.value)}
+                className={cn(
+                  'inline-flex items-center gap-0.5 rounded-full p-px leading-none',
+                  on ? 'ring-2 ring-blue-500 ring-offset-1' : 'opacity-75 hover:opacity-100',
+                )}
+              >
+                <StatusBadge status={o.value} className="px-1.5 py-px text-[10px]" />
+                <span className="pr-0.5 text-[10px] tabular-nums text-gray-600">{o.count}</span>
+              </button>
+            );
+          })}
+        </span>
+      )}
       <input
         type="search"
         aria-label="物件名・マンションコードで検索"
@@ -1323,7 +1401,12 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
         onImport={handleImport}
         onDownloadTemplate={handleDownloadTemplate}
       />
-      <RowDetailModal open={detailRowId !== null} onClose={() => setDetailRowId(null)} rowId={detailRowId} />
+      <RowDetailModal
+        open={detailRowId !== null}
+        onClose={() => setDetailRowId(null)}
+        rowId={detailRowId}
+        context={detailContext}
+      />
       <SaveTemplateModal
         open={showSaveTemplate}
         onClose={() => setShowSaveTemplate(false)}
@@ -1347,28 +1430,26 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
           profileVendorId={profileVendorId ?? null}
         />
       )}
-      <ReportUploadModal
-        open={!!reportTarget}
-        onClose={() => setReportTarget(null)}
-        inspection={reportTarget?.inspection ?? null}
-        targetMonth={reportTarget?.targetMonth ?? null}
-        entryId={reportTarget?.entryId ?? null}
-        previous={reportTarget?.previous ?? null}
-        defaultPerformedOn={reportTarget?.defaultPerformedOn ?? null}
-        onUploaded={() => {
+      {/* 行の報告書UP（再提出）・報告書一括アップロード・その他ファイルは、ファイルアップロードの1つの画面で開く（修正依頼1029 決定①） */}
+      <FileUploadModal
+        open={!!reportTarget || showBulkReport || showOtherFile}
+        preset={
+          reportTarget
+            ? { kind: 'report', ...reportTarget }
+            : showBulkReport
+              ? { kind: 'bulk' }
+              : showOtherFile
+                ? { kind: 'other' }
+                : null
+        }
+        onClose={() => {
           setReportTarget(null);
-          void portal.refetch();
+          setShowBulkReport(false);
+          setShowOtherFile(false);
         }}
-        onDeleted={() => void portal.refetch()}
-      />
-      <BulkReportUploadModal
-        open={showBulkReport}
-        onClose={() => setShowBulkReport(false)}
         vendorId={currentVendor.id}
-        onUploaded={() => void portal.refetch()}
+        onChanged={() => void portal.refetch()}
       />
-      {/* 建物の選択肢は、モーダルが DB の「置ける建物」を読む（修正依頼1025 G2） */}
-      <OtherFileUploadModal open={showOtherFile} onClose={() => setShowOtherFile(false)} />
       <BuildingRequestModal
         open={showBuildingRequest}
         onClose={() => setShowBuildingRequest(false)}

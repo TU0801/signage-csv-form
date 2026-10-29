@@ -127,6 +127,8 @@ export const RPC = {
   portalDeletePropertyFile: 'portal_delete_property_file',
   /** その他ファイルを置ける建物（点検行の無い自社物件を含む） */
   portalPropertyFileTargets: 'portal_property_file_targets',
+  portalUploadPropertyAliases: 'portal_upload_property_aliases',
+  portalUploadVendorAliases: 'portal_upload_vendor_aliases',
   ocrRecordCorrections: 'ocr_record_corrections',
   ocrCorrectionDictionary: 'ocr_correction_dictionary',
   /** 一括入力テンプレートの保守会社の略称と、点検種別の並び（業務システムの設備の並び。修正依頼1027 (2)。scripts/fix-1027-bulk.sql） */

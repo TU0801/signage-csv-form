@@ -7,7 +7,7 @@ import { entryErrorReason, STALE_ENTRY_MESSAGE } from '@/lib/api/admin-entries';
 import { approveEntryChecked, reviewEntry } from '@/lib/api/portal';
 import type { PortalEntryRow, PortalInspectionRow } from '@/types/portal';
 import { useRefetchOnVisible } from '@/features/approval/hooks/useRefetchOnVisible';
-import { ReportUploadModal } from '@/features/inspection-documents/components/ReportUploadModal';
+import { FileUploadModal } from '@/features/inspection-documents/components/FileUploadModal';
 import { usePortalData } from '../hooks/usePortalData';
 import { reportDefaultPerformedOn, reportEntryId, canSubmit, type PortalRole } from '../lib/actions';
 import { filterSchedule, filterUnscheduled, INITIAL_FILTERS, type PortalFilters } from '../lib/filters';
@@ -259,20 +259,15 @@ export function InspectionPortal() {
           profileVendorId={vendorId ?? null}
         />
       )}
+      {/* 報告書UP・再提出はファイルアップロードの画面で開く（修正依頼1029 決定①。点検・対象月を入れておく） */}
       {canSubmit(role) && (
-        <ReportUploadModal
+        <FileUploadModal
           open={!!reportTarget}
+          preset={reportTarget ? { kind: 'report', ...reportTarget } : null}
           onClose={() => setReportTarget(null)}
-          inspection={reportTarget?.inspection ?? null}
-          targetMonth={reportTarget?.targetMonth ?? null}
-          entryId={reportTarget?.entryId ?? null}
-          previous={reportTarget?.previous ?? null}
-          defaultPerformedOn={reportTarget?.defaultPerformedOn ?? null}
-          onUploaded={() => {
-            setReportTarget(null);
-            void data.refetch();
-          }}
-          onDeleted={() => void data.refetch()}
+          // 台ごとの保守会社が他社の点検に報告書を出すときも、自社の点検として決まるように
+          vendorId={isAdmin ? null : (vendorId ?? null)}
+          onChanged={() => void data.refetch()}
         />
       )}
       <EntryDetailModal

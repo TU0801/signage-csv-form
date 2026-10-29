@@ -24,6 +24,11 @@ const formApi = vi.hoisted(() => ({
   fetchScopedManagementCompanies: vi.fn(),
 }));
 vi.mock('@/lib/api/inspection-form', () => formApi);
+// 報告書UP はファイルアップロードの画面（修正依頼1029 決定①。画面そのものは FileUploadModal のテストで見る）。開いた区分と点検だけを見る
+vi.mock('@/features/inspection-documents/components/FileUploadModal', () => ({
+  FileUploadModal: (p: { open: boolean; preset: { kind: string; inspection: { property_name: string } } | null }) =>
+    p.open && p.preset ? <p>ファイルアップロード（{p.preset.kind}・{p.preset.inspection.property_name}）</p> : null,
+}));
 
 import { ReportCheckPage } from '../ReportCheckPage';
 
@@ -113,7 +118,8 @@ describe('報告書確認（申請不要の点検の報告書。修正依頼1027
     expect(screen.getByTestId('report-summary')).toHaveTextContent('2件中 0件 届いた（未着 2件）');
 
     fireEvent.click(within(rowOf('物件B')).getByRole('button', { name: '報告書UP' }));
-    expect(await screen.findByText('報告書の提出')).toBeInTheDocument();
+    // 報告書UP はファイルアップロードの画面で開く（修正依頼1029 決定①）
+    expect(await screen.findByText('ファイルアップロード（report・物件B）')).toBeInTheDocument();
   });
 
   it('対象月の選択肢は行のある最も古い月から（点検の登録月より前の月は 0件と誤読されるので出さない）', async () => {

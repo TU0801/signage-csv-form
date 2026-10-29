@@ -54,6 +54,11 @@ export interface BulkEntryRow {
    * 物件・点検種別は点検行のもので変えられない。自動保存・テンプレートには入れない（開くたびに DB から作り直す）
    */
   schedule?: BulkScheduleMeta;
+  /**
+   * 申請済みの申請を修正している行（schedule.editEntryId）で点検種別を変えたときの、付け替える点検（修正依頼1029 決定④）。
+   * 『申請する』でその申請の点検種別・テンプレートNo・紐付けを直す。行は元の予定の行のまま（読み直しで新しい点検の行に出る）
+   */
+  relink?: { inspectionId: string; unitId: string | null };
 }
 
 /** 点検予定の行の情報（ScheduleItem の key で画面側の予定と結び付ける） */

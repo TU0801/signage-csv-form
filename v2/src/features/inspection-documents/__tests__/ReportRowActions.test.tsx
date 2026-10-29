@@ -26,8 +26,9 @@ function buttons(report: DbInspectionReport, viewer: ReportViewer): string[] {
 describe('ReportRowActions（ロール別の出し分け）', () => {
   const submitted = makeReport();
 
-  it('保守会社は自社の版を編集・再提出でき、削除（管理者だけ。修正依頼1027 決定②）・受領・差戻しは出ない', () => {
-    expect(buttons(submitted, vendor)).toEqual(['開く', 'DL', '再提出', '編集']);
+  it('保守会社は自社の版を編集・再提出でき、受領前（提出のうち）は削除もできる（修正依頼1029 決定②）。受領・差戻しは出ない', () => {
+    expect(buttons(submitted, vendor)).toEqual(['開く', 'DL', '再提出', '編集', '削除']);
+    expect(buttons(makeReport({ status: 'returned' }), vendor)).not.toContain('削除');
     expect(buttons(submitted, otherVendor)).toEqual(['開く', 'DL']);
   });
 

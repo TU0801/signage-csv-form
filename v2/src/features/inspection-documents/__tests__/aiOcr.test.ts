@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  documentTypeIsRead,
   buildCorrectionDictionary,
   correctionKey,
   correctionRecord,
@@ -181,5 +182,13 @@ describe('aiOcr 区間への割り当て', () => {
       ],
     );
     expect(picks).toEqual({ 0: 'a-10', 2: 'b-10' });
+  });
+});
+
+describe('documentTypeIsRead（区分の学習記録は書類の種類が読めたときだけ）', () => {
+  it('空と「その他」は読めていない扱い、見積書などは読めた扱い', () => {
+    expect(documentTypeIsRead('')).toBe(false);
+    expect(documentTypeIsRead('その他')).toBe(false);
+    expect(documentTypeIsRead('見積書')).toBe(true);
   });
 });

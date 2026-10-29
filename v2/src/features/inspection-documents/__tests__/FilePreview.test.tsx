@@ -22,4 +22,14 @@ describe('FilePreview', () => {
     expect(screen.getByLabelText('8ページ目')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /残り/ })).not.toBeInTheDocument();
   });
+
+  it('動画（MP4・MOV）は再生できる形で出す（修正依頼1029 決定③）', async () => {
+    const create = vi.fn(() => 'blob:video');
+    Object.assign(URL, { createObjectURL: create, revokeObjectURL: vi.fn() });
+    const { container } = render(<FilePreview file={new File(['x'], 'IMG_0001.MOV')} />);
+    await vi.waitFor(() => expect(container.querySelector('video')).not.toBeNull());
+    const video = container.querySelector('video')!;
+    expect(video).toHaveAttribute('src', 'blob:video');
+    expect(video).toHaveAttribute('controls');
+  });
 });

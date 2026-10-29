@@ -10,11 +10,14 @@ import { sha256Hex } from './portal';
  * Storage ポリシー）が持つ。AI-OCR は Edge Function signage-ai-ocr（キー未設定なら 503）。
  */
 
-/** 範囲内のその他ファイル（RLS で絞られる。削除済みも返す） */
+/**
+ * 範囲内のその他ファイル（RLS で絞られる。削除済みも返す）。can_delete は見ている人が削除できるか
+ * （計算列 signage.property_file_can_delete。削除の RPC と同じ判定。scripts/fix-1029-upload.sql）
+ */
 export async function fetchPropertyFiles(): Promise<DbPropertyFile[]> {
   const { data, error } = await supabase
     .from(TABLES.propertyFiles)
-    .select('*')
+    .select('*, can_delete:property_file_can_delete')
     .order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []) as DbPropertyFile[];
@@ -30,6 +33,43 @@ export async function fetchPropertyFileTargets(): Promise<{ code: string; name: 
   }));
 }
 
+/**
+ * ファイル名からの自動入力に使う物件の名前（修正依頼1029(1)）。範囲は「置ける建物」と同じ。
+ * 業務システムの物件名・物件名略称・サイネージ名を添える（RPC portal_upload_property_aliases。scripts/fix-1029-upload.sql）
+ */
+export async function fetchUploadPropertyAliases(): Promise<
+  { code: string; name: string; aliases: string[]; managementCompanyId: string | null }[]
+> {
+  const { data, error } = await supabase.rpc(RPC.portalUploadPropertyAliases);
+  if (error) throw error;
+  return (
+    (data ?? []) as {
+      property_code: string;
+      property_name: string;
+      biz_name: string | null;
+      biz_name_short: string | null;
+      signage_name: string | null;
+      management_company_id: string | null;
+    }[]
+  ).map((r) => ({
+    code: r.property_code,
+    name: r.property_name,
+    aliases: [r.biz_name, r.biz_name_short, r.signage_name].filter((v): v is string => !!v),
+    managementCompanyId: r.management_company_id,
+  }));
+}
+
+/** ファイル名からの自動入力に使う保守会社の取引先名・略称（範囲内だけ。RPC portal_upload_vendor_aliases） */
+export async function fetchUploadVendorAliases(): Promise<{ id: string; name: string; shortName: string | null }[]> {
+  const { data, error } = await supabase.rpc(RPC.portalUploadVendorAliases);
+  if (error) throw error;
+  return ((data ?? []) as { id: string; name: string; short_name: string | null }[]).map((r) => ({
+    id: r.id,
+    name: r.name,
+    shortName: r.short_name,
+  }));
+}
+
 export interface RegisterPropertyFileInput {
   propertyCode: string;
   category: PropertyFileCategory;
@@ -41,6 +81,8 @@ export interface RegisterPropertyFileInput {
   note: string | null;
   /** AI-OCR で読んだ結果（人が直す前）。読んでいなければ null */
   ocrResult?: unknown;
+  /** 保守会社（管理者が選んだもの。DB は管理者のときだけ使い、保守会社のアカウントは自社・管理会社は無しに固定する） */
+  vendorId?: string | null;
 }
 
 /** 置き場所の拡張子（ASCII の英数字だけ。無ければ bin） */
@@ -73,12 +115,13 @@ export async function registerPropertyFile(input: RegisterPropertyFileInput): Pr
     p_doc_date: input.docDate,
     p_note: input.note,
     p_ocr_result: input.ocrResult ?? null,
+    p_vendor_id: input.vendorId || null,
   });
   if (error) throw error;
   return data as DbPropertyFile;
 }
 
-/** 削除（論理）。アップロードした本人と管理者だけ */
+/** 削除（論理）。管理者・アップロードした本人と会社（修正依頼1029 決定②） */
 export async function deletePropertyFile(fileId: string): Promise<DbPropertyFile> {
   const { data, error } = await supabase.rpc(RPC.portalDeletePropertyFile, { p_file_id: fileId });
   if (error) throw error;

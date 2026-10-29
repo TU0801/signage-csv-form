@@ -20,7 +20,9 @@ import { applyDefaultStartDate } from '@/features/entries-list/hooks/useEntriesF
 import { BasicEntryForm, normalizePosition, type BasicFormValues } from '@/features/bulk-entry/components/BasicEntryForm';
 import { usePosterUploads } from '@/features/bulk-entry/hooks/usePosterUploads';
 import { templateDisplayName } from '@/features/bulk-entry/utils/rowDetail';
+import { inspectionForType, vendorTypeOptions } from '@/features/bulk-entry/utils/typeScope';
 import type { DbEntry, DbInspectionType, DbTemplateImage, DbVendor } from '@/types/database';
+import type { InspectionScope } from '../hooks/useInspectionScope';
 
 interface PendingEntryEditModalProps {
   entry: DbEntry | null;
@@ -32,7 +34,12 @@ interface PendingEntryEditModalProps {
   emailOf: (userId: string | null | undefined) => string;
   inspectionTypes: DbInspectionType[];
   templateImages: Pick<DbTemplateImage, 'image_key' | 'image_url' | 'display_name'>[];
-  vendors: Pick<DbVendor, 'vendor_name' | 'emergency_contact'>[];
+  vendors: (Pick<DbVendor, 'vendor_name' | 'emergency_contact'> & { id?: string })[];
+  /**
+   * 点検種別を選び直せる範囲（修正依頼1029 ユーザー決定④）。申請の保守会社がその物件で担当する点検種別だけ選べる。
+   * null は読み込み中（申請の点検種別のまま）
+   */
+  typeScope?: InspectionScope | null;
   displayDefault: number;
   /** 承認できない理由（建物未承認など）。あれば「保存して承認」を押せない */
   approveBlockedReason?: string;
@@ -79,7 +86,13 @@ export function pendingEntryPatch(
   initial: BasicFormValues,
   v: BasicFormValues,
   entry: DbEntry,
-  opts: { templateNo: string; today: string; displayDefault: number },
+  opts: {
+    templateNo: string;
+    today: string;
+    displayDefault: number;
+    /** 点検種別を変えたときの紐付け先（点検に紐付いた申請だけ。修正依頼1029）。台はその点検に同じ台があれば残し、無ければ外す */
+    relink?: { inspectionId: string; unitId: string | null } | null;
+  },
 ): Partial<DbEntry> {
   const patch: Partial<DbEntry> = {};
   if (v.noticeText !== initial.noticeText) patch.announcement = v.noticeText;
@@ -101,6 +114,10 @@ export function pendingEntryPatch(
   if (v.inspectionType !== initial.inspectionType) {
     patch.inspection_type = v.inspectionType;
     patch.template_no = opts.templateNo;
+    if (opts.relink && entry.property_inspection_id) {
+      if (opts.relink.inspectionId !== entry.property_inspection_id) patch.property_inspection_id = opts.relink.inspectionId;
+      if ((entry.property_unit_id ?? null) !== opts.relink.unitId) patch.property_unit_id = opts.relink.unitId;
+    }
   }
   return patch;
 }
@@ -115,6 +132,7 @@ function PendingEntryEditDialog({
   inspectionTypes,
   templateImages,
   vendors,
+  typeScope,
   displayDefault,
   approveBlockedReason,
 }: PendingEntryEditModalProps & { entry: DbEntry }) {
@@ -131,7 +149,47 @@ function PendingEntryEditDialog({
       ? (entry.template_no ?? typeOf(values.inspectionType)?.template_no ?? '')
       : (typeOf(values.inspectionType)?.template_no ?? '');
   const vendorContact = vendors.find((v) => v.vendor_name === entry.vendor_name)?.emergency_contact ?? '';
-  const typeOptions = useMemo(() => inspectionTypes.map((t) => t.inspection_name).filter(Boolean), [inspectionTypes]);
+  // 選べる点検種別: 申請の保守会社がこの物件で担当する点検種別だけ（一括入力の詳細設定と同じ。ユーザー決定④）。
+  // 旧来の申請は vendor_id が無いので保守会社名で引く
+  const vendorId = entry.vendor_id ?? vendors.find((v) => v.vendor_name === entry.vendor_name)?.id ?? null;
+  const typeOptions = useMemo(
+    () =>
+      typeScope && vendorId
+        ? vendorTypeOptions(
+            typeScope.inspections,
+            entry.property_code,
+            vendorId,
+            inspectionTypes.map((t) => t.inspection_name),
+          )
+        : [],
+    [typeScope, vendorId, entry.property_code, inspectionTypes],
+  );
+  // 点検に紐付いた申請で点検種別を変えたら、紐付けもその種別の点検へ付け替える（台は同じ台があれば残す）
+  const relinkTo =
+    values.inspectionType !== initial.inspectionType && entry.property_inspection_id && typeScope
+      ? inspectionForType(typeScope.inspections, entry.property_code, values.inspectionType, vendorId)
+      : null;
+  const relink = relinkTo
+    ? {
+        inspectionId: relinkTo.inspection_id,
+        unitId:
+          entry.property_unit_id &&
+          typeScope!.units.some((u) => u.inspection_id === relinkTo.inspection_id && u.unit_id === entry.property_unit_id)
+            ? entry.property_unit_id
+            : null,
+      }
+    : null;
+
+  // 付け替え先が2台以上の点検で、申請の台がその点検に無い（台を決められない）ときは保存させない。管理者の更新は台の決まり
+  // （guard_entry_unit の2台以上は台ごと）を通らないので、ここで止めないと台なしの申請が台ごとの点検に付く（修正依頼1029）
+  const relinkError =
+    relink && !relink.unitId && typeScope
+      ? typeScope.units.filter((u) => u.inspection_id === relink.inspectionId && u.unit_id).length >= 2
+        ? `「${values.inspectionType}」は台ごとの点検で、どの台の申請か決められません。保守会社に台ごとの申請をしてもらってください`
+        : null
+      : values.inspectionType !== initial.inspectionType && entry.property_inspection_id && typeScope && !relink
+        ? `この保守会社に「${values.inspectionType}」の点検が無いため、紐付けを付け替えられません`
+        : null;
 
   const { uploading, uploadFile, keep } = usePosterUploads({
     userId,
@@ -164,13 +222,17 @@ function PendingEntryEditDialog({
       addToast(`点検種別「${values.inspectionType}」にテンプレートNoがありません。別の点検種別を選んでください`, 'error');
       return;
     }
+    if (relinkError) {
+      addToast(relinkError, 'error');
+      return;
+    }
     const seconds = parseInt(values.displayTime);
     if (!(seconds >= 1 && seconds <= DISPLAY_TIME_MAX)) {
       addToast(`表示時間は1〜${DISPLAY_TIME_MAX}秒で入力してください`, 'error');
       return;
     }
     const today = localDateString();
-    const patch = pendingEntryPatch(initial, values, entry, { templateNo, today, displayDefault });
+    const patch = pendingEntryPatch(initial, values, entry, { templateNo, today, displayDefault, relink });
     const start = patch.display_start_date ?? entry.display_start_date;
     const end = patch.display_end_date ?? entry.display_end_date;
     if (start && end && end < start) {
@@ -250,12 +312,16 @@ function PendingEntryEditDialog({
         uploadFile={uploadFile}
         status={<Badge variant="warning">{entryApprovalLabel(entry.status)}</Badge>}
         inspectionType={{
-          options: typeOptions,
-          note: !entry.property_inspection_id
-            ? undefined
-            : values.inspectionType !== initial.inspectionType
-              ? `点検予定に紐付いた申請です。申請時の点検種別（${initial.inspectionType}）と違います。紐付けた点検予定は変わりません`
-              : '点検予定に紐付いた申請です。点検種別を変えても紐付けは変わりません',
+          options: typeOptions.length > 0 ? typeOptions : undefined,
+          note: !typeScope
+            ? '担当の点検種別を読み込み中です'
+            : typeOptions.length === 0
+              ? 'この保守会社がこの物件で担当する点検（業務システム）が無いため、点検種別は変えられません'
+              : !entry.property_inspection_id
+                ? undefined
+                : values.inspectionType !== initial.inspectionType
+                  ? `点検予定に紐付いた申請です。保存すると紐付けを「${values.inspectionType}」の点検へ付け替えます（申請時は ${initial.inspectionType}）`
+                  : '点検予定に紐付いた申請です。点検種別を変えると紐付けもその種別の点検へ付け替えます',
         }}
         registrant={{ email: emailOf(entry.user_id), at: formatJaDateTime(entry.created_at) }}
         showMemo

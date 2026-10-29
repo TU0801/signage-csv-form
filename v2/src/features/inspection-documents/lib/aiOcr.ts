@@ -384,6 +384,14 @@ export function matchInspectionTypeInText(pageText: string, labels: string[]): s
 // ---------------------------------------------------------------------------
 
 
+/**
+ * 書類の種類が読めたか（空・「その他」は読めていない）。読めたときだけ区分を自動で入れ、区分の学習記録も残す
+ * （読めていない「その他」を記録すると、「その他」と読んだ全部の書類を1つの区分に決める辞書になりうるため）
+ */
+export function documentTypeIsRead(docType: string): boolean {
+  return !!docType && docType !== 'その他';
+}
+
 /** 書類の種類（AI か文字の手掛かり）から、その他ファイルの区分の初期値。報告書の類は「その他」＋種類名 */
 export function categoryOfDocumentType(docType: string): { category: PropertyFileCategory; note: string } {
   switch (docType) {

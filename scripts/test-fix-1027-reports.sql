@@ -70,10 +70,9 @@ SELECT pg_temp.expect_error('同じファイルの二重登録',
     '20310212_試験_1027.pdf', '2b84a9bd-b98e-4332-bd19-2973387bc13c/t1027-a.pdf', 'a.pdf', 10, 'hash-a')$q$, '登録済み');
 
 -- ============================================================
--- 2. 保守会社は削除・復元できない。編集は今どおりできる
+-- 2. 保守会社の編集は今どおりできる
+--    （保守会社の削除は修正依頼1029 決定②で「受領前の自社の版は削除できる」に変わった。確かめは test-fix-1029-upload.sql）
 -- ============================================================
-SELECT pg_temp.expect_error('保守会社の削除',
-  format('SELECT signage.portal_update_report(%L, ''delete'')', (SELECT id FROM t_ids WHERE k = 'a')), '管理者だけ');
 SELECT pg_temp.check('保守会社の編集はできる',
   (signage.portal_update_report((SELECT id FROM t_ids WHERE k = 'a'), 'edit', p_note => 'メモ1027')).note = 'メモ1027');
 

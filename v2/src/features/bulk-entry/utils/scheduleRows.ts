@@ -57,9 +57,15 @@ export function editRowInput(entry: DbEntry): BulkRowInput {
 
 /**
  * 修正中の行の申請を DB の修正（portal_update_submitted_entry）に渡す列にする。buildBulkEntries の行から、直せる列だけを取る
- * （物件・点検・保守会社・状態・台は元の申請のまま）
+ * （物件・対象月・保守会社・状態は元の申請のまま）。
+ * 点検種別を詳細設定で変えたとき（original の点検種別と違うとき。修正依頼1029 決定④）だけ、点検種別・テンプレートNo と、
+ * 点検に紐付いた申請なら紐付ける点検・台（relink）も送る。変えていなければ送らない（旧来の空のテンプレートNo などを触らない）
  */
-export function submittedEntryPatch(row: Record<string, unknown>): Record<string, unknown> {
+export function submittedEntryPatch(
+  row: Record<string, unknown>,
+  original?: Pick<DbEntry, 'inspection_type' | 'property_inspection_id'> | null,
+  relink?: { inspectionId: string; unitId: string | null },
+): Record<string, unknown> {
   const keys = [
     'inspection_start',
     'inspection_end',
@@ -82,6 +88,14 @@ export function submittedEntryPatch(row: Record<string, unknown>): Record<string
   patch.extra_posters = row.extra_posters ?? [];
   // 終了日を省いたときは1日の点検（新しい申請と同じく開始日）
   if (!patch.inspection_end) patch.inspection_end = patch.inspection_start ?? null;
+  if (original && row.inspection_type !== undefined && row.inspection_type !== original.inspection_type) {
+    patch.inspection_type = row.inspection_type;
+    patch.template_no = row.template_no;
+    if (original.property_inspection_id && relink) {
+      patch.property_inspection_id = relink.inspectionId;
+      patch.property_unit_id = relink.unitId;
+    }
+  }
   return patch;
 }
 
