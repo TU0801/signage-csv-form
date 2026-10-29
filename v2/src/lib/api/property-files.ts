@@ -30,6 +30,43 @@ export async function fetchPropertyFileTargets(): Promise<{ code: string; name: 
   }));
 }
 
+/**
+ * ファイル名からの自動入力に使う物件の名前（修正依頼1029(1)）。範囲は「置ける建物」と同じ。
+ * 業務システムの物件名・物件名略称・サイネージ名を添える（RPC portal_upload_property_aliases。scripts/fix-1029-upload.sql）
+ */
+export async function fetchUploadPropertyAliases(): Promise<
+  { code: string; name: string; aliases: string[]; managementCompanyId: string | null }[]
+> {
+  const { data, error } = await supabase.rpc(RPC.portalUploadPropertyAliases);
+  if (error) throw error;
+  return (
+    (data ?? []) as {
+      property_code: string;
+      property_name: string;
+      biz_name: string | null;
+      biz_name_short: string | null;
+      signage_name: string | null;
+      management_company_id: string | null;
+    }[]
+  ).map((r) => ({
+    code: r.property_code,
+    name: r.property_name,
+    aliases: [r.biz_name, r.biz_name_short, r.signage_name].filter((v): v is string => !!v),
+    managementCompanyId: r.management_company_id,
+  }));
+}
+
+/** ファイル名からの自動入力に使う保守会社の取引先名・略称（範囲内だけ。RPC portal_upload_vendor_aliases） */
+export async function fetchUploadVendorAliases(): Promise<{ id: string; name: string; shortName: string | null }[]> {
+  const { data, error } = await supabase.rpc(RPC.portalUploadVendorAliases);
+  if (error) throw error;
+  return ((data ?? []) as { id: string; name: string; short_name: string | null }[]).map((r) => ({
+    id: r.id,
+    name: r.name,
+    shortName: r.short_name,
+  }));
+}
+
 export interface RegisterPropertyFileInput {
   propertyCode: string;
   category: PropertyFileCategory;
@@ -78,7 +115,7 @@ export async function registerPropertyFile(input: RegisterPropertyFileInput): Pr
   return data as DbPropertyFile;
 }
 
-/** 削除（論理）。アップロードした本人と管理者だけ */
+/** 削除（論理）。管理者・アップロードした本人と会社（修正依頼1029 決定②） */
 export async function deletePropertyFile(fileId: string): Promise<DbPropertyFile> {
   const { data, error } = await supabase.rpc(RPC.portalDeletePropertyFile, { p_file_id: fileId });
   if (error) throw error;

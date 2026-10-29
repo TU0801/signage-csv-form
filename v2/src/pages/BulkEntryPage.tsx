@@ -83,9 +83,7 @@ import {
 } from '@/features/inspection-portal/lib/status';
 import { buildUnscheduledItems } from '@/features/inspection-portal/components/UnscheduledTable';
 import { ApplyModal, type ApplyTarget } from '@/features/inspection-portal/components/ApplyModal';
-import { ReportUploadModal } from '@/features/inspection-documents/components/ReportUploadModal';
-import { BulkReportUploadModal } from '@/features/inspection-documents/components/BulkReportUploadModal';
-import { OtherFileUploadModal } from '@/features/inspection-documents/components/OtherFileUploadModal';
+import { FileUploadModal } from '@/features/inspection-documents/components/FileUploadModal';
 import { BuildingRequestModal } from '@/features/building-requests/components/BuildingRequestModal';
 import { useProvisionalBuildings } from '@/features/building-requests/hooks/useProvisionalBuildings';
 import { isProvisionalCode, provisionalCode } from '@/features/building-requests/lib/provisional';
@@ -1347,28 +1345,26 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
           profileVendorId={profileVendorId ?? null}
         />
       )}
-      <ReportUploadModal
-        open={!!reportTarget}
-        onClose={() => setReportTarget(null)}
-        inspection={reportTarget?.inspection ?? null}
-        targetMonth={reportTarget?.targetMonth ?? null}
-        entryId={reportTarget?.entryId ?? null}
-        previous={reportTarget?.previous ?? null}
-        defaultPerformedOn={reportTarget?.defaultPerformedOn ?? null}
-        onUploaded={() => {
+      {/* 行の報告書UP（再提出）・報告書一括アップロード・その他ファイルは、ファイルアップロードの1つの画面で開く（修正依頼1029 決定①） */}
+      <FileUploadModal
+        open={!!reportTarget || showBulkReport || showOtherFile}
+        preset={
+          reportTarget
+            ? { kind: 'report', ...reportTarget }
+            : showBulkReport
+              ? { kind: 'bulk' }
+              : showOtherFile
+                ? { kind: 'other' }
+                : null
+        }
+        onClose={() => {
           setReportTarget(null);
-          void portal.refetch();
+          setShowBulkReport(false);
+          setShowOtherFile(false);
         }}
-        onDeleted={() => void portal.refetch()}
-      />
-      <BulkReportUploadModal
-        open={showBulkReport}
-        onClose={() => setShowBulkReport(false)}
         vendorId={currentVendor.id}
-        onUploaded={() => void portal.refetch()}
+        onChanged={() => void portal.refetch()}
       />
-      {/* 建物の選択肢は、モーダルが DB の「置ける建物」を読む（修正依頼1025 G2） */}
-      <OtherFileUploadModal open={showOtherFile} onClose={() => setShowOtherFile(false)} />
       <BuildingRequestModal
         open={showBuildingRequest}
         onClose={() => setShowBuildingRequest(false)}

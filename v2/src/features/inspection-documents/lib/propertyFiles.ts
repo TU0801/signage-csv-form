@@ -39,6 +39,9 @@ const EXTENSION_MIME: Record<string, string> = {
   doc: 'application/msword',
   pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   ppt: 'application/vnd.ms-powerpoint',
+  // 動画（修正依頼1029 決定③。バケットの許可は scripts/fix-1029-upload.sql で足す）
+  mp4: 'video/mp4',
+  mov: 'video/quicktime',
 };
 
 export const PROPERTY_FILE_ACCEPT = Object.keys(EXTENSION_MIME)
@@ -54,7 +57,7 @@ export function propertyFileMime(name: string): string | null {
 
 /** 置ける形式・大きさか（問題なければ null） */
 export function validatePropertyFile(file: Pick<File, 'name' | 'size'>): string | null {
-  if (!propertyFileMime(file.name)) return 'PDF・画像（JPG/PNG）・Excel・Word・PowerPoint のファイルを選んでください';
+  if (!propertyFileMime(file.name)) return 'PDF・画像（JPG/PNG）・Excel・Word・PowerPoint・動画（MP4/MOV）のファイルを選んでください';
   if (file.size === 0) return 'ファイルが空です';
   if (file.size > MAX_PROPERTY_FILE_BYTES) return 'ファイルが大きすぎます（50MB まで）';
   return null;
@@ -159,7 +162,22 @@ export function propertyFileInSelection(file: DbPropertyFile, sel: TreeSelection
   return true;
 }
 
-/** 削除できるか（アップロードした本人と管理者。最終判断は RPC） */
-export function canDeletePropertyFile(file: DbPropertyFile, viewer: { isAdmin: boolean; userId: string | null | undefined }): boolean {
-  return file.status === 'active' && (viewer.isAdmin || (!!viewer.userId && file.uploaded_by === viewer.userId));
+/**
+ * 削除できるか（管理者・上げた本人・上げた会社。修正依頼1029 決定②。最終判断は RPC portal_delete_property_file）。
+ * 管理会社は上げた人の会社を持たないので、保守会社の無いファイルで物件の管理会社が自社なら出す（DB が上げた人の会社で確かめる）
+ */
+export function canDeletePropertyFile(
+  file: DbPropertyFile,
+  viewer: {
+    isAdmin: boolean;
+    userId: string | null | undefined;
+    vendorId?: string | null;
+    managementCompanyId?: string | null;
+  },
+): boolean {
+  if (file.status !== 'active') return false;
+  if (viewer.isAdmin) return true;
+  if (viewer.userId && file.uploaded_by === viewer.userId) return true;
+  if (viewer.vendorId && file.vendor_id === viewer.vendorId) return true;
+  return !!viewer.managementCompanyId && !file.vendor_id && file.management_company_id === viewer.managementCompanyId;
 }

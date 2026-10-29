@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import type { DbInspectionReport, DbPropertyFile, PortalInspectionRow } from '@/types/portal';
+import type { DbInspectionReport, DbPropertyFile } from '@/types/portal';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
 import { Spinner } from '@/components/ui/Spinner';
@@ -29,11 +29,8 @@ import { showPdfInTab, withPdfTitle } from '../lib/pdfTab';
 import { ReportTree } from './ReportTree';
 import { ReportFiltersBar } from './ReportFiltersBar';
 import { ReportsTable } from './ReportsTable';
-import { ReportEditModal } from './ReportEditModal';
 import { ReportReturnModal } from './ReportReturnModal';
-import { ReportUploadModal } from './ReportUploadModal';
-import { BulkReportUploadModal } from './BulkReportUploadModal';
-import { OtherFileUploadModal } from './OtherFileUploadModal';
+import { FileUploadModal, type FileUploadPreset } from './FileUploadModal';
 import { PropertyFilesTable, type PropertyFileAction } from './PropertyFilesTable';
 import type { ReportAction } from './ReportRowActions';
 import {
@@ -42,7 +39,6 @@ import {
   propertyCandidatesOf,
   propertyFileInSelection,
   propertyFileTreeRow,
-  vendorCandidatesOf,
 } from '../lib/propertyFiles';
 
 /**
@@ -52,7 +48,7 @@ import {
  */
 export function InspectionDocuments() {
   const { addToast } = useToast();
-  const { isAdmin, isManagement, vendorId, user } = useAuth();
+  const { isAdmin, isManagement, vendorId, managementCompanyId, user } = useAuth();
   const { reports, inspections, files, loading, error, inspectionsError, filesError, reload, replaceReport, replaceFile } =
     useInspectionDocuments();
 
@@ -87,12 +83,10 @@ export function InspectionDocuments() {
   const [keepHierarchy, setKeepHierarchy] = useState(true);
   const [zipProgress, setZipProgress] = useState<{ done: number; total: number } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [editing, setEditing] = useState<DbInspectionReport | null>(null);
   const [returning, setReturning] = useState<DbInspectionReport | null>(null);
   const [deleting, setDeleting] = useState<DbInspectionReport | null>(null);
-  const [resubmit, setResubmit] = useState<{ report: DbInspectionReport; inspection: PortalInspectionRow } | null>(null);
-  const [bulkOpen, setBulkOpen] = useState(false);
-  const [otherOpen, setOtherOpen] = useState(false);
+  /** ファイルアップロードの画面（報告書一括アップロード・その他ファイル・再提出・編集を1つの画面で開く。修正依頼1029 決定①） */
+  const [upload, setUpload] = useState<FileUploadPreset | null>(null);
   const [deletingFile, setDeletingFile] = useState<DbPropertyFile | null>(null);
   // 一括アップロードは提出できるロール（保守会社・管理者）だけ。管理者は保守会社を選ばず全社の点検から選ぶ
   const canBulkUpload = isAdmin || !isManagement;
@@ -111,11 +105,6 @@ export function InspectionDocuments() {
     [filteredFiles, treeSelection, focusId],
   );
   const propertyCandidates = useMemo(() => propertyCandidatesOf(inspections), [inspections]);
-  const vendorCandidates = useMemo(() => vendorCandidatesOf(inspections), [inspections]);
-  const inspectionTypeLabels = useMemo(
-    () => [...new Set(inspections.map((i) => i.inspection_type_label ?? '').filter(Boolean))],
-    [inspections],
-  );
   const visible = useMemo(
     () => filtered.filter((r) => matchesTreeSelection(r, treeSelection) && (!focusId || r.id === focusId)),
     [filtered, treeSelection, focusId],
@@ -181,7 +170,12 @@ export function InspectionDocuments() {
         return;
       }
       case 'edit':
-        setEditing(report);
+        // 点検が分かれば、同じ点検・対象月の報告書も並べる（点検行が消された版はその1件だけ）
+        setUpload({
+          kind: 'edit',
+          report,
+          inspection: report.property_inspection_id ? (inspectionsById.get(report.property_inspection_id) ?? null) : null,
+        });
         return;
       case 'delete':
         setDeleting(report);
@@ -206,7 +200,13 @@ export function InspectionDocuments() {
           addToast('この報告書の点検が見つかりません（担当から外れた可能性があります）', 'error');
           return;
         }
-        setResubmit({ report, inspection });
+        setUpload({
+          kind: 'report',
+          inspection,
+          targetMonth: report.target_month,
+          entryId: report.entry_id,
+          previous: report,
+        });
         return;
       }
     }
@@ -295,11 +295,16 @@ export function InspectionDocuments() {
         </p>
         <span className="ml-auto flex gap-1 self-center">
           {/* その他ファイルは管理会社もアップロードできる（建物関連情報など） */}
-          <Button variant="secondary" size="sm" className="text-xs" onClick={() => setOtherOpen(true)}>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="text-xs"
+            onClick={() => setUpload({ kind: 'other', propertyCode: treeSelection?.propertyCode ?? null })}
+          >
             その他ファイルアップロード
           </Button>
           {canBulkUpload && (
-            <Button size="sm" className="text-xs" onClick={() => setBulkOpen(true)}>
+            <Button size="sm" className="text-xs" onClick={() => setUpload({ kind: 'bulk' })}>
               報告書一括アップロード
             </Button>
           )}
@@ -437,7 +442,9 @@ export function InspectionDocuments() {
               {visibleFiles.length > 0 && (
                 <PropertyFilesTable
                   files={visibleFiles}
-                  canDelete={(f) => canDeletePropertyFile(f, { isAdmin, userId: user?.id })}
+                  canDelete={(f) =>
+                    canDeletePropertyFile(f, { isAdmin, userId: user?.id, vendorId: isManagement ? null : vendorId, managementCompanyId })
+                  }
                   busyId={busyId}
                   onAction={(f, a) => void handleFileAction(f, a)}
                 />
@@ -447,7 +454,6 @@ export function InspectionDocuments() {
         </div>
       </div>
 
-      <ReportEditModal report={editing} onClose={() => setEditing(null)} onSaved={replaceReport} />
       <ReportReturnModal report={returning} onClose={() => setReturning(null)} onSubmit={handleReturn} />
       <ConfirmDialog
         open={!!deleting}
@@ -460,17 +466,6 @@ export function InspectionDocuments() {
         message={`「${deleting?.file_name ?? ''}」を削除しますか？\n「削除済みも表示」から復元できます。`}
         confirmLabel="削除"
         variant="danger"
-      />
-      <ReportUploadModal
-        open={!!resubmit}
-        onClose={() => setResubmit(null)}
-        inspection={resubmit?.inspection ?? null}
-        targetMonth={resubmit?.report.target_month ?? null}
-        entryId={resubmit?.report.entry_id ?? null}
-        previous={resubmit?.report ?? null}
-        // 再提出は報告書が1件増える（修正依頼1027 決定①）ので、1行の差し替えでなく読み直す
-        onUploaded={() => void reload()}
-        onDeleted={() => void reload()}
       />
       <ConfirmDialog
         open={!!deletingFile}
@@ -492,23 +487,16 @@ export function InspectionDocuments() {
         confirmLabel="削除"
         variant="danger"
       />
-      <OtherFileUploadModal
-        open={otherOpen}
-        onClose={() => setOtherOpen(false)}
+      <FileUploadModal
+        open={!!upload}
+        preset={upload}
+        onClose={() => setUpload(null)}
+        // 管理者は保守会社を選ばず全社の点検から選ぶ
+        vendorId={isAdmin || isManagement ? null : (vendorId ?? null)}
         properties={propertyCandidates}
-        vendors={vendorCandidates}
-        inspectionTypes={inspectionTypeLabels}
-        defaultPropertyCode={treeSelection?.propertyCode ?? null}
-        onUploaded={() => void reload()}
+        // 報告書は1件増える・編集で名前が変わるので、1行の差し替えでなく読み直す
+        onChanged={() => void reload()}
       />
-      {canBulkUpload && (
-        <BulkReportUploadModal
-          open={bulkOpen}
-          onClose={() => setBulkOpen(false)}
-          vendorId={isAdmin ? null : (vendorId ?? null)}
-          onUploaded={() => void reload()}
-        />
-      )}
     </div>
   );
 }

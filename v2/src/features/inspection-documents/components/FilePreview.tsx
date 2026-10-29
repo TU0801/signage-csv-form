@@ -5,7 +5,8 @@ import { propertyFileMime } from '../lib/propertyFiles';
 
 /*
  * 選んだファイルのプレビュー（その他ファイルアップロード。修正依頼1026 J3。DocFlow と同じく左にプレビュー、右に入力欄）。
- * PDF は1ページ目から縦に並べ（多いときは先頭の数ページ。残りはボタンで出す）、画像はそのまま、Excel・Word・PowerPoint はファイル名だけ。
+ * PDF は1ページ目から縦に並べ（多いときは先頭の数ページ。残りはボタンで出す）、画像はそのまま、動画は再生できる形（修正依頼1029 決定③）、
+ * Excel・Word・PowerPoint はファイル名だけ。
  */
 
 /** 描くページの上限（大きなスキャン PDF で描画を待たせない） */
@@ -14,12 +15,13 @@ const MAX_PREVIEW_PAGES = 5;
 const MAX_RENDER_WIDTH = 900;
 const scale = () => Math.min(2, Math.max(1, typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1));
 
-type Kind = 'pdf' | 'image' | 'other';
+type Kind = 'pdf' | 'image' | 'video' | 'other';
 
 function kindOf(file: File): Kind {
   const mime = propertyFileMime(file.name) ?? file.type;
   if (mime === 'application/pdf') return 'pdf';
   if (/^image\/(jpeg|png)$/.test(mime)) return 'image';
+  if (/^video\/(mp4|quicktime)$/.test(mime)) return 'video';
   return 'other';
 }
 
@@ -46,6 +48,7 @@ export function FilePreview({ file }: { file: File | null }) {
       {!file && <p className="m-auto text-xs text-gray-400">ファイルを追加すると、ここにプレビューが出ます</p>}
       {file && kind === 'pdf' && <PdfPreview key={`${file.name}-${file.size}-${file.lastModified}`} file={file} width={width} />}
       {file && kind === 'image' && <ImagePreview file={file} />}
+      {file && kind === 'video' && <VideoPreview file={file} />}
       {file && kind === 'other' && (
         <div className="m-auto text-center text-xs text-gray-600">
           <p className="break-all font-medium">{file.name}</p>
@@ -56,9 +59,9 @@ export function FilePreview({ file }: { file: File | null }) {
   );
 }
 
-function ImagePreview({ file }: { file: File }) {
+/** 選んだファイルの一時的な URL（作った effect の片付けで外す。ファイルを替えた・閉じたときにメモリを残さない） */
+function useObjectUrl(file: File): string | null {
   const [url, setUrl] = useState<string | null>(null);
-  // URL は作った effect の片付けで外す（ファイルを替えた・閉じたときにメモリを残さない）
   useEffect(() => {
     if (typeof URL.createObjectURL !== 'function') return;
     let cancelled = false;
@@ -73,6 +76,27 @@ function ImagePreview({ file }: { file: File }) {
       if (u) URL.revokeObjectURL(u);
     };
   }, [file]);
+  return url;
+}
+
+/** 動画（MP4・MOV）。MOV はブラウザによって再生できない（Safari は再生できる）ので、そのときはファイル名を出す */
+export function VideoPreview({ file }: { file: File }) {
+  const url = useObjectUrl(file);
+  const [failed, setFailed] = useState(false);
+  if (failed)
+    return (
+      <div className="m-auto text-center text-xs text-gray-600">
+        <p className="break-all font-medium">{file.name}</p>
+        <p className="mt-1 text-gray-400">このブラウザでは再生できない形式です（保管はできます）</p>
+      </div>
+    );
+  return url ? (
+    <video src={url} controls preload="metadata" className="max-h-[60vh] max-w-full rounded bg-black" aria-label={file.name} onError={() => setFailed(true)} />
+  ) : null;
+}
+
+function ImagePreview({ file }: { file: File }) {
+  const url = useObjectUrl(file);
   return url ? <img src={url} alt={file.name} className="max-w-full rounded shadow-sm" /> : null;
 }
 
