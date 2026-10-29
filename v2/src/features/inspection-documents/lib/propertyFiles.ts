@@ -164,7 +164,8 @@ export function propertyFileInSelection(file: DbPropertyFile, sel: TreeSelection
 
 /**
  * 削除できるか（管理者・上げた本人・上げた会社。修正依頼1029 決定②。最終判断は RPC portal_delete_property_file）。
- * 管理会社は上げた人の会社を持たないので、保守会社の無いファイルで物件の管理会社が自社なら出す（DB が上げた人の会社で確かめる）
+ * 一覧の can_delete（DB の property_file_can_delete。RPC と同じ判定）があればそれに従う。無いとき（テストなど）は
+ * 行で分かる範囲の近似（管理会社は上げた人の会社が行に無いので、保守会社の無いファイルで物件の管理会社が自社なら出す）
  */
 export function canDeletePropertyFile(
   file: DbPropertyFile,
@@ -176,6 +177,7 @@ export function canDeletePropertyFile(
   },
 ): boolean {
   if (file.status !== 'active') return false;
+  if (typeof file.can_delete === 'boolean') return file.can_delete;
   if (viewer.isAdmin) return true;
   if (viewer.userId && file.uploaded_by === viewer.userId) return true;
   if (viewer.vendorId && file.vendor_id === viewer.vendorId) return true;

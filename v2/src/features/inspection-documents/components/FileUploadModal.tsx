@@ -22,6 +22,7 @@ import { extractPages, loadSourcePdf } from '../lib/pdfSplit';
 import { buildSegments, buildTargets, identicalLiveReport } from '../lib/bulkSegments';
 import {
   correctionRecord,
+  documentTypeIsRead,
   postProcessOcr,
   suggestBreaks,
   type CorrectionRecord,
@@ -149,7 +150,8 @@ function presetInputOf(preset: FileUploadPreset, vendorId: string | null | undef
   const inspection = preset.kind === 'report' ? preset.inspection : (preset.inspection ?? null);
   const report = preset.kind === 'edit' ? preset.report : (preset.previous ?? null);
   const month = preset.kind === 'report' ? (preset.targetMonth ?? preset.previous?.target_month ?? null) : (report?.target_month ?? null);
-  const performedOn = preset.kind === 'report' ? preset.defaultPerformedOn || preset.previous?.performed_on || '' : '';
+  // 実施日: 報告書UP は行の点検開始日（無ければ前の版の実施日）、編集はその報告書の実施日
+  const performedOn = preset.kind === 'report' ? preset.defaultPerformedOn || preset.previous?.performed_on || '' : (report?.performed_on ?? '');
   const out: Partial<RowInput> = {
     ...base,
     category: 'report',
@@ -535,7 +537,7 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
     const source = sourcesRef.current.find((s) => s.id === id) ?? added;
     const docCategory: UploadCategory | undefined = /報告書/.test(suggestion.documentType)
       ? 'report'
-      : suggestion.documentType && suggestion.documentType !== 'その他'
+      : documentTypeIsRead(suggestion.documentType)
         ? suggestion.category
         : undefined;
     const patchFor = (pages: OcrSuggestion['pages'], whole: boolean): Partial<RowInput> => {
@@ -695,6 +697,7 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
     let skipped = 0;
     let failed = 0;
     const okRows: UploadRow[] = [];
+    const firstOfSource = new Set<string>();
     // その他ファイルの名前（同じ「日付_建物_区分」になる行に _1・_2… を付ける）
     const otherRows = pendingRows.filter((r) => effStates[r.key]?.input.category && effStates[r.key]?.input.category !== 'report');
     const propertyName = (code: string) => options.properties.find((o) => o.value === code)?.label ?? '';
@@ -763,8 +766,12 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
             file: pre.file,
             docDate: input.performedOn || null,
             note: input.note.trim() || null,
-            ocrResult: ocrRawRef.current.get(row.sourceId) ?? null,
+            // AI-OCR の生の結果は、同じファイルを区間に分けても最初の行にだけ持たせる（旧 OtherFileUploadModal と同じ）
+            ocrResult: firstOfSource.has(row.sourceId) ? null : (ocrRawRef.current.get(row.sourceId) ?? null),
+            // 保守会社は管理者が選んだものだけ渡す（DB は保守会社のアカウントを自社に、管理会社を無しに固定する）
+            vendorId: isAdmin ? input.vendorId || null : null,
           });
+          firstOfSource.add(row.sourceId);
           setResults((prev) => ({ ...prev, [row.key]: { state: 'ok', fileName: saved.file_name } }));
         }
         ok += 1;
@@ -799,7 +806,9 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
         records.push(correctionRecord('property', p.buildingRead, p.property?.code ?? null, input.propertyCode));
         if (input.category === 'report') records.push(correctionRecord('inspection_type', p.inspectionTypeRead, p.inspectionType, input.inspectionType));
       }
-      if (input.category && input.category !== 'report') records.push(correctionRecord('category', o.suggestion.documentType, o.suggestion.category, input.category));
+      // 区分は書類の種類が読めたときだけ記録する（空・「その他」は区分の手掛かりにならない。documentTypeIsRead）
+      if (input.category && input.category !== 'report' && documentTypeIsRead(o.suggestion.documentType))
+        records.push(correctionRecord('category', o.suggestion.documentType, o.suggestion.category, input.category));
     }
     return records.filter((r): r is CorrectionRecord => !!r);
   };
@@ -1021,6 +1030,7 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
                 disabled={submitting}
                 today={today}
                 options={options}
+                fixedOtherVendorId={isAdmin ? undefined : isManagement ? '' : (myVendorId ?? '')}
                 onToggle={(key) =>
                   setSelected((prev) => {
                     const next = new Set(prev);

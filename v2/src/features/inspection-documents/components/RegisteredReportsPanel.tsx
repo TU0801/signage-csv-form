@@ -30,7 +30,7 @@ interface RegisteredReportsPanelProps {
 /**
  * 登録済みの報告書の一覧（修正依頼1029(1)。報告書の再提出・編集をファイルのアップロード画面に統一）。
  * 名前を押すと左にプレビュー、状態のバッジ、『編集』（実施日・対象月・ファイル名・メモ）、『削除』
- * （受領前は上げた保守会社も、受領後は管理者だけ。決定②）
+ * （受領前〔提出のうち〕は上げた保守会社も、差戻し・受領後は管理者だけ。決定②）
  */
 export function RegisteredReportsPanel({
   heading,
@@ -50,7 +50,7 @@ export function RegisteredReportsPanel({
         <span className="font-semibold text-gray-700">登録済みの報告書（{reports ? `${reports.length}件` : '読み込み中'}）</span>
         <span className="text-gray-600">{heading}</span>
         <span className="ml-auto text-[11px] text-gray-500">
-          新しいファイルは置き換えず追加します。受領前は上げた保守会社も削除でき、受領後の削除は管理者が行います。
+          新しいファイルは置き換えず追加します。提出のうちは上げた保守会社も削除でき、差戻し・受領後の削除は管理者が行います。
         </span>
       </div>
       {reports && reports.length === 0 && <p className="px-2 py-1 text-xs text-gray-400">まだありません</p>}

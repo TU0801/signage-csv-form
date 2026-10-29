@@ -4,7 +4,7 @@ import type { BulkEntryRow } from '../types';
 
 /*
  * 点検種別を選び直せる範囲（修正依頼1029 ユーザー決定④）。保守会社は、その物件で自社が担当する点検種別（業務システムの点検行の
- * 保守会社か、台ごとの保守の保守会社）の中からだけ選べる。DB の guard_entry_inspection_type と同じ考え方
+ * 保守会社か、台ごとの保守の保守会社）の中からだけ選べる。DB の guard_entry_type_scope（scripts/fix-1029-detail.sql）と同じ考え方
  * （scripts/fix-1029-detail.sql）。
  */
 

@@ -47,12 +47,15 @@ export function UploadBulkEdit({ selectedCount, options, today, disabled, onAppl
     setValues((prev) => ({ ...prev, [key]: value }));
     setEnabled((prev) => new Set(prev).add(key));
   };
-  const keep = (key: BulkField) =>
+  // 「変更しない」に戻したら入れていた値の表示も消す（流れる値が無いのに、前に選んだ値が見えたままにしない）
+  const keep = (key: BulkField) => {
+    setValues((prev) => ({ ...prev, [key]: '' }));
     setEnabled((prev) => {
       const next = new Set(prev);
       next.delete(key);
       return next;
     });
+  };
   const field = 'w-full rounded border border-gray-300 bg-white px-1 py-0.5 text-[11px]';
   const apply = () => {
     const patch: BulkPatch = {};

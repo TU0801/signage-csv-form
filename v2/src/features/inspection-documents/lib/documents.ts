@@ -305,7 +305,7 @@ export interface ReportPermissions {
 
 /**
  * portal_update_report と同じ判定: 管理者は全件、保守会社は自社（vendor_id）の版だけで受領済みは変えられない。
- * 削除・復元は管理者だけ。
+ * 削除は受領前（提出のうち）なら自社の保守会社も、それ以外は管理者だけ。復元は管理者だけ。
  * 受領・差戻しは管理会社と管理者（portal_review_report）。再提出（追加の提出）は書ける人が行う
  */
 export function reportPermissions(report: DbInspectionReport, viewer: ReportViewer): ReportPermissions {
@@ -317,11 +317,9 @@ export function reportPermissions(report: DbInspectionReport, viewer: ReportView
   return {
     canOpen: report.storage_backend === 'supabase',
     canEdit: writable && live && !lockedByAcceptance,
-    // 削除: 受領前（提出・差戻し）は上げた保守会社も自社の版を消せる。受領後は管理者だけ（修正依頼1029 決定②。
-    // DB の portal_update_report も同じ）。復元は管理者だけ
-    canDelete:
-      (viewer.isAdmin && report.status !== 'deleted') ||
-      (ownVendor && (report.status === 'submitted' || report.status === 'returned')),
+    // 削除: 受領前（提出のうち）は上げた保守会社も自社の版を消せる。差戻し・受領後は管理者だけ（修正依頼1029 決定②。
+    // 差戻しの版を消すと差戻し理由が一覧から消えるため。DB の portal_update_report も同じ）。復元は管理者だけ
+    canDelete: (viewer.isAdmin && report.status !== 'deleted') || (ownVendor && report.status === 'submitted'),
     canRestore: viewer.isAdmin && report.status === 'deleted',
     canAccept: reviewer && live && report.status !== 'accepted',
     canReturn: reviewer && live && report.status !== 'returned',

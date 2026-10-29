@@ -10,11 +10,14 @@ import { sha256Hex } from './portal';
  * Storage ポリシー）が持つ。AI-OCR は Edge Function signage-ai-ocr（キー未設定なら 503）。
  */
 
-/** 範囲内のその他ファイル（RLS で絞られる。削除済みも返す） */
+/**
+ * 範囲内のその他ファイル（RLS で絞られる。削除済みも返す）。can_delete は見ている人が削除できるか
+ * （計算列 signage.property_file_can_delete。削除の RPC と同じ判定。scripts/fix-1029-upload.sql）
+ */
 export async function fetchPropertyFiles(): Promise<DbPropertyFile[]> {
   const { data, error } = await supabase
     .from(TABLES.propertyFiles)
-    .select('*')
+    .select('*, can_delete:property_file_can_delete')
     .order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []) as DbPropertyFile[];
@@ -78,6 +81,8 @@ export interface RegisterPropertyFileInput {
   note: string | null;
   /** AI-OCR で読んだ結果（人が直す前）。読んでいなければ null */
   ocrResult?: unknown;
+  /** 保守会社（管理者が選んだもの。DB は管理者のときだけ使い、保守会社のアカウントは自社・管理会社は無しに固定する） */
+  vendorId?: string | null;
 }
 
 /** 置き場所の拡張子（ASCII の英数字だけ。無ければ bin） */
@@ -110,6 +115,7 @@ export async function registerPropertyFile(input: RegisterPropertyFileInput): Pr
     p_doc_date: input.docDate,
     p_note: input.note,
     p_ocr_result: input.ocrResult ?? null,
+    p_vendor_id: input.vendorId || null,
   });
   if (error) throw error;
   return data as DbPropertyFile;

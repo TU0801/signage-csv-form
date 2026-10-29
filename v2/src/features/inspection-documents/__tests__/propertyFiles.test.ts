@@ -14,3 +14,13 @@ describe('canDeletePropertyFile（修正依頼1029 決定②: 上げた会社も
     expect(canDeletePropertyFile({ ...byVendor, status: 'deleted' }, { isAdmin: true, userId: 'u1' })).toBe(false);
   });
 });
+
+describe('canDeletePropertyFile は一覧の can_delete（DB の property_file_can_delete）に従う', () => {
+  it('管理者が上げた保守会社なしのファイルは、自社物件の管理会社にも出さない', () => {
+    const byAdmin = makePropertyFile({ uploaded_by: 'admin', vendor_id: null, management_company_id: 'm1', can_delete: false });
+    expect(canDeletePropertyFile(byAdmin, { isAdmin: false, userId: 'u1', managementCompanyId: 'm1' })).toBe(false);
+    const byMgmt = makePropertyFile({ uploaded_by: 'u-other', vendor_id: null, management_company_id: 'm1', can_delete: true });
+    expect(canDeletePropertyFile(byMgmt, { isAdmin: false, userId: 'u1', managementCompanyId: 'm1' })).toBe(true);
+    expect(canDeletePropertyFile({ ...byMgmt, status: 'deleted' }, { isAdmin: false, userId: 'u1', managementCompanyId: 'm1' })).toBe(false);
+  });
+});

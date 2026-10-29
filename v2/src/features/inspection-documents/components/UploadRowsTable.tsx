@@ -57,6 +57,11 @@ interface UploadRowsTableProps {
   disabled: boolean;
   today: string;
   options: RowOptions;
+  /**
+   * その他ファイルの行の保守会社を固定して見せる値（管理者以外。DB は保守会社のアカウントを自社に、管理会社を無しに固定するので、
+   * 選べても保存されない）。undefined なら選べる（管理者）
+   */
+  fixedOtherVendorId?: string;
   onToggle: (key: string) => void;
   onToggleAll: (checked: boolean) => void;
   onActivate: (key: string) => void;
@@ -164,6 +169,7 @@ function RowLine({
   disabled,
   today,
   options,
+  fixedOtherVendorId,
   onToggle,
   onActivate,
   onChange,
@@ -318,15 +324,27 @@ function RowLine({
         />
       </td>
       <td className={td}>
-        <Combobox
-          aria-label={`行${row.no}の保守会社`}
-          className={cn('py-0.5 text-[11px]', cellErr('vendorId', conflict('vendorId')))}
-          value={input.vendorId}
-          options={options.vendors}
-          placeholder={derived?.vendor ?? '🔍 保守会社'}
-          disabled={locked}
-          onChange={(v) => set({ vendorId: v })}
-        />
+        {!isReport && fixedOtherVendorId !== undefined ? (
+          <Combobox
+            aria-label={`行${row.no}の保守会社`}
+            className="py-0.5 text-[11px]"
+            value={fixedOtherVendorId}
+            options={options.vendors}
+            placeholder={fixedOtherVendorId ? '' : '（なし）'}
+            disabled
+            onChange={() => {}}
+          />
+        ) : (
+          <Combobox
+            aria-label={`行${row.no}の保守会社`}
+            className={cn('py-0.5 text-[11px]', cellErr('vendorId', conflict('vendorId')))}
+            value={input.vendorId}
+            options={options.vendors}
+            placeholder={derived?.vendor ?? '🔍 保守会社'}
+            disabled={locked}
+            onChange={(v) => set({ vendorId: v })}
+          />
+        )}
       </td>
       <td className={td}>
         <Button

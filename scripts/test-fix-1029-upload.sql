@@ -54,7 +54,7 @@ INSERT INTO storage.objects (bucket_id, name, owner_id) VALUES
   ('inspection-reports', '2b84a9bd-b98e-4332-bd19-2973387bc13c/t1029-c.pdf', 'a0000000-0000-4000-8000-000000000002');
 
 -- ============================================================
--- 1. 報告書: 提出・差戻しのうちは上げた保守会社も削除できる。受領後は管理者だけ。復元は管理者だけ。他社は消せない
+-- 1. 報告書: 提出のうちは上げた保守会社も削除できる。差戻し・受領後は管理者だけ。復元は管理者だけ。他社は消せない
 -- ============================================================
 SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000002');
 INSERT INTO t_ids SELECT 'a', (signage.portal_register_report('2b84a9bd-b98e-4332-bd19-2973387bc13c', '2031-03-01', '2031-03-10',
@@ -80,13 +80,13 @@ SELECT pg_temp.check('提出の報告書を保守会社が削除できる',
 SELECT pg_temp.expect_error('保守会社の復元',
   format('SELECT signage.portal_update_report(%L, ''restore'')', (SELECT id FROM t_ids WHERE k = 'a')), '管理者だけ');
 
--- 差戻しのうちも削除できる、受領後は削除できない
+-- 差戻し・受領後は削除できない
 SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000001');
 SELECT signage.portal_review_report((SELECT id FROM t_ids WHERE k = 'b'), 'return', '試験の差戻し');
 SELECT signage.portal_review_report((SELECT id FROM t_ids WHERE k = 'c'), 'accept', NULL);
 SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000002');
-SELECT pg_temp.check('差戻しの報告書を保守会社が削除できる',
-  (signage.portal_update_report((SELECT id FROM t_ids WHERE k = 'b'), 'delete')).status = 'deleted');
+SELECT pg_temp.expect_error('差戻しの報告書を保守会社が削除',
+  format('SELECT signage.portal_update_report(%L, ''delete'')', (SELECT id FROM t_ids WHERE k = 'b')), '管理者だけ');
 SELECT pg_temp.expect_error('受領済みの報告書を保守会社が削除',
   format('SELECT signage.portal_update_report(%L, ''delete'')', (SELECT id FROM t_ids WHERE k = 'c')), '管理者だけ');
 -- 置き換え済み（superseded）の版も保守会社は削除できない
@@ -145,9 +145,54 @@ EXCEPTION WHEN OTHERS THEN
   IF SQLERRM LIKE 'NG%' THEN RAISE; END IF;
   RAISE NOTICE 'ok (止まった) 別の管理会社の削除: %', SQLERRM;
 END $$;
+-- 管理者が上げた保守会社なしのファイル（物件の管理会社は mgmt@ の会社）は、管理会社には削除できない（画面の can_delete も false）
+SELECT pg_temp.as_owner();
+WITH x AS (
+  INSERT INTO signage.signage_property_files (property_id, property_code, property_name, category, file_name, storage_path, mime_type,
+    uploaded_by, vendor_id, management_company_id, status)
+  SELECT 'd0000000-0000-4000-8000-000000000001', '120409-00', '試験', 'estimate', 't1029-4.pdf', '120409-00/t1029-4.pdf', 'application/pdf',
+    'a0000000-0000-4000-8000-000000000001', NULL, p.management_company_id, 'active'
+  FROM signage.signage_profiles p WHERE p.id = 'a0000000-0000-4000-8000-000000000006' RETURNING id)
+INSERT INTO t_ids SELECT 'f4', id FROM x;
 SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000006');
+SELECT pg_temp.check('管理会社の一覧: 自社の人が上げたファイルは can_delete、管理者が上げたものは不可',
+  (SELECT bool_and(CASE f.id WHEN (SELECT id FROM t_ids WHERE k = 'f3') THEN signage.property_file_can_delete(f)
+                             ELSE NOT signage.property_file_can_delete(f) END)
+          AND count(*) = 2
+     FROM signage.signage_property_files f WHERE f.id IN (SELECT id FROM t_ids WHERE k IN ('f3', 'f4'))));
+SELECT pg_temp.expect_error('管理者が上げたファイルを管理会社が削除',
+  format('SELECT signage.portal_delete_property_file(%L)', (SELECT id FROM t_ids WHERE k = 'f4')), 'アップロードした会社と管理者だけ');
 SELECT pg_temp.check('管理会社が自社の上げたファイルを削除できる',
   (signage.portal_delete_property_file((SELECT id FROM t_ids WHERE k = 'f3'))).status = 'deleted');
+
+-- ============================================================
+-- 2b. その他ファイルの登録: 管理者は保守会社を選べる。保守会社のアカウントは自社に固定。関数は1つだけ
+-- ============================================================
+SELECT pg_temp.as_owner();
+SELECT pg_temp.check('portal_register_property_file の定義は1つ',
+  (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'signage' AND p.proname = 'portal_register_property_file') = 1);
+INSERT INTO storage.objects (bucket_id, name, owner_id) VALUES
+  ('property-files', '120409-00/t1029-r1.pdf', NULL),
+  ('property-files', '120409-00/t1029-r2.pdf', NULL),
+  ('property-files', '120409-00/t1029-r3.pdf', NULL);
+SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000001');
+SELECT pg_temp.check('管理者が選んだ保守会社が保存される',
+  (SELECT r.vendor_id = 'c0000000-0000-4000-8000-000000000003' AND r.vendor_name IS NOT NULL
+     FROM signage.portal_register_property_file('120409-00', 'estimate', NULL, 't1029-r1.pdf', '120409-00/t1029-r1.pdf', 'r1.pdf',
+       'application/pdf', 10, 'hash-1029-r1', NULL, NULL, NULL, 'c0000000-0000-4000-8000-000000000003') r));
+SELECT pg_temp.check('管理者が保守会社を選ばなければ空',
+  (SELECT r.vendor_id IS NULL
+     FROM signage.portal_register_property_file('120409-00', 'estimate', NULL, 't1029-r2.pdf', '120409-00/t1029-r2.pdf', 'r2.pdf',
+       'application/pdf', 10, 'hash-1029-r2') r));
+SELECT pg_temp.expect_error('管理者が無い保守会社を渡す',
+  $q$SELECT signage.portal_register_property_file('120409-00', 'estimate', NULL, 't1029-r3.pdf', '120409-00/t1029-r3.pdf', 'r3.pdf',
+       'application/pdf', 10, 'hash-1029-r3x', NULL, NULL, NULL, 'c0000000-0000-4000-8000-0000000000ff')$q$, '保守会社が見つかりません');
+SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000002');
+SELECT pg_temp.check('保守会社のアカウントは他社を渡しても自社',
+  (SELECT r.vendor_id = 'c0000000-0000-4000-8000-000000000001'
+     FROM signage.portal_register_property_file('120409-00', 'estimate', NULL, 't1029-r3.pdf', '120409-00/t1029-r3.pdf', 'r3.pdf',
+       'application/pdf', 10, 'hash-1029-r3', NULL, NULL, NULL, 'c0000000-0000-4000-8000-000000000003') r));
 
 -- ============================================================
 -- 3. バケットに動画が足されている（重複なし）・上限 50MB のまま
@@ -190,6 +235,8 @@ SELECT pg_temp.as_owner();
 SELECT pg_temp.check('anon に実行権が無い',
   NOT has_function_privilege('anon', 'signage.portal_update_report(uuid, text, date, date, text, text)', 'EXECUTE')
   AND NOT has_function_privilege('anon', 'signage.portal_delete_property_file(uuid)', 'EXECUTE')
+  AND NOT has_function_privilege('anon', 'signage.property_file_can_delete(signage.signage_property_files)', 'EXECUTE')
+  AND NOT has_function_privilege('anon', 'signage.portal_register_property_file(text, text, text, text, text, text, text, bigint, text, date, text, jsonb, uuid)', 'EXECUTE')
   AND NOT has_function_privilege('anon', 'signage.portal_upload_property_aliases()', 'EXECUTE')
   AND NOT has_function_privilege('anon', 'signage.portal_upload_vendor_aliases()', 'EXECUTE'));
 

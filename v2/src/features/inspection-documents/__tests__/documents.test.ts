@@ -5,6 +5,7 @@ import {
   buildZipPaths,
   filterReports,
   matchesTreeSelection,
+  reportPermissions,
   reportsToCsv,
   revealReport,
 } from '../lib/documents';
@@ -109,5 +110,16 @@ describe('revealReport（?report=<id> で指した版を隠さない）', () => 
     });
     expect(filterReports([target], filters)).toHaveLength(1);
     expect(selection).toEqual({ propertyCode: '100001', year: '2025', inspectionType: '消防設備点検' });
+  });
+});
+
+describe('reportPermissions の削除（修正依頼1029 決定②: 受領前〔提出のうち〕は自社の保守会社も削除できる）', () => {
+  it('保守会社は自社の提出の版だけ削除でき、差戻し・受領済みは管理者だけ', () => {
+    const vendor = { isAdmin: false, isManagement: false, vendorId: 'v1' };
+    const admin = { isAdmin: true, isManagement: false, vendorId: null };
+    expect(reportPermissions(makeReport({ vendor_id: 'v1', status: 'submitted' }), vendor).canDelete).toBe(true);
+    expect(reportPermissions(makeReport({ vendor_id: 'v1', status: 'returned' }), vendor).canDelete).toBe(false);
+    expect(reportPermissions(makeReport({ vendor_id: 'v1', status: 'accepted' }), vendor).canDelete).toBe(false);
+    expect(reportPermissions(makeReport({ vendor_id: 'v1', status: 'returned' }), admin).canDelete).toBe(true);
   });
 });

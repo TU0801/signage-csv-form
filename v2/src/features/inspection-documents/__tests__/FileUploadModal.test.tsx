@@ -151,6 +151,27 @@ describe('FileUploadModal（修正依頼1029(1) ファイルのアップロー�
     expect(input.file.type).toBe('video/mp4');
   });
 
+  it('管理者がその他ファイルで選んだ保守会社を登録に渡す', async () => {
+    auth.isAdmin = true;
+    fileApi.fetchUploadVendorAliases.mockResolvedValue([{ id: 'v2', name: '検証清掃サービス株式会社', shortName: null }]);
+    fileApi.registerPropertyFile.mockResolvedValue({ file_name: 'x.pdf' });
+    await open({ kind: 'other' }, { vendorId: null });
+    addFiles(new File(['x'], '20261025_御見積.xlsx'));
+    await screen.findByTestId('upload-row-1');
+    await pick(1, '物件', /テスト第一マンション/);
+    await pick(1, '保守会社', /検証清掃サービス株式会社/);
+    fireEvent.click(screen.getByRole('button', { name: '1行を登録する' }));
+    await waitFor(() => expect(fileApi.registerPropertyFile).toHaveBeenCalledTimes(1));
+    expect(fileApi.registerPropertyFile.mock.calls[0]![0]).toMatchObject({ category: 'estimate', vendorId: 'v2' });
+  });
+
+  it('管理者以外はその他ファイルの行の保守会社を変えられない（保存では自社に固定・管理会社は空のため）', async () => {
+    await open({ kind: 'other' });
+    addFiles(new File(['x'], '20261025_御見積.xlsx'));
+    await screen.findByTestId('upload-row-1');
+    expect(within(row(1)).getByRole('combobox', { name: '行1の保守会社' })).toBeDisabled();
+  });
+
   it('選択行の一括設定は、選んだ行の入れた項目だけを変える（変更しないの項目は行ごとの値のまま）', async () => {
     await open({ kind: 'other' });
     addFiles(new File(['x'], 'a_請求書.xlsx'), new File(['y'], 'b_請求書.xlsx'));
@@ -164,6 +185,17 @@ describe('FileUploadModal（修正依頼1029(1) ファイルのアップロー�
     expect(within(row(1)).getByLabelText('行1の区分')).toHaveValue('estimate');
     expect(within(row(2)).getByLabelText('行2の区分')).toHaveValue('estimate');
     expect(within(row(2)).getByLabelText('行2のメモ')).toHaveValue('2行目のメモ');
+  });
+
+  it('一括設定で「変更しない」に戻すと、入れていた値の表示を消す', async () => {
+    await open({ kind: 'other' });
+    addFiles(new File(['x'], 'a_請求書.xlsx'));
+    await screen.findByTestId('upload-row-1');
+    fireEvent.click(within(row(1)).getByLabelText('行1を選ぶ'));
+    const box = screen.getByTestId('upload-bulk-edit');
+    fireEvent.change(within(box).getByLabelText('一括設定の区分'), { target: { value: 'photo' } });
+    fireEvent.click(within(box).getByRole('button', { name: '区分を変更しない' }));
+    expect(within(box).getByLabelText('一括設定の区分')).toHaveValue('');
   });
 
   it('開いた行の実施日とファイル名の日付が食い違えば要確認にして止め、詳細で選び直すと登録できる', async () => {
@@ -197,6 +229,15 @@ describe('FileUploadModal（修正依頼1029(1) ファイルのアップロー�
     fireEvent.click(within(list).getByRole('button', { name: '自社の版.pdf を削除' }));
     fireEvent.click(screen.getByRole('button', { name: '削除' }));
     await waitFor(() => expect(api.updateInspectionReport).toHaveBeenCalledWith('r1', 'delete'));
+  });
+
+  it('編集で開いて足したファイルの実施日は、報告書の実施日を入れておく', async () => {
+    const report = makeReport({ id: 'r1', property_inspection_id: 'i1', property_name: 'テスト第一マンション', inspection_type_label: 'エレベーター定期点検', performed_on: '2026-10-05' });
+    api.fetchInspectionReports.mockResolvedValue([report]);
+    await open({ kind: 'edit', report, inspection: first });
+    addFiles(new File(['%PDF-1.4'], 'camera_report.pdf', { type: 'application/pdf', lastModified: Date.parse('2026-10-28T03:00:00Z') }));
+    await screen.findByTestId(/^upload-page-f\d+-0$/);
+    expect(within(row(1)).getByLabelText('行1の実施日')).toHaveValue('2026-10-05');
   });
 
   it('編集で開くと報告書の編集欄を出し、実施日・ファイル名・メモを保存する', async () => {

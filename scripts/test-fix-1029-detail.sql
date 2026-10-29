@@ -78,6 +78,12 @@ BEGIN
   INSERT INTO signage.signage_entries (user_id, property_code, terminal_id, vendor_name, inspection_type, template_no, status, inspection_start)
   VALUES ('a0000000-0000-4000-8000-000000000002', '120409-00', '', '検証エレベーター保守株式会社', '外壁補修工事',
           'construction_building_large_scale', 'draft', '2026-12-05');
+  -- (3) 紐付けの無い INSERT でも、テンプレートNo が種別のものでなければ断る
+  PERFORM pg_temp.expect_denied($q$
+    INSERT INTO signage.signage_entries (user_id, property_code, terminal_id, vendor_name, inspection_type, template_no, status, inspection_start)
+    VALUES ('a0000000-0000-4000-8000-000000000002', '120409-00', '', '検証エレベーター保守株式会社', '消防設備点検',
+            'cleaning', 'pending', '2026-12-05')$q$,
+    '22023', 'INSERT 紐付け無しでテンプレートNo の食い違い');
 
   -- (1) 紐付けたまま種別だけ変える UPDATE は断る
   PERFORM pg_temp.expect_denied($q$
