@@ -283,3 +283,7 @@ $function$;
 
 REVOKE ALL ON FUNCTION signage.portal_upload_vendor_aliases() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION signage.portal_upload_vendor_aliases() TO authenticated, service_role;
+
+-- PostgREST の型の読み直し（計算列 property_file_can_delete と portal_register_property_file の新しい形を、すぐに API から使えるように。
+-- Supabase の DDL のイベントトリガーでも読み直されるが、遅れたときの代わり。何度送っても同じ）
+NOTIFY pgrst, 'reload schema';

@@ -149,8 +149,9 @@ export function mergeAuto(state: RowState, patch: Partial<RowInput>, source: Fie
     if (!cur || ((sources[k] === 'mtime' || sources[k] === 'default') && source !== sources[k])) {
       (input as Record<RowField, string>)[k] = v;
       sources[k] = source;
-    } else if (cur !== v && k !== 'note' && !isHumanChoice(sources[k])) {
-      // 入っている値はそのまま。開いた行の値・先に読んだ値と違えば知らせる（この画面で人が選んだ値には知らせない）
+    } else if (cur !== v && k !== 'note' && source !== 'mtime' && !isHumanChoice(sources[k])) {
+      // 入っている値はそのまま。開いた行の値・先に読んだ値と違えば知らせる（この画面で人が選んだ値には知らせない）。
+      // ファイルの更新日は手掛かりが無いときの仮の値なので、入っている値と違っても知らせない（要確認で止めない）
       conflicts[k] = { value: v, source };
     }
   }

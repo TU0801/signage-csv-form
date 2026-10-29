@@ -238,6 +238,7 @@ describe('FileUploadModal（修正依頼1029(1) ファイルのアップロー�
     addFiles(new File(['%PDF-1.4'], 'camera_report.pdf', { type: 'application/pdf', lastModified: Date.parse('2026-10-28T03:00:00Z') }));
     await screen.findByTestId(/^upload-page-f\d+-0$/);
     expect(within(row(1)).getByLabelText('行1の実施日')).toHaveValue('2026-10-05');
+    expect(within(row(1)).queryByText('要確認')).toBeNull();
   });
 
   it('編集で開くと報告書の編集欄を出し、実施日・ファイル名・メモを保存する', async () => {
