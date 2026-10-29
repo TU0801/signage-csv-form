@@ -387,6 +387,7 @@ export function BasicEntryForm({
                   vendorName={vendorName}
                   emergencyContact={contact}
                   textScale={PREVIEW_TEXT_SCALE}
+                  titleText={values.inspectionType}
                 />
               </div>
               <p className="rounded bg-gray-900 px-2 py-1 text-center text-xs font-semibold text-white" data-testid="template-name">

@@ -30,10 +30,40 @@ const type = (name: string, templateNo: string, text: string): DbInspectionType 
   sort_order: 1,
   created_at: null,
 });
+/** 範囲の点検行（物件 2010。山田エレベーター＝V1 の点検 3つと、別の会社の点検 1つ） */
+const insp = (id: string, label: string, vendor: string, units: string[] = []) => ({
+  inspection_id: id,
+  property_code: '2010-00',
+  property_name: 'エクレスト六本松',
+  terminal_count: 1,
+  terminal_ids: [],
+  management_company_id: null,
+  management_company_name: null,
+  inspection_type_id: id,
+  inspection_type_label: label,
+  template_no: null,
+  vendor_id: vendor,
+  vendor_name: null,
+  unit_vendor_ids: units,
+  inspection_months: [],
+  schedule_from: '2026-01-01',
+  remarks: '',
+});
+const SCOPE = {
+  inspections: [
+    insp('i-ev', 'エレベーター定期点検', 'V1'),
+    insp('i-fire', '消防設備点検', 'V2', ['V1']),
+    insp('i-none', 'テンプレート無し点検', 'V1'),
+    insp('i-other', 'インターホン点検', 'V2'),
+  ],
+  units: [{ inspection_id: 'i-fire', unit_id: 'u-1', unit_code: 'No1', unit_sort: 1, maintainer_id: 'V1', inspection_months: [], inspected_on: null, equipment_code: null }],
+};
+
 const TYPES = [
   type('エレベーター定期点検', 'elevator_inspection', 'エレベーターが止まります。'),
   type('消防設備点検', 'fire_inspection', '火災報知器が鳴ります。'),
   type('テンプレート無し点検', '', ''),
+  type('インターホン点検', 'intercom', ''),
 ];
 
 function open(over = {}) {
@@ -58,7 +88,8 @@ function open(over = {}) {
       emailOf={() => 'mitsubishi@EV'}
       inspectionTypes={TYPES}
       templateImages={[]}
-      vendors={[]}
+      vendors={[{ id: 'V1', vendor_name: '山田エレベーター', emergency_contact: '' }]}
+      typeScope={SCOPE}
       displayDefault={6}
     />,
   );
@@ -105,11 +136,31 @@ describe('PendingEntryEditModal（承認待ちの編集を基本フォームで�
   it('テンプレートNoの無い点検種別に変えると保存・承認を止め、点検予定に紐付いた申請は種別が申請時と違うと知らせる', () => {
     open({ property_inspection_id: '2b84a9bd-b98e-4332-bd19-2973387bc13c' });
     fireEvent.change(screen.getByLabelText('点検種別'), { target: { value: 'テンプレート無し点検' } });
-    expect(screen.getByText(/申請時の点検種別（エレベーター定期点検）と違います/)).toBeInTheDocument();
+    expect(screen.getByText(/紐付けを「テンプレート無し点検」の点検へ付け替えます/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '保存して承認' }));
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
     expect(api.updatePendingEntry).not.toHaveBeenCalled();
     expect(toast.addToast).toHaveBeenCalledWith(expect.stringContaining('テンプレートNoがありません'), 'error');
+  });
+
+  it('点検種別は申請の保守会社がその物件で担当する種別だけ選べる（修正依頼1029 決定④。保守会社名から引く旧来の申請も同じ）', () => {
+    open({ vendor_id: null });
+    const options = [...(screen.getByLabelText('点検種別') as HTMLSelectElement).options].map((o) => o.value);
+    expect(options).toEqual(['エレベーター定期点検', '消防設備点検', 'テンプレート無し点検']);
+  });
+
+  it('点検に紐付いた申請で点検種別を変えると、紐付けをその種別の点検へ付け替え、台はその点検に同じ台があれば残す（修正依頼1029）', async () => {
+    open({ property_inspection_id: 'i-ev', vendor_id: 'V1', property_unit_id: 'u-1' });
+    fireEvent.change(screen.getByLabelText('点検種別'), { target: { value: '消防設備点検' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    await waitFor(() => expect(api.updatePendingEntry).toHaveBeenCalledTimes(1));
+    expect(api.updatePendingEntry).toHaveBeenCalledWith(
+      '11111111-aaaa-4bbb-8ccc-000000000001',
+      expect.objectContaining({ inspection_type: '消防設備点検', template_no: 'fire_inspection', property_inspection_id: 'i-fire' }),
+      '2026-10-26T00:00:00+00:00',
+    );
+    const [, patch] = api.updatePendingEntry.mock.calls[0] as unknown as [string, Record<string, unknown>];
+    expect(patch).not.toHaveProperty('property_unit_id');
   });
 
   it('「保存して承認」は同じ更新で状態を承認済み（ready）にする（版は開いたときの updated_at）', async () => {
