@@ -53,6 +53,8 @@ export interface UploadPagesPaneProps {
   activeRowKey: string | null;
   /** 空白ページを探している最中のファイル */
   scanning: ReadonlySet<string>;
+  /** 空白ページを探した結果の文言（ファイルの id → 「空白ページはありませんでした」など） */
+  blankNotes?: Record<string, string>;
   disabled: boolean;
   onToggleBreak: (sourceId: string, before: number) => void;
   onRotate: (sourceId: string, page: number, delta: number) => void;
@@ -127,6 +129,7 @@ function SourceBlock({
   lockedSources,
   activeRowKey,
   scanning,
+  blankNotes,
   disabled,
   thumbWidth,
   onToggleBreak,
@@ -142,7 +145,7 @@ function SourceBlock({
   return (
     <div id={`upload-source-${source.id}`} className="mb-2 rounded border border-gray-200 bg-white" data-testid="upload-source">
       <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 px-1.5 py-0.5 text-xs">
-        <span className="min-w-0 flex-1 truncate font-medium text-gray-800" title={source.file.name}>
+        <span className="min-w-[8rem] flex-1 truncate font-medium text-gray-800" title={source.file.name}>
           {source.file.name}
         </span>
         <span className="text-gray-500">
@@ -162,6 +165,7 @@ function SourceBlock({
             {scanning.has(source.id) ? '空白ページを探しています…' : '空白ページを削除'}
           </Button>
         )}
+
         <Button
           variant="ghost"
           size="sm"
@@ -173,6 +177,11 @@ function SourceBlock({
           外す
         </Button>
       </div>
+      {source.kind === 'pdf' && blankNotes?.[source.id] && !scanning.has(source.id) && (
+        <p role="status" className="px-1.5 text-[11px] text-blue-800">
+          {blankNotes[source.id]}
+        </p>
+      )}
       {locked && <p className="px-1.5 text-[11px] text-gray-500">登録済みの区間があるため、区切り・回転・削除は変えられません。</p>}
       {source.kind !== 'pdf' ? (
         <div className={cn('max-h-80 overflow-hidden p-1', myRows[0]?.key === activeRowKey && 'ring-2 ring-blue-400')}>
