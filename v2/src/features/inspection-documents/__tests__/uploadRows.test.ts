@@ -47,6 +47,12 @@ describe('uploadRows（修正依頼1029(1) ファイルのアップロードの�
     expect(checkRow(row, fixed, ctx).needsReview).toBe(false);
   });
 
+  it('画面の既定（報告書一括アップロードの区分）はファイル名で読めた区分に黙って譲る（要確認にしない）', () => {
+    const s = mergeAuto(setFields(EMPTY_ROW_STATE, { category: 'report' }, 'default'), { category: 'estimate' }, 'filename');
+    expect(s.input.category).toBe('estimate');
+    expect(s.conflicts).toEqual({});
+  });
+
   it('一括設定は「変更しない」の項目を変えず、選択中の行だけに入れる', () => {
     const states = {
       a: setFields(EMPTY_ROW_STATE, { note: 'a のメモ', category: 'invoice' }, 'manual'),

@@ -108,10 +108,11 @@ export const EMPTY_ROW_INPUT: RowInput = {
 };
 
 /** 値の出どころ（詳細に出す。手で入れた値は自動で上書きしない） */
-export type FieldSource = 'preset' | 'filename' | 'mtime' | 'text' | 'ai' | 'manual' | 'bulk';
+export type FieldSource = 'preset' | 'default' | 'filename' | 'mtime' | 'text' | 'ai' | 'manual' | 'bulk';
 
 export const FIELD_SOURCE_LABEL: Record<FieldSource, string> = {
   preset: '開いた行',
+  default: '画面の既定',
   filename: 'ファイル名',
   mtime: 'ファイルの更新日',
   text: '文字情報',
@@ -144,8 +145,8 @@ export function mergeAuto(state: RowState, patch: Partial<RowInput>, source: Fie
   for (const [k, v] of Object.entries(patch) as [RowField, string | undefined][]) {
     if (!v) continue;
     const cur = input[k];
-    // 更新日は手掛かりが無いときの仮の日付なので、後から読めた日付で黙って置き換える
-    if (!cur || (sources[k] === 'mtime' && source !== 'mtime')) {
+    // 更新日・画面の既定（報告書一括アップロードの区分など）は手掛かりが無いときの仮の値なので、後から読めた値で黙って置き換える
+    if (!cur || ((sources[k] === 'mtime' || sources[k] === 'default') && source !== sources[k])) {
       (input as Record<RowField, string>)[k] = v;
       sources[k] = source;
     } else if (cur !== v && k !== 'note' && !isHumanChoice(sources[k])) {
@@ -157,7 +158,7 @@ export function mergeAuto(state: RowState, patch: Partial<RowInput>, source: Fie
 }
 
 /** 人が入れた値（手入力・一括設定）。その項目の食い違いは解消したことにする */
-export function setFields(state: RowState, patch: Partial<RowInput>, source: 'manual' | 'bulk' | 'preset'): RowState {
+export function setFields(state: RowState, patch: Partial<RowInput>, source: 'manual' | 'bulk' | 'preset' | 'default'): RowState {
   const sources = { ...state.sources };
   const conflicts = { ...state.conflicts };
   for (const k of Object.keys(patch) as RowField[]) {

@@ -133,11 +133,19 @@ const presetLabel = (preset: FileUploadPreset) =>
           ? '報告書の再提出'
           : '報告書のアップロード';
 
-/** 開いたときに入れておく値 */
-function presetInputOf(preset: FileUploadPreset, vendorId: string | null | undefined): Partial<RowInput> {
+/** 開いたときに入れておく値のうち、ファイル名などで読めた値に黙って譲る既定（区分・保守会社の絞り込み） */
+function presetDefaultsOf(preset: FileUploadPreset, vendorId: string | null | undefined): Partial<RowInput> {
   const base: Partial<RowInput> = vendorId ? { vendorId } : {};
   if (preset.kind === 'bulk') return { ...base, category: 'report' };
-  if (preset.kind === 'other') return { ...base, ...(preset.propertyCode ? { propertyCode: preset.propertyCode } : {}) };
+  if (preset.kind === 'other') return base;
+  return {};
+}
+
+/** 開いたときに入れておく値（開いた行・選んだ建物。ファイル名などで読めた値と違えば要確認にする） */
+function presetInputOf(preset: FileUploadPreset, vendorId: string | null | undefined): Partial<RowInput> {
+  const base: Partial<RowInput> = vendorId ? { vendorId } : {};
+  if (preset.kind === 'bulk') return {};
+  if (preset.kind === 'other') return preset.propertyCode ? { propertyCode: preset.propertyCode } : {};
   const inspection = preset.kind === 'report' ? preset.inspection : (preset.inspection ?? null);
   const report = preset.kind === 'edit' ? preset.report : (preset.previous ?? null);
   const month = preset.kind === 'report' ? (preset.targetMonth ?? preset.previous?.target_month ?? null) : (report?.target_month ?? null);
@@ -166,7 +174,9 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ---- 開いたときに入れておく値 ----
-  const [presetState] = useState<RowState>(() => setFields(EMPTY_ROW_STATE, presetInputOf(preset, vendorId), 'preset'));
+  const [presetState] = useState<RowState>(() =>
+    setFields(setFields(EMPTY_ROW_STATE, presetDefaultsOf(preset, vendorId), 'default'), presetInputOf(preset, vendorId), 'preset'),
+  );
   const presetInspection = preset.kind === 'report' ? preset.inspection : preset.kind === 'edit' ? (preset.inspection ?? null) : null;
   const presetMonth =
     preset.kind === 'report'
@@ -915,7 +925,13 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
           </p>
         )}
 
-        <div className="grid min-h-0 grid-cols-1 gap-2 lg:h-[70vh] lg:grid-cols-[minmax(0,5fr)_minmax(0,8fr)]">
+        <div
+          className={cn(
+            'grid min-h-0 grid-cols-1 gap-2 lg:grid-cols-[minmax(0,4fr)_minmax(0,9fr)]',
+            // 登録済みの報告書の一覧を出すときは、その分だけ低くして画面に収める
+            preset.kind === 'report' || preset.kind === 'edit' ? 'lg:h-[56vh]' : 'lg:h-[68vh]',
+          )}
+        >
           {/* 左: プレビュー（区間分け・空白ページの削除・ファイルを追加） */}
           <div
             className={cn('flex min-h-0 flex-col gap-1', dragging && 'rounded ring-2 ring-blue-400')}

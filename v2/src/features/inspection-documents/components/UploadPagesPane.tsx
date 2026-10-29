@@ -75,7 +75,8 @@ export function UploadPagesPane(props: UploadPagesPaneProps) {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const thumbWidth = thumbWidthFor(width, perRow);
+  // ファイルごとの枠（枠線と余白 12px）のぶんを引く
+  const thumbWidth = thumbWidthFor(width - 12, perRow);
 
   // 表で行を選んだら、その区間の先頭ページ（PDF 以外はファイル）までスクロールする
   const active = rows.find((r) => r.key === props.activeRowKey) ?? null;

@@ -73,7 +73,7 @@ export function UploadRowsTable(props: UploadRowsTableProps) {
   const [openDetail, setOpenDetail] = useState<string | null>(null);
   const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.key));
   return (
-    <table className="w-full min-w-[60rem] table-fixed border-collapse text-[11px]" data-testid="upload-rows">
+    <table className="w-full min-w-[62rem] table-fixed border-collapse text-[11px]" data-testid="upload-rows">
       <thead className="sticky top-0 z-10 bg-gray-50">
         <tr>
           <th className={cn(th, 'w-6')}>
@@ -85,11 +85,11 @@ export function UploadRowsTable(props: UploadRowsTableProps) {
               onChange={(e) => props.onToggleAll(e.target.checked)}
             />
           </th>
-          <th className={cn(th, 'w-14')}>ステータス</th>
-          <th className={cn(th, 'w-24')}>区分</th>
-          <th className={cn(th, 'w-12')}>区間</th>
-          <th className={cn(th, 'w-16')}>ページ</th>
-          <th className={cn(th, 'w-24')}>
+          <th className={cn(th, 'w-12')}>ステータス</th>
+          <th className={cn(th, 'w-20')}>区分</th>
+          <th className={cn(th, 'w-11')}>区間</th>
+          <th className={cn(th, 'w-14')}>ページ</th>
+          <th className={cn(th, 'w-[5.5rem]')}>
             No
             <span className="block text-[10px] font-normal text-gray-400">対象月</span>
           </th>
@@ -97,14 +97,14 @@ export function UploadRowsTable(props: UploadRowsTableProps) {
             実施日
             <span className="block text-[10px] font-normal text-gray-400">点検開始日</span>
           </th>
-          <th className={cn(th, 'w-40')}>
+          <th className={cn(th, 'w-36')}>
             物件<span className="text-red-600">*</span>
             <span className="block text-[10px] font-normal text-gray-400">※リストに無い建物は建物追加申請を</span>
           </th>
-          <th className={cn(th, 'w-32')}>点検種別</th>
-          <th className={cn(th, 'w-24')}>メモ</th>
-          <th className={cn(th, 'w-28')}>管理会社</th>
-          <th className={cn(th, 'w-28')}>保守会社</th>
+          <th className={cn(th, 'w-28')}>点検種別</th>
+          <th className={cn(th, 'w-20')}>メモ</th>
+          <th className={cn(th, 'w-24')}>管理会社</th>
+          <th className={cn(th, 'w-24')}>保守会社</th>
           <th className={cn(th, 'w-9')}>詳細</th>
         </tr>
       </thead>

@@ -66,11 +66,12 @@ export function UploadBulkEdit({ selectedCount, options, today, disabled, onAppl
         選択行に一括設定（{selectedCount}行）
         <span className="ml-1 font-normal text-gray-500">入力した項目だけを選択中の行に上書きします。「変更しない」の項目は行ごとの値を変えません。</span>
       </p>
-      <div className="mt-1 grid grid-cols-[4.5rem_4.5rem_minmax(0,1fr)] items-center gap-x-1 gap-y-0.5">
+      {/* 高密度（修正依頼1026 以降の方針）: 広い画面では2列に並べる */}
+      <div className="mt-1 grid grid-cols-1 gap-x-3 gap-y-0.5 xl:grid-cols-2">
         {FIELDS.map(({ key, label }) => {
           const on = enabled.has(key);
           return (
-            <div key={key} className="contents">
+            <div key={key} className="grid grid-cols-[3.5rem_4.5rem_minmax(0,1fr)] items-center gap-x-1">
               <span className="text-gray-700">{label}</span>
               <button
                 type="button"

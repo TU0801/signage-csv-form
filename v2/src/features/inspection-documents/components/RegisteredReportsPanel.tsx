@@ -199,7 +199,7 @@ function ReportEditForm({
       <div className="flex flex-wrap items-end gap-2">
         <label className="flex flex-col text-[11px] text-gray-600">
           実施日
-          <input type="date" aria-label="報告書の実施日" className={field} value={performedOn} max="9999-12-31" onChange={(e) => changePerformedOn(e.target.value)} />
+          <input type="date" aria-label="報告書の実施日" data-autofocus className={field} value={performedOn} max="9999-12-31" onChange={(e) => changePerformedOn(e.target.value)} />
         </label>
         <label className="flex flex-col text-[11px] text-gray-600">
           対象月
