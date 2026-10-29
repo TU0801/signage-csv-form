@@ -81,7 +81,7 @@ export function UploadRowsTable(props: UploadRowsTableProps) {
   const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.key));
   return (
     // 1366x768 でも横スクロールなしに全部の列が見えるよう、列幅を詰める（合計 58.75rem ≒ 940px。修正依頼1029 本番確認(1)）。
-    // table-fixed + w-full なので、広い画面では余った幅を列幅の比で配る
+    // table-fixed + w-full なので、広い画面では余った幅を列幅の比で配る。1536 以上は物件（見出しの注記）とページ（「（2ページ削除）」）を広げて折り返しを減らす
     <table className="w-full min-w-[58.75rem] table-fixed border-collapse text-[11px]" data-testid="upload-rows">
       <thead className="sticky top-0 z-10 bg-gray-50">
         <tr>
@@ -97,7 +97,7 @@ export function UploadRowsTable(props: UploadRowsTableProps) {
           <th className={cn(th, 'w-16')}>ステータス</th>
           <th className={cn(th, 'w-[4.5rem]')}>区分</th>
           <th className={cn(th, 'w-11')}>区間</th>
-          <th className={cn(th, 'w-12')}>ページ</th>
+          <th className={cn(th, 'w-12 2xl:w-20')}>ページ</th>
           <th className={cn(th, 'w-[5.25rem]')}>
             No
             <span className="block text-[10px] font-normal text-gray-400">対象月</span>
@@ -106,7 +106,7 @@ export function UploadRowsTable(props: UploadRowsTableProps) {
             実施日
             <span className="block text-[10px] font-normal text-gray-400">点検開始日</span>
           </th>
-          <th className={cn(th, 'w-[7.5rem]')}>
+          <th className={cn(th, 'w-[7.5rem] 2xl:w-40')}>
             物件<span className="text-red-600">*</span>
             <span className="block whitespace-normal text-[10px] font-normal leading-tight text-gray-400">※リストに無い建物は建物追加申請を</span>
           </th>

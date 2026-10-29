@@ -20,6 +20,8 @@ export type PerRow = (typeof PER_ROW_OPTIONS)[number];
 export const DEFAULT_PER_ROW: PerRow = 2;
 /** ページ1枚ぶんの幅のうちサムネイル以外（区切りの帯 20px・枠と余白 12px） */
 const THUMB_CHROME = 32;
+/** サムネイルの幅の下限（px） */
+const MIN_THUMB_WIDTH = 120;
 /** 描く解像度の上限（px）。大きく並べても 27 ページの PDF でメモリを使い切らない */
 const MAX_RENDER_WIDTH = 900;
 const thumbScale = () => Math.min(2, Math.max(1, typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1));
@@ -28,7 +30,17 @@ const thumbScale = () => Math.min(2, Math.max(1, typeof window === 'undefined' ?
 export function thumbWidthFor(containerWidth: number, perRow: number): number {
   if (containerWidth <= 0) return THUMB_WIDTH;
   // 入れ物の左右の余白（p-2）とスクロールバーのぶんを引く
-  return Math.max(120, Math.floor((containerWidth - 16 - 4) / perRow) - THUMB_CHROME);
+  return Math.max(MIN_THUMB_WIDTH, Math.floor((containerWidth - 16 - 4) / perRow) - THUMB_CHROME);
+}
+
+/**
+ * 1行に perRow 枚を選んでいても、入れ物の幅で1枚 MIN_THUMB_WIDTH に届かないときは、届く枚数まで減らす
+ * （1366 幅で 2枚が 120px の1列に折り返し、1枚より小さく出ていた。修正依頼1029 本番確認の検証）
+ */
+export function fitPerRow(containerWidth: number, perRow: number): number {
+  if (containerWidth <= 0) return perRow;
+  const fits = Math.floor((containerWidth - 16 - 4) / (MIN_THUMB_WIDTH + THUMB_CHROME));
+  return Math.max(1, Math.min(perRow, fits));
 }
 
 /** 区間の見分けに使う色（行の番号の順にくり返す） */
@@ -78,7 +90,8 @@ export function UploadPagesPane(props: UploadPagesPaneProps) {
     return () => ro.disconnect();
   }, []);
   // ファイルごとの枠（枠線と余白 12px）のぶんを引く
-  const thumbWidth = thumbWidthFor(width - 12, perRow);
+  const shown = fitPerRow(width - 12, perRow);
+  const thumbWidth = thumbWidthFor(width - 12, shown);
 
   // 表で行を選んだら、その区間の先頭ページ（PDF 以外はファイル）までスクロールする
   const active = rows.find((r) => r.key === props.activeRowKey) ?? null;
@@ -109,6 +122,7 @@ export function UploadPagesPane(props: UploadPagesPaneProps) {
               {n}枚
             </button>
           ))}
+          {shown < perRow && <span className="text-[11px] text-gray-500">（幅に合わせて{shown}枚）</span>}
         </div>
       </div>
       <div ref={boxRef} className="min-h-[12rem] flex-1 overflow-y-auto bg-gray-50 p-2" data-testid="upload-pages">
@@ -170,7 +184,8 @@ function SourceBlock({
           variant="ghost"
           size="sm"
           className="h-5 px-1 text-[11px] text-red-700"
-          disabled={disabled || locked}
+          // 空白ページを探している間に外すと、片付けた PDF を読みに行って失敗する
+          disabled={disabled || locked || scanning.has(source.id)}
           aria-label={`${source.file.name} を外す`}
           onClick={() => onRemoveSource(source.id)}
         >

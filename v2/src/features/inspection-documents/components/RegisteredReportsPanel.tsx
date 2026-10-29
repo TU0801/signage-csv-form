@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { DbInspectionReport } from '@/types/portal';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -24,6 +24,8 @@ interface RegisteredReportsPanelProps {
   /** 削除の確認を出す（確認ダイアログは親が持つ） */
   onDelete: (report: DbInspectionReport) => void;
   onSaved: (report: DbInspectionReport) => void;
+  /** 編集欄の値が元と違うか（閉じるときの破棄の確認に使う） */
+  onEditDirtyChange?: (dirty: boolean) => void;
   disabled?: boolean;
 }
 
@@ -41,6 +43,7 @@ export function RegisteredReportsPanel({
   initialEditId,
   onDelete,
   onSaved,
+  onEditDirtyChange,
   disabled,
 }: RegisteredReportsPanelProps) {
   const [editingId, setEditingId] = useState<string | null>(initialEditId ?? null);
@@ -108,6 +111,7 @@ export function RegisteredReportsPanel({
                     key={r.id}
                     report={r}
                     onCancel={() => setEditingId(null)}
+                    onDirtyChange={onEditDirtyChange}
                     onSaved={(saved) => {
                       setEditingId(null);
                       onSaved(saved);
@@ -132,10 +136,12 @@ function ReportEditForm({
   report,
   onCancel,
   onSaved,
+  onDirtyChange,
 }: {
   report: DbInspectionReport;
   onCancel: () => void;
   onSaved: (report: DbInspectionReport) => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const { addToast } = useToast();
   const [performedOn, setPerformedOn] = useState(report.performed_on);
@@ -153,6 +159,17 @@ function ReportEditForm({
   const [renameProposal, setRenameProposal] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 値を元から変えたままなら、画面を閉じるときに破棄の確認を出す（閉じた・保存した編集欄は数えない）
+  const dirty =
+    performedOn !== report.performed_on ||
+    targetMonth !== (report.target_month?.slice(0, 7) ?? '') ||
+    fileName !== report.file_name ||
+    note !== (report.note ?? '');
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   const nameFor = (date: string) =>
     buildReportFileName({ performedOn: date, propertyName: report.property_name, inspectionTypeLabel: report.inspection_type_label });

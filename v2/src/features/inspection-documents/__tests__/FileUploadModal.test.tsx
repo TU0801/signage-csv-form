@@ -2,6 +2,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, configure, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { makeInspection } from '@/features/inspection-portal/__tests__/fixtures';
 import { makeReport } from './fixtures';
+import { openPdfPages } from '../lib/pdfPages';
 
 const api = vi.hoisted(() => ({
   fetchPortalInspections: vi.fn(),
@@ -262,6 +263,17 @@ describe('FileUploadModal（修正依頼1029(1) ファイルのアップロー�
     );
   });
 
+  it('登録済みの報告書の編集欄に入力したままのキャンセルも、破棄の確認を出す', async () => {
+    const report = makeReport({ id: 'r1', property_inspection_id: 'i1', note: null });
+    api.fetchInspectionReports.mockResolvedValue([report]);
+    const { onClose } = await open({ kind: 'edit', report, inspection: first });
+    const form = await screen.findByTestId('report-edit-form');
+    fireEvent.change(within(form).getByLabelText('報告書のメモ'), { target: { value: '直しかけ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }));
+    expect(screen.getByText('入力した内容は破棄されます。閉じますか？')).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it('入力したファイルがあるときのキャンセルは破棄の確認を出し、何も入れていなければすぐ閉じる', async () => {
     const { onClose } = await open({ kind: 'other' });
     fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }));
@@ -295,6 +307,43 @@ describe('FileUploadModal（修正依頼1029(1) ファイルのアップロー�
     await screen.findByTestId(/^upload-page-f\d+-3$/);
     fireEvent.click(screen.getByRole('button', { name: '空白ページを削除' }));
     expect(await within(screen.getByTestId('upload-source')).findByText('空白ページはありませんでした')).toBeInTheDocument();
+  });
+
+  it('空白ページを探せなかったときは、その理由をファイルの欄に残す', async () => {
+    vi.mocked(openPdfPages).mockResolvedValueOnce({
+      pageCount: 4,
+      render: vi.fn(async () => {}),
+      pageTexts: vi.fn(async () => {
+        throw new Error('読めない PDF');
+      }),
+      destroy: vi.fn(),
+    });
+    await open({ kind: 'bulk' });
+    addFiles(new File(['%PDF-1.4'], '20261025_テスト第一マンション_エレベーター定期点検.pdf', { type: 'application/pdf' }));
+    await screen.findByTestId(/^upload-page-f\d+-3$/);
+    fireEvent.click(screen.getByRole('button', { name: '空白ページを削除' }));
+    expect(await within(screen.getByTestId('upload-source')).findByText(/^空白ページを探せませんでした/)).toBeInTheDocument();
+  });
+
+  it('空白ページにもう削除の印が付いていれば、そう出す。ページの「戻す」でその文言は消す', async () => {
+    // jsdom には canvas の描画が無いので、真っ白なページとして読ませる
+    const getContext = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue({ getImageData: () => ({ data: new Uint8ClampedArray(300 * 150 * 4).fill(255) }) } as unknown as CanvasRenderingContext2D);
+    try {
+      await open({ kind: 'bulk' });
+      addFiles(new File(['%PDF-1.4'], '20261025_テスト第一マンション_エレベーター定期点検.pdf', { type: 'application/pdf' }));
+      await screen.findByTestId(/^upload-page-f\d+-3$/);
+      const box = screen.getByTestId('upload-source');
+      fireEvent.click(screen.getByRole('button', { name: '空白ページを削除' }));
+      expect(await within(box).findByText(/^4ページを削除しました/)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: '空白ページを削除' }));
+      expect(await within(box).findByText('空白ページはすべて削除の印が付いています（p.1・2・3・4）')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: '1ページ目の削除を戻す' }));
+      expect(within(box).queryByText(/空白ページは/)).not.toBeInTheDocument();
+    } finally {
+      getContext.mockRestore();
+    }
   });
 
   it('ファイル名の物件から入れた管理会社は、値の出どころを「物件から」と出す', async () => {
