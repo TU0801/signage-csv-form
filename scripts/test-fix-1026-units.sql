@@ -52,12 +52,13 @@ CREATE TEMP TABLE t_ids (k text PRIMARY KEY, id uuid);
 GRANT ALL ON t_ids TO authenticated;
 
 -- 0. 台が1台（EV-1 だけ）の点検へは、保守会社も台なしで申請できる（R3 の止めは2台以上の点検だけ）。この行は 7 で使う
+--    （下の 1 で 11月に台の申請を作るので、こちらは 2月にする。台なしの申請は全部の台と重なり、同じ月だと二重の申請として断られる〔修正依頼1029〕）
 SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000002');
 WITH x AS (
   INSERT INTO signage.signage_entries (user_id, property_code, terminal_id, vendor_name, inspection_type, inspection_start,
                                        status, property_inspection_id, vendor_id, target_month)
-  VALUES ('a0000000-0000-4000-8000-000000000002', '120409-00', '', '検証エレベーター保守株式会社', 'エレベーター定期点検', '2026-11-05',
-          'draft', '2b84a9bd-b98e-4332-bd19-2973387bc13c', 'c0000000-0000-4000-8000-000000000001', '2026-11-01')
+  VALUES ('a0000000-0000-4000-8000-000000000002', '120409-00', '', '検証エレベーター保守株式会社', 'エレベーター定期点検', '2027-02-05',
+          'draft', '2b84a9bd-b98e-4332-bd19-2973387bc13c', 'c0000000-0000-4000-8000-000000000001', '2027-02-01')
   RETURNING id)
 INSERT INTO t_ids SELECT 'e0', id FROM x;
 SELECT pg_temp.check('0a 台が1台の点検へは台なしで申請できる', (SELECT count(*) = 1 FROM t_ids WHERE k = 'e0'));
@@ -128,12 +129,13 @@ SELECT pg_temp.expect_error('1g 点検行の保守会社（user@）も台なし�
   '点検登録フォーム（一括入力）から台ごとに申請してください');
 SELECT pg_temp.check('1h 既存の台なしの申請（台・点検を変えない修正）は今どおり直せる',
   (SELECT remarks = '既存' FROM signage.portal_update_submitted_entry((SELECT id FROM t_ids WHERE k = 'e0'), '{"remarks":"既存"}')));
+-- （11月は EV-1・EV-2 の申請があり、台なしの申請はそれと重なって二重の申請として断られる〔修正依頼1029〕ので、申請の無い 5月にする）
 SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000001');
 WITH x AS (
   INSERT INTO signage.signage_entries (user_id, property_code, terminal_id, vendor_name, inspection_type, status,
                                        property_inspection_id, vendor_id, target_month)
   VALUES ('a0000000-0000-4000-8000-000000000001', '120409-00', '', 'x', 'エレベーター定期点検', 'draft',
-          '2b84a9bd-b98e-4332-bd19-2973387bc13c', 'c0000000-0000-4000-8000-000000000001', '2026-11-01')
+          '2b84a9bd-b98e-4332-bd19-2973387bc13c', 'c0000000-0000-4000-8000-000000000001', '2027-05-01')
   RETURNING id)
 INSERT INTO t_ids SELECT 'ea', id FROM x;
 SELECT pg_temp.check('1i 管理者は台なしで申請できる', (SELECT count(*) = 1 FROM t_ids WHERE k = 'ea'));

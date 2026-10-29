@@ -242,6 +242,21 @@ BEGIN
     SELECT signage.portal_update_submitted_entry('d1029000-0000-4000-8000-000000000004',
       '{"inspection_type":"消防設備点検","template_no":"fire_inspection","property_inspection_id":"2124a983-8f13-4323-9eea-67f36bedf3d3"}')$q$,
     '22023', 'RPC 付け替え先の月に申請がある');
+  -- 台なしの申請は全部の台に効く: 台なしの申請がある月へ、台（FIRE-1）を付けて付け替えても断る
+  PERFORM pg_temp.expect_denied($q$
+    SELECT signage.portal_update_submitted_entry('d1029000-0000-4000-8000-000000000004',
+      '{"inspection_type":"消防設備点検","template_no":"fire_inspection","property_inspection_id":"2124a983-8f13-4323-9eea-67f36bedf3d3",
+        "property_unit_id":"b1029000-0000-4000-8000-000000000001"}')$q$,
+    '22023', 'RPC 台なしの申請がある月へ台ありで');
+  -- 逆向き: 台（FIRE-1）の申請がある月へ、台なしで付け替えても断る
+  PERFORM pg_temp.as_owner();
+  UPDATE signage.signage_entries SET property_unit_id = 'b1029000-0000-4000-8000-000000000001'
+   WHERE id = 'd1029000-0000-4000-8000-000000000005';
+  PERFORM pg_temp.act_as('a0000000-0000-4000-8000-000000000002');
+  PERFORM pg_temp.expect_denied($q$
+    SELECT signage.portal_update_submitted_entry('d1029000-0000-4000-8000-000000000004',
+      '{"inspection_type":"消防設備点検","template_no":"fire_inspection","property_inspection_id":"2124a983-8f13-4323-9eea-67f36bedf3d3"}')$q$,
+    '22023', 'RPC 台ありの申請がある月へ台なしで');
   PERFORM pg_temp.as_owner();
   DELETE FROM signage.signage_entries WHERE id = 'd1029000-0000-4000-8000-000000000005';
 
@@ -271,6 +286,31 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM signage.signage_audit_logs WHERE record_id::text = 'd1029000-0000-4000-8000-000000000004' AND operation = 'UPDATE') THEN
     RAISE EXCEPTION '修正が監査ログに残らない';
   END IF;
+
+  -- 付け替えた後に、付け替え先の点検・同じ月・同じ台へ新しく申請（INSERT）しても断る（一括入力で付け替え先の行から申請したとき）
+  PERFORM pg_temp.act_as('a0000000-0000-4000-8000-000000000002');
+  PERFORM pg_temp.expect_denied($q$
+    INSERT INTO signage.signage_entries (user_id, property_code, terminal_id, vendor_name, vendor_id, inspection_type, template_no,
+                                         property_inspection_id, property_unit_id, target_month, status, inspection_start)
+    VALUES ('a0000000-0000-4000-8000-000000000002', '120409-00', '', '検証エレベーター保守株式会社', 'c0000000-0000-4000-8000-000000000001',
+            '消防設備点検', 'fire_inspection', '2124a983-8f13-4323-9eea-67f36bedf3d3', 'b1029000-0000-4000-8000-000000000001',
+            '2026-12-01', 'draft', '2026-12-12')$q$,
+    '23505', 'INSERT 付け替えた申請と同じ点検・月・台');
+  -- 別の台（FIRE-2）なら同じ点検・月でも申請できる
+  INSERT INTO signage.signage_entries (user_id, property_code, terminal_id, vendor_name, vendor_id, inspection_type, template_no,
+                                       property_inspection_id, property_unit_id, target_month, status, inspection_start)
+  VALUES ('a0000000-0000-4000-8000-000000000002', '120409-00', '', '検証エレベーター保守株式会社', 'c0000000-0000-4000-8000-000000000001',
+          '消防設備点検', 'fire_inspection', '2124a983-8f13-4323-9eea-67f36bedf3d3', 'b1029000-0000-4000-8000-000000000002',
+          '2026-12-01', 'draft', '2026-12-12');
+  -- 台なしの申請は全部の台と重なる（管理者の台なしの INSERT も断る）
+  PERFORM pg_temp.act_as('a0000000-0000-4000-8000-000000000001');
+  PERFORM pg_temp.expect_denied($q$
+    INSERT INTO signage.signage_entries (user_id, property_code, terminal_id, vendor_name, vendor_id, inspection_type, template_no,
+                                         property_inspection_id, target_month, status, inspection_start)
+    VALUES ('a0000000-0000-4000-8000-000000000001', '120409-00', '', '検証エレベーター保守株式会社', 'c0000000-0000-4000-8000-000000000001',
+            '消防設備点検', 'fire_inspection', '2124a983-8f13-4323-9eea-67f36bedf3d3', '2026-12-01', 'draft', '2026-12-12')$q$,
+    '23505', 'INSERT 台ありの申請がある月へ台なし（管理者）');
+  PERFORM pg_temp.as_owner();
   RAISE NOTICE 'RPC ok';
 END $$;
 

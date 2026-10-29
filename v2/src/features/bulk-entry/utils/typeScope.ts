@@ -1,4 +1,4 @@
-import { normalizePropertyCode } from '@/features/inspection-portal/lib/schedule';
+import { monthOf, normalizePropertyCode } from '@/features/inspection-portal/lib/schedule';
 import type { PortalInspectionRow } from '@/types/portal';
 import type { BulkEntryRow } from '../types';
 
@@ -188,5 +188,45 @@ export function editRetypeTarget(
       message: `「${newType}」のこの月の行に入力があります。その行の入力を消してから選び直してください`,
     };
   }
-  return { kind: 'link', inspectionId: target.schedule!.inspectionId, unitId: sameUnit ? entryUnitId : null };
+  // 台は申請の台、無ければ付け替え先の行の台（1台の点検の行。その行から新しく申請したときと同じ台にする）
+  return {
+    kind: 'link',
+    inspectionId: target.schedule!.inspectionId,
+    unitId: sameUnit ? entryUnitId : (target.schedule!.unitId ?? null),
+  };
+}
+
+/** 申請が結び付く点検・対象月・台（予定の行から申請するとき） */
+function applyKey(row: BulkEntryRow): { inspectionId: string; month: string | null; unitId: string | null } | null {
+  const s = row.schedule;
+  if (!s) return null;
+  if (row.relink) return { inspectionId: row.relink.inspectionId, month: s.targetMonth, unitId: row.relink.unitId };
+  // 修正中の行で付け替えないものは元の申請のまま（新しい申請にならない）
+  if (s.editEntryId) return null;
+  // 点検月の無い点検の行は点検開始日の月が対象月
+  return { inspectionId: s.inspectionId, month: s.targetMonth ?? (row.startDate ? monthOf(row.startDate) : null), unitId: s.unitId ?? null };
+}
+
+/**
+ * 『申請する』の前に、修正中の行の付け替え先と重なる申請を止める（修正依頼1029 決定④の検証の指摘）。
+ * 付け替え先の行が詳細設定を保存した時点では空でも、その後に入力して一緒に申請すると、同じ点検・同じ月の申請が2件になるため。
+ * 重なりは同じ点検・同じ対象月で、台が同じかどちらかが台なし（台なしの申請は全部の台に効く。DB の guard_entry_unit_duplicate と同じ）。
+ * targets は『申請する』の対象の行（isApplyTarget）。重なる行があれば、付け替えた行でない方の行と理由を返す
+ */
+export function relinkConflict(targets: readonly BulkEntryRow[]): { rowId: number; message: string } | null {
+  for (const edit of targets) {
+    if (!edit.relink || !edit.schedule?.editEntryId) continue;
+    const a = applyKey(edit)!;
+    for (const other of targets) {
+      if (other.id === edit.id) continue;
+      const b = applyKey(other);
+      if (!b || b.inspectionId !== a.inspectionId || b.month !== a.month) continue;
+      if (a.unitId && b.unitId && a.unitId !== b.unitId) continue;
+      return {
+        rowId: other.id,
+        message: `「${edit.inspectionType}」のこの月の点検は、点検種別を「${edit.inspectionType}」へ変えた修正中の申請と重なります。どちらか一方の行だけ申請してください`,
+      };
+    }
+  }
+  return null;
 }

@@ -5,7 +5,8 @@ import { ToastProvider } from '@/components/ui/Toast';
 import { useBulkStore, resetBulkSession } from '@/stores/bulkStore';
 import { RowDetailModal, type RowDetailContext } from '../modals/RowDetailModal';
 import { buildBulkEntries } from '../utils/buildBulkEntries';
-import { submittedEntryPatch } from '../utils/scheduleRows';
+import { isApplyTarget, submittedEntryPatch } from '../utils/scheduleRows';
+import { editRetypeTarget, relinkConflict } from '../utils/typeScope';
 import { todayUtc } from '@/lib/utils';
 import { createMemoryStorage } from './memoryStorage';
 
@@ -419,6 +420,38 @@ describe('RowDetailModal の追記表示と点検種別の変更（修正依頼1
       inspection_start: '2026-11-05',
     });
     expect(patch).not.toHaveProperty('target_month');
+  });
+
+  it('付け替えた後に付け替え先の予定の行へ入力して一緒に申請しようとすると、その行を理由つきで止める（二重の申請にしない）', () => {
+    const store = useBulkStore.getState();
+    store.syncScheduleRows([scheduleInput('i-ev', 'エレベーター定期点検', false, 'entry-1'), scheduleInput('i-remote', 'リモート点検')]);
+    const [ev, remote] = useBulkStore.getState().rows;
+    store.changeStartDate(ev!.id, '2026-11-05');
+    renderModal(ev!.id, { status: 'applying', inspections: INSPECTIONS, editEntryUnitId: null });
+    fireEvent.change(screen.getByLabelText('点検種別'), { target: { value: 'リモート点検' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    // 『申請する』と同じく申請の対象の行（入力のある予定の行）で確かめる
+    const targets = () => useBulkStore.getState().rows.filter(isApplyTarget);
+    expect(relinkConflict(targets())).toBeNull();
+    store.changeStartDate(remote!.id, '2026-11-12');
+    expect(relinkConflict(targets())).toMatchObject({
+      rowId: remote!.id,
+      message: expect.stringContaining('修正中の申請と重なります'),
+    });
+  });
+
+  it('台なしの申請を1台の点検へ付け替えるときは、その行の台を付ける（その行から新しく申請したときと同じ台）', () => {
+    const remoteUnit = scheduleInput('i-remote', 'リモート点検');
+    useBulkStore.getState().syncScheduleRows([
+      scheduleInput('i-ev', 'エレベーター定期点検', false, 'entry-1'),
+      { ...remoteUnit, meta: { ...remoteUnit.meta, unitId: 'u-remote-1', unitCode: 'R-1' } },
+    ]);
+    const rows = useBulkStore.getState().rows;
+    expect(editRetypeTarget(rows, rows[0]!, 'リモート点検', INSPECTIONS, null)).toEqual({
+      kind: 'link',
+      inspectionId: 'i-remote',
+      unitId: 'u-remote-1',
+    });
   });
 
   it('修正中の行で、その種別の点検にこの月の予定の行が無ければ変えずに理由を知らせる', async () => {

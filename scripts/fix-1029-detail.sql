@@ -4,7 +4,7 @@
 -- 適用方法: ファイル全体を1つのクエリとして流す（Management API なら1回の query に全文を入れる。psql なら psql -1 -f）。
 --   BEGIN/COMMIT は付けない。先頭の lock_timeout で、ロックが取れないときは待ち続けずに失敗させる。何度流しても同じ結果になる。
 --   既存のガード（guard_entry_approval_flow・guard_entry_portal_columns・guard_entry_unit など）は変えない。足すのは
---   新しいガード1つ（signage.guard_entry_type_scope と同名のトリガー）と、申請済みの申請の修正（portal_update_submitted_entry。
+--   新しいガード2つ（signage.guard_entry_type_scope と、二重の申請を止める signage.guard_entry_unit_duplicate。どちらも同名のトリガー）と、申請済みの申請の修正（portal_update_submitted_entry。
 --   引数は同じで、点検種別・テンプレートNo・紐付けも直せるようにした。末尾）の置き換え。biz スキーマは変えない。
 --   トリガーは名前の順に動くので、貼紙（guard_entry_posters）・建物追加（guard_entry_property_request）のガードの後、
 --   台（guard_entry_unit）のガードの前に動く名前にした（今までのガードが先に断る書き込みは今までどおりの理由で断る）。
@@ -124,6 +124,60 @@ CREATE TRIGGER guard_entry_type_scope BEFORE INSERT OR UPDATE ON signage.signage
   FOR EACH ROW EXECUTE FUNCTION signage.guard_entry_type_scope();
 
 -- ============================================================
+-- 同じ点検・同じ対象月・同じ台への二重の申請を止める（修正依頼1029 決定④の検証の指摘）。
+-- 一括入力で修正中の行を別の種別の点検へ付け替え、付け替え先の予定の行からも新しく申請すると、同じ点検・月の申請が2件できていた
+-- （portal_update_submitted_entry の中の確かめは修正の側しか見ず、INSERT には確かめが無かった。signage_entries_inspection_month_idx は一意ではない）。
+-- 止めるもの: JWT を持つ書き込み（管理者も。二重の申請は権限ではなく整合の問題なので）で、点検に紐付き対象月を持つ申請中の行
+--   （承認待ち draft・承認済み ready・取込済み exported・差戻し中〔pending で差戻しの理由あり〕）を INSERT するときと、
+--   紐付け・対象月・台を変える UPDATE。ほかに同じ点検・同じ対象月で台が重なる申請中の行があれば断る。
+--   台なしの申請は全部の台に効く（units.ts）ので、どちらかが台なしなら重なるものとして扱う（一意の索引では書けないのでトリガーにした）。
+-- 止めないもの: JWT の無い経路（service_role・管理 SQL）、状態だけの更新（承認・差戻し・再申請。点検・月・台は変わらない）、
+--   未申請（pending で差戻しの理由なし）の行、紐付けの無い申請・対象月の無い申請、業務システムで点検行を消したときの FK（SET NULL）。
+-- 同時に2件を出したときに両方が通らないよう、点検 × 対象月の勧告ロックを取ってから確かめる（トランザクションの終わりまで）。
+-- 名前は台のガード（guard_entry_unit）の後に動くようにした（ほかのガードが先に断る書き込みは今までどおりの理由で断る）。
+-- 本番の今の申請（2026-10-29 読み取り）: この規則に当たる組は 0件。
+CREATE OR REPLACE FUNCTION signage.guard_entry_unit_duplicate()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'biz', 'signage', 'pg_temp'
+AS $function$
+BEGIN
+  IF auth.uid() IS NULL OR NEW.property_inspection_id IS NULL OR NEW.target_month IS NULL THEN
+    RETURN NEW;
+  END IF;
+  IF NOT (NEW.status IN ('draft', 'ready', 'exported') OR (NEW.status = 'pending' AND NEW.review_comment IS NOT NULL)) THEN
+    RETURN NEW;
+  END IF;
+  -- UPDATE は紐付け・対象月・台を変えたときだけ（INSERT では OLD を見ない。plpgsql の OR は短絡が保証されないので IF を分ける）
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.property_inspection_id IS NOT DISTINCT FROM OLD.property_inspection_id
+       AND NEW.target_month IS NOT DISTINCT FROM OLD.target_month
+       AND NEW.property_unit_id IS NOT DISTINCT FROM OLD.property_unit_id THEN
+      RETURN NEW;
+    END IF;
+  END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended('signage_entries:' || NEW.property_inspection_id::text || ':' || NEW.target_month::text, 0));
+  IF EXISTS (
+       SELECT 1 FROM signage.signage_entries o
+        WHERE o.id <> NEW.id
+          AND o.property_inspection_id = NEW.property_inspection_id
+          AND o.target_month = NEW.target_month
+          AND (o.property_unit_id IS NULL OR NEW.property_unit_id IS NULL OR o.property_unit_id = NEW.property_unit_id)
+          AND (o.status IN ('draft', 'ready', 'exported') OR (o.status = 'pending' AND o.review_comment IS NOT NULL))) THEN
+    RAISE EXCEPTION '「%」のこの月の点検には、もう申請があります（同じ点検・同じ月・同じ台の申請は1件だけです）', NEW.inspection_type
+      USING ERRCODE = '23505';
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+REVOKE ALL ON FUNCTION signage.guard_entry_unit_duplicate() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS guard_entry_unit_duplicate ON signage.signage_entries;
+CREATE TRIGGER guard_entry_unit_duplicate BEFORE INSERT OR UPDATE ON signage.signage_entries
+  FOR EACH ROW EXECUTE FUNCTION signage.guard_entry_unit_duplicate();
+
+-- ============================================================
 -- 申請済み（承認前）の申請の修正で、点検種別・テンプレートNo・点検の紐付け（点検行・台）も直せるようにする
 -- （ユーザー決定④: 保守会社の一括入力の詳細設定で、修正中の行の点検種別を変える）。
 -- 引数は今のまま（p_entry_id uuid, p_patch jsonb）。p_patch に足せるキー: inspection_type・template_no・property_inspection_id・
@@ -138,7 +192,8 @@ CREATE TRIGGER guard_entry_type_scope BEFORE INSERT OR UPDATE ON signage.signage
 --     （guard_entry_type_scope (2) と同じ判定）。テンプレートNo はその種別のもの（空は不可）。
 --   紐付けを変える・種別や台を変える（点検に紐付いた申請）: 紐付ける点検は同じ物件・その種別・担当（inspection_in_scope）。
 --     台は、指定するならその点検の台で管理者以外は自社が保守する台、指定しないならその点検の台が2台未満（guard_entry_unit と同じ）。
---     同じ点検・同じ対象月・同じ台にほかの申請（承認待ち・承認済み・取込済み・差戻し中）があれば断る（二重の申請にしない）。
+--     同じ点検・同じ対象月で台が重なる（同じ台か、どちらかが台なし＝全部の台）ほかの申請（承認待ち・承認済み・取込済み・差戻し中）があれば
+--     断る（二重の申請にしない。INSERT 側は guard_entry_unit_duplicate が同じ規則で止める）。
 --   紐付けを外す・紐付けの無い申請に紐付けを付けることはできない（紐付けの無い申請は対象月を持たないため）。
 -- 戻し: fix-1026-units.sql の portal_update_submitted_entry の定義を流し直す（同じ引数なので置き換わる）。
 CREATE OR REPLACE FUNCTION signage.portal_update_submitted_entry(p_entry_id uuid, p_patch jsonb)
@@ -261,7 +316,8 @@ BEGIN
           WHERE o.id <> e.id
             AND o.property_inspection_id = n.property_inspection_id
             AND o.target_month IS NOT DISTINCT FROM e.target_month
-            AND o.property_unit_id IS NOT DISTINCT FROM n.property_unit_id
+            -- 台なしの申請は全部の台に効くので、どちらかが台なしなら重なる
+            AND (o.property_unit_id IS NULL OR n.property_unit_id IS NULL OR o.property_unit_id = n.property_unit_id)
             AND (o.status IN ('draft', 'ready', 'exported') OR (o.status = 'pending' AND o.review_comment IS NOT NULL))) THEN
       RAISE EXCEPTION '「%」のこの月の点検には、もう申請があります', n.inspection_type USING ERRCODE = '22023';
     END IF;

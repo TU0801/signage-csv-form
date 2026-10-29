@@ -59,7 +59,9 @@ WITH x AS (
   INSERT INTO signage.signage_entries (user_id, property_code, terminal_id, vendor_name, inspection_type, inspection_start,
                                        status, property_inspection_id, vendor_id, target_month)
   SELECT 'a0000000-0000-4000-8000-000000000002', '120409-00', '', '検証エレベーター保守株式会社', 'エレベーター定期点検', ('2026-11-0' || n)::date,
-         'draft', '2b84a9bd-b98e-4332-bd19-2973387bc13c', 'c0000000-0000-4000-8000-000000000001', '2026-11-01'
+         'draft', '2b84a9bd-b98e-4332-bd19-2973387bc13c', 'c0000000-0000-4000-8000-000000000001',
+         -- 同じ点検・同じ月の申請は1件だけ（修正依頼1029 guard_entry_unit_duplicate）なので、対象月を1か月ずつずらす
+         (date '2026-11-01' + (n - 1) * interval '1 month')::date
     FROM generate_series(1, 3) n
   RETURNING id, inspection_start)
 INSERT INTO t_ids SELECT 'e' || extract(day from inspection_start)::int, id FROM x;

@@ -26,6 +26,7 @@ import { ManageTemplateModal } from '@/features/bulk-entry/modals/ManageTemplate
 import { BulkApplyModal } from '@/features/bulk-entry/modals/BulkApplyModal';
 import { parseExcelPaste } from '@/features/bulk-entry/utils/parseExcelPaste';
 import { scheduleTargetsFor } from '@/features/bulk-entry/utils/importToSchedule';
+import { relinkConflict } from '@/features/bulk-entry/utils/typeScope';
 import { buildTemplateRows, downloadTemplateXlsx, templateFilename } from '@/features/bulk-entry/utils/bulkTemplateXlsx';
 import {
   buildFilterOptions,
@@ -1050,6 +1051,12 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
         first.rowId,
       );
       focusErrorCell(first.rowId, first.col);
+      return;
+    }
+    // 修正中の行の付け替え先（詳細設定で点検種別を変えた行。修正依頼1029 決定④）と同じ点検・月の行を一緒に申請させない（二重の申請になる）
+    const conflict = relinkConflict(targets);
+    if (conflict) {
+      showSaveError(conflict.message, conflict.rowId);
       return;
     }
     const hidden = all.filter((r) => isApplyTarget(r) && !isVisible(r)).length;
