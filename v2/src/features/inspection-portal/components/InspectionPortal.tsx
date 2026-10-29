@@ -265,6 +265,8 @@ export function InspectionPortal() {
           open={!!reportTarget}
           preset={reportTarget ? { kind: 'report', ...reportTarget } : null}
           onClose={() => setReportTarget(null)}
+          // 台ごとの保守会社が他社の点検に報告書を出すときも、自社の点検として決まるように
+          vendorId={isAdmin ? null : (vendorId ?? null)}
           onChanged={() => void data.refetch()}
         />
       )}

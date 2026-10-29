@@ -89,6 +89,12 @@ SELECT pg_temp.check('差戻しの報告書を保守会社が削除できる',
   (signage.portal_update_report((SELECT id FROM t_ids WHERE k = 'b'), 'delete')).status = 'deleted');
 SELECT pg_temp.expect_error('受領済みの報告書を保守会社が削除',
   format('SELECT signage.portal_update_report(%L, ''delete'')', (SELECT id FROM t_ids WHERE k = 'c')), '管理者だけ');
+-- 置き換え済み（superseded）の版も保守会社は削除できない
+SELECT pg_temp.as_owner();
+UPDATE signage.signage_inspection_reports SET status = 'superseded', status_before_delete = NULL WHERE id = (SELECT id FROM t_ids WHERE k = 'b');
+SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000002');
+SELECT pg_temp.expect_error('置き換え済みの報告書を保守会社が削除',
+  format('SELECT signage.portal_update_report(%L, ''delete'')', (SELECT id FROM t_ids WHERE k = 'b')), '管理者だけ');
 SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000001');
 SELECT pg_temp.check('受領済みの報告書を管理者が削除できる',
   (signage.portal_update_report((SELECT id FROM t_ids WHERE k = 'c'), 'delete')).status = 'deleted');

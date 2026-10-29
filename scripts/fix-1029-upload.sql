@@ -5,8 +5,8 @@
 --   既存の関数は引数の形を変えない（CREATE OR REPLACE だけ。重複定義を作らない）。土台は本番の定義（2026-10-29 に
 --   pg_get_functiondef で読んだもの。ローカルの定義と md5 が一致）。表・制約は変えない。
 --
--- 1. 報告書の削除（決定②）: 受領前（提出・差戻し）は、上げた保守会社も自社の報告書を削除できる。受領後は管理者だけ
---    （受領済みは元から「管理者以外は変更できない」で止まる）。他社の報告書は今どおり「権限がありません」。復元は管理者だけのまま。
+-- 1. 報告書の削除（決定②）: 受領前（提出・差戻し）は、上げた保守会社も自社の報告書を削除できる。受領済み・置き換え済み
+--    （1027 より前の再提出で superseded になった版）は管理者だけ。他社の報告書は今どおり「権限がありません」。復元は管理者だけのまま。
 -- 2. その他ファイルの削除（決定②）: 上げた会社（保守会社は同じ vendor_id）も削除できる。今までは上げた本人と管理者だけだった。
 --    管理会社は vendor_id を持たないので、上げた人の管理会社が自社と同じなら削除できる。見えないファイルは今どおり「見つかりません」。
 -- 3. 動画（決定③）: Storage のバケット property-files に MP4（video/mp4）・MOV（video/quicktime）を足す。上限 50MB は今のまま。
@@ -46,10 +46,10 @@ BEGIN
   IF NOT coalesce(signage.is_active_admin(), false) AND p_action = 'restore' THEN
     RAISE EXCEPTION '報告書の復元は管理者だけができます' USING ERRCODE = '42501';
   END IF;
-  -- 削除: 受領前（提出・差戻し）は上げた保守会社も自社の版を削除できる。受領後は管理者だけ（修正依頼1029 決定②。
-  -- 受領済みは次の「受領済みの報告書は変更できません」でも止まる）
-  IF NOT coalesce(signage.is_active_admin(), false) AND p_action = 'delete' AND r.status = 'accepted' THEN
-    RAISE EXCEPTION '受領済みの報告書の削除は管理者だけができます' USING ERRCODE = '42501';
+  -- 削除: 受領前（提出・差戻し）は上げた保守会社も自社の版を削除できる。受領済み・置き換え済みは管理者だけ（修正依頼1029 決定②。
+  -- 画面の reportPermissions.canDelete と同じ）
+  IF NOT coalesce(signage.is_active_admin(), false) AND p_action = 'delete' AND r.status NOT IN ('submitted', 'returned', 'deleted') THEN
+    RAISE EXCEPTION '受領済み・置き換え済みの報告書の削除は管理者だけができます' USING ERRCODE = '42501';
   END IF;
   IF NOT coalesce(signage.is_active_admin(), false) AND r.status = 'accepted' THEN
     RAISE EXCEPTION '受領済みの報告書は変更できません（再提出してください）' USING ERRCODE = '42501';

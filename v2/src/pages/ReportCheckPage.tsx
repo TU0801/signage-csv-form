@@ -275,6 +275,7 @@ export function ReportCheckPage({ modeSwitch }: { modeSwitch?: ReactNode } = {})
         open={!!reportTarget}
         preset={reportTarget ? { kind: 'report', ...reportTarget } : null}
         onClose={() => setReportTarget(null)}
+        vendorId={isAdmin ? null : (profileVendorId ?? null)}
         onChanged={() => void portal.refetch()}
       />
     </div>

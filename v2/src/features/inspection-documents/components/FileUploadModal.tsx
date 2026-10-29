@@ -555,7 +555,9 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
     const base = mergeAuto(baseStatesRef.current[id] ?? presetState, docPatch, src);
     setBaseStates((prev) => ({ ...prev, [id]: mergeAuto(prev[id] ?? presetState, docPatch, src) }));
     let breaks = source.breaks;
-    if (source.kind === 'pdf' && breaks.size === 0 && !lockedSources.has(id)) {
+    // 建物が変わるページで区切る案は報告書のファイルだけ（見積書などを黙って分けない）
+    const isReportFile = docCategory === 'report' || base.input.category === 'report';
+    if (source.kind === 'pdf' && isReportFile && breaks.size === 0 && !lockedSources.has(id)) {
       const suggested = suggestBreaks(suggestion.pages, source.pageCount);
       if (suggested.size > 0) {
         breaks = suggested;

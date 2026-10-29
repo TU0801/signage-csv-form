@@ -17,6 +17,8 @@ import {
   type UploadSource,
 } from '../lib/uploadRows';
 import { formatBytes } from '../lib/documents';
+import { buildReportFileName } from '../lib/fileName';
+import { buildPropertyFileName, propertyFileCategoryLabel } from '../lib/propertyFiles';
 import { colorOf } from './UploadPagesPane';
 
 export type RowResult =
@@ -345,6 +347,29 @@ function RowLine({
   );
 }
 
+/** 保存するファイル名（報告書は「実施日_建物名_点検種別.pdf」、その他ファイルは「作業実施日_建物名_区分.拡張子」。前の画面と同じ規則） */
+function savedNameOf(input: RowInput, check: RowCheck | undefined, source: UploadSource | undefined, options: RowOptions): string {
+  if (!source || !input.category || !input.performedOn) return '';
+  if (input.category === 'report') {
+    if (!check?.inspection) return '';
+    return buildReportFileName({
+      performedOn: input.performedOn,
+      propertyName: check.inspection.property_name,
+      inspectionTypeLabel: check.inspection.inspection_type_label ?? '',
+    });
+  }
+  const propertyName = options.properties.find((o) => o.value === input.propertyCode)?.label ?? '';
+  if (!propertyName) return '';
+  return buildPropertyFileName({
+    docDate: input.performedOn,
+    propertyName,
+    categoryLabel: propertyFileCategoryLabel({ category: input.category, category_note: input.category === 'other' ? input.categoryNote.trim() : null }),
+    originalName: source.file.name,
+    index: 0,
+    total: 1,
+  });
+}
+
 const FIELD_LABEL: Record<RowField, string> = {
   category: '区分',
   categoryNote: 'その他の内容',
@@ -422,6 +447,12 @@ function DetailLine({
         {check?.inspection && (
           <p>
             登録する点検: {check.inspection.property_name}・{check.inspection.inspection_type_label}・{check.inspection.vendor_name ?? '保守会社未設定'}
+          </p>
+        )}
+        {savedNameOf(state.input, check, source, options) && (
+          <p>
+            保存するファイル名: <span className="break-all font-mono">{savedNameOf(state.input, check, source, options)}</span>
+            <span className="ml-1 text-gray-400">（同じ名前があるときは末尾に _2 などが付きます）</span>
           </p>
         )}
         {result?.state === 'ok' && <p className="text-green-700">登録しました（{result.fileName}）</p>}
