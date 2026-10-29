@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { ToastProvider } from '@/components/ui/Toast';
 import { useBulkStore, resetBulkSession } from '@/stores/bulkStore';
-import { RowDetailModal } from '../modals/RowDetailModal';
+import { RowDetailModal, type RowDetailContext } from '../modals/RowDetailModal';
 import { buildBulkEntries } from '../utils/buildBulkEntries';
 import { todayUtc } from '@/lib/utils';
 import { createMemoryStorage } from './memoryStorage';
@@ -246,5 +246,142 @@ describe('RowDetailModal（修正依頼1024 B18）', () => {
     fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }));
     expect(io.discardOwnPosterImages).toHaveBeenCalledWith([IMG('extra3')], 'user-1');
     expect(rowOf(id).extraPosters).toHaveLength(1);
+  });
+});
+
+describe('RowDetailModal の追記表示と点検種別の変更（修正依頼1029）', () => {
+  const insp = (id: string, code: string, label: string) => ({
+    inspection_id: id,
+    property_code: code,
+    inspection_type_label: label,
+    vendor_id: 'v1',
+    unit_vendor_ids: [],
+  });
+  // 物件A（z0001A01-00）で自社が担当するのはエレベーター定期点検とリモート点検。消防設備点検は別の物件
+  const INSPECTIONS = [
+    insp('i-ev', 'z0001A01-00', 'エレベーター定期点検'),
+    insp('i-remote', 'z0001A01-00', 'リモート点検'),
+    insp('i-fire', 'z0002A01', '消防設備点検'),
+  ];
+  const VENDOR = { id: 'v1', name: 'A社' };
+
+  function master() {
+    const store = useBulkStore.getState();
+    store.setUserId('user-1');
+    store.setMasterData({
+      properties: [{ propertyCode: 'z0001A01', propertyName: '物件A', terminalId: 'T-A1', supplement: '' }],
+      vendors: [{ id: 'v1', vendorName: 'A社', emergencyContact: '092-000-0000' }],
+      notices: [
+        { inspectionType: '消防設備点検', templateNo: 'fire_inspection', noticeText: '火災報知器が鳴ります' },
+        { inspectionType: 'エレベーター定期点検', templateNo: 'elevator_inspection', noticeText: 'エレベーターが止まります' },
+        { inspectionType: 'リモート点検', templateNo: 'remote_check', noticeText: '遠隔で点検します' },
+      ],
+      templateImages: [
+        { image_key: 'elevator_inspection', image_url: 'https://img/ev.png', display_name: 'エレベーター点検' },
+        { image_key: 'remote_check', image_url: 'https://img/remote.png', display_name: 'リモート点検' },
+      ],
+    });
+    store.setCurrentVendor(VENDOR);
+  }
+
+  const scheduleInput = (inspectionId: string, label: string, locked = false) => ({
+    meta: {
+      key: `${inspectionId}:2026-11-01`,
+      inspectionId,
+      targetMonth: '2026-11-01',
+      locked,
+      propertyName: '物件A',
+      terminalIds: ['T-A1'],
+    },
+    row: { propertyCode: 'z0001A01', inspectionType: label, terminalId: 'T-A1' },
+  });
+
+  function renderModal(rowId: number, context: RowDetailContext) {
+    render(
+      <ToastProvider>
+        <RowDetailModal open rowId={rowId} onClose={() => {}} context={context} />
+      </ToastProvider>,
+    );
+  }
+
+  const entryOf = (id: number) => {
+    const s = useBulkStore.getState();
+    return buildBulkEntries([rowOf(id)], s.masterData, VENDOR, s.appSettings)[0];
+  };
+
+  beforeEach(() => {
+    HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
+      this.open = true;
+    };
+    HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
+      this.open = false;
+    };
+    vi.stubGlobal('localStorage', createMemoryStorage());
+    resetBulkSession();
+    master();
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it('右上にステータス、プレビューの見出しに点検種別、下に登録者・登録日時を出す', () => {
+    useBulkStore.getState().syncScheduleRows([scheduleInput('i-ev', 'エレベーター定期点検')]);
+    const id = useBulkStore.getState().rows[0]!.id;
+    renderModal(id, {
+      status: 'applying',
+      registrant: { email: 'mitsubishi@EV', at: '2026/10/26 0:39:54' },
+      inspections: INSPECTIONS,
+    });
+    expect(screen.getByTestId('entry-status')).toHaveTextContent('点検予定申請中');
+    expect(screen.getByTestId('poster-title')).toHaveTextContent('エレベーター定期点検');
+    expect(screen.getByTestId('registrant')).toHaveTextContent('mitsubishi@EV');
+    expect(screen.getByTestId('registrant')).toHaveTextContent('2026/10/26 0:39:54');
+  });
+
+  it('点検種別はその物件で自社が担当する種別だけ選べ、変えるとテンプレートNo・見出し・既定の案内文が追従する（手入力の行はそのまま変わる）', () => {
+    const id = useBulkStore.getState().addRow({ propertyCode: 'z0001A01', inspectionType: 'エレベーター定期点検' });
+    renderModal(id, { inspections: INSPECTIONS });
+    expect(screen.getByTestId('entry-status')).toHaveTextContent('未申請');
+    const select = screen.getByLabelText('点検種別') as HTMLSelectElement;
+    expect([...select.options].map((o) => o.value)).toEqual(['エレベーター定期点検', 'リモート点検']);
+    fireEvent.change(select, { target: { value: 'リモート点検' } });
+    expect(screen.getByTestId('template-no')).toHaveTextContent('remote_check');
+    expect(screen.getByTestId('poster-title')).toHaveTextContent('リモート点検');
+    expect(screen.getByLabelText('掲示板用案内文')).toHaveValue('遠隔で点検します');
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    expect(rowOf(id).inspectionType).toBe('リモート点検');
+    expect(entryOf(id)).toMatchObject({ inspection_type: 'リモート点検', template_no: 'remote_check' });
+  });
+
+  it('点検予定の行で変えると、同じ月のその種別の点検の行へ入力を移し、元の行は空に戻す（紐付ける点検が変わる）', () => {
+    const store = useBulkStore.getState();
+    store.syncScheduleRows([scheduleInput('i-ev', 'エレベーター定期点検'), scheduleInput('i-remote', 'リモート点検')]);
+    const [ev, remote] = useBulkStore.getState().rows;
+    store.changeStartDate(ev!.id, '2026-11-05');
+    store.changeRemarks(ev!.id, '午前中');
+    renderModal(ev!.id, { status: 'not_applied', inspections: INSPECTIONS });
+    fireEvent.change(screen.getByLabelText('点検種別'), { target: { value: 'リモート点検' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    expect(rowOf(remote!.id)).toMatchObject({ startDate: '2026-11-05', remarks: '午前中', noticeText: '遠隔で点検します' });
+    expect(rowOf(ev!.id)).toMatchObject({ startDate: '', remarks: '', inspectionType: 'エレベーター定期点検' });
+    expect(entryOf(remote!.id)).toMatchObject({
+      inspection_type: 'リモート点検',
+      template_no: 'remote_check',
+      property_inspection_id: 'i-remote',
+      target_month: '2026-11-01',
+    });
+  });
+
+  it('移し先の点検がこの月に申請済みなら移さずに知らせる', async () => {
+    const store = useBulkStore.getState();
+    store.syncScheduleRows([scheduleInput('i-ev', 'エレベーター定期点検'), scheduleInput('i-remote', 'リモート点検', true)]);
+    const [ev] = useBulkStore.getState().rows;
+    store.changeStartDate(ev!.id, '2026-11-05');
+    renderModal(ev!.id, { inspections: INSPECTIONS });
+    fireEvent.change(screen.getByLabelText('点検種別'), { target: { value: 'リモート点検' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    expect(await screen.findByText(/申請済みです。点検種別は変えられません/)).toBeInTheDocument();
+    expect(rowOf(ev!.id).startDate).toBe('2026-11-05');
   });
 });

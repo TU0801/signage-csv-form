@@ -18,6 +18,7 @@ import { PendingEntryRow } from './PendingEntryRow';
 import { EntryDetailModal } from './EntryDetailModal';
 import { PendingEntryEditModal } from './PendingEntryEditModal';
 import { usePendingEntries } from '../hooks/usePendingEntries';
+import { useInspectionScope } from '../hooks/useInspectionScope';
 import { useRefetchOnVisible } from '../hooks/useRefetchOnVisible';
 import { useUnitLabels } from '@/features/inspection-portal/hooks/useUnitLabels';
 
@@ -62,6 +63,8 @@ export function PendingEntriesList() {
   const [detailEntry, setDetailEntry] = useState<DbEntry | null>(null);
   const [editEntry, setEditEntry] = useState<DbEntry | null>(null);
   const [confirm, setConfirm] = useState<PendingConfirm | null>(null);
+  // 編集で選べる点検種別の範囲（申請の保守会社が担当する点検行。修正依頼1029）。編集を初めて開いたときに読む
+  const typeScope = useInspectionScope(editEntry !== null);
 
   useEffect(() => {
     fetchPendingEntries();
@@ -420,6 +423,7 @@ export function PendingEntriesList() {
         inspectionTypes={lookups.inspectionTypes}
         templateImages={lookups.templateImages}
         vendors={lookups.vendors}
+        typeScope={typeScope}
         displayDefault={lookups.displayDefault}
         approveBlockedReason={
           editEntry && pendingBuildingOf(editEntry) !== undefined ? '建物が承認されるまで承認できません' : undefined

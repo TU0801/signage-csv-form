@@ -56,7 +56,7 @@ SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000002');
 WITH x AS (
   INSERT INTO signage.signage_entries (user_id, property_code, terminal_id, vendor_name, inspection_type, inspection_start,
                                        status, property_inspection_id, vendor_id, target_month)
-  VALUES ('a0000000-0000-4000-8000-000000000002', '120409-00', '', '検証エレベーター保守株式会社', 'テスト', '2026-11-05',
+  VALUES ('a0000000-0000-4000-8000-000000000002', '120409-00', '', '検証エレベーター保守株式会社', 'エレベーター定期点検', '2026-11-05',
           'draft', '2b84a9bd-b98e-4332-bd19-2973387bc13c', 'c0000000-0000-4000-8000-000000000001', '2026-11-01')
   RETURNING id)
 INSERT INTO t_ids SELECT 'e0', id FROM x;
@@ -77,7 +77,7 @@ SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000002');
 WITH x AS (
   INSERT INTO signage.signage_entries (user_id, property_code, terminal_id, vendor_name, inspection_type, inspection_start,
                                        status, property_inspection_id, vendor_id, target_month, property_unit_id)
-  VALUES ('a0000000-0000-4000-8000-000000000002', '120409-00', '', '検証エレベーター保守株式会社', 'テスト', '2026-11-10',
+  VALUES ('a0000000-0000-4000-8000-000000000002', '120409-00', '', '検証エレベーター保守株式会社', 'エレベーター定期点検', '2026-11-10',
           'draft', '2b84a9bd-b98e-4332-bd19-2973387bc13c', 'c0000000-0000-4000-8000-000000000001', '2026-11-01',
           'b0000000-0000-4000-8000-000000000001')
   RETURNING id)
@@ -87,25 +87,25 @@ SELECT pg_temp.check('1a 自社の台（EV-1）で申請できる', (SELECT coun
 SELECT pg_temp.expect_error('1b 他社の台（EV-2）では申請できない', $q$
   INSERT INTO signage.signage_entries (user_id, property_code, terminal_id, vendor_name, inspection_type, status,
                                        property_inspection_id, vendor_id, target_month, property_unit_id)
-  VALUES ('a0000000-0000-4000-8000-000000000002', '120409-00', '', 'x', 'テスト', 'draft',
+  VALUES ('a0000000-0000-4000-8000-000000000002', '120409-00', '', 'x', 'エレベーター定期点検', 'draft',
           '2b84a9bd-b98e-4332-bd19-2973387bc13c', 'c0000000-0000-4000-8000-000000000001', '2026-11-01',
           'b0000000-0000-4000-8000-000000000002')$q$, '担当外の台');
 SELECT pg_temp.expect_error('1c 別の物件の台（SG-1）は指定できない', $q$
   INSERT INTO signage.signage_entries (user_id, property_code, terminal_id, vendor_name, inspection_type, status,
                                        property_inspection_id, vendor_id, target_month, property_unit_id)
-  VALUES ('a0000000-0000-4000-8000-000000000002', '120409-00', '', 'x', 'テスト', 'draft',
+  VALUES ('a0000000-0000-4000-8000-000000000002', '120409-00', '', 'x', 'エレベーター定期点検', 'draft',
           '2b84a9bd-b98e-4332-bd19-2973387bc13c', 'c0000000-0000-4000-8000-000000000001', '2026-11-01',
           'b0000000-0000-4000-8000-000000000003')$q$, 'この点検のものではありません');
 SELECT pg_temp.expect_error('1d 点検に結び付けない申請に台は付けられない', $q$
   INSERT INTO signage.signage_entries (user_id, property_code, terminal_id, vendor_name, inspection_type, status, property_unit_id)
-  VALUES ('a0000000-0000-4000-8000-000000000002', '120409-00', '', 'x', 'テスト', 'draft',
+  VALUES ('a0000000-0000-4000-8000-000000000002', '120409-00', '', 'x', 'エレベーター定期点検', 'draft',
           'b0000000-0000-4000-8000-000000000001')$q$, '点検に結び付けた申請だけ');
 
 SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000005');
 WITH x AS (
   INSERT INTO signage.signage_entries (user_id, property_code, terminal_id, vendor_name, inspection_type, inspection_start,
                                        status, property_inspection_id, vendor_id, target_month, property_unit_id)
-  VALUES ('a0000000-0000-4000-8000-000000000005', '120409-00', '', '検証清掃サービス株式会社', 'テスト', '2026-11-12',
+  VALUES ('a0000000-0000-4000-8000-000000000005', '120409-00', '', '検証清掃サービス株式会社', 'エレベーター定期点検', '2026-11-12',
           'draft', '2b84a9bd-b98e-4332-bd19-2973387bc13c', 'c0000000-0000-4000-8000-000000000003', '2026-11-01',
           'b0000000-0000-4000-8000-000000000002')
   RETURNING id)
@@ -116,14 +116,14 @@ SELECT pg_temp.check('1e 台の保守会社（user-b）は自社の台（EV-2）
 SELECT pg_temp.expect_error('1f 1台だけ保守する会社（user-b）は台なしで申請できない', $q$
   INSERT INTO signage.signage_entries (user_id, property_code, terminal_id, vendor_name, inspection_type, status,
                                        property_inspection_id, vendor_id, target_month)
-  VALUES ('a0000000-0000-4000-8000-000000000005', '120409-00', '', 'x', 'テスト', 'draft',
+  VALUES ('a0000000-0000-4000-8000-000000000005', '120409-00', '', 'x', 'エレベーター定期点検', 'draft',
           '2b84a9bd-b98e-4332-bd19-2973387bc13c', 'c0000000-0000-4000-8000-000000000003', '2026-11-01')$q$,
   '点検登録フォーム（一括入力）から台ごとに申請してください');
 SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000002');
 SELECT pg_temp.expect_error('1g 点検行の保守会社（user@）も台なしでは申請できない', $q$
   INSERT INTO signage.signage_entries (user_id, property_code, terminal_id, vendor_name, inspection_type, status,
                                        property_inspection_id, vendor_id, target_month)
-  VALUES ('a0000000-0000-4000-8000-000000000002', '120409-00', '', 'x', 'テスト', 'draft',
+  VALUES ('a0000000-0000-4000-8000-000000000002', '120409-00', '', 'x', 'エレベーター定期点検', 'draft',
           '2b84a9bd-b98e-4332-bd19-2973387bc13c', 'c0000000-0000-4000-8000-000000000001', '2026-11-01')$q$,
   '点検登録フォーム（一括入力）から台ごとに申請してください');
 SELECT pg_temp.check('1h 既存の台なしの申請（台・点検を変えない修正）は今どおり直せる',
@@ -132,7 +132,7 @@ SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000001');
 WITH x AS (
   INSERT INTO signage.signage_entries (user_id, property_code, terminal_id, vendor_name, inspection_type, status,
                                        property_inspection_id, vendor_id, target_month)
-  VALUES ('a0000000-0000-4000-8000-000000000001', '120409-00', '', 'x', 'テスト', 'draft',
+  VALUES ('a0000000-0000-4000-8000-000000000001', '120409-00', '', 'x', 'エレベーター定期点検', 'draft',
           '2b84a9bd-b98e-4332-bd19-2973387bc13c', 'c0000000-0000-4000-8000-000000000001', '2026-11-01')
   RETURNING id)
 INSERT INTO t_ids SELECT 'ea', id FROM x;

@@ -21,6 +21,11 @@ interface PosterPreviewProps {
    * 欄に収まらないときは、その欄だけ 1 まで縮める（はみ出して切れないように）
    */
   textScale?: number;
+  /**
+   * 「お知らせ」の下の見出しに重ねる点検種別名（点検工事案内。修正依頼1029 で詳細設定・承認待ちの編集のプレビューに足した）。
+   * 省略すると出さない（1件入力のプレビューは今までどおり）
+   */
+  titleText?: string;
 }
 
 const NO_EXTRAS: readonly string[] = [];
@@ -70,6 +75,7 @@ export function PosterPreview({
   vendorName,
   emergencyContact,
   textScale = 1,
+  titleText,
 }: PosterPreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -122,7 +128,7 @@ export function PosterPreview({
         el.style.setProperty('--ts', String(scale));
       }
     }
-  }, [textScale, noticeText, dateText, remarks, vendorName, emergencyContact, fittedWidth]);
+  }, [textScale, noticeText, dateText, remarks, vendorName, emergencyContact, fittedWidth, titleText]);
 
   if (isCustom) {
     return (
@@ -185,6 +191,11 @@ export function PosterPreview({
           onLoad={fit}
         />
         <div ref={overlayRef} className="se-poster-overlay">
+          {titleText !== undefined && (
+            <div className="se-poster-title-text" data-testid="poster-title">
+              {titleText}
+            </div>
+          )}
           <div className="se-poster-notice-text">{noticeText}</div>
           <div className="se-poster-date-text">{dateText}</div>
           <div className="se-poster-remarks-text">{remarks}</div>

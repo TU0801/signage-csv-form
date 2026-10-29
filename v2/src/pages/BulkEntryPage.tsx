@@ -18,7 +18,9 @@ import { BulkToolbar } from '@/features/bulk-entry/components/BulkToolbar';
 import { BulkTable, type BulkRowInfo } from '@/features/bulk-entry/components/BulkTable';
 import { BulkFooter } from '@/features/bulk-entry/components/BulkFooter';
 import { PasteModal } from '@/features/bulk-entry/modals/PasteModal';
-import { RowDetailModal } from '@/features/bulk-entry/modals/RowDetailModal';
+import { RowDetailModal, type RowDetailContext } from '@/features/bulk-entry/modals/RowDetailModal';
+import { fetchProfileEmails } from '@/features/relationships/api';
+import { formatJaDateTime } from '@/features/entries-list/lib/entries';
 import { SaveTemplateModal } from '@/features/bulk-entry/modals/SaveTemplateModal';
 import { ManageTemplateModal } from '@/features/bulk-entry/modals/ManageTemplateModal';
 import { BulkApplyModal } from '@/features/bulk-entry/modals/BulkApplyModal';
@@ -388,6 +390,41 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
     },
     [itemsByKey, completed, today],
   );
+  // 行の詳細設定に足して出すもの（修正依頼1029）: ステータス・登録者と登録日時（申請済みの申請を修正している行）・担当の点検行
+  const detailRow = detailRowId === null ? undefined : rows.find((r) => r.id === detailRowId);
+  const detailEdit = detailRow?.schedule?.editEntryId ? (editing.get(detailRow.schedule.key) ?? null) : null;
+  // 登録者のメール: 自分の申請は自分のメール。管理者は申請者のプロファイルを読む（保守会社のアカウントは自分のプロファイルしか読めない）
+  const [registrantEmails, setRegistrantEmails] = useState<ReadonlyMap<string, string>>(() => new Map());
+  const detailAuthor = detailEdit?.user_id ?? null;
+  useEffect(() => {
+    if (!isAdmin || !detailAuthor || detailAuthor === user?.id || registrantEmails.has(detailAuthor)) return;
+    let cancelled = false;
+    fetchProfileEmails([detailAuthor])
+      .then((m) => {
+        if (!cancelled) setRegistrantEmails((prev) => new Map([...prev, ...m]));
+      })
+      .catch((err) => console.error('Failed to load registrant email:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, detailAuthor, user?.id, registrantEmails]);
+  const detailContext = useMemo<RowDetailContext>(
+    () => ({
+      status: detailRow ? statusOf(detailRow) : undefined,
+      registrant: detailEdit
+        ? {
+            email:
+              detailEdit.user_id && detailEdit.user_id === user?.id
+                ? (user?.email ?? '－')
+                : (registrantEmails.get(detailEdit.user_id ?? '') ?? '－'),
+            at: formatJaDateTime(detailEdit.created_at),
+          }
+        : undefined,
+      inspections: vendorInspections,
+    }),
+    [detailRow, detailEdit, statusOf, user?.id, user?.email, registrantEmails, vendorInspections],
+  );
+
   // 時期・管理会社・検索の絞り込み（タグ・見出しの抽出・申請不要の切り替えより前）
   const passesBaseFilters = useCallback(
     (row: BulkEntryRow) => {
@@ -509,6 +546,15 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       count: counts.get(s) ?? 0,
     }));
   }, [passesBaseFilters, columnFilters, propertyNameOf, showReportOnly, isReportOnlyRow, statusOf]);
+
+  // タグのバッジ（修正依頼1029。件数のあるタグと選んでいるタグだけ並べ、押すとそのタグだけを表示。複数選べる・もう一度押すと外す）。
+  // statusOptions はストアの行を読むので、行が変わったら数え直す
+  const statusBadges = useMemo(
+    () => (void rows, statusOptions().filter((o) => o.count > 0 || statusFilter.includes(o.value))),
+    [statusOptions, statusFilter, rows],
+  );
+  const toggleStatus = (s: InspectionStatus) =>
+    setStatusFilter((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
 
   // 選択中の保守会社の点検行（手で足した行を点検行に結び付ける・点検月を出すため）
   const inspectionOfManual = useCallback(
@@ -1167,6 +1213,30 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
           </button>
         )}
       </span>
+      {statusBadges.length > 0 && (
+        <span className="inline-flex flex-wrap items-center gap-1" role="group" aria-label="タグで絞り込む">
+          {statusBadges.map((o) => {
+            const on = statusFilter.includes(o.value);
+            return (
+              <button
+                key={o.value}
+                type="button"
+                aria-pressed={on}
+                aria-label={`${STATUS_LABEL[o.value]} ${o.count}件`}
+                title={on ? `「${STATUS_LABEL[o.value]}」の絞り込みを外す` : `「${STATUS_LABEL[o.value]}」の行だけ表示`}
+                onClick={() => toggleStatus(o.value)}
+                className={cn(
+                  'inline-flex items-center gap-0.5 rounded-full p-px leading-none',
+                  on ? 'ring-2 ring-blue-500 ring-offset-1' : 'opacity-75 hover:opacity-100',
+                )}
+              >
+                <StatusBadge status={o.value} className="px-1.5 py-px text-[10px]" />
+                <span className="pr-0.5 text-[10px] tabular-nums text-gray-600">{o.count}</span>
+              </button>
+            );
+          })}
+        </span>
+      )}
       <input
         type="search"
         aria-label="物件名・マンションコードで検索"
@@ -1321,7 +1391,12 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
         onImport={handleImport}
         onDownloadTemplate={handleDownloadTemplate}
       />
-      <RowDetailModal open={detailRowId !== null} onClose={() => setDetailRowId(null)} rowId={detailRowId} />
+      <RowDetailModal
+        open={detailRowId !== null}
+        onClose={() => setDetailRowId(null)}
+        rowId={detailRowId}
+        context={detailContext}
+      />
       <SaveTemplateModal
         open={showSaveTemplate}
         onClose={() => setShowSaveTemplate(false)}

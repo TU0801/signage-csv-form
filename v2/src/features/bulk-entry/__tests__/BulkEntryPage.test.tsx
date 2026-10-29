@@ -768,6 +768,18 @@ describe('BulkEntryPage (v1 js/bulk.js init / adminVendorSelect)', () => {
       expect(statuses()).toEqual(['sent_back']);
       fireEvent.click(screen.getByRole('button', { name: 'タグの絞り込みを解除' }));
       expect(statuses()).toHaveLength(3);
+
+      // 表示欄のタグのバッジ（件数つき）を押すとそのタグだけ表示、複数選べ、もう一度押すと外れる（修正依頼1029）
+      const badges = within(screen.getByRole('group', { name: 'タグで絞り込む' }));
+      expect(badges.getByRole('button', { name: '点検月超過 1件' })).toHaveAttribute('aria-pressed', 'false');
+      fireEvent.click(badges.getByRole('button', { name: '点検月超過 1件' }));
+      expect(statuses()).toEqual(['overdue']);
+      fireEvent.click(badges.getByRole('button', { name: '申請差戻し 1件' }));
+      expect(statuses()).toEqual(['overdue', 'sent_back']);
+      fireEvent.click(badges.getByRole('button', { name: '点検月超過 1件' }));
+      expect(statuses()).toEqual(['sent_back']);
+      fireEvent.click(badges.getByRole('button', { name: '申請差戻し 1件' }));
+      expect(statuses()).toHaveLength(3);
     });
 
     it('見出しの🔍で物件を一覧から選んで抽出し、「物件抽出中」の✕で外す。開始日の見出しで並べ替える（修正依頼1027 (6)）', async () => {

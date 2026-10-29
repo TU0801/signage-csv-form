@@ -75,3 +75,22 @@
   color: #1e293b;
   overflow: hidden;
 }
+
+/* 見出し（点検種別名。「お知らせ」の帯の下の白い所。修正依頼1029） */
+.se-poster-title-text {
+  position: absolute;
+  top: 12%;
+  left: 6%;
+  right: 6%;
+  height: 8%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-size: calc(var(--pw, 400) * 0.055px * var(--ts, 1));
+  font-weight: bold;
+  line-height: 1.15;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+}
