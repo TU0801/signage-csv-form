@@ -27,8 +27,7 @@ vi.mock('@/hooks/useAuth', () => ({
 const toast = vi.hoisted(() => vi.fn());
 vi.mock('@/components/ui/Toast', () => ({ useToast: () => ({ addToast: toast }) }));
 // モーダルは各テストで見る（ここでは一覧だけ）
-vi.mock('../components/ReportUploadModal', () => ({ ReportUploadModal: () => null }));
-vi.mock('../components/ReportEditModal', () => ({ ReportEditModal: () => null }));
+vi.mock('../components/FileUploadModal', () => ({ FileUploadModal: () => null }));
 vi.mock('../components/ReportReturnModal', () => ({ ReportReturnModal: () => null }));
 
 import { InspectionDocuments } from '../components/InspectionDocuments';

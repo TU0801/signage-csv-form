@@ -12,7 +12,7 @@ import { addMonths, formatDate, formatMonth, monthOf, todayJst, typeFlagsMap, ty
 import { completionKeys, isRowCompleted } from '@/features/inspection-portal/lib/status';
 import { buildNotifyOffIndex, buildUnitIndex } from '@/features/inspection-portal/lib/units';
 import { buildReportCheckItems, REPORT_STATE_LABEL } from '@/features/inspection-portal/lib/reportCheck';
-import { ReportUploadModal } from '@/features/inspection-documents/components/ReportUploadModal';
+import { FileUploadModal } from '@/features/inspection-documents/components/FileUploadModal';
 import { ManagementCompanyFilter } from '@/features/single-entry/components/ManagementCompanySelect';
 import { useManagementCompanies } from '@/features/single-entry/hooks/useManagementCompanies';
 import { MANAGEMENT_COMPANY_NONE } from '@/features/single-entry/lib/entryLogic';
@@ -270,19 +270,12 @@ export function ReportCheckPage({ modeSwitch }: { modeSwitch?: ReactNode } = {})
           </table>
         </div>
       </Card>
-      <ReportUploadModal
+      {/* 報告書UP・再提出はファイルアップロードの画面で開く（修正依頼1029 決定①。点検・対象月を入れておく） */}
+      <FileUploadModal
         open={!!reportTarget}
+        preset={reportTarget ? { kind: 'report', ...reportTarget } : null}
         onClose={() => setReportTarget(null)}
-        inspection={reportTarget?.inspection ?? null}
-        targetMonth={reportTarget?.targetMonth ?? null}
-        entryId={reportTarget?.entryId ?? null}
-        previous={reportTarget?.previous ?? null}
-        defaultPerformedOn={reportTarget?.defaultPerformedOn ?? null}
-        onUploaded={() => {
-          setReportTarget(null);
-          void portal.refetch();
-        }}
-        onDeleted={() => void portal.refetch()}
+        onChanged={() => void portal.refetch()}
       />
     </div>
   );

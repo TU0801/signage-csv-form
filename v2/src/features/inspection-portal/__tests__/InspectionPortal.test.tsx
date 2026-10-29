@@ -27,11 +27,13 @@ const toast = vi.hoisted(() => ({ addToast: vi.fn() }));
 vi.mock('@/components/ui/Toast', () => ({ useToast: () => toast }));
 // 申請・報告書のモーダルはそれぞれのテストで見る（ここではマスタを読ませない）
 vi.mock('../components/ApplyModal', () => ({ ApplyModal: () => null }));
-type UploadProps = { open: boolean; targetMonth: string | null; entryId?: string | null; previous?: { id: string } | null };
-const upload = vi.hoisted(() => ({ props: null as null | UploadProps }));
-vi.mock('@/features/inspection-documents/components/ReportUploadModal', () => ({
-  ReportUploadModal: (p: UploadProps) => {
-    upload.props = p;
+// 報告書UP はファイルアップロードの画面（修正依頼1029 決定①）。開くときに入れる値（preset）だけを見る
+type UploadPreset = { kind: string; targetMonth: string | null; entryId?: string | null; previous?: { id: string } | null };
+type UploadProps = { open: boolean; preset: UploadPreset | null };
+const upload = vi.hoisted(() => ({ props: null as null | { open: boolean } & Partial<UploadPreset> }));
+vi.mock('@/features/inspection-documents/components/FileUploadModal', () => ({
+  FileUploadModal: (p: UploadProps) => {
+    upload.props = { open: p.open, ...(p.preset ?? {}) };
     return null;
   },
 }));
