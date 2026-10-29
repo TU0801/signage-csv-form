@@ -280,7 +280,7 @@ export function PropertyInspectionEditor({
             </select>
             <label
               className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-gray-700"
-              title={form.scheduleUnread ? UNREAD_TITLE : '設備点検管理システムで点検日を連絡（申請）する点検か。外すと申請不要（報告書のみ）。リモート点検・警備は既定で外れます'}
+              title={form.scheduleUnread ? UNREAD_TITLE : '設備点検管理システムで点検日を連絡（申請）する点検か。外すと申請不要（報告書のみ）。リモート点検・警備・デジタルサイネージ点検は既定で外れます'}
             >
               <input
                 type="checkbox"

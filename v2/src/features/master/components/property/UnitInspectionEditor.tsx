@@ -217,7 +217,7 @@ export function UnitInspectionEditor({
                             </select>
                           )}
                           {!insp.remove && (
-                            <label className={subLabelClass} title={scheduleUnread ? UNREAD_TITLE : '設備点検管理システムで点検日を連絡（申請）する点検か。外すと申請不要（報告書のみ）。リモート点検・警備は既定で外れます'}>
+                            <label className={subLabelClass} title={scheduleUnread ? UNREAD_TITLE : '設備点検管理システムで点検日を連絡（申請）する点検か。外すと申請不要（報告書のみ）。リモート点検・警備・デジタルサイネージ点検は既定で外れます'}>
                               <input
                                 type="checkbox"
                                 className="h-3.5 w-3.5"
