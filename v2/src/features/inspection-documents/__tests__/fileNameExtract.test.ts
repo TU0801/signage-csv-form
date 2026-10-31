@@ -47,6 +47,7 @@ describe('fileNameExtract（修正依頼1029(1) ファイル名からの自動�
       propertyCode: '120409-00',
       vendorId: 'v1',
       managementCompanyId: 'm1',
+      managementCompanySource: 'property',
       inspectionType: 'エレベーター定期点検',
       performedOn: '2026-10-21',
       performedOnSource: 'mtime',

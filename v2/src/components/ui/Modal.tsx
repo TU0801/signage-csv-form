@@ -7,8 +7,11 @@ interface ModalProps {
   onClose: () => void;
   title?: string;
   children: ReactNode;
-  /** 本文の下に固定して出す操作（保存・キャンセルなど）。本文だけがスクロールし、ここは常に見える */
-  footer?: ReactNode;
+  /**
+   * 本文の下に固定して出す操作（保存・キャンセルなど）。本文だけがスクロールし、ここは常に見える。
+   * 関数で渡すと requestClose（× と同じく、dirty なら破棄の確認を出してから閉じる）を受け取れる
+   */
+  footer?: ReactNode | ((ctx: { requestClose: () => void }) => ReactNode);
   className?: string;
   /**
    * 保存していない変更があるか。true の間は Escape・背景クリック・× ですぐ閉じず、
@@ -16,6 +19,8 @@ interface ModalProps {
    * footer のキャンセルなど呼び出し側のボタンは明示的な破棄として扱い、確認しない。
    */
   dirty?: boolean;
+  /** dirty のときの破棄の確認の文言（既定は「保存していない変更があります。破棄して閉じますか？」） */
+  dirtyMessage?: string;
   /**
    * 処理中（送信の途中など）で閉じてはいけないか。true の間は Escape・背景クリック・× で閉じない
    * （確認も出さない）。footer のボタンは呼び出し側で無効にする
@@ -45,6 +50,7 @@ export function Modal({
   footer,
   className,
   dirty = false,
+  dirtyMessage = '保存していない変更があります。破棄して閉じますか？',
   busy = false,
   draggable = false,
 }: ModalProps) {
@@ -213,13 +219,15 @@ export function Modal({
           {children}
         </div>
         {footer && (
-          <div className="flex shrink-0 justify-end gap-2 border-t border-gray-200 px-4 py-2">{footer}</div>
+          <div className="flex shrink-0 justify-end gap-2 border-t border-gray-200 px-4 py-2">
+            {typeof footer === 'function' ? footer({ requestClose }) : footer}
+          </div>
         )}
         {/* 破棄の確認は window.confirm を使わず、モーダル全体を覆って出す（入力中の内容は裏に残す） */}
         {showDiscardConfirm && (
           <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-white/85 p-4">
             <div role="alert" className="space-y-3 rounded-md border border-yellow-300 bg-yellow-50 px-4 py-3 shadow-sm">
-              <p className="text-sm text-yellow-900">保存していない変更があります。破棄して閉じますか？</p>
+              <p className="text-sm text-yellow-900">{dirtyMessage}</p>
               <div className="flex justify-end gap-2">
                 <button
                   type="button"

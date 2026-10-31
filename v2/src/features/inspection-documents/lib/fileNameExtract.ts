@@ -146,6 +146,8 @@ export interface FileNameExtraction {
   propertyCode: string | null;
   vendorId: string | null;
   managementCompanyId: string | null;
+  /** 管理会社の出どころ（ファイル名の物件から引いたか、ファイル名の会社名か） */
+  managementCompanySource: 'property' | 'filename' | null;
   inspectionType: string | null;
   /** 実施日（ファイル名、無ければ更新日） */
   performedOn: string | null;
@@ -165,6 +167,7 @@ export function extractFromFileName(file: Pick<File, 'name' | 'lastModified'>, c
     vendorId: vendor?.id ?? null,
     // 物件が決まれば物件の管理会社、無ければファイル名の会社名
     managementCompanyId: property?.managementCompanyId ?? management?.id ?? null,
+    managementCompanySource: property?.managementCompanyId ? 'property' : management ? 'filename' : null,
     inspectionType: matchInspectionTypeInText(file.name.normalize('NFKC').replace(/_/g, ' '), ctx.inspectionTypes),
     performedOn: fromName ?? mtime,
     performedOnSource: fromName ? 'filename' : mtime ? 'mtime' : null,

@@ -108,12 +108,14 @@ export const EMPTY_ROW_INPUT: RowInput = {
 };
 
 /** 値の出どころ（詳細に出す。手で入れた値は自動で上書きしない） */
-export type FieldSource = 'preset' | 'default' | 'filename' | 'mtime' | 'text' | 'ai' | 'manual' | 'bulk';
+export type FieldSource = 'preset' | 'default' | 'filename' | 'property' | 'mtime' | 'text' | 'ai' | 'manual' | 'bulk';
 
 export const FIELD_SOURCE_LABEL: Record<FieldSource, string> = {
   preset: '開いた行',
   default: '画面の既定',
   filename: 'ファイル名',
+  /** ファイル名・読み取りで決まった物件の管理会社（修正依頼1029 本番確認(5)） */
+  property: '物件から',
   mtime: 'ファイルの更新日',
   text: '文字情報',
   ai: 'AI-OCR',

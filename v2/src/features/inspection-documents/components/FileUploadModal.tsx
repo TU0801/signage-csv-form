@@ -197,6 +197,8 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
   const [fileError, setFileError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [scanning, setScanning] = useState<Set<string>>(new Set());
+  /** 空白ページを探した結果（ファイルごと。ボタンの横に残す。トーストは上に出て数秒で消え、見落とされた） */
+  const [blankNotes, setBlankNotes] = useState<Record<string, string>>({});
 
   // ---- 行の入力 ----
   /** ファイルごとの既定（開いた値＋ファイル名＋書類全体の読み取り。区切りを足して増えた区間はこれから始まる） */
@@ -223,6 +225,7 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
   );
   const [deleting, setDeleting] = useState<DbInspectionReport | null>(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
+  const [editDirty, setEditDirty] = useState(false);
 
   // 閉じたら pdfjs の文書を片付ける。読み取りの結果は非同期で届くので、届いた時点のファイル・既定を ref で見る
   const docsRef = useRef(docs);
@@ -233,7 +236,15 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
     sourcesRef.current = sources;
     baseStatesRef.current = baseStates;
   }, [docs, sources, baseStates]);
-  useEffect(() => () => Object.values(docsRef.current).forEach((d) => d.destroy()), []);
+  // 閉じた後に届いた非同期の結果（空白ページの検出など）を捨てるための印
+  const closedRef = useRef(false);
+  useEffect(() => {
+    closedRef.current = false;
+    return () => {
+      closedRef.current = true;
+      Object.values(docsRef.current).forEach((d) => d.destroy());
+    };
+  }, []);
 
   const sourceMap = useMemo(() => Object.fromEntries(sources.map((s) => [s.id, s])), [sources]);
   const rows = useMemo(() => buildRows(sources), [sources]);
@@ -256,9 +267,16 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
     for (const i of data.inspections)
       if (i.management_company_id && !mgmt.has(i.management_company_id))
         mgmt.set(i.management_company_id, { name: i.management_company_name ?? i.management_company_id });
+    // 保守会社は一覧（点検の vendor_name。多くは業務システムの略称）と同じ表記で出し、正式名・略称は hint にして探せるようにする
+    // （修正依頼1029 本番確認(3)。ファイル名の照合は nameCtx の正式名・略称のまま）。管理会社は一覧も正式名なのでそのまま
+    const listVendorName = new Map(vendorCandidatesOf(data.inspections).map((v) => [v.id, v.name]));
     const vendors = new Map<string, { name: string; hint?: string }>();
-    for (const v of hints.vendors) vendors.set(v.id, { name: v.name, hint: v.shortName ?? undefined });
-    for (const v of vendorCandidatesOf(data.inspections)) if (!vendors.has(v.id)) vendors.set(v.id, { name: v.name });
+    for (const v of hints.vendors) {
+      const label = listVendorName.get(v.id) ?? v.shortName ?? v.name;
+      const others = [...new Set([v.name, v.shortName ?? ''])].filter((n) => n && n !== label);
+      vendors.set(v.id, { name: label, hint: others.join('／') || undefined });
+    }
+    for (const [id, name] of listVendorName) if (!vendors.has(id)) vendors.set(id, { name });
     const typesByProperty = new Map<string, Set<string>>();
     const allTypes = new Set<string>();
     for (const i of data.inspections) {
@@ -410,11 +428,13 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
           category: extraction.category ?? undefined,
           propertyCode: extraction.propertyCode ?? undefined,
           vendorId: extraction.vendorId ?? undefined,
-          managementCompanyId: extraction.managementCompanyId ?? undefined,
           inspectionType: extraction.inspectionType ?? undefined,
         },
         'filename',
       );
+      // 管理会社は物件から引いたものなら「物件から」、ファイル名の会社名なら「ファイル名」を出どころにする
+      if (extraction.managementCompanyId)
+        base = mergeAuto(base, { managementCompanyId: extraction.managementCompanyId }, extraction.managementCompanySource ?? 'filename');
       if (extraction.performedOn) base = mergeAuto(base, { performedOn: extraction.performedOn }, extraction.performedOnSource ?? 'filename');
       setBaseStates((prev) => ({ ...prev, [id]: base }));
       let source: UploadSource = { id, file, kind, pageCount: 0, breaks: new Set(), removed: new Set() };
@@ -449,11 +469,16 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
     bytesRef.current.delete(id);
     pdfLibRef.current.delete(id);
     setSources((prev) => prev.filter((s) => s.id !== id));
+    clearBlankNote(id);
     setSelected((prev) => new Set([...prev].filter((k) => !k.startsWith(`${id}:`) && k !== id)));
   };
 
   const updateSource = (id: string, fn: (s: UploadSource) => UploadSource) => setSources((prev) => prev.map((s) => (s.id === id ? fn(s) : s)));
+  /** 空白ページを探した結果の文言を消す（ページの削除・区切りを手で変えたら、前の結果は今の状態と合わない） */
+  const clearBlankNote = (id: string) =>
+    setBlankNotes((prev) => (id in prev ? Object.fromEntries(Object.entries(prev).filter(([k]) => k !== id)) : prev));
   const toggleBreak = (id: string, before: number) => {
+    clearBlankNote(id);
     updateSource(id, (s) => {
       const breaks = new Set(s.breaks);
       if (breaks.has(before)) breaks.delete(before);
@@ -463,13 +488,15 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
     // 区間の組み方が変わるので、前の失敗の表示は消す（別のページの区間に残さない）
     setResults((prev) => Object.fromEntries(Object.entries(prev).filter(([, r]) => r.state === 'ok' || r.state === 'skipped')));
   };
-  const toggleRemoved = (id: string, page: number) =>
+  const toggleRemoved = (id: string, page: number) => {
+    clearBlankNote(id);
     updateSource(id, (s) => {
       const removed = new Set(s.removed);
       if (removed.has(page)) removed.delete(page);
       else removed.add(page);
       return { ...s, removed };
     });
+  };
   const rotate = (id: string, page: number, delta: number) =>
     setRotations((prev) => ({ ...prev, [id]: { ...prev[id], [page]: ((((prev[id]?.[page] ?? 0) + delta) % 360) + 360) % 360 } }));
 
@@ -490,14 +517,28 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
         if (!ctx || canvas.width === 0 || canvas.height === 0) continue;
         if (isBlankPixels(ctx.getImageData(0, 0, canvas.width, canvas.height).data)) blank.push(p);
       }
-      if (blank.length > 0) updateSource(id, (s) => ({ ...s, removed: new Set([...s.removed, ...blank]) }));
-      addToast(
-        blank.length > 0 ? `空白ページ ${blank.length}ページ（p.${blank.map((p) => p + 1).join('・')}）に削除の印を付けました` : '空白ページは見つかりませんでした',
-        'info',
-      );
+      // 探している間に外したファイル・閉じた画面には何も言わない
+      if (closedRef.current || docsRef.current[id] !== pages) return;
+      // 削除の印がもう付いているページは数えない（押し直しで同じページを「削除しました」と言わない）
+      const added = blank.filter((p) => !source.removed.has(p));
+      if (added.length > 0) updateSource(id, (s) => ({ ...s, removed: new Set([...s.removed, ...added]) }));
+      const pageList = (list: number[]) => `p.${list.map((p) => p + 1).join('・')}`;
+      const note =
+        added.length > 0
+          ? `${added.length}ページを削除しました（${pageList(added)}。「戻す」で戻せます）`
+          : blank.length > 0
+            ? `空白ページはすべて削除の印が付いています（${pageList(blank)}）`
+            : '空白ページはありませんでした';
+      setBlankNotes((prev) => ({ ...prev, [id]: note }));
+      addToast(note, 'info');
     } catch (err) {
+      // 閉じたときは pdfjs の文書を片付けるので、探している途中なら失敗する。閉じた後には知らせない
+      if (closedRef.current || docsRef.current[id] !== pages) return;
       console.error('Blank page scan failed:', err);
-      addToast(`空白ページを探せませんでした: ${entryErrorReason(err)}`, 'error');
+      // 上のお知らせは4秒で消えるので、ファイルの欄にも残す（修正依頼1029 本番確認(4) の検証）
+      const note = `空白ページを探せませんでした: ${entryErrorReason(err)}`;
+      setBlankNotes((prev) => ({ ...prev, [id]: note }));
+      addToast(note, 'error');
     } finally {
       setScanning((prev) => {
         const next = new Set(prev);
@@ -546,16 +587,21 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
         category: docCategory,
         categoryNote: docCategory === 'other' ? suggestion.categoryNote || undefined : undefined,
         propertyCode: property?.code,
-        managementCompanyId: property ? (propertyAliasOf.get(property.code)?.managementCompanyId ?? undefined) : undefined,
         inspectionType: pages.find((p) => p.inspectionType)?.inspectionType ?? suggestion.inspectionType ?? undefined,
         performedOn: pages.find((p) => p.performedOn)?.performedOn ?? suggestion.performedOn ?? undefined,
         targetMonth: suggestion.targetMonth ? suggestion.targetMonth.slice(0, 7) : undefined,
         vendorId: suggestion.vendor?.id,
       };
     };
+    /** 読んだ値を入れる。管理会社は読んだ物件から引くので、出どころは「物件から」にする */
+    const merge = (state: RowState, patch: Partial<RowInput>) => {
+      const mgmt = patch.propertyCode ? propertyAliasOf.get(patch.propertyCode)?.managementCompanyId : undefined;
+      const next = mergeAuto(state, patch, src);
+      return mgmt ? mergeAuto(next, { managementCompanyId: mgmt }, 'property') : next;
+    };
     const docPatch = patchFor(suggestion.pages, true);
-    const base = mergeAuto(baseStatesRef.current[id] ?? presetState, docPatch, src);
-    setBaseStates((prev) => ({ ...prev, [id]: mergeAuto(prev[id] ?? presetState, docPatch, src) }));
+    const base = merge(baseStatesRef.current[id] ?? presetState, docPatch);
+    setBaseStates((prev) => ({ ...prev, [id]: merge(prev[id] ?? presetState, docPatch) }));
     let breaks = source.breaks;
     // 建物が変わるページで区切る案は報告書のファイルだけ（見積書などを黙って分けない）
     const isReportFile = docCategory === 'report' || base.input.category === 'report';
@@ -573,7 +619,7 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
         const key = rowKey(id, seg ? seg.start : null);
         const pages = seg ? suggestion.pages.filter((p) => p.page - 1 >= seg.start && p.page - 1 <= seg.end) : suggestion.pages;
         // 区間の入力がまだ無ければ、ファイルの既定（書類全体で読んだ値を含む）から始める
-        next[key] = mergeAuto(next[key] ?? base, patchFor(pages, segs.length === 1), src);
+        next[key] = merge(next[key] ?? base, patchFor(pages, segs.length === 1));
       }
       return next;
     });
@@ -856,7 +902,8 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
     }
   };
 
-  const dirty = sources.length > 0 && !allDone;
+  // 入れたファイルが残っているか、登録済みの報告書の編集欄に入れかけの値があれば、閉じる前に確認する
+  const dirty = (sources.length > 0 && !allDone) || editDirty;
   const title = `ファイルアップロード（${presetLabel(preset)}）`;
 
   return (
@@ -866,12 +913,14 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
       title={title}
       className="max-w-[min(98vw,1800px)]"
       dirty={dirty && !submitting}
+      dirtyMessage="入力した内容は破棄されます。閉じますか？"
       // 送信の途中で閉じると、残りの行の送信が裏で続き、行ごとの結果が見えなくなる
       busy={submitting}
-      footer={
+      footer={({ requestClose }) => (
         <>
           {reviewCount > 0 && !submitting && <span className="mr-auto text-xs text-red-700">要確認 {reviewCount}行</span>}
-          <Button variant="secondary" size="sm" onClick={onClose} disabled={submitting}>
+          {/* キャンセルも × と同じく、入れたファイルが残っていれば破棄の確認を出す（修正依頼1029 本番確認(2)） */}
+          <Button variant="secondary" size="sm" onClick={requestClose} disabled={submitting}>
             {allDone ? '閉じる' : 'キャンセル'}
           </Button>
           {!allDone && (
@@ -880,7 +929,7 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
             </Button>
           )}
         </>
-      }
+      )}
     >
       <div className="flex flex-col gap-1.5 text-sm">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
@@ -918,6 +967,7 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
             onPreview={(r) => setPreviewReportId(r.id)}
             initialEditId={preset.kind === 'edit' ? preset.report.id : null}
             onDelete={setDeleting}
+            onEditDirtyChange={setEditDirty}
             onSaved={(saved) => {
               setOverrides((prev) => ({ ...prev, [saved.id]: saved }));
               onChanged?.();
@@ -938,7 +988,9 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
 
         <div
           className={cn(
-            'grid min-h-0 grid-cols-1 gap-2 lg:grid-cols-[minmax(0,4fr)_minmax(0,9fr)]',
+            // 1366 幅では右の表に幅を寄せ（左 1：右 3）、表の全部の列を横スクロールなしで見せる。1536 以上は今までどおり 4：9。
+            // 左は 21.5rem を下回らせない（ページのプレビューを1行に2枚並べられる幅。1366 でも右に表の 940px が残る）
+            'grid min-h-0 grid-cols-1 gap-2 lg:grid-cols-[minmax(21.5rem,1fr)_minmax(0,3fr)] 2xl:grid-cols-[minmax(0,4fr)_minmax(0,9fr)]',
             // 登録済みの報告書の一覧を出すときは、その分だけ低くして画面に収める
             preset.kind === 'report' || preset.kind === 'edit' ? 'lg:h-[56vh]' : 'lg:h-[68vh]',
           )}
@@ -976,6 +1028,7 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
                 lockedSources={lockedSources}
                 activeRowKey={activeRowKey}
                 scanning={scanning}
+                blankNotes={blankNotes}
                 disabled={submitting}
                 onToggleBreak={toggleBreak}
                 onRotate={rotate}

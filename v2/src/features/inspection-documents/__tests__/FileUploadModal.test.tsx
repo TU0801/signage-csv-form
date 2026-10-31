@@ -1,7 +1,8 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, configure, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, configure, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { makeInspection } from '@/features/inspection-portal/__tests__/fixtures';
 import { makeReport } from './fixtures';
+import { openPdfPages } from '../lib/pdfPages';
 
 const api = vi.hoisted(() => ({
   fetchPortalInspections: vi.fn(),
@@ -81,12 +82,13 @@ beforeEach(() => {
 
 async function open(preset: FileUploadPreset, props: { vendorId?: string | null } = {}) {
   const onChanged = vi.fn();
-  render(<FileUploadModal open preset={preset} onClose={vi.fn()} vendorId={props.vendorId ?? 'v1'} onChanged={onChanged} />);
+  const onClose = vi.fn();
+  render(<FileUploadModal open preset={preset} onClose={onClose} vendorId={props.vendorId ?? 'v1'} onChanged={onChanged} />);
   // 点検一覧と名前の一覧を読み終えてからファイルを入れる（ファイル名の照合に使う）
   await waitFor(() => expect(fileApi.fetchUploadPropertyAliases).toHaveBeenCalled());
   await waitFor(() => expect(api.fetchPortalEntries).toHaveBeenCalled());
   await act(async () => {});
-  return { onChanged };
+  return { onChanged, onClose };
 }
 
 const addFiles = (...files: File[]) => fireEvent.change(screen.getByTestId('upload-file-input'), { target: { files } });
@@ -259,5 +261,117 @@ describe('FileUploadModal（修正依頼1029(1) ファイルのアップロー�
         note: '直しました',
       }),
     );
+  });
+
+  it('登録済みの報告書の編集欄に入力したままのキャンセルも、破棄の確認を出す', async () => {
+    const report = makeReport({ id: 'r1', property_inspection_id: 'i1', note: null });
+    api.fetchInspectionReports.mockResolvedValue([report]);
+    const { onClose } = await open({ kind: 'edit', report, inspection: first });
+    const form = await screen.findByTestId('report-edit-form');
+    fireEvent.change(within(form).getByLabelText('報告書のメモ'), { target: { value: '直しかけ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }));
+    expect(screen.getByText('入力した内容は破棄されます。閉じますか？')).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('入力したファイルがあるときのキャンセルは破棄の確認を出し、何も入れていなければすぐ閉じる', async () => {
+    const { onClose } = await open({ kind: 'other' });
+    fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    onClose.mockClear();
+    addFiles(new File(['x'], '20261025_御見積.xlsx'));
+    await screen.findByTestId('upload-row-1');
+    fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }));
+    expect(screen.getByText('入力した内容は破棄されます。閉じますか？')).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: '破棄して閉じる' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('保守会社は一覧と同じく略称で出し、正式名でも探せる', async () => {
+    auth.isAdmin = true;
+    fileApi.fetchUploadVendorAliases.mockResolvedValue([{ id: 'v2', name: '三菱電機ビルソリューションズ株式会社', shortName: '三菱電機ﾋﾞﾙｿﾘｭｰｼｮﾝｽﾞ㈱' }]);
+    await open({ kind: 'other' }, { vendorId: null });
+    addFiles(new File(['x'], '20261025_御見積.xlsx'));
+    await screen.findByTestId('upload-row-1');
+    const box = screen.getByRole('combobox', { name: '行1の保守会社' });
+    fireEvent.click(box);
+    fireEvent.change(box, { target: { value: 'ビルソリューションズ株式会社' } });
+    fireEvent.click(await screen.findByRole('option', { name: /三菱電機ﾋﾞﾙｿﾘｭｰｼｮﾝｽﾞ㈱/ }));
+    expect(box).toHaveValue('三菱電機ﾋﾞﾙｿﾘｭｰｼｮﾝｽﾞ㈱');
+  });
+
+  it('空白ページが無ければ「空白ページはありませんでした」をファイルの欄に出す', async () => {
+    await open({ kind: 'bulk' });
+    addFiles(new File(['%PDF-1.4'], '20261025_テスト第一マンション_エレベーター定期点検.pdf', { type: 'application/pdf' }));
+    await screen.findByTestId(/^upload-page-f\d+-3$/);
+    fireEvent.click(screen.getByRole('button', { name: '空白ページを削除' }));
+    expect(await within(screen.getByTestId('upload-source')).findByText('空白ページはありませんでした')).toBeInTheDocument();
+  });
+
+  it('空白ページを探せなかったときは、その理由をファイルの欄に残す', async () => {
+    vi.mocked(openPdfPages).mockResolvedValueOnce({
+      pageCount: 4,
+      render: vi.fn(async () => {}),
+      pageTexts: vi.fn(async () => {
+        throw new Error('読めない PDF');
+      }),
+      destroy: vi.fn(),
+    });
+    await open({ kind: 'bulk' });
+    addFiles(new File(['%PDF-1.4'], '20261025_テスト第一マンション_エレベーター定期点検.pdf', { type: 'application/pdf' }));
+    await screen.findByTestId(/^upload-page-f\d+-3$/);
+    fireEvent.click(screen.getByRole('button', { name: '空白ページを削除' }));
+    expect(await within(screen.getByTestId('upload-source')).findByText(/^空白ページを探せませんでした/)).toBeInTheDocument();
+  });
+
+  it('空白ページを探している途中で閉じたときは、閉じた後に失敗を知らせない', async () => {
+    let fail: (err: Error) => void = () => {};
+    vi.mocked(openPdfPages).mockResolvedValueOnce({
+      pageCount: 4,
+      render: vi.fn(async () => {}),
+      pageTexts: vi.fn(() => new Promise<string[]>((_, reject) => { fail = reject; })),
+      destroy: vi.fn(),
+    });
+    await open({ kind: 'bulk' });
+    addFiles(new File(['%PDF-1.4'], '20261025_テスト第一マンション_エレベーター定期点検.pdf', { type: 'application/pdf' }));
+    await screen.findByTestId(/^upload-page-f\d+-3$/);
+    fireEvent.click(screen.getByRole('button', { name: '空白ページを削除' }));
+    toast.mockClear();
+    cleanup();
+    fail(new Error('文書は片付けられました'));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(toast).not.toHaveBeenCalledWith(expect.stringMatching(/^空白ページを探せませんでした/), 'error');
+  });
+
+  it('空白ページにもう削除の印が付いていれば、そう出す。ページの「戻す」でその文言は消す', async () => {
+    // jsdom には canvas の描画が無いので、真っ白なページとして読ませる
+    const getContext = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue({ getImageData: () => ({ data: new Uint8ClampedArray(300 * 150 * 4).fill(255) }) } as unknown as CanvasRenderingContext2D);
+    try {
+      await open({ kind: 'bulk' });
+      addFiles(new File(['%PDF-1.4'], '20261025_テスト第一マンション_エレベーター定期点検.pdf', { type: 'application/pdf' }));
+      await screen.findByTestId(/^upload-page-f\d+-3$/);
+      const box = screen.getByTestId('upload-source');
+      fireEvent.click(screen.getByRole('button', { name: '空白ページを削除' }));
+      expect(await within(box).findByText(/^4ページを削除しました/)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: '空白ページを削除' }));
+      expect(await within(box).findByText('空白ページはすべて削除の印が付いています（p.1・2・3・4）')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: '1ページ目の削除を戻す' }));
+      expect(within(box).queryByText(/空白ページは/)).not.toBeInTheDocument();
+    } finally {
+      getContext.mockRestore();
+    }
+  });
+
+  it('ファイル名の物件から入れた管理会社は、値の出どころを「物件から」と出す', async () => {
+    await open({ kind: 'bulk' });
+    addFiles(new File(['%PDF-1.4'], '20261025_第一マンション略称_エレベーター定期点検報告書.pdf', { type: 'application/pdf' }));
+    await screen.findByTestId(/^upload-page-f\d+-3$/);
+    fireEvent.click(screen.getByRole('button', { name: '行1の詳細' }));
+    const detail = screen.getByTestId('upload-row-detail-1');
+    expect(within(detail).getByText(/管理会社=テスト管理（物件から）/)).toBeInTheDocument();
+    expect(within(detail).getByText(/物件=テスト第一マンション（ファイル名）/)).toBeInTheDocument();
   });
 });

@@ -20,6 +20,8 @@ export type PerRow = (typeof PER_ROW_OPTIONS)[number];
 export const DEFAULT_PER_ROW: PerRow = 2;
 /** ページ1枚ぶんの幅のうちサムネイル以外（区切りの帯 20px・枠と余白 12px） */
 const THUMB_CHROME = 32;
+/** サムネイルの幅の下限（px） */
+const MIN_THUMB_WIDTH = 120;
 /** 描く解像度の上限（px）。大きく並べても 27 ページの PDF でメモリを使い切らない */
 const MAX_RENDER_WIDTH = 900;
 const thumbScale = () => Math.min(2, Math.max(1, typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1));
@@ -28,7 +30,17 @@ const thumbScale = () => Math.min(2, Math.max(1, typeof window === 'undefined' ?
 export function thumbWidthFor(containerWidth: number, perRow: number): number {
   if (containerWidth <= 0) return THUMB_WIDTH;
   // 入れ物の左右の余白（p-2）とスクロールバーのぶんを引く
-  return Math.max(120, Math.floor((containerWidth - 16 - 4) / perRow) - THUMB_CHROME);
+  return Math.max(MIN_THUMB_WIDTH, Math.floor((containerWidth - 16 - 4) / perRow) - THUMB_CHROME);
+}
+
+/**
+ * 1行に perRow 枚を選んでいても、入れ物の幅で1枚 MIN_THUMB_WIDTH に届かないときは、届く枚数まで減らす
+ * （1366 幅で 2枚が 120px の1列に折り返し、1枚より小さく出ていた。修正依頼1029 本番確認の検証）
+ */
+export function fitPerRow(containerWidth: number, perRow: number): number {
+  if (containerWidth <= 0) return perRow;
+  const fits = Math.floor((containerWidth - 16 - 4) / (MIN_THUMB_WIDTH + THUMB_CHROME));
+  return Math.max(1, Math.min(perRow, fits));
 }
 
 /** 区間の見分けに使う色（行の番号の順にくり返す） */
@@ -53,6 +65,8 @@ export interface UploadPagesPaneProps {
   activeRowKey: string | null;
   /** 空白ページを探している最中のファイル */
   scanning: ReadonlySet<string>;
+  /** 空白ページを探した結果の文言（ファイルの id → 「空白ページはありませんでした」など） */
+  blankNotes?: Record<string, string>;
   disabled: boolean;
   onToggleBreak: (sourceId: string, before: number) => void;
   onRotate: (sourceId: string, page: number, delta: number) => void;
@@ -76,7 +90,8 @@ export function UploadPagesPane(props: UploadPagesPaneProps) {
     return () => ro.disconnect();
   }, []);
   // ファイルごとの枠（枠線と余白 12px）のぶんを引く
-  const thumbWidth = thumbWidthFor(width - 12, perRow);
+  const shown = fitPerRow(width - 12, perRow);
+  const thumbWidth = thumbWidthFor(width - 12, shown);
 
   // 表で行を選んだら、その区間の先頭ページ（PDF 以外はファイル）までスクロールする
   const active = rows.find((r) => r.key === props.activeRowKey) ?? null;
@@ -107,6 +122,7 @@ export function UploadPagesPane(props: UploadPagesPaneProps) {
               {n}枚
             </button>
           ))}
+          {shown < perRow && <span className="text-[11px] text-gray-500">（幅に合わせて{shown}枚）</span>}
         </div>
       </div>
       <div ref={boxRef} className="min-h-[12rem] flex-1 overflow-y-auto bg-gray-50 p-2" data-testid="upload-pages">
@@ -127,6 +143,7 @@ function SourceBlock({
   lockedSources,
   activeRowKey,
   scanning,
+  blankNotes,
   disabled,
   thumbWidth,
   onToggleBreak,
@@ -142,7 +159,7 @@ function SourceBlock({
   return (
     <div id={`upload-source-${source.id}`} className="mb-2 rounded border border-gray-200 bg-white" data-testid="upload-source">
       <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 px-1.5 py-0.5 text-xs">
-        <span className="min-w-0 flex-1 truncate font-medium text-gray-800" title={source.file.name}>
+        <span className="min-w-[8rem] flex-1 truncate font-medium text-gray-800" title={source.file.name}>
           {source.file.name}
         </span>
         <span className="text-gray-500">
@@ -162,17 +179,24 @@ function SourceBlock({
             {scanning.has(source.id) ? '空白ページを探しています…' : '空白ページを削除'}
           </Button>
         )}
+
         <Button
           variant="ghost"
           size="sm"
           className="h-5 px-1 text-[11px] text-red-700"
-          disabled={disabled || locked}
+          // 空白ページを探している間に外すと、片付けた PDF を読みに行って失敗する
+          disabled={disabled || locked || scanning.has(source.id)}
           aria-label={`${source.file.name} を外す`}
           onClick={() => onRemoveSource(source.id)}
         >
           外す
         </Button>
       </div>
+      {source.kind === 'pdf' && blankNotes?.[source.id] && !scanning.has(source.id) && (
+        <p role="status" className="px-1.5 text-[11px] text-blue-800">
+          {blankNotes[source.id]}
+        </p>
+      )}
       {locked && <p className="px-1.5 text-[11px] text-gray-500">登録済みの区間があるため、区切り・回転・削除は変えられません。</p>}
       {source.kind !== 'pdf' ? (
         <div className={cn('max-h-80 overflow-hidden p-1', myRows[0]?.key === activeRowKey && 'ring-2 ring-blue-400')}>

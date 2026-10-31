@@ -80,7 +80,9 @@ export function UploadRowsTable(props: UploadRowsTableProps) {
   const [openDetail, setOpenDetail] = useState<string | null>(null);
   const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.key));
   return (
-    <table className="w-full min-w-[62rem] table-fixed border-collapse text-[11px]" data-testid="upload-rows">
+    // 1366x768 でも横スクロールなしに全部の列が見えるよう、列幅を詰める（合計 58.75rem ≒ 940px。修正依頼1029 本番確認(1)）。
+    // table-fixed + w-full なので、広い画面では余った幅を列幅の比で配る。1536 以上は物件（見出しの注記）とページ（「（2ページ削除）」）を広げて折り返しを減らす
+    <table className="w-full min-w-[58.75rem] table-fixed border-collapse text-[11px]" data-testid="upload-rows">
       <thead className="sticky top-0 z-10 bg-gray-50">
         <tr>
           <th className={cn(th, 'w-6')}>
@@ -92,27 +94,27 @@ export function UploadRowsTable(props: UploadRowsTableProps) {
               onChange={(e) => props.onToggleAll(e.target.checked)}
             />
           </th>
-          <th className={cn(th, 'w-12')}>ステータス</th>
-          <th className={cn(th, 'w-20')}>区分</th>
+          <th className={cn(th, 'w-16')}>ステータス</th>
+          <th className={cn(th, 'w-[4.5rem]')}>区分</th>
           <th className={cn(th, 'w-11')}>区間</th>
-          <th className={cn(th, 'w-14')}>ページ</th>
-          <th className={cn(th, 'w-[5.5rem]')}>
+          <th className={cn(th, 'w-12 2xl:w-20')}>ページ</th>
+          <th className={cn(th, 'w-[5.25rem]')}>
             No
             <span className="block text-[10px] font-normal text-gray-400">対象月</span>
           </th>
-          <th className={cn(th, 'w-28')}>
+          <th className={cn(th, 'w-24')}>
             実施日
             <span className="block text-[10px] font-normal text-gray-400">点検開始日</span>
           </th>
-          <th className={cn(th, 'w-36')}>
+          <th className={cn(th, 'w-[7.5rem] 2xl:w-40')}>
             物件<span className="text-red-600">*</span>
-            <span className="block text-[10px] font-normal text-gray-400">※リストに無い建物は建物追加申請を</span>
+            <span className="block whitespace-normal text-[10px] font-normal leading-tight text-gray-400">※リストに無い建物は建物追加申請を</span>
           </th>
-          <th className={cn(th, 'w-28')}>点検種別</th>
-          <th className={cn(th, 'w-20')}>メモ</th>
+          <th className={cn(th, 'w-24')}>点検種別</th>
+          <th className={cn(th, 'w-14')}>メモ</th>
           <th className={cn(th, 'w-24')}>管理会社</th>
           <th className={cn(th, 'w-24')}>保守会社</th>
-          <th className={cn(th, 'w-9')}>詳細</th>
+          <th className={cn(th, 'w-11')}>詳細</th>
         </tr>
       </thead>
       <tbody>
