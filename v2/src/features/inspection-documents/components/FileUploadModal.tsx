@@ -65,7 +65,7 @@ import {
   type UploadRow,
   type UploadSource,
 } from '../lib/uploadRows';
-import { clampLeftWidth, submitGate } from '../lib/uploadView';
+import { LEFT_MIN_PX, RIGHT_MIN_PX, clampLeftWidth, submitGate } from '../lib/uploadView';
 import { useAiOcr } from '../hooks/useAiOcr';
 import { usePropertyFileTargets } from '../hooks/usePropertyFileTargets';
 import { useUploadNameHints } from '../hooks/useUploadNameHints';
@@ -431,8 +431,11 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
   const selectedPending = pendingRows.filter((r) => selected.has(r.key));
 
   // ---- 行の入力の変更 ----
-  const updateRow = (key: string, sourceId: string, fn: (s: RowState) => RowState) =>
+  // 行・ファイルを変えたら、前に止めた理由は今の状態と合わないので消す（直した後も「入力の足りない行が…」が残った。修正依頼1104 本番確認）
+  const updateRow = (key: string, sourceId: string, fn: (s: RowState) => RowState) => {
+    setSubmitError(null);
     setStates((prev) => ({ ...prev, [key]: fn(prev[key] ?? baseStates[sourceId] ?? presetState) }));
+  };
   const changeRow = (key: string, patch: Partial<RowInput>) => {
     const row = rows.find((r) => r.key === key);
     if (row) updateRow(key, row.sourceId, (s) => setFields(s, patch, 'manual'));
@@ -450,6 +453,7 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
   };
   const applyBulkEdit = (patch: BulkPatch) => {
     const keys = rows.filter((r) => selected.has(r.key) && !isRowFinished(results[r.key])).map((r) => r.key);
+    setSubmitError(null);
     setStates((prev) => applyBulk({ ...effStates, ...prev }, keys, patch));
     addToast(`${keys.length}行に入れました`, 'success');
   };
@@ -467,6 +471,7 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
       }
     }
     setFileError(null);
+    setSubmitError(null);
     setPreviewReportId(null);
     for (const file of list) {
       const kind = sourceKindOf(file.name)!;
@@ -514,6 +519,7 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
   };
 
   const removeSource = (id: string) => {
+    setSubmitError(null);
     docs[id]?.destroy();
     setDocs((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => k !== id)));
     bytesRef.current.delete(id);
@@ -523,7 +529,10 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
     setSelected((prev) => new Set([...prev].filter((k) => !k.startsWith(`${id}:`) && k !== id)));
   };
 
-  const updateSource = (id: string, fn: (s: UploadSource) => UploadSource) => setSources((prev) => prev.map((s) => (s.id === id ? fn(s) : s)));
+  const updateSource = (id: string, fn: (s: UploadSource) => UploadSource) => {
+    setSubmitError(null);
+    setSources((prev) => prev.map((s) => (s.id === id ? fn(s) : s)));
+  };
   /** 空白ページを探した結果の文言を消す（ページの削除・区切りを手で変えたら、前の結果は今の状態と合わない） */
   const clearBlankNote = (id: string) =>
     setBlankNotes((prev) => (id in prev ? Object.fromEntries(Object.entries(prev).filter(([k]) => k !== id)) : prev));
@@ -653,6 +662,8 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
       const next = mergeAuto(state, patch, src);
       return mgmt ? mergeAuto(next, { managementCompanyId: mgmt }, 'property') : next;
     };
+    // 読み取りで行の値が変わるので、前に止めた理由は消す（手で直したときと同じ）
+    setSubmitError(null);
     const docPatch = patchFor(suggestion.pages, true);
     const base = merge(baseStatesRef.current[id] ?? presetState, docPatch);
     setBaseStates((prev) => ({ ...prev, [id]: merge(prev[id] ?? presetState, docPatch) }));
@@ -705,6 +716,7 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
       }
       return;
     }
+    setSubmitError(null);
     const strip = (prev: Record<string, RowState>) => Object.fromEntries(Object.entries(prev).map(([k, v]) => [k, dropAiValues(v)]));
     setStates(strip);
     setBaseStates(strip);
@@ -1370,6 +1382,8 @@ function ResizeBar({
 }) {
   const barRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ startX: number; startLeft: number } | null>(null);
+  /** 支援技術に伝える今の幅と最大（aria-valuenow・aria-valuemax。既定の比のときも測った幅を出す） */
+  const [aria, setAria] = useState<{ now: number; max: number } | null>(null);
   /** 2列とバー・すき間を合わせた幅と、バーとすき間の幅 */
   const measure = () => {
     const grid = gridRef.current?.getBoundingClientRect().width ?? 0;
@@ -1396,13 +1410,31 @@ function ResizeBar({
     return () => window.removeEventListener('resize', fit);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- measure は ref だけを読む
   }, [width, onChange]);
+  useEffect(() => {
+    const grid = gridRef.current;
+    const left = leftRef.current;
+    if (!grid || !left || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => {
+      const { grid: g, chrome } = measure();
+      const now = Math.round(left.getBoundingClientRect().width);
+      const max = Math.round(Math.max(LEFT_MIN_PX, g - chrome - RIGHT_MIN_PX));
+      setAria((prev) => (prev && prev.now === now && prev.max === max ? prev : { now, max }));
+    });
+    ro.observe(grid);
+    ro.observe(left);
+    return () => ro.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- measure は ref だけを読む
+  }, [gridRef, leftRef]);
   return (
     <div
       ref={barRef}
       role="separator"
       aria-orientation="vertical"
       aria-label="プレビューと表の幅を変える"
-      aria-valuenow={width ?? undefined}
+      aria-valuenow={width ?? aria?.now}
+      aria-valuemin={LEFT_MIN_PX}
+      aria-valuemax={aria?.max}
+      aria-valuetext={(width ?? aria?.now) !== undefined ? `プレビューの幅 ${width ?? aria?.now}px` : undefined}
       tabIndex={0}
       title="ドラッグ（または ← →）でプレビューの幅を変えます。ダブルクリックで元の幅に戻します"
       data-testid="upload-resize-bar"
