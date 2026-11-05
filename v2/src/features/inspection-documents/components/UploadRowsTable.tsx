@@ -330,9 +330,10 @@ function RowLine({
           <Combobox
             aria-label={`行${row.no}の保守会社`}
             className="py-0.5 text-[11px]"
-            value={fixedOtherVendorId}
+            // 選択肢に無い値は Combobox が値（ID）のまま出すので、名前の一覧を読み終えるまでは空にして「自社」と出す（修正依頼1104 本番確認）
+            value={options.vendors.some((o) => o.value === fixedOtherVendorId) ? fixedOtherVendorId : ''}
             options={options.vendors}
-            placeholder={fixedOtherVendorId ? '' : '（なし）'}
+            placeholder={fixedOtherVendorId ? '自社' : '（なし）'}
             disabled
             onChange={() => {}}
           />

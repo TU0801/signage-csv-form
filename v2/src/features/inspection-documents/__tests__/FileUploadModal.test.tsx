@@ -194,6 +194,20 @@ describe('FileUploadModal（修正依頼1029(1) ファイルのアップロー�
     expect(within(row(1)).getByRole('combobox', { name: '行1の保守会社' })).toBeDisabled();
   });
 
+  it('自社が保守会社の名前の一覧に無い（読み終える前）ときも、固定の保守会社の欄に ID をそのまま出さない（修正依頼1104 本番確認）', async () => {
+    auth.vendorId = 'v-not-listed';
+    try {
+      await open({ kind: 'other' }, { vendorId: 'v-not-listed' });
+      addFiles(new File(['x'], '20261025_御見積.xlsx'));
+      await screen.findByTestId('upload-row-1');
+      const box = within(row(1)).getByRole('combobox', { name: '行1の保守会社' }) as HTMLInputElement;
+      expect(box.value).toBe('');
+      expect(box).toHaveAttribute('placeholder', '自社');
+    } finally {
+      auth.vendorId = 'v1';
+    }
+  });
+
   it('選択行の一括設定は、選んだ行の入れた項目だけを変える（変更しないの項目は行ごとの値のまま）', async () => {
     await open({ kind: 'other' });
     addFiles(new File(['x'], 'a_請求書.xlsx'), new File(['y'], 'b_請求書.xlsx'));
@@ -264,6 +278,9 @@ describe('FileUploadModal（修正依頼1029(1) ファイルのアップロー�
     fireEvent.click(screen.getByRole('button', { name: '3行を登録する' }));
     expect(screen.getByTestId('upload-submit-error')).toHaveTextContent('入力の足りない行が1行あります（行3。');
     expect(fileApi.registerPropertyFile).not.toHaveBeenCalled();
+    // 行を直したら、前に止めた理由は消す（修正依頼1104 本番確認）
+    fireEvent.change(within(row(3)).getByLabelText('行3の区分'), { target: { value: 'estimate' } });
+    expect(screen.queryByTestId('upload-submit-error')).toBeNull();
 
     fireEvent.click(within(row(2)).getByLabelText('行2を選ぶ'));
     fireEvent.click(screen.getByRole('button', { name: '選択した 1 行を登録' }));
