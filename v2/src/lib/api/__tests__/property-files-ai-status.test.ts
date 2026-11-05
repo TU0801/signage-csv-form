@@ -21,6 +21,10 @@ describe('fetchAiOcrStatus（修正依頼1104 本番確認: 状態を確かめ�
     expect(failed.configured).toBe(false);
     expect(failed.message).toBe('AI-OCR の状態を確かめられませんでした（ログインが必要です）。画面を読み込み直してください');
 
+    // supabase-js の英語の定型文は出さない
+    invoke.mockResolvedValueOnce({ data: null, error: new Error('Failed to send a request to the Edge Function') });
+    expect((await fetchAiOcrStatus()).message).toBe('AI-OCR の状態を確かめられませんでした（通信に失敗しました）。画面を読み込み直してください');
+
     invoke.mockResolvedValueOnce({ data: { configured: true }, error: null });
     expect(await fetchAiOcrStatus()).toEqual({ configured: true, message: null });
   });

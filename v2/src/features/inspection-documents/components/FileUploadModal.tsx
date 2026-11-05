@@ -662,6 +662,8 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
       const next = mergeAuto(state, patch, src);
       return mgmt ? mergeAuto(next, { managementCompanyId: mgmt }, 'property') : next;
     };
+    // 読み取りで行の値が変わるので、前に止めた理由は消す（手で直したときと同じ）
+    setSubmitError(null);
     const docPatch = patchFor(suggestion.pages, true);
     const base = merge(baseStatesRef.current[id] ?? presetState, docPatch);
     setBaseStates((prev) => ({ ...prev, [id]: merge(prev[id] ?? presetState, docPatch) }));
@@ -714,6 +716,7 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
       }
       return;
     }
+    setSubmitError(null);
     const strip = (prev: Record<string, RowState>) => Object.fromEntries(Object.entries(prev).map(([k, v]) => [k, dropAiValues(v)]));
     setStates(strip);
     setBaseStates(strip);
@@ -1431,7 +1434,7 @@ function ResizeBar({
       aria-valuenow={width ?? aria?.now}
       aria-valuemin={LEFT_MIN_PX}
       aria-valuemax={aria?.max}
-      aria-valuetext={`プレビューの幅 ${width ?? aria?.now ?? ''}px`}
+      aria-valuetext={(width ?? aria?.now) !== undefined ? `プレビューの幅 ${width ?? aria?.now}px` : undefined}
       tabIndex={0}
       title="ドラッグ（または ← →）でプレビューの幅を変えます。ダブルクリックで元の幅に戻します"
       data-testid="upload-resize-bar"

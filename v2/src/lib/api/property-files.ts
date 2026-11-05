@@ -185,7 +185,9 @@ export async function fetchAiOcrStatus(): Promise<AiOcrStatus> {
   } catch (err) {
     // 関数の失敗（ログインの期限切れの 401・通信の失敗など）を「未設定」と言わない（管理者に連絡しても直らない。修正依頼1104 本番確認）
     console.warn('AI-OCR status check failed:', err);
-    const reason = err instanceof Error && err.message ? err.message : '通信に失敗しました';
+    // 理由は関数が返した日本語の文だけを出す（supabase-js の英語の定型文〔Failed to send a request … など〕は出さない）
+    const raw = err instanceof Error ? err.message : '';
+    const reason = /[ぁ-んァ-ヶ一-龠]/.test(raw) ? raw : '通信に失敗しました';
     return { configured: false, message: `AI-OCR の状態を確かめられませんでした（${reason}）。画面を読み込み直してください` };
   }
 }
