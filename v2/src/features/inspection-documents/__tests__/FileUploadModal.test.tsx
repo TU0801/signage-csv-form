@@ -30,6 +30,7 @@ const fileApi = vi.hoisted(() => ({
   fetchPropertyFileTargets: vi.fn(async () => [] as unknown[]),
   fetchUploadPropertyAliases: vi.fn(async () => [] as unknown[]),
   fetchUploadVendorAliases: vi.fn(async () => [] as unknown[]),
+  fetchUploadIssuerNames: vi.fn(async () => [] as string[]),
 }));
 vi.mock('@/lib/api/property-files', () => fileApi);
 vi.mock('@/lib/supabase', () => ({ supabase: {}, TABLES: {}, RPC: {} }));
@@ -126,6 +127,25 @@ describe('FileUploadModal（修正依頼1029(1) ファイルのアップロー�
     expect(onChanged).toHaveBeenCalled();
   });
 
+  it('建物が変わるページでの自動の区切りは報告書だけ。請求書は全ページで1区間（修正依頼1104 E6）', async () => {
+    const pagesOf = (texts: string[]) => ({ pageCount: 4, render: vi.fn(async () => {}), pageTexts: vi.fn(async () => texts), destroy: vi.fn() });
+    const perPage = (doc: string) => [1, 2, 3, 4].map((n) => `${doc}\nテスト${n % 2 ? '第一' : '第二'}マンション 様`);
+    vi.mocked(openPdfPages).mockResolvedValueOnce(pagesOf(perPage('請求書')) as never);
+    await open({ kind: 'other' });
+    addFiles(new File(['%PDF-1.4'], '20261025_請求書.pdf', { type: 'application/pdf' }));
+    await screen.findByTestId(/^upload-page-f\d+-3$/);
+    // 文字情報を読み終えた（物件が入った）後で数える
+    await waitFor(() => expect(within(row(1)).getByRole('combobox', { name: '行1の物件' })).toHaveValue('テスト第一マンション'));
+    expect(screen.getAllByTestId(/^upload-row-\d+$/)).toHaveLength(1);
+    cleanup();
+
+    vi.mocked(openPdfPages).mockResolvedValueOnce(pagesOf(perPage('点検報告書')) as never);
+    await open({ kind: 'bulk' });
+    addFiles(new File(['%PDF-1.4'], '20261025_報告書.pdf', { type: 'application/pdf' }));
+    await screen.findByTestId(/^upload-page-f\d+-3$/);
+    await waitFor(() => expect(screen.getAllByTestId(/^upload-row-\d+$/).length).toBeGreaterThan(1));
+  });
+
   it('削除したページは送る PDF から外す', async () => {
     api.registerInspectionReport.mockResolvedValue(makeReport());
     await open({ kind: 'bulk' });
@@ -181,12 +201,19 @@ describe('FileUploadModal（修正依頼1029(1) ファイルのアップロー�
     fireEvent.change(within(row(2)).getByLabelText('行2のメモ'), { target: { value: '2行目のメモ' } });
     fireEvent.click(within(row(1)).getByLabelText('行1を選ぶ'));
     fireEvent.click(within(row(2)).getByLabelText('行2を選ぶ'));
+    // 一括設定は普段は閉じていて、表の上のボタンで開く（修正依頼1104 E7）
+    expect(screen.getByTestId('upload-bulk-edit')).not.toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: '選択行に一括設定（2行）' }));
     const box = screen.getByTestId('upload-bulk-edit');
     fireEvent.change(within(box).getByLabelText('一括設定の区分'), { target: { value: 'estimate' } });
     fireEvent.click(within(box).getByRole('button', { name: '選択中の2行に入れる' }));
     expect(within(row(1)).getByLabelText('行1の区分')).toHaveValue('estimate');
     expect(within(row(2)).getByLabelText('行2の区分')).toHaveValue('estimate');
     expect(within(row(2)).getByLabelText('行2のメモ')).toHaveValue('2行目のメモ');
+    // 入れると閉じ、入れた値は次に開いたときもそのまま
+    expect(box).not.toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: '選択行に一括設定（2行）' }));
+    expect(within(box).getByLabelText('一括設定の区分')).toHaveValue('estimate');
   });
 
   it('一括設定で「変更しない」に戻すと、入れていた値の表示を消す', async () => {
@@ -194,28 +221,59 @@ describe('FileUploadModal（修正依頼1029(1) ファイルのアップロー�
     addFiles(new File(['x'], 'a_請求書.xlsx'));
     await screen.findByTestId('upload-row-1');
     fireEvent.click(within(row(1)).getByLabelText('行1を選ぶ'));
+    fireEvent.click(screen.getByRole('button', { name: '選択行に一括設定（1行）' }));
     const box = screen.getByTestId('upload-bulk-edit');
     fireEvent.change(within(box).getByLabelText('一括設定の区分'), { target: { value: 'photo' } });
     fireEvent.click(within(box).getByRole('button', { name: '区分を変更しない' }));
     expect(within(box).getByLabelText('一括設定の区分')).toHaveValue('');
   });
 
-  it('開いた行の実施日とファイル名の日付が食い違えば要確認にして止め、詳細で選び直すと登録できる', async () => {
+  it('食い違いの要確認は理由を出し、確認のうえそのまま登録できる。詳細で選び直しても解消する（修正依頼1104 E1）', async () => {
     api.registerInspectionReport.mockResolvedValue(makeReport());
     await open({ kind: 'report', inspection: first, targetMonth: null, defaultPerformedOn: '2026-10-10' });
     addFiles(new File(['%PDF-1.4'], '20261025_報告書.pdf', { type: 'application/pdf' }));
     await screen.findByTestId(/^upload-page-f\d+-0$/);
-    expect(within(row(1)).getByText('要確認')).toBeInTheDocument();
+    expect(within(row(1)).getByTestId('upload-row-status-review')).toHaveTextContent('要確認: 実施日確認のうえ登録できます');
     fireEvent.click(screen.getByRole('button', { name: '1行を登録する' }));
-    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/要確認の行が1行あります/), 'error');
+    expect(screen.getByText(/要確認 1 行をこのまま登録しますか？/)).toBeInTheDocument();
     expect(api.registerInspectionReport).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'このまま登録する' }));
+    await waitFor(() => expect(api.registerInspectionReport).toHaveBeenCalledTimes(1));
+    // 今の値（開いた行の実施日）で登録する
+    expect(api.registerInspectionReport.mock.calls[0]![0]).toMatchObject({ inspectionId: 'i1', performedOn: '2026-10-10' });
+  });
 
+  it('詳細の「…にする」で食い違いを解消すれば、確認なしで登録する', async () => {
+    api.registerInspectionReport.mockResolvedValue(makeReport());
+    await open({ kind: 'report', inspection: first, targetMonth: null, defaultPerformedOn: '2026-10-10' });
+    addFiles(new File(['%PDF-1.4'], '20261025_報告書.pdf', { type: 'application/pdf' }));
+    await screen.findByTestId(/^upload-page-f\d+-0$/);
     fireEvent.click(screen.getByRole('button', { name: '行1の詳細' }));
     fireEvent.click(within(screen.getByTestId('upload-row-detail-1')).getByRole('button', { name: '「2026-10-25」にする' }));
-    expect(within(row(1)).queryByText('要確認')).toBeNull();
+    expect(within(row(1)).queryByTestId('upload-row-status-review')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '1行を登録する' }));
     await waitFor(() => expect(api.registerInspectionReport).toHaveBeenCalledTimes(1));
     expect(api.registerInspectionReport.mock.calls[0]![0]).toMatchObject({ inspectionId: 'i1', performedOn: '2026-10-25', targetMonth: '2026-10-01' });
+  });
+
+  it('入力の足りない行があれば止め、理由を登録ボタンの近くに残す。選択した行だけを登録でき、2回に分けても名前が重ならない（修正依頼1104 E1・E10）', async () => {
+    fileApi.registerPropertyFile.mockImplementation(async (input: { fileName: string }) => ({ file_name: input.fileName }));
+    await open({ kind: 'other', propertyCode: '900001-00' });
+    addFiles(new File(['x'], '20261025_御見積.xlsx'), new File(['y'], '20261025_御見積2.xlsx'), new File(['z'], 'memo.xlsx'));
+    await screen.findByTestId('upload-row-3');
+    fireEvent.click(screen.getByRole('button', { name: '3行を登録する' }));
+    expect(screen.getByTestId('upload-submit-error')).toHaveTextContent('入力の足りない行が1行あります（行3。');
+    expect(fileApi.registerPropertyFile).not.toHaveBeenCalled();
+
+    fireEvent.click(within(row(2)).getByLabelText('行2を選ぶ'));
+    fireEvent.click(screen.getByRole('button', { name: '選択した 1 行を登録' }));
+    await waitFor(() => expect(fileApi.registerPropertyFile).toHaveBeenCalledTimes(1));
+    fireEvent.click(within(row(2)).getByLabelText('行2を選ぶ'));
+    fireEvent.click(within(row(1)).getByLabelText('行1を選ぶ'));
+    fireEvent.click(screen.getByRole('button', { name: '選択した 1 行を登録' }));
+    await waitFor(() => expect(fileApi.registerPropertyFile).toHaveBeenCalledTimes(2));
+    const names = fileApi.registerPropertyFile.mock.calls.map(([a]) => (a as { fileName: string }).fileName);
+    expect(names[0]).not.toBe(names[1]);
   });
 
   it('再提出で開くと登録済みの報告書を並べ、受領前の自社の報告書は保守会社も削除できる（決定②）', async () => {

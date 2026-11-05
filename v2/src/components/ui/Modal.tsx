@@ -31,6 +31,16 @@ interface ModalProps {
    * 既定は false（動かない）。開くたびに中央へ戻す
    */
   draggable?: boolean;
+  /**
+   * 画面いっぱいに出す（修正依頼1104 E3 ファイルアップロード）。本文は flex の縦並びで、子は flex-1 で残りの高さを使える。
+   * 既定は false（中央の枠）
+   */
+  fullScreen?: boolean;
+  /**
+   * 右上の閉じるボタンを、× ではなくこの文字の赤いボタンにする（修正依頼1104 E2。ファイルアップロードだけ）。
+   * 渡さなければ今までどおり ×
+   */
+  closeLabel?: string;
 }
 
 /** 開いたときにフォーカスする欄。[data-autofocus] が無ければ本文の最初の入力欄（チェックボックス等は除く） */
@@ -53,6 +63,8 @@ export function Modal({
   dirtyMessage = '保存していない変更があります。破棄して閉じますか？',
   busy = false,
   draggable = false,
+  fullScreen = false,
+  closeLabel,
 }: ModalProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -185,15 +197,18 @@ export function Modal({
       // 動かした量は translate で中央（m-auto）からずらす
       style={draggable && (offset.x || offset.y) ? { translate: `${offset.x}px ${offset.y}px` } : undefined}
       className={cn(
-        'm-auto rounded-lg shadow-xl backdrop:bg-black/50 p-0 w-full',
-        !/(^|\s)max-w-/.test(className ?? '') && 'max-w-lg',
+        fullScreen
+          ? // dialog の UA 既定（max-width/max-height: calc(100% - 2em - 6px)）を外して画面いっぱいにする
+            'm-0 h-dvh max-h-none w-screen max-w-none p-0 backdrop:bg-black/50'
+          : 'm-auto rounded-lg shadow-xl backdrop:bg-black/50 p-0 w-full',
+        !fullScreen && !/(^|\s)max-w-/.test(className ?? '') && 'max-w-lg',
         className,
       )}
     >
       {/* 見出しと footer はスクロールの外に置き、本文だけを画面の高さに合わせてスクロールさせる。
           flex は内側の div に付ける（dialog に付けると閉じているときの display:none を上書きして常時表示になる）。
           高さの上限は dialog の UA 既定（100% - 2em - 6px）より小さくし、dialog 自体はスクロールさせない */}
-      <div className="relative flex max-h-[calc(100dvh-2.5rem)] flex-col">
+      <div className={cn('relative flex flex-col', fullScreen ? 'h-full' : 'max-h-[calc(100dvh-2.5rem)]')}>
         {title && (
           <div
             className={cn(
@@ -204,18 +219,30 @@ export function Modal({
             title={draggable ? '見出しを引いて動かせます' : undefined}
           >
             <h2 className="text-base font-semibold text-gray-900">{title}</h2>
-            <button
-              type="button"
-              aria-label="閉じる"
-              onClick={requestClose}
-              disabled={busy}
-              className="text-gray-400 hover:text-gray-600 text-xl leading-none disabled:opacity-40 disabled:hover:text-gray-400"
-            >
-              &times;
-            </button>
+            {closeLabel ? (
+              <button
+                type="button"
+                onClick={requestClose}
+                disabled={busy}
+                data-testid="modal-close"
+                className="rounded border border-red-500 bg-white px-2 py-0.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-40 disabled:hover:bg-white"
+              >
+                {closeLabel}
+              </button>
+            ) : (
+              <button
+                type="button"
+                aria-label="閉じる"
+                onClick={requestClose}
+                disabled={busy}
+                className="text-gray-400 hover:text-gray-600 text-xl leading-none disabled:opacity-40 disabled:hover:text-gray-400"
+              >
+                &times;
+              </button>
+            )}
           </div>
         )}
-        <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+        <div ref={bodyRef} className={cn('min-h-0 flex-1 overflow-y-auto px-4 py-3', fullScreen && 'flex flex-col px-3 py-2')}>
           {children}
         </div>
         {footer && (

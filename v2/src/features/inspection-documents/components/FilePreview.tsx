@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Spinner } from '@/components/ui/Spinner';
 import { openPdfPages, type PdfPages } from '../lib/pdfPages';
 import { propertyFileMime } from '../lib/propertyFiles';
+import { renderWidthFor } from '../lib/uploadView';
 
 /*
  * 選んだファイルのプレビュー（その他ファイルアップロード。修正依頼1026 J3。DocFlow と同じく左にプレビュー、右に入力欄）。
@@ -11,9 +12,6 @@ import { propertyFileMime } from '../lib/propertyFiles';
 
 /** 描くページの上限（大きなスキャン PDF で描画を待たせない） */
 const MAX_PREVIEW_PAGES = 5;
-/** 描く解像度の上限（px） */
-const MAX_RENDER_WIDTH = 900;
-const scale = () => Math.min(2, Math.max(1, typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1));
 
 type Kind = 'pdf' | 'image' | 'video' | 'other';
 
@@ -162,7 +160,8 @@ function PdfPreview({ file, width }: { file: File; width: number }) {
 function PdfPageCanvas({ pages, index, width }: { pages: PdfPages; index: number; width: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
   // 描く幅は 50px 単位にそろえる（入れ物の幅が少し変わるたびに描き直さない）
-  const renderWidth = Math.min(MAX_RENDER_WIDTH, Math.ceil((width * scale()) / 50) * 50);
+  // 倍率 max(2, 画面の倍率)・上限 1600px（修正依頼1104 E8。字がつぶれないよう 1029 の 900px から上げた）
+  const renderWidth = renderWidthFor(width);
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;

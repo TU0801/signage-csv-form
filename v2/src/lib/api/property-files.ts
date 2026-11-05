@@ -70,6 +70,13 @@ export async function fetchUploadVendorAliases(): Promise<{ id: string; name: st
   }));
 }
 
+/** 自社（業務システムの発行元）の会社名（修正依頼1104 E1。保守会社の読み取りの候補から外すのに使う） */
+export async function fetchUploadIssuerNames(): Promise<string[]> {
+  const { data, error } = await supabase.rpc(RPC.portalUploadIssuerNames);
+  if (error) throw error;
+  return ((data ?? []) as { company_name: string }[]).map((r) => r.company_name);
+}
+
 export interface RegisterPropertyFileInput {
   propertyCode: string;
   category: PropertyFileCategory;

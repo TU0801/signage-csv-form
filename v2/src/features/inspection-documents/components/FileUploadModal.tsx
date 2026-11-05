@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react';
 import type { PDFDocument } from 'pdf-lib';
 import type { DbInspectionReport, PortalInspectionRow } from '@/types/portal';
 import { Modal } from '@/components/ui/Modal';
@@ -44,17 +44,20 @@ import { UPLOAD_CATEGORIES, extractFromFileName, type UploadCategory } from '../
 import {
   EMPTY_ROW_STATE,
   applyBulk,
+  assignRowNames,
   buildRows,
   checkRow,
+  dropAiValues,
   isBlankPixels,
   liveReportsOf,
   mergeAuto,
-  nameSlots,
+  reviewReasons,
   rowKey,
   rowTargetMonth,
   setFields,
   sourceKindOf,
   type BulkPatch,
+  type ReviewReason,
   type RowCheck,
   type RowField,
   type RowInput,
@@ -62,6 +65,7 @@ import {
   type UploadRow,
   type UploadSource,
 } from '../lib/uploadRows';
+import { clampLeftWidth, submitGate } from '../lib/uploadView';
 import { useAiOcr } from '../hooks/useAiOcr';
 import { usePropertyFileTargets } from '../hooks/usePropertyFileTargets';
 import { useUploadNameHints } from '../hooks/useUploadNameHints';
@@ -122,6 +126,9 @@ interface Prepared {
 
 const NO_PROPERTIES: PropertyCandidate[] = [];
 let sourceSeq = 0;
+
+/** 左右の幅を覚える localStorage の鍵（修正依頼1104 E9） */
+const LEFT_WIDTH_KEY = 'signage.fileUpload.leftWidth';
 
 const presetLabel = (preset: FileUploadPreset) =>
   preset.kind === 'bulk'
@@ -211,12 +218,32 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
   const [results, setResults] = useState<Record<string, RowResult>>({});
   const [sizes, setSizes] = useState<Record<string, number>>({});
   const preparedRef = useRef(new Map<string, Prepared>());
-  const [confirmReplace, setConfirmReplace] = useState<{ count: number; latest: DbInspectionReport[]; prepared: Map<string, Prepared> } | null>(null);
+  const [confirmReplace, setConfirmReplace] = useState<{
+    count: number;
+    latest: DbInspectionReport[];
+    prepared: Map<string, Prepared>;
+    targets: UploadRow[];
+  } | null>(null);
+  /** 要確認（食い違いだけ）の行をこのまま登録するかの確認（修正依頼1104 E1） */
+  const [confirmReview, setConfirmReview] = useState<{ count: number; targets: UploadRow[] } | null>(null);
+  /** 登録で止めたときの知らせ（登録ボタンの近くに残す。上のお知らせは数秒で消える。修正依頼1104 E1） */
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  /** AI-OCR の生の結果を保存したファイル（同じファイルを区間に分けても最初の行にだけ持たせる。2回に分けて登録しても同じ） */
+  const ocrSavedRef = useRef(new Set<string>());
 
   // ---- 読み取り ----
+  /**
+   * 取込の方式（修正依頼1104 E11）。既定は『ファイル名を取込』（ファイル名と PDF の文字情報。費用なし）、『AIで取込』は AI-OCR も使う。
+   * AI からファイル名に戻すと AI の結果は値から外す（結果は残しておき、AI に戻しても呼び直さない）
+   */
   const [useAi, setUseAi] = useState(false);
+  // 読み取りの途中（前の描画で作った関数の中）から、今の方式を見る
+  const useAiRef = useRef(false);
   const [ocr, setOcr] = useState<Record<string, OcrState>>({});
-  const ocrRawRef = useRef(new Map<string, unknown>());
+  /** 最後に読んだ生の結果と、それが AI-OCR のものか（ファイル名を取込のときは AI の結果を保存しない） */
+  const ocrRawRef = useRef(new Map<string, { raw: unknown; ai: boolean }>());
+  /** AI-OCR で読んだ結果（ファイルごと。AI に戻したときに呼び直さず使う） */
+  const aiCacheRef = useRef(new Map<string, { suggestion: OcrSuggestion; raw: unknown; mode: Extract<OcrState, { state: 'done' }>['mode']; pages: number }>());
 
   // ---- 登録済みの報告書（報告書UP・再提出・編集） ----
   const [overrides, setOverrides] = useState<Record<string, DbInspectionReport>>({});
@@ -262,8 +289,12 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
   const options = useMemo<RowOptions>(() => {
     const props = new Map<string, string>();
     for (const p of [...fileTargets, ...hints.properties]) if (!props.has(p.code)) props.set(p.code, p.name);
-    const mgmt = new Map<string, { name: string; hint?: string }>();
-    for (const m of hints.managementCompanies) mgmt.set(m.id, { name: m.name, hint: m.shortName ?? undefined });
+    // 管理会社は略称で見せ（無ければ正式名）、正式名でも探せるようにする（修正依頼1104 E4。詳細は正式名＝fullName）
+    const mgmt = new Map<string, { name: string; hint?: string; fullName?: string }>();
+    for (const m of hints.managementCompanies) {
+      const short = m.shortName?.trim();
+      mgmt.set(m.id, short && short !== m.name ? { name: short, hint: m.name, fullName: m.name } : { name: m.name, fullName: m.name });
+    }
     for (const i of data.inspections)
       if (i.management_company_id && !mgmt.has(i.management_company_id))
         mgmt.set(i.management_company_id, { name: i.management_company_name ?? i.management_company_id });
@@ -285,8 +316,10 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
       allTypes.add(l);
       typesByProperty.set(i.property_code, (typesByProperty.get(i.property_code) ?? new Set()).add(l));
     }
-    const toOptions = (m: Map<string, { name: string; hint?: string }>) =>
-      [...m.entries()].map(([value, v]) => ({ value, label: v.name, hint: v.hint })).sort((a, b) => a.label.localeCompare(b.label, 'ja'));
+    const toOptions = (m: Map<string, { name: string; hint?: string; fullName?: string }>) =>
+      [...m.entries()]
+        .map(([value, v]) => ({ value, label: v.name, hint: v.hint, fullName: v.fullName }))
+        .sort((a, b) => a.label.localeCompare(b.label, 'ja'));
     return {
       properties: [...props.entries()]
         .map(([value, label]) => ({ value, label, hint: value }))
@@ -307,11 +340,15 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
       properties: hints.properties.length
         ? hints.properties
         : options.properties.map((o) => ({ code: o.value, name: o.label, aliases: [], managementCompanyId: null })),
-      vendors: hints.vendors.length ? hints.vendors : vendorCandidatesOf(data.inspections).map((v) => ({ ...v, shortName: null })),
+      // 自社（業務システムの発行元と同じ会社）は保守会社の読み取りの候補に入れない（宛名の「株式会社BARAN 御中」を保守会社と読むため。
+      // 修正依頼1104 E1）。自社の保守会社アカウントでは外さない。手で選ぶ候補（options.vendors）には残す
+      vendors: (hints.vendors.length ? hints.vendors : vendorCandidatesOf(data.inspections).map((v) => ({ ...v, shortName: null }))).filter(
+        (v) => v.id === myVendorId || !hints.ownVendorIds.includes(v.id),
+      ),
       managementCompanies: hints.managementCompanies,
       inspectionTypes: [...new Set(data.inspections.map((i) => i.inspection_type_label ?? '').filter(Boolean))],
     }),
-    [hints, options.properties, data.inspections],
+    [hints, options.properties, data.inspections, myVendorId],
   );
   /** OCR の照合に使う物件（業務システムの名前・略称も、同じ物件コードの別名として入れる） */
   const ocrProperties = useMemo<PropertyCandidate[]>(() => {
@@ -343,14 +380,19 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
     return list;
   }, [data.reports, overrides, preset]);
 
-  const checks = useMemo(() => {
+  const { checks, reasons } = useMemo(() => {
     const out: Record<string, RowCheck> = {};
+    const why: Record<string, ReviewReason[]> = {};
     for (const r of rows) {
       const source = sourceMap[r.sourceId];
       const size = sizes[r.key] ?? (source && (source.kind !== 'pdf' || r.pages.length === source.pageCount) ? source.file.size : null);
-      out[r.key] = checkRow(r, effStates[r.key] ?? presetState, { inspections: data.inspections, source, size, canReport: !isManagement });
+      const st = effStates[r.key] ?? presetState;
+      const check = checkRow(r, st, { inspections: data.inspections, source, size, canReport: !isManagement });
+      out[r.key] = check;
+      // 要確認の理由（ステータスの横に出し、登録の止め方を決める。修正依頼1104 E1）
+      why[r.key] = reviewReasons(st, check);
     }
-    return out;
+    return { checks: out, reasons: why };
   }, [rows, sourceMap, sizes, effStates, presetState, data.inspections, isManagement]);
 
   const existingCounts = useMemo(() => {
@@ -385,6 +427,8 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
   const pendingRows = rows.filter((r) => !isRowFinished(results[r.key]) && !checks[r.key]?.skip);
   const allDone = rows.length > 0 && pendingRows.length === 0;
   const reviewCount = pendingRows.filter((r) => checks[r.key]?.needsReview).length;
+  /** 選択した行のうち送る行（修正依頼1104 E10） */
+  const selectedPending = pendingRows.filter((r) => selected.has(r.key));
 
   // ---- 行の入力の変更 ----
   const updateRow = (key: string, sourceId: string, fn: (s: RowState) => RowState) =>
@@ -397,6 +441,12 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
     const row = rows.find((r) => r.key === key);
     const c = row ? stateOf(row).conflicts[field] : undefined;
     if (row && c) updateRow(key, row.sourceId, (s) => setFields(s, { [field]: c.value }, 'manual'));
+  };
+  /** 食い違いを今の値のままにする（今の値を手入力として入れ直す。区分の select は同じ値を選び直しても変わらないため。修正依頼1104 E1） */
+  const keepConflict = (key: string, field: RowField) => {
+    const row = rows.find((r) => r.key === key);
+    const st = row ? stateOf(row) : undefined;
+    if (row && st?.conflicts[field]) updateRow(key, row.sourceId, (s) => setFields(s, { [field]: s.input[field] }, 'manual'));
   };
   const applyBulkEdit = (patch: BulkPatch) => {
     const keys = rows.filter((r) => selected.has(r.key) && !isRowFinished(results[r.key])).map((r) => r.key);
@@ -447,7 +497,7 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
           setDocs((prev) => ({ ...prev, [id]: pages }));
           source = { ...source, pageCount: pages.pageCount };
           setSources((prev) => [...prev, source]);
-          void runOcrFor(source, pages, useAi && ai.configured);
+          void runOcrFor(source, pages, useAiRef.current && ai.configured);
         } catch (err) {
           console.error('PDF open failed:', err);
           setFileError(
@@ -458,7 +508,7 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
         }
       } else {
         setSources((prev) => [...prev, source]);
-        if (useAi && ai.configured && kind === 'image') void runOcrFor(source, null, true);
+        if (useAiRef.current && ai.configured && kind === 'image') void runOcrFor(source, null, true);
       }
     }
   };
@@ -562,11 +612,15 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
         dictionary: ai.dictionary,
         pageTexts: read.pageTexts,
       });
-      ocrRawRef.current.set(source.id, read.raw);
+      if (withAi) aiCacheRef.current.set(source.id, { suggestion, raw: read.raw, mode: read.mode, pages: read.pages });
+      // 読んでいる間に『ファイル名を取込』へ戻したときは、AI の結果を値に入れない（結果は残すので、AI に戻せば呼び直さず使う）
+      if (withAi && !useAiRef.current) return;
+      ocrRawRef.current.set(source.id, { raw: read.raw, ai: withAi });
       setOcr((prev) => ({ ...prev, [source.id]: { state: 'done', suggestion, mode: read.mode, pages: read.pages } }));
       applyOcr(source, suggestion, withAi ? 'ai' : 'text');
     } catch (err) {
       console.error('OCR failed:', err);
+      if (withAi && !useAiRef.current) return;
       setOcr((prev) => ({ ...prev, [source.id]: { state: 'error', message: entryErrorReason(err) } }));
     }
   };
@@ -631,6 +685,36 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
       void runOcrFor(s, docs[s.id] ?? null, withAi);
     }
   };
+  /**
+   * 取込の方式を切り替える（修正依頼1104 E11）。AI へ: 読み終えたファイルは呼び直さず前の結果を入れ、まだのファイルだけ AI-OCR に送る。
+   * ファイル名へ: AI で入れた値と AI の食い違いを外し、PDF は文字情報で読み直す（無料。AI が先に埋めていた欄を文字情報で埋め直す）
+   */
+  const changeReadMode = (toAi: boolean) => {
+    if (toAi === useAiRef.current) return;
+    setUseAi(toAi);
+    useAiRef.current = toAi;
+    if (toAi) {
+      for (const s of sources) {
+        if (lockedSources.has(s.id)) continue;
+        const cached = aiCacheRef.current.get(s.id);
+        if (cached) {
+          ocrRawRef.current.set(s.id, { raw: cached.raw, ai: true });
+          setOcr((prev) => ({ ...prev, [s.id]: { state: 'done', suggestion: cached.suggestion, mode: cached.mode, pages: cached.pages } }));
+          applyOcr(s, cached.suggestion, 'ai');
+        } else void runOcrFor(s, docs[s.id] ?? null, true);
+      }
+      return;
+    }
+    const strip = (prev: Record<string, RowState>) => Object.fromEntries(Object.entries(prev).map(([k, v]) => [k, dropAiValues(v)]));
+    setStates(strip);
+    setBaseStates(strip);
+    for (const s of sources) {
+      if (lockedSources.has(s.id)) continue;
+      if (ocrRawRef.current.get(s.id)?.ai) ocrRawRef.current.delete(s.id);
+      if (s.kind === 'pdf') void runOcrFor(s, docs[s.id] ?? null, false);
+      else setOcr((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => k !== s.id)));
+    }
+  };
   const ocrSummary: OcrState = useMemo(() => {
     const list = Object.values(ocr);
     const running = list.find((o) => o.state === 'running');
@@ -689,29 +773,52 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
     return prepared;
   };
 
-  const handleSubmit = async () => {
+  const stop = (text: string) => {
+    setSubmitError(text);
+    addToast(text, 'error');
+  };
+
+  /**
+   * targets を登録する（全部の行、または選択した行。修正依頼1104 E10）。入力漏れ（区分・物件が無い・報告書の点検が決まらない・
+   * 50MB 超など）の行があれば止める。食い違いの要確認だけの行は、確認のうえそのまま登録する（修正依頼1104 E1。業務システムの Q1 の決定と同じ）
+   */
+  const handleSubmit = (targets: UploadRow[]) => {
     setTouched(true);
-    if (pendingRows.length === 0) {
-      addToast('登録する行がありません（ファイルを追加してください）', 'error');
+    setSubmitError(null);
+    if (targets.length === 0) {
+      stop(pendingRows.length === 0 ? '登録する行がありません（ファイルを追加してください）' : '登録する行を選んでください');
       return;
     }
-    if (reviewCount > 0) {
-      addToast(`要確認の行が${reviewCount}行あります（赤い欄・詳細の食い違いを直してください）`, 'error');
+    const gate = submitGate(
+      targets.map((r) => r.key),
+      reasons,
+    );
+    if (gate.blocking.length > 0) {
+      const nos = targets.filter((r) => gate.blocking.includes(r.key)).map((r) => r.no);
+      stop(`入力の足りない行が${nos.length}行あります（行${nos.join('・')}。赤い欄・詳細の理由を直してください）`);
       return;
     }
+    if (gate.confirmable.length > 0) {
+      setConfirmReview({ count: gate.confirmable.length, targets });
+      return;
+    }
+    void prepareAndSend(targets);
+  };
+
+  const prepareAndSend = async (targets: UploadRow[]) => {
     setSubmitting(true);
     let latest: DbInspectionReport[] = allReports;
-    const hasReport = pendingRows.some((r) => effStates[r.key]?.input.category === 'report');
+    const hasReport = targets.some((r) => effStates[r.key]?.input.category === 'report');
     try {
       // 提出済みの版と同じ内容かを見比べるので、送る直前の報告書の一覧で数える（開いた後にほかの人が出した版も入れる）
       if (hasReport) latest = await fetchInspectionReports();
     } catch (err) {
       setSubmitting(false);
-      addToast(`登録前の確認に失敗しました: ${entryErrorReason(err)}`, 'error');
+      stop(`登録前の確認に失敗しました: ${entryErrorReason(err)}`);
       return;
     }
     const prepared = new Map<string, Prepared>();
-    for (const r of pendingRows) {
+    for (const r of targets) {
       try {
         prepared.set(r.key, await prepare(r));
       } catch (err) {
@@ -721,7 +828,7 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
     }
     setSubmitting(false);
     // 同じ点検・対象月に報告書があれば追加になる（同じ内容で送らない区間は数えない）
-    const replacing = pendingRows.filter((r) => {
+    const replacing = targets.filter((r) => {
       const st = effStates[r.key];
       const insp = checks[r.key]?.inspection;
       if (!st || st.input.category !== 'report' || !insp) return false;
@@ -731,31 +838,52 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
       return liveReportsOf(latest, insp.inspection_id, month).length > 0;
     }).length;
     if (replacing > 0) {
-      setConfirmReplace({ count: replacing, latest, prepared });
+      setConfirmReplace({ count: replacing, latest, prepared, targets });
       return;
     }
-    await send(latest, prepared);
+    await send(targets, latest, prepared);
   };
 
-  const send = async (latest: DbInspectionReport[], prepared: Map<string, Prepared>) => {
+  const send = async (targets: UploadRow[], latest: DbInspectionReport[], prepared: Map<string, Prepared>) => {
     setSubmitting(true);
+    setSubmitError(null);
     let ok = 0;
     let skipped = 0;
     let failed = 0;
     const okRows: UploadRow[] = [];
-    const firstOfSource = new Set<string>();
-    // その他ファイルの名前（同じ「日付_建物_区分」になる行に _1・_2… を付ける）
-    const otherRows = pendingRows.filter((r) => effStates[r.key]?.input.category && effStates[r.key]?.input.category !== 'report');
+    // その他ファイルの名前（同じ「日付_建物_区分」になる行に _1・_2… を付ける）。連番は送らない行を除く全部の行（登録済みも含む）で振り、
+    // 登録済みの行は保存した名前に固定して、未登録の行はその名前と重ならない番号にする（選択した行だけを2回に分けて登録しても
+    // 同じ名前にしない。修正依頼1104 E10）
     const propertyName = (code: string) => options.properties.find((o) => o.value === code)?.label ?? '';
     const categoryLabelOf = (input: RowInput) =>
       propertyFileCategoryLabel({ category: input.category as Exclude<UploadCategory, 'report'>, category_note: input.category === 'other' ? input.categoryNote.trim() : null });
-    const slots = nameSlots(
+    const fileNameOf = (input: RowInput, fileName: string, index: number, total: number) =>
+      buildPropertyFileName({
+        docDate: input.performedOn,
+        propertyName: propertyName(input.propertyCode),
+        categoryLabel: categoryLabelOf(input),
+        originalName: fileName,
+        index,
+        total,
+      });
+    const otherRows = rows.filter((r) => {
+      const c = effStates[r.key]?.input.category;
+      return c && c !== 'report' && !checks[r.key]?.skip;
+    });
+    // 送らない未登録の行（今回選ばなかった行）も、次に送るときと同じ番号になるよう母集団に入れる
+    const names = assignRowNames(
       otherRows.map((r) => {
         const input = effStates[r.key]!.input;
-        return { key: r.key, base: `${input.performedOn}|${input.propertyCode}|${categoryLabelOf(input)}` };
+        const res = results[r.key];
+        return { key: r.key, base: `${input.performedOn}|${input.propertyCode}|${categoryLabelOf(input)}`, saved: res?.state === 'ok' ? res.fileName : null };
       }),
+      (key, index, total) => {
+        const r = otherRows.find((x) => x.key === key)!;
+        const name = prepared.get(key)?.file.name ?? sourceMap[r.sourceId]?.file.name ?? '';
+        return fileNameOf(effStates[key]!.input, name, index, total);
+      },
     );
-    for (const row of pendingRows) {
+    for (const row of targets) {
       const input = effStates[row.key]?.input;
       if (!input) continue;
       setResults((prev) => ({ ...prev, [row.key]: { state: 'running' } }));
@@ -794,30 +922,23 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
           });
           setResults((prev) => ({ ...prev, [row.key]: { state: 'ok', fileName: report.file_name } }));
         } else {
-          const [index, total] = slots[row.key] ?? [0, 1];
           const category = input.category as Exclude<UploadCategory, 'report' | ''>;
           const saved = await registerPropertyFile({
             propertyCode: input.propertyCode,
             category,
             categoryNote: category === 'other' ? input.categoryNote.trim() : null,
             // 作業実施日があれば「作業実施日_建物名_区分」に付け替える（修正依頼1026 J4）
-            fileName: buildPropertyFileName({
-              docDate: input.performedOn,
-              propertyName: propertyName(input.propertyCode),
-              categoryLabel: categoryLabelOf(input),
-              originalName: pre.file.name,
-              index,
-              total,
-            }),
+            fileName: names[row.key] ?? fileNameOf(input, pre.file.name, 0, 1),
             file: pre.file,
             docDate: input.performedOn || null,
             note: input.note.trim() || null,
-            // AI-OCR の生の結果は、同じファイルを区間に分けても最初の行にだけ持たせる（旧 OtherFileUploadModal と同じ）
-            ocrResult: firstOfSource.has(row.sourceId) ? null : (ocrRawRef.current.get(row.sourceId) ?? null),
+            // AI-OCR の生の結果は、同じファイルを区間に分けても最初の行にだけ持たせる（旧 OtherFileUploadModal と同じ。2回に分けて登録しても）。
+            // 『ファイル名を取込』のときは AI の結果を値に使っていないので保存しない（修正依頼1104 E11）
+            ocrResult: ocrSavedRef.current.has(row.sourceId) ? null : ocrRawOf(row.sourceId),
             // 保守会社は管理者が選んだものだけ渡す（DB は保守会社のアカウントを自社に、管理会社を無しに固定する）
             vendorId: isAdmin ? input.vendorId || null : null,
           });
-          firstOfSource.add(row.sourceId);
+          ocrSavedRef.current.add(row.sourceId);
           setResults((prev) => ({ ...prev, [row.key]: { state: 'ok', fileName: saved.file_name } }));
         }
         ok += 1;
@@ -835,9 +956,16 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
       void recordCorrections(correctionsFor(okRows));
     }
     const skippedNote = skipped > 0 ? `（${skipped}件は同じ内容の報告書が提出済みのため送っていません）` : '';
+    if (failed > 0) setSubmitError(`${failed}件の登録に失敗しました（行の「失敗」と詳細の理由を見て、直して再送できます）`);
     if (failed === 0 && ok === 0) addToast(`同じ内容の報告書が提出済みのため、${skipped}件とも送っていません`, 'info');
     else if (failed === 0) addToast(`${ok}件を登録しました${skippedNote}`, 'success');
     else addToast(`${ok}件を登録し、${failed}件は失敗しました${skippedNote}（失敗した行は直して再送できます）`, 'warning');
+  };
+
+  /** 保存する読み取りの生の結果（AI の結果は『AIで取込』のときだけ） */
+  const ocrRawOf = (sourceId: string): unknown => {
+    const r = ocrRawRef.current.get(sourceId);
+    return r && (!r.ai || useAiRef.current) ? r.raw : null;
   };
 
   /** 自己改善: 読み取った建物名・点検種別・書類の種類と、人が確定した値を記録する（次から同じ読みに当てる） */
@@ -847,6 +975,8 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
       const o = ocr[row.sourceId];
       const input = effStates[row.key]?.input;
       if (o?.state !== 'done' || !input) continue;
+      // ファイル名を取込のときは AI の読みを値に使っていないので記録しない（修正依頼1104 E11）
+      if (o.mode !== 'local' && !useAiRef.current) continue;
       const pages = row.segment ? o.suggestion.pages.filter((p) => p.page - 1 >= row.segment!.start && p.page - 1 <= row.segment!.end) : o.suggestion.pages;
       for (const p of pages) {
         records.push(correctionRecord('property', p.buildingRead, p.property?.code ?? null, input.propertyCode));
@@ -902,6 +1032,31 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
     }
   };
 
+  // ---- 一括設定のポップアップ（値は UploadBulkEdit を閉じても消さない。修正依頼1104 E7） ----
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const selectedEditable = rows.filter((r) => selected.has(r.key) && !isRowFinished(results[r.key])).length;
+
+  // ---- 左右の幅（修正依頼1104 E9。null は既定の比。ブラウザに覚える） ----
+  const gridRef = useRef<HTMLDivElement>(null);
+  const leftRef = useRef<HTMLDivElement>(null);
+  const [leftWidth, setLeftWidth] = useState<number | null>(() => {
+    try {
+      const v = Number(window.localStorage.getItem(LEFT_WIDTH_KEY));
+      return Number.isFinite(v) && v > 0 ? v : null;
+    } catch {
+      return null;
+    }
+  });
+  const changeLeftWidth = (px: number | null) => {
+    setLeftWidth(px);
+    try {
+      if (px === null) window.localStorage.removeItem(LEFT_WIDTH_KEY);
+      else window.localStorage.setItem(LEFT_WIDTH_KEY, String(px));
+    } catch {
+      // 覚えられなくても幅は変えられる（プライベートウィンドウなど）
+    }
+  };
+
   // 入れたファイルが残っているか、登録済みの報告書の編集欄に入れかけの値があれば、閉じる前に確認する
   const dirty = (sources.length > 0 && !allDone) || editDirty;
   const title = `ファイルアップロード（${presetLabel(preset)}）`;
@@ -911,27 +1066,47 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
       open
       onClose={onClose}
       title={title}
-      className="max-w-[min(98vw,1800px)]"
+      // 常に全画面（修正依頼1104 E3。表示する内容が多いため）。右上は赤い文字の「閉じる」（E2。この画面だけ）
+      fullScreen
+      closeLabel="閉じる"
       dirty={dirty && !submitting}
       dirtyMessage="入力した内容は破棄されます。閉じますか？"
       // 送信の途中で閉じると、残りの行の送信が裏で続き、行ごとの結果が見えなくなる
       busy={submitting}
       footer={({ requestClose }) => (
         <>
-          {reviewCount > 0 && !submitting && <span className="mr-auto text-xs text-red-700">要確認 {reviewCount}行</span>}
+          <span className="mr-auto flex min-w-0 flex-wrap items-center gap-x-2 text-xs">
+            {reviewCount > 0 && !submitting && <span className="text-red-700">要確認 {reviewCount}行</span>}
+            {submitError && !submitting && (
+              <span role="alert" className="rounded bg-red-50 px-1.5 py-0.5 text-red-700" data-testid="upload-submit-error">
+                {submitError}
+              </span>
+            )}
+          </span>
           {/* キャンセルも × と同じく、入れたファイルが残っていれば破棄の確認を出す（修正依頼1029 本番確認(2)） */}
           <Button variant="secondary" size="sm" onClick={requestClose} disabled={submitting}>
             {allDone ? '閉じる' : 'キャンセル'}
           </Button>
           {!allDone && (
-            <Button size="sm" onClick={() => void handleSubmit()} disabled={submitting || pendingRows.length === 0}>
-              {submitting ? '送信中…' : pendingRows.length > 0 ? `${pendingRows.length}行を登録する` : '登録する'}
-            </Button>
+            <>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => handleSubmit(selectedPending)}
+                disabled={submitting || selectedPending.length === 0}
+                title="☑ で選んだ行だけを登録します"
+              >
+                選択した {selectedPending.length} 行を登録
+              </Button>
+              <Button size="sm" onClick={() => handleSubmit(pendingRows)} disabled={submitting || pendingRows.length === 0}>
+                {submitting ? '送信中…' : pendingRows.length > 0 ? `${pendingRows.length}行を登録する` : '登録する'}
+              </Button>
+            </>
           )}
         </>
       )}
     >
-      <div className="flex flex-col gap-1.5 text-sm">
+      <div className="flex min-h-0 flex-1 flex-col gap-1.5 text-sm">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
           <p className="text-xs text-gray-600">
             報告書・見積書・請求書・契約書などを建物ごとに保管します。区分が報告書の行は点検（物件・点検種別・対象月）の報告書として、
@@ -940,14 +1115,11 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
           <div className="ml-auto">
             <AiOcrControls
               enabled={useAi}
-              onToggle={(checked) => {
-                setUseAi(checked);
-                if (checked) runOcrAll(true);
-              }}
+              onToggle={changeReadMode}
               configured={ai.configured}
               checking={ai.checking}
               message={ai.message}
-              onReadLocal={sources.some((s) => s.kind === 'pdf') ? () => runOcrAll(false) : undefined}
+              onReadLocal={!useAi && sources.some((s) => s.kind === 'pdf') ? () => runOcrAll(false) : undefined}
               disabled={submitting}
               ocr={ocrSummary}
             />
@@ -986,18 +1158,26 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
           </p>
         )}
 
+        {/*
+          全画面（修正依頼1104 E3）の残りの高さいっぱいに、左のプレビュー・幅を変えるバー・右の表を並べる（登録済みの報告書の一覧があれば、
+          その下の残り）。既定の幅は今までの比（1366 幅では左 1：右 3、1536 以上は 4：9。左は 22.5rem を下回らせない＝プレビューを
+          1行に2枚並べられる幅。縦のスクロールバーが 17px の環境でも 2枚）。バーを動かした後は左の幅を px で持ち、右は 20rem まで
+          狭められる（表は横スクロールで見る。修正依頼1104 E9）。lg 未満は縦に積み、バーは出さない
+        */}
         <div
+          ref={gridRef}
           className={cn(
-            // 1366 幅では右の表に幅を寄せ（左 1：右 3）、表の全部の列を横スクロールなしで見せる。1536 以上は今までどおり 4：9。
-            // 左は 21.5rem を下回らせない（ページのプレビューを1行に2枚並べられる幅。1366 でも右に表の 940px が残る）
-            'grid min-h-0 grid-cols-1 gap-2 lg:grid-cols-[minmax(21.5rem,1fr)_minmax(0,3fr)] 2xl:grid-cols-[minmax(0,4fr)_minmax(0,9fr)]',
-            // 登録済みの報告書の一覧を出すときは、その分だけ低くして画面に収める
-            preset.kind === 'report' || preset.kind === 'edit' ? 'lg:h-[56vh]' : 'lg:h-[68vh]',
+            'grid min-h-0 grid-cols-1 gap-1 lg:min-h-[24rem] lg:flex-1',
+            leftWidth === null
+              ? 'lg:grid-cols-[minmax(22.5rem,1fr)_auto_minmax(0,3fr)] 2xl:grid-cols-[minmax(0,4fr)_auto_minmax(0,9fr)]'
+              : 'lg:grid-cols-[var(--upload-left)_auto_minmax(20rem,1fr)]',
           )}
+          style={leftWidth === null ? undefined : ({ '--upload-left': `${leftWidth}px` } as CSSProperties)}
         >
           {/* 左: プレビュー（区間分け・空白ページの削除・ファイルを追加） */}
           <div
-            className={cn('flex min-h-0 flex-col gap-1', dragging && 'rounded ring-2 ring-blue-400')}
+            ref={leftRef}
+            className={cn('flex min-h-0 min-w-0 flex-col gap-1', dragging && 'rounded ring-2 ring-blue-400')}
             onDragOver={(e) => {
               e.preventDefault();
               setDragging(true);
@@ -1065,14 +1245,46 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
             </div>
           </div>
 
-          {/* 右: 1区間1行の表と、選択行の一括設定 */}
-          <div className="flex min-h-0 flex-col gap-1">
+          <ResizeBar gridRef={gridRef} leftRef={leftRef} width={leftWidth} onChange={changeLeftWidth} />
+
+          {/* 右: 選択行の一括設定（ボタンで開くポップアップ。修正依頼1104 E7）と、1区間1行の表 */}
+          <div className="flex min-h-0 min-w-0 flex-col gap-1">
+            {/* @container: 右の列が一括設定のポップアップ（26rem）より狭いときは、ポップアップを右端に揃えて画面の外へ出さない（UploadBulkEdit） */}
+            <div className="@container relative flex items-center gap-2 text-xs">
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-6 border-emerald-500 text-[11px] text-emerald-800"
+                aria-expanded={bulkOpen && selectedEditable > 0}
+                aria-controls="upload-bulk-edit"
+                disabled={submitting || selectedEditable === 0}
+                title={selectedEditable === 0 ? '☑ で行を選ぶと押せます' : undefined}
+                onClick={() => setBulkOpen((v) => !v)}
+                data-testid="upload-bulk-open"
+              >
+                選択行に一括設定（{selectedEditable}行）
+              </Button>
+              <span className="text-[11px] text-gray-500">☑ で選んだ行に、同じ値をまとめて入れます</span>
+              <UploadBulkEdit
+                open={bulkOpen && selectedEditable > 0}
+                onClose={() => setBulkOpen(false)}
+                selectedCount={selectedEditable}
+                options={options}
+                today={today}
+                disabled={submitting}
+                onApply={(patch) => {
+                  applyBulkEdit(patch);
+                  setBulkOpen(false);
+                }}
+              />
+            </div>
             <div className="min-h-[10rem] flex-1 overflow-auto rounded border border-gray-200">
               <UploadRowsTable
                 rows={rows}
                 sources={sourceMap}
                 states={effStates}
                 checks={checks}
+                reasons={reasons}
                 results={results}
                 existingCounts={existingCounts}
                 derivedNames={derivedNames}
@@ -1099,15 +1311,9 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
                 }}
                 onChange={changeRow}
                 onTakeConflict={takeConflict}
+                onKeepConflict={keepConflict}
               />
             </div>
-            <UploadBulkEdit
-              selectedCount={rows.filter((r) => selected.has(r.key)).length}
-              options={options}
-              today={today}
-              disabled={submitting}
-              onApply={applyBulkEdit}
-            />
           </div>
         </div>
       </div>
@@ -1116,11 +1322,21 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
         open={!!confirmReplace}
         onClose={() => setConfirmReplace(null)}
         onConfirm={() => {
-          if (confirmReplace) void send(confirmReplace.latest, confirmReplace.prepared);
+          if (confirmReplace) void send(confirmReplace.targets, confirmReplace.latest, confirmReplace.prepared);
         }}
         title="提出済みの報告書があります"
         message={`${confirmReplace?.count ?? 0}行は、同じ点検・対象月に提出済みの報告書があります。\n登録すると報告書が追加されます（前の版はそのまま残ります。同じ内容の行は数えていません。送りません）。\nこのまま登録しますか？`}
         confirmLabel="追加で登録する"
+      />
+      <ConfirmDialog
+        open={!!confirmReview}
+        onClose={() => setConfirmReview(null)}
+        onConfirm={() => {
+          if (confirmReview) void prepareAndSend(confirmReview.targets);
+        }}
+        title="要確認の行があります"
+        message={`要確認 ${confirmReview?.count ?? 0} 行をこのまま登録しますか？\n（読み取った値と入っている値の食い違いが残っています。今の値で登録します。直すときは「戻る」を押し、詳細の「…にする」「今の値のままにする」を使ってください）`}
+        confirmLabel="このまま登録する"
       />
       <ConfirmDialog
         open={!!deleting}
@@ -1137,3 +1353,89 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
   );
 }
 
+/**
+ * 左（プレビュー）と右（表）の間の縦のバー（修正依頼1104 E9。業務システムと同じ）。ドラッグか、フォーカスして ← → で動かす
+ * （Shift で大きく、Home・End で端まで）。ダブルクリックで既定の幅に戻す。lg 未満（縦に積むとき）は出さない
+ */
+function ResizeBar({
+  gridRef,
+  leftRef,
+  width,
+  onChange,
+}: {
+  gridRef: RefObject<HTMLDivElement | null>;
+  leftRef: RefObject<HTMLDivElement | null>;
+  width: number | null;
+  onChange: (px: number | null) => void;
+}) {
+  const barRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ startX: number; startLeft: number } | null>(null);
+  /** 2列とバー・すき間を合わせた幅と、バーとすき間の幅 */
+  const measure = () => {
+    const grid = gridRef.current?.getBoundingClientRect().width ?? 0;
+    const bar = barRef.current?.getBoundingClientRect().width ?? 0;
+    const gap = gridRef.current ? parseFloat(getComputedStyle(gridRef.current).columnGap) || 0 : 0;
+    return { grid, chrome: bar + gap * 2 };
+  };
+  const currentLeft = () => width ?? leftRef.current?.getBoundingClientRect().width ?? 360;
+  const set = (px: number) => {
+    const { grid, chrome } = measure();
+    onChange(clampLeftWidth(px, grid, chrome));
+  };
+  // 窓を狭めて右が最小より狭くなったら、左を縮めて収める
+  useEffect(() => {
+    if (width === null) return;
+    const fit = () => {
+      const { grid, chrome } = measure();
+      if (grid <= 0 || !barRef.current?.offsetParent) return;
+      const clamped = clampLeftWidth(width, grid, chrome);
+      if (clamped !== width) onChange(clamped);
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- measure は ref だけを読む
+  }, [width, onChange]);
+  return (
+    <div
+      ref={barRef}
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="プレビューと表の幅を変える"
+      aria-valuenow={width ?? undefined}
+      tabIndex={0}
+      title="ドラッグ（または ← →）でプレビューの幅を変えます。ダブルクリックで元の幅に戻します"
+      data-testid="upload-resize-bar"
+      className="group hidden w-2 cursor-col-resize touch-none items-stretch justify-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 lg:flex"
+      onPointerDown={(e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        e.currentTarget.setPointerCapture(e.pointerId);
+        dragRef.current = { startX: e.clientX, startLeft: currentLeft() };
+      }}
+      onPointerMove={(e) => {
+        const d = dragRef.current;
+        if (d) set(d.startLeft + e.clientX - d.startX);
+      }}
+      onPointerUp={(e) => {
+        dragRef.current = null;
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+      }}
+      onPointerCancel={() => {
+        dragRef.current = null;
+      }}
+      onDoubleClick={() => onChange(null)}
+      onKeyDown={(e) => {
+        const step = e.shiftKey ? 64 : 16;
+        if (e.key === 'ArrowLeft') set(currentLeft() - step);
+        else if (e.key === 'ArrowRight') set(currentLeft() + step);
+        else if (e.key === 'Home') set(0);
+        else if (e.key === 'End') set(Number.MAX_SAFE_INTEGER);
+        else return;
+        e.preventDefault();
+      }}
+    >
+      <span className="w-1 rounded bg-gray-300 group-hover:bg-blue-400 group-focus-visible:bg-blue-500" />
+    </div>
+  );
+}

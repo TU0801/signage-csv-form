@@ -8,6 +8,7 @@ import {
   matchBuildingInText,
   matchBuildingName,
   matchCompany,
+  ownCompanyIdsOf,
   parseDateRange,
   parseJapaneseDate,
   parseTargetMonth,
@@ -190,5 +191,17 @@ describe('documentTypeIsRead（区分の学習記録は書類の種類が読め�
     expect(documentTypeIsRead('')).toBe(false);
     expect(documentTypeIsRead('その他')).toBe(false);
     expect(documentTypeIsRead('見積書')).toBe(true);
+  });
+});
+
+describe('ownCompanyIdsOf（自社を保守会社の読み取りの候補から外す。修正依頼1104 E1）', () => {
+  it('発行元の会社名の核が、正式名か略称と一致する会社だけ', () => {
+    const companies = [
+      { id: 'own', name: '株式会社BARAN', shortName: '㈱BARAN' },
+      { id: 'other', name: 'BARAN設備株式会社', shortName: null },
+      { id: 'short', name: 'ﾊﾞﾗﾝ', shortName: 'BARAN' },
+    ];
+    expect(ownCompanyIdsOf(['株式会社BARAN', 'エヌオージェイ下関店'], companies)).toEqual(['own', 'short']);
+    expect(ownCompanyIdsOf([], companies)).toEqual([]);
   });
 });
