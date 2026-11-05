@@ -11,14 +11,14 @@ export type OcrState =
   | { state: 'error'; message: string };
 
 interface AiOcrControlsProps {
-  /** ☑ AI-OCRで判定（既定 OFF） */
+  /** 取込の方式（false＝ファイル名を取込〔既定〕、true＝AIで取込。修正依頼1104 E11） */
   enabled: boolean;
   onToggle: (checked: boolean) => void;
   configured: boolean;
   checking: boolean;
   /** 使えないときの理由（未設定など） */
   message: string | null;
-  /** 文字情報だけで読む（AI なし・費用なし）。PDF のときだけ出す */
+  /** 文字情報で読み直す（AI なし・費用なし）。PDF があり『ファイル名を取込』のときだけ出す */
   onReadLocal?: () => void;
   disabled?: boolean;
   ocr: OcrState;
@@ -31,7 +31,10 @@ const MODE_LABEL: Record<OcrMode, string> = {
   local: '文字情報だけ（AI なし）',
 };
 
-/** AI-OCR のチェックボックスと、読み取りの状況（未設定なら無効にして理由を出す） */
+/**
+ * 取込の方式の切替『ファイル名を取込｜AIで取込』（修正依頼1104 E11。業務システムと同じ形）と、読み取りの状況。
+ * ファイル名を取込でも、PDF の文字情報は今までどおり読む（無料）。有料の AI-OCR だけを切り替える。AI が未設定なら AI 側を押せなくして理由を出す
+ */
 export function AiOcrControls({
   enabled,
   onToggle,
@@ -44,20 +47,40 @@ export function AiOcrControls({
 }: AiOcrControlsProps) {
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
-      <label className={configured ? 'flex items-center gap-1 text-gray-700' : 'flex items-center gap-1 text-gray-400'}>
-        <input
-          type="checkbox"
-          checked={enabled && configured}
-          disabled={!configured || disabled}
-          onChange={(e) => onToggle(e.target.checked)}
-        />
-        AI-OCRで判定
-      </label>
+      <div role="group" aria-label="取込の方式" className="flex overflow-hidden rounded border border-blue-400" data-testid="upload-read-mode">
+        {(
+          [
+            [false, 'ファイル名を取込', 'ファイル名と PDF の文字情報で読みます（費用なし）'],
+            [true, 'AIで取込', 'AI-OCR に送って読み取ります（費用がかかります）'],
+          ] as const
+        ).map(([ai, label, title]) => {
+          const on = (enabled && configured) === ai;
+          return (
+            <button
+              key={label}
+              type="button"
+              aria-pressed={on}
+              title={title}
+              disabled={disabled || (ai && !configured)}
+              className={
+                on
+                  ? 'bg-blue-600 px-2 py-0.5 font-medium text-white disabled:opacity-50'
+                  : 'bg-white px-2 py-0.5 text-blue-800 hover:bg-blue-50 disabled:text-gray-400 disabled:hover:bg-white'
+              }
+              onClick={() => {
+                if (!on) onToggle(ai);
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
       {checking && <span className="text-gray-400">確認中…</span>}
       {!checking && !configured && message && <span className="text-amber-700">{message}</span>}
       {onReadLocal && (
         <Button variant="ghost" size="sm" className="text-xs" onClick={onReadLocal} disabled={disabled || ocr.state === 'running'}>
-          文字情報から読み取る（AI なし）
+          読み直す
         </Button>
       )}
       <span aria-live="polite" className="contents">

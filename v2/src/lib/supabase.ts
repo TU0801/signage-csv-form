@@ -129,6 +129,8 @@ export const RPC = {
   portalPropertyFileTargets: 'portal_property_file_targets',
   portalUploadPropertyAliases: 'portal_upload_property_aliases',
   portalUploadVendorAliases: 'portal_upload_vendor_aliases',
+  /** 自社（業務システムの発行元）の会社名。保守会社の読み取りの候補から外す（修正依頼1104 E1。scripts/fix-1104-own-company.sql） */
+  portalUploadIssuerNames: 'portal_upload_issuer_names',
   ocrRecordCorrections: 'ocr_record_corrections',
   ocrCorrectionDictionary: 'ocr_correction_dictionary',
   /** 一括入力テンプレートの保守会社の略称と、点検種別の並び（業務システムの設備の並び。修正依頼1027 (2)。scripts/fix-1027-bulk.sql） */

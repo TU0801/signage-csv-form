@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { formatBytes } from '../lib/documents';
 import type { PdfPages } from '../lib/pdfPages';
 import type { UploadRow, UploadSource } from '../lib/uploadRows';
+import { renderWidthFor } from '../lib/uploadView';
 import { FilePreview } from './FilePreview';
 
 /*
@@ -23,8 +24,6 @@ const THUMB_CHROME = 32;
 /** サムネイルの幅の下限（px） */
 const MIN_THUMB_WIDTH = 120;
 /** 描く解像度の上限（px）。大きく並べても 27 ページの PDF でメモリを使い切らない */
-const MAX_RENDER_WIDTH = 900;
-const thumbScale = () => Math.min(2, Math.max(1, typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1));
 
 /** 入れ物の幅から、1行に perRow 枚並べたときのサムネイルの幅 */
 export function thumbWidthFor(containerWidth: number, perRow: number): number {
@@ -288,7 +287,8 @@ function PageThumb({ id, pages, page, width, rotation, rowNo, active, removed, o
     return () => io.disconnect();
   }, [near]);
   // 描く幅は 50px 単位にそろえる（入れ物の幅が少し変わるたびに描き直さない）
-  const renderWidth = Math.min(MAX_RENDER_WIDTH, Math.ceil((width * thumbScale()) / 50) * 50);
+  // 倍率 max(2, 画面の倍率)・上限 1600px（修正依頼1104 E8）
+  const renderWidth = renderWidthFor(width);
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !near) return;

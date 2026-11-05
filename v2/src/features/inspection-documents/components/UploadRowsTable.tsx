@@ -8,7 +8,10 @@ import { firstDayOfPreviousMonth } from '../lib/aiOcr';
 import type { UploadCategory } from '../lib/fileNameExtract';
 import {
   FIELD_SOURCE_LABEL,
+  ROW_FIELD_LABEL,
+  reasonSummary,
   rowPageLabel,
+  type ReviewReason,
   type RowCheck,
   type RowField,
   type RowInput,
@@ -34,7 +37,8 @@ export interface RowOptions {
   properties: ComboboxOption[];
   /** 物件ごとの点検種別（物件が未選択なら全部） */
   inspectionTypesOf: (propertyCode: string) => ComboboxOption[];
-  managementCompanies: ComboboxOption[];
+  /** 管理会社（表は略称。fullName は詳細に出す正式名。修正依頼1104 E4） */
+  managementCompanies: (ComboboxOption & { fullName?: string })[];
   vendors: ComboboxOption[];
   categories: { value: UploadCategory; label: string }[];
 }
@@ -44,6 +48,8 @@ interface UploadRowsTableProps {
   sources: Record<string, UploadSource>;
   states: Record<string, RowState>;
   checks: Record<string, RowCheck>;
+  /** 要確認の理由（ステータスに「要確認: 区分」の形で出す。修正依頼1104 E1） */
+  reasons: Record<string, ReviewReason[]>;
   results: Record<string, RowResult>;
   /** 同じ点検・対象月の登録済みの報告書の数（報告書の行。追加になることを知らせる） */
   existingCounts: Record<string, number>;
@@ -68,6 +74,8 @@ interface UploadRowsTableProps {
   onChange: (key: string, patch: Partial<RowInput>) => void;
   /** 詳細で、自動で読んだ食い違いの値に置き換える */
   onTakeConflict: (key: string, field: RowField) => void;
+  /** 詳細で、食い違いを今の値のままにする（修正依頼1104 E1。区分の select は同じ値を選び直しても変わらないため） */
+  onKeepConflict: (key: string, field: RowField) => void;
 }
 
 const th = 'border-b border-gray-200 px-1 py-0.5 text-left font-medium text-gray-600 whitespace-nowrap';
@@ -80,9 +88,11 @@ export function UploadRowsTable(props: UploadRowsTableProps) {
   const [openDetail, setOpenDetail] = useState<string | null>(null);
   const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.key));
   return (
-    // 1366x768 でも横スクロールなしに全部の列が見えるよう、列幅を詰める（合計 58.75rem ≒ 940px。修正依頼1029 本番確認(1)）。
-    // table-fixed + w-full なので、広い画面では余った幅を列幅の比で配る。1536 以上は物件（見出しの注記）とページ（「（2ページ削除）」）を広げて折り返しを減らす
-    <table className="w-full min-w-[58.75rem] table-fixed border-collapse text-[11px]" data-testid="upload-rows">
+    // 修正依頼1104 E4: 1行を上下2段にした（客先の手書きの並び）。上段＝管理会社・実施日・保守会社、下段＝物件・対象月・点検種別。
+    // ☑・ステータス・区分・区間・ページ・メモ・詳細は2段の高さの1つの欄。2段は同じ <td> の中に積む（選択・詳細・アクティブ行の扱いを変えない）。
+    // 列は 10、合計 49.5rem（1029 の1段 13列は 58.75rem）。table-fixed + w-full なので、広い画面では余った幅を列幅の比で配る。
+    // 右の枠が 49.5rem より狭い（バーで左を広げた）ときは、入れ物の横スクロールで見る（修正依頼1104 E9）
+    <table className="w-full min-w-[49.5rem] table-fixed border-collapse text-[11px]" data-testid="upload-rows">
       <thead className="sticky top-0 z-10 bg-gray-50">
         <tr>
           <th className={cn(th, 'w-6')}>
@@ -94,26 +104,26 @@ export function UploadRowsTable(props: UploadRowsTableProps) {
               onChange={(e) => props.onToggleAll(e.target.checked)}
             />
           </th>
-          <th className={cn(th, 'w-16')}>ステータス</th>
-          <th className={cn(th, 'w-[4.5rem]')}>区分</th>
+          <th className={cn(th, 'w-20')}>ステータス</th>
+          <th className={cn(th, 'w-20')}>区分</th>
           <th className={cn(th, 'w-11')}>区間</th>
           <th className={cn(th, 'w-12 2xl:w-20')}>ページ</th>
-          <th className={cn(th, 'w-[5.25rem]')}>
-            No
-            <span className="block text-[10px] font-normal text-gray-400">対象月</span>
+          <th className={cn(th, 'w-36 2xl:w-48')}>
+            管理会社
+            <span className="block whitespace-normal font-normal leading-tight text-gray-500">
+              物件<span className="text-red-600">*</span>
+              <span className="ml-1 text-[10px] text-gray-400">※リストに無い建物は建物追加申請を</span>
+            </span>
           </th>
-          <th className={cn(th, 'w-24')}>
-            実施日
-            <span className="block text-[10px] font-normal text-gray-400">点検開始日</span>
+          <th className={cn(th, 'w-28')}>
+            実施日<span className="text-[10px] font-normal text-gray-400">（点検開始日）</span>
+            <span className="block font-normal text-gray-500">対象月</span>
           </th>
-          <th className={cn(th, 'w-[7.5rem] 2xl:w-40')}>
-            物件<span className="text-red-600">*</span>
-            <span className="block whitespace-normal text-[10px] font-normal leading-tight text-gray-400">※リストに無い建物は建物追加申請を</span>
+          <th className={cn(th, 'w-36 2xl:w-40')}>
+            保守会社
+            <span className="block font-normal text-gray-500">点検種別</span>
           </th>
-          <th className={cn(th, 'w-24')}>点検種別</th>
           <th className={cn(th, 'w-14')}>メモ</th>
-          <th className={cn(th, 'w-24')}>管理会社</th>
-          <th className={cn(th, 'w-24')}>保守会社</th>
           <th className={cn(th, 'w-11')}>詳細</th>
         </tr>
       </thead>
@@ -131,7 +141,7 @@ export function UploadRowsTable(props: UploadRowsTableProps) {
         ))}
         {rows.length === 0 && (
           <tr>
-            <td colSpan={13} className="px-2 py-4 text-center text-xs text-gray-400">
+            <td colSpan={10} className="px-2 py-4 text-center text-xs text-gray-400">
               ファイルを追加すると、ここに1区間1行で並びます。
             </td>
           </tr>
@@ -141,7 +151,7 @@ export function UploadRowsTable(props: UploadRowsTableProps) {
   );
 }
 
-function StatusCell({ check, result }: { check: RowCheck | undefined; result: RowResult | undefined }) {
+function StatusCell({ check, result, reasons }: { check: RowCheck | undefined; result: RowResult | undefined; reasons: ReviewReason[] }) {
   if (result?.state === 'running')
     return (
       <span className="inline-flex items-center gap-0.5 text-gray-600">
@@ -153,7 +163,20 @@ function StatusCell({ check, result }: { check: RowCheck | undefined; result: Ro
   if (result?.state === 'skipped') return <span className="rounded bg-gray-100 px-1 text-gray-700">提出済</span>;
   if (result?.state === 'error') return <span className="rounded bg-red-100 px-1 text-red-800">失敗</span>;
   if (check?.skip) return <span className="rounded bg-gray-100 px-1 text-gray-500">送らない</span>;
-  if (check?.needsReview) return <span className="rounded bg-amber-100 px-1 font-medium text-red-700 ring-1 ring-amber-300">要確認</span>;
+  if (check?.needsReview) {
+    // 理由を出す（修正依頼1104 E1）。入力漏れが無ければ、確認のうえそのまま登録できる
+    const blocking = reasons.some((r) => r.kind === 'error');
+    return (
+      <span
+        className="inline-block rounded bg-amber-100 px-1 font-medium text-red-700 ring-1 ring-amber-300"
+        title={reasons.map((r) => r.message).join('\n')}
+        data-testid="upload-row-status-review"
+      >
+        要確認{reasons.length > 0 && `: ${reasonSummary(reasons)}`}
+        {!blocking && reasons.length > 0 && <span className="block text-[10px] font-normal text-gray-600">確認のうえ登録できます</span>}
+      </span>
+    );
+  }
   return <span className="rounded bg-blue-50 px-1 text-blue-800">入力済</span>;
 }
 
@@ -162,6 +185,7 @@ function RowLine({
   sources,
   states,
   checks,
+  reasons,
   results,
   existingCounts,
   derivedNames,
@@ -201,9 +225,10 @@ function RowLine({
     >
       <td className={td}>
         <input type="checkbox" aria-label={`行${row.no}を選ぶ`} checked={selected.has(row.key)} disabled={disabled} onChange={() => onToggle(row.key)} />
+        <span className="block text-[10px] text-gray-500">{row.no}</span>
       </td>
       <td className={td}>
-        <StatusCell check={check} result={result} />
+        <StatusCell check={check} result={result} reasons={reasons[row.key] ?? []} />
       </td>
       <td className={td}>
         <select
@@ -238,8 +263,54 @@ function RowLine({
         </span>
       </td>
       <td className={cn(td, 'break-all text-gray-700')}>{rowPageLabel(row)}</td>
+      {/* 上段: 管理会社 ／ 下段: 物件 */}
       <td className={td}>
-        <span className="text-gray-500">{row.no}</span>
+        <Combobox
+          aria-label={`行${row.no}の管理会社`}
+          className={cn('py-0.5 text-[11px]', cellErr('managementCompanyId', conflict('managementCompanyId')))}
+          value={input.managementCompanyId}
+          options={options.managementCompanies}
+          placeholder={derived?.management ?? '🔍 管理会社'}
+          disabled={locked}
+          onChange={(v) => set({ managementCompanyId: v })}
+        />
+        <div className="mt-0.5">
+          <Combobox
+            aria-label={`行${row.no}の物件`}
+            className={cn('field-required py-0.5 text-[11px]', cellErr('propertyCode', conflict('propertyCode')))}
+            value={input.propertyCode}
+            options={options.properties}
+            placeholder="🔍 物件名・コード"
+            disabled={locked}
+            onChange={(v) => set({ propertyCode: v })}
+          />
+        </div>
+      </td>
+      {/* 上段: 実施日 ／ 下段: 対象月 */}
+      <td className={td}>
+        <input
+          type="date"
+          aria-label={`行${row.no}の実施日`}
+          className={cn(fieldCls, isReport && 'field-required', cellErr('performedOn', conflict('performedOn')))}
+          value={input.performedOn}
+          max="9999-12-31"
+          disabled={locked}
+          onChange={(e) => set({ performedOn: e.target.value })}
+        />
+        <span className="flex flex-wrap gap-x-1 text-[10px]">
+          <button type="button" className="text-blue-700 hover:underline disabled:opacity-40" disabled={locked} onClick={() => set({ performedOn: today })}>
+            今日
+          </button>
+          <button
+            type="button"
+            className="text-blue-700 hover:underline disabled:opacity-40"
+            disabled={locked}
+            onClick={() => set({ performedOn: firstDayOfPreviousMonth(today) })}
+          >
+            先月頭
+          </button>
+          {input.performedOn > today && <span className="text-amber-700">未来の日付</span>}
+        </span>
         <input
           type="month"
           aria-label={`行${row.no}の対象月`}
@@ -253,78 +324,7 @@ function RowLine({
           <span className="text-[10px] text-gray-400">{formatMonth(`${input.performedOn.slice(0, 7)}-01`)}</span>
         )}
       </td>
-      <td className={td}>
-        <input
-          type="date"
-          aria-label={`行${row.no}の実施日`}
-          className={cn(fieldCls, isReport && 'field-required', cellErr('performedOn', conflict('performedOn')))}
-          value={input.performedOn}
-          max="9999-12-31"
-          disabled={locked}
-          onChange={(e) => set({ performedOn: e.target.value })}
-        />
-        <span className="flex gap-1 text-[10px]">
-          <button type="button" className="text-blue-700 hover:underline disabled:opacity-40" disabled={locked} onClick={() => set({ performedOn: today })}>
-            今日
-          </button>
-          <button
-            type="button"
-            className="text-blue-700 hover:underline disabled:opacity-40"
-            disabled={locked}
-            onClick={() => set({ performedOn: firstDayOfPreviousMonth(today) })}
-          >
-            先月頭
-          </button>
-        </span>
-        {input.performedOn > today && <span className="block text-[10px] text-amber-700">未来の日付です</span>}
-      </td>
-      <td className={td}>
-        <Combobox
-          aria-label={`行${row.no}の物件`}
-          className={cn('field-required py-0.5 text-[11px]', cellErr('propertyCode', conflict('propertyCode')))}
-          value={input.propertyCode}
-          options={options.properties}
-          placeholder="🔍 物件名・コード"
-          disabled={locked}
-          onChange={(v) => set({ propertyCode: v })}
-        />
-      </td>
-      <td className={td}>
-        <Combobox
-          aria-label={`行${row.no}の点検種別`}
-          className={cn(isReport && 'field-required', 'py-0.5 text-[11px]', cellErr('inspectionType', conflict('inspectionType') || (touched && !!check?.errors.inspection)))}
-          value={input.inspectionType}
-          options={options.inspectionTypesOf(input.propertyCode)}
-          placeholder={isReport ? '🔍 点検種別' : '（報告書のとき）'}
-          disabled={locked || !isReport}
-          onChange={(v) => set({ inspectionType: v })}
-        />
-        {isReport && (existingCounts[row.key] ?? 0) > 0 && !result && (
-          <span className="block text-[10px] text-amber-700">登録済み{existingCounts[row.key]}件（追加します）</span>
-        )}
-      </td>
-      <td className={td}>
-        <input
-          aria-label={`行${row.no}のメモ`}
-          placeholder="メモ"
-          className={fieldCls}
-          value={input.note}
-          maxLength={500}
-          disabled={locked}
-          onChange={(e) => set({ note: e.target.value })}
-        />
-      </td>
-      <td className={td}>
-        <Combobox
-          aria-label={`行${row.no}の管理会社`}
-          className={cn('py-0.5 text-[11px]', cellErr('managementCompanyId', conflict('managementCompanyId')))}
-          value={input.managementCompanyId}
-          options={options.managementCompanies}
-          placeholder={derived?.management ?? '🔍 管理会社'}
-          disabled={locked}
-          onChange={(v) => set({ managementCompanyId: v })}
-        />
-      </td>
+      {/* 上段: 保守会社 ／ 下段: 点検種別 */}
       <td className={td}>
         {!isReport && fixedOtherVendorId !== undefined ? (
           <Combobox
@@ -347,6 +347,31 @@ function RowLine({
             onChange={(v) => set({ vendorId: v })}
           />
         )}
+        <div className="mt-0.5">
+          <Combobox
+            aria-label={`行${row.no}の点検種別`}
+            className={cn(isReport && 'field-required', 'py-0.5 text-[11px]', cellErr('inspectionType', conflict('inspectionType') || (touched && !!check?.errors.inspection)))}
+            value={input.inspectionType}
+            options={options.inspectionTypesOf(input.propertyCode)}
+            placeholder={isReport ? '🔍 点検種別' : '（報告書のとき）'}
+            disabled={locked || !isReport}
+            onChange={(v) => set({ inspectionType: v })}
+          />
+        </div>
+        {isReport && (existingCounts[row.key] ?? 0) > 0 && !result && (
+          <span className="block text-[10px] text-amber-700">登録済み{existingCounts[row.key]}件（追加します）</span>
+        )}
+      </td>
+      <td className={td}>
+        <input
+          aria-label={`行${row.no}のメモ`}
+          placeholder="メモ"
+          className={fieldCls}
+          value={input.note}
+          maxLength={500}
+          disabled={locked}
+          onChange={(e) => set({ note: e.target.value })}
+        />
       </td>
       <td className={td}>
         <Button
@@ -390,17 +415,10 @@ function savedNameOf(input: RowInput, check: RowCheck | undefined, source: Uploa
   });
 }
 
-const FIELD_LABEL: Record<RowField, string> = {
-  category: '区分',
-  categoryNote: 'その他の内容',
-  performedOn: '実施日',
-  propertyCode: '物件',
-  inspectionType: '点検種別',
-  targetMonth: '対象月',
-  note: 'メモ',
-  managementCompanyId: '管理会社',
-  vendorId: '保守会社',
-};
+const FIELD_LABEL = ROW_FIELD_LABEL;
+
+/** 詳細は管理会社を正式名で出す（表は略称。options の fullName。修正依頼1104 E4） */
+const fullNameOf = (o: (ComboboxOption & { fullName?: string }) | undefined) => (o ? (o.fullName ?? o.label) : undefined);
 
 /** 詳細の行: 元のファイル・区間の大きさ・値の出どころ・食い違い（置き換えボタン）・送れない理由・結果 */
 function DetailLine({
@@ -412,6 +430,7 @@ function DetailLine({
   sizes,
   options,
   onTakeConflict,
+  onKeepConflict,
   disabled,
 }: UploadRowsTableProps & { row: UploadRow }) {
   const state = states[row.key];
@@ -423,14 +442,14 @@ function DetailLine({
     if (f === 'category') return options.categories.find((c) => c.value === v)?.label ?? v;
     if (f === 'propertyCode') return options.properties.find((o) => o.value === v)?.label ?? v;
     if (f === 'vendorId') return options.vendors.find((o) => o.value === v)?.label ?? v;
-    if (f === 'managementCompanyId') return options.managementCompanies.find((o) => o.value === v)?.label ?? v;
+    if (f === 'managementCompanyId') return fullNameOf(options.managementCompanies.find((o) => o.value === v)) ?? v;
     return v;
   };
   const sourced = (Object.entries(state.sources) as [RowField, keyof typeof FIELD_SOURCE_LABEL][]).filter(([f]) => state.input[f]);
   return (
     <tr className="bg-gray-50" data-testid={`upload-row-detail-${row.no}`}>
       <td />
-      <td colSpan={12} className="space-y-0.5 px-1 py-1 text-[11px] text-gray-700">
+      <td colSpan={9} className="space-y-0.5 px-1 py-1 text-[11px] text-gray-700">
         <p>
           元のファイル: <span className="break-all">{source?.file.name}</span>
           {source && `（${formatBytes(source.file.size)}）`}
@@ -453,7 +472,15 @@ function DetailLine({
             >
               「{labelOf(f, c.value)}」にする
             </button>
-            <span className="ml-1 text-gray-500">（今の値のままでよければ、欄で選び直すと解消します）</span>
+            <button
+              type="button"
+              className="ml-1 rounded border border-gray-400 bg-white px-1 hover:bg-gray-50 disabled:opacity-40"
+              disabled={disabled || isRowFinished(result)}
+              onClick={() => onKeepConflict(row.key, f)}
+            >
+              今の値のままにする
+            </button>
+            <span className="ml-1 text-gray-500">（どちらかを押すと解消します。このままでも、確認のうえ登録できます）</span>
           </p>
         ))}
         {check &&

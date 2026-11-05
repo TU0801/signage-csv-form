@@ -3,14 +3,18 @@ import { makeInspection } from '@/features/inspection-portal/__tests__/fixtures'
 import {
   EMPTY_ROW_STATE,
   applyBulk,
+  assignRowNames,
   buildRows,
   checkRow,
+  dropAiValues,
   isBlankPixels,
   mergeAuto,
+  reviewReasons,
   rowPageLabel,
   setFields,
   type UploadSource,
 } from '../lib/uploadRows';
+import { clampLeftWidth, renderWidthFor, submitGate } from '../lib/uploadView';
 
 const pdf = (over: Partial<UploadSource> = {}): UploadSource => ({
   id: 's1',
@@ -81,6 +85,60 @@ describe('uploadRows（修正依頼1029(1) ファイルのアップロードの�
     expect(picked.needsReview).toBe(false);
     const image = { ...pdf(), kind: 'image' as const };
     expect(checkRow(row, base, { ...ctx, source: image }).errors.file).toMatch(/PDF だけ/);
+  });
+
+  it('修正依頼1104 E1: 区分と実施日が食い違った行は、実施日だけ直しても要確認だが、止めずに確認のうえ登録できる（入力漏れは止める）', () => {
+    const inspections = [makeInspection({ inspection_id: 'i1', property_code: 'P1', inspection_type_label: 'EV', vendor_id: 'v1' })];
+    const row = buildRows([pdf({ breaks: new Set(), removed: new Set() })])[0]!;
+    const ctx = { inspections, source: pdf(), size: 100, canReport: true };
+    let s = setFields(EMPTY_ROW_STATE, { category: 'report', propertyCode: 'P1', inspectionType: 'EV', performedOn: '2026-12-01' }, 'preset');
+    s = mergeAuto(s, { category: 'estimate', performedOn: '2026-10-25' }, 'text');
+    s = setFields(s, { performedOn: '2026-11-05' }, 'manual');
+    const check = checkRow(row, s, ctx);
+    expect(check.needsReview).toBe(true);
+    const reasons = reviewReasons(s, check);
+    expect(reasons.map((r) => [r.kind, r.label])).toEqual([['conflict', '区分']]);
+    expect(submitGate(['r'], { r: reasons })).toEqual({ blocking: [], confirmable: ['r'] });
+    // 「今の値のままにする」（今の値を手入力として入れ直す）で解消する
+    expect(checkRow(row, setFields(s, { category: s.input.category }, 'manual'), ctx).needsReview).toBe(false);
+    // 物件が無い行は止める
+    const noProperty = setFields(s, { propertyCode: '' }, 'manual');
+    const r2 = reviewReasons(noProperty, checkRow(row, noProperty, ctx));
+    expect(submitGate(['r'], { r: r2 }).blocking).toEqual(['r']);
+  });
+
+  it('修正依頼1104 E11: AI-OCR で入れた値と AI の食い違いだけを外す', () => {
+    let s = mergeAuto(EMPTY_ROW_STATE, { propertyCode: 'P1' }, 'filename');
+    s = mergeAuto(s, { propertyCode: 'P2', inspectionType: 'EV' }, 'ai');
+    const dropped = dropAiValues(s);
+    expect(dropped.input).toMatchObject({ propertyCode: 'P1', inspectionType: '' });
+    expect(dropped.sources).toEqual({ propertyCode: 'filename' });
+    expect(dropped.conflicts).toEqual({});
+  });
+
+  it('修正依頼1104 E10: 登録済みの名前と重ならない連番にする（2回に分けて登録しても同じ名前にしない）', () => {
+    const nameAt = (_k: string, i: number, total: number) => (total > 1 ? `x_${i + 1}.pdf` : 'x.pdf');
+    expect(assignRowNames([{ key: 'a', base: 'x' }], nameAt)).toEqual({ a: 'x.pdf' });
+    expect(
+      assignRowNames(
+        [
+          { key: 'a', base: 'x', saved: 'x_1.pdf' },
+          { key: 'b', base: 'x' },
+          { key: 'c', base: 'x' },
+        ],
+        nameAt,
+      ),
+    ).toEqual({ a: 'x_1.pdf', b: 'x_2.pdf', c: 'x_3.pdf' });
+    // 1件目だけ先に登録した後、2件目の名前が「x.pdf」と重なるときは連番の形にする
+    expect(assignRowNames([{ key: 'a', base: 'x', saved: 'x.pdf' }, { key: 'b', base: 'y' }, { key: 'c', base: 'x' }], nameAt).c).toBe('x_1.pdf');
+  });
+
+  it('修正依頼1104 E8・E9: 描く幅は2倍以上（上限 1600px）、左の幅は左右の最小に収める', () => {
+    expect(renderWidthFor(300, 1)).toBe(600);
+    expect(renderWidthFor(300, 4)).toBe(900);
+    expect(renderWidthFor(1000, 2)).toBe(1600);
+    expect(clampLeftWidth(100, 1200, 12)).toBe(360);
+    expect(clampLeftWidth(1000, 1200, 12)).toBe(1200 - 12 - 320);
   });
 
   it('空白ページは画素のほとんどが白いもの', () => {

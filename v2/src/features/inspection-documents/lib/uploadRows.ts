@@ -171,8 +171,33 @@ export function setFields(state: RowState, patch: Partial<RowInput>, source: 'ma
   return { input: { ...state.input, ...patch }, sources, conflicts };
 }
 
+/**
+ * AI-OCR で入れた値を外す（『ファイル名を取込』に戻したとき。修正依頼1104 E11）。出どころが AI の項目は空に戻し、
+ * AI が読んだ食い違いも消す。AI が更新日・画面の既定を置き換えていた項目は、元の仮の値には戻らず空になる
+ */
+export function dropAiValues(state: RowState): RowState {
+  const input = { ...state.input };
+  const sources = { ...state.sources };
+  const conflicts = { ...state.conflicts };
+  let changed = false;
+  for (const [k, s] of Object.entries(state.sources) as [RowField, FieldSource][]) {
+    if (s !== 'ai') continue;
+    (input as Record<RowField, string>)[k] = '';
+    delete sources[k];
+    changed = true;
+  }
+  for (const [k, c] of Object.entries(state.conflicts) as [RowField, { source: FieldSource }][]) {
+    if (c.source !== 'ai') continue;
+    delete conflicts[k];
+    changed = true;
+  }
+  return changed ? { input, sources, conflicts } : state;
+}
+
 /** 一括設定の1項目（「変更しない」なら undefined） */
-export type BulkPatch = Partial<Pick<RowInput, 'category' | 'performedOn' | 'propertyCode' | 'inspectionType' | 'note' | 'managementCompanyId' | 'vendorId'>>;
+export type BulkPatch = Partial<
+  Pick<RowInput, 'category' | 'performedOn' | 'targetMonth' | 'propertyCode' | 'inspectionType' | 'note' | 'managementCompanyId' | 'vendorId'>
+>;
 
 /** 選択中の行に一括設定を入れる（「変更しない」の項目は行ごとの値を変えない） */
 export function applyBulk(states: Record<string, RowState>, keys: string[], patch: BulkPatch): Record<string, RowState> {
@@ -267,6 +292,59 @@ export function checkRow(row: UploadRow, state: RowState, ctx: RowCheckContext):
   return { errors, inspection, needsReview, skip };
 }
 
+/** 項目の名前（要確認の理由・詳細の表示に使う） */
+export const ROW_FIELD_LABEL: Record<RowField, string> = {
+  category: '区分',
+  categoryNote: 'その他の内容',
+  performedOn: '実施日',
+  targetMonth: '対象月',
+  propertyCode: '物件',
+  inspectionType: '点検種別',
+  note: 'メモ',
+  managementCompanyId: '管理会社',
+  vendorId: '保守会社',
+};
+
+/**
+ * 要確認の理由1つ（修正依頼1104 E1）。kind が error のものは送れない（区分・物件が無い・報告書の点検が1件に決まらない・50MB 超など。
+ * 確認ダイアログでも通さない）。conflict（自動で読んだ値と入っている値の食い違い）は、確認のうえそのまま登録してよい
+ */
+export interface ReviewReason {
+  kind: 'error' | 'conflict';
+  /** 結び付く項目（ファイル・点検の error は null） */
+  field: RowField | null;
+  /** 短い名前（ステータスの横に出す。例「区分」「点検」） */
+  label: string;
+  /** 文言（error は送れない理由、conflict は「区分が食い違い（文字情報）」） */
+  message: string;
+}
+
+/**
+ * 行が要確認になっている理由の一覧（checkRow の結果と同じ条件から作る）。送らない行（skip）は空。
+ * 並びは error → conflict、同じ種類の中は ROW_FIELD_LABEL の順
+ */
+export function reviewReasons(state: RowState, check: Pick<RowCheck, 'errors' | 'skip'>): ReviewReason[] {
+  if (check.skip) return [];
+  const order = Object.keys(ROW_FIELD_LABEL) as RowField[];
+  const out: ReviewReason[] = [];
+  for (const f of order) {
+    const msg = check.errors[f];
+    if (msg) out.push({ kind: 'error', field: f, label: ROW_FIELD_LABEL[f], message: msg });
+  }
+  if (check.errors.inspection) out.push({ kind: 'error', field: null, label: '点検', message: check.errors.inspection });
+  if (check.errors.file) out.push({ kind: 'error', field: null, label: 'ファイル', message: check.errors.file });
+  for (const f of order) {
+    const c = state.conflicts[f];
+    if (c) out.push({ kind: 'conflict', field: f, label: ROW_FIELD_LABEL[f], message: `${ROW_FIELD_LABEL[f]}が食い違い（${FIELD_SOURCE_LABEL[c.source]}）` });
+  }
+  return out;
+}
+
+/** 要確認の理由の短い表示（「区分・実施日」。同じ名前は1つにまとめる） */
+export function reasonSummary(reasons: readonly ReviewReason[]): string {
+  return [...new Set(reasons.map((r) => r.label))].join('・');
+}
+
 /** 表示順を保ったまま、区間の鍵が残っている入力だけを残す（ファイルを外した・区切りを外したときの片付け） */
 export function pruneStates(states: Record<string, RowState>, rows: UploadRow[]): Record<string, RowState> {
   const keys = new Set(rows.map((r) => r.key));
@@ -279,6 +357,42 @@ export function nameSlots(rows: { key: string; base: string }[]): Record<string,
   for (const r of rows) groups.set(r.base, [...(groups.get(r.base) ?? []), r.key]);
   const out: Record<string, [number, number]> = {};
   for (const keys of groups.values()) keys.forEach((k, i) => (out[k] = [i, keys.length]));
+  return out;
+}
+
+/**
+ * その他ファイルの行の保存する名前。登録済みの行（saved あり）は保存した名前のまま動かさず、未登録の行は同じ base の中で
+ * nameSlots と同じ連番を振る。ただし登録済みの名前と重なる番号は飛ばす（選択した行だけを2回に分けて登録しても、
+ * 同じ名前にしない。修正依頼1104 E10。biz の assignRowNames を写した）。nameAt は (行の鍵, 何番目, 全部で何件) → 名前
+ */
+export function assignRowNames(
+  rows: { key: string; base: string; saved?: string | null }[],
+  nameAt: (key: string, index: number, total: number) => string,
+): Record<string, string> {
+  const used = new Set(rows.flatMap((r) => (r.saved ? [r.saved] : [])));
+  const groups = new Map<string, typeof rows>();
+  for (const r of rows) groups.set(r.base, [...(groups.get(r.base) ?? []), r]);
+  const out: Record<string, string> = {};
+  for (const group of groups.values()) {
+    let next = 0;
+    for (const r of group) {
+      if (r.saved) {
+        out[r.key] = r.saved;
+        continue;
+      }
+      let total = group.length;
+      let name = nameAt(r.key, next, total);
+      for (let guard = 0; used.has(name) && guard < 10000; guard++) {
+        // 1件だけの名前が登録済みと重なるときは連番を付ける形にする
+        if (total < 2) total = 2;
+        else next += 1;
+        name = nameAt(r.key, next, total);
+      }
+      used.add(name);
+      out[r.key] = name;
+      next += 1;
+    }
+  }
   return out;
 }
 

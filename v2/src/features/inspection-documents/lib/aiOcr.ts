@@ -313,6 +313,16 @@ export interface VendorCandidate {
   name: string;
 }
 
+/**
+ * 発行元（業務システムの自社の社名）と同じ会社の id。会社名の核が正式名か略称と一致するもの（修正依頼1104 E1。
+ * 業務システムの ownCompanyIdsOf と同じ規則）。文字列を決め打ちせず発行元の表から決める
+ */
+export function ownCompanyIdsOf(issuerNames: readonly string[], companies: readonly { id: string; name: string; shortName?: string | null }[]): string[] {
+  const cores = new Set(issuerNames.map((n) => companyCore(n)).filter((c) => c !== ''));
+  if (cores.size === 0) return [];
+  return companies.filter((c) => cores.has(companyCore(c.name)) || (!!c.shortName && cores.has(companyCore(c.shortName)))).map((c) => c.id);
+}
+
 /** 会社名を保守会社に当てる。核の一致、無ければ包含（2文字以上）。候補が1つのときだけ（invoice-intake の名寄せ） */
 export function matchCompany(read: string, vendors: VendorCandidate[]): VendorCandidate | null {
   const core = companyCore(read);
