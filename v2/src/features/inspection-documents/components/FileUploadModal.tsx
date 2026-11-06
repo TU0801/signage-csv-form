@@ -174,7 +174,7 @@ function presetInputOf(preset: FileUploadPreset, vendorId: string | null | undef
 }
 
 function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: extraProperties = NO_PROPERTIES }: FileUploadModalProps & { preset: FileUploadPreset }) {
-  const { addToast } = useToast();
+  const { addToast, dismissToast } = useToast();
   const { isAdmin, isManagement, vendorId: myVendorId } = useAuth();
   const data = usePortalData();
   const hints = useUploadNameHints();
@@ -226,8 +226,22 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
   } | null>(null);
   /** 要確認（食い違いだけ）の行をこのまま登録するかの確認（修正依頼1104 E1） */
   const [confirmReview, setConfirmReview] = useState<{ count: number; targets: UploadRow[] } | null>(null);
-  /** 登録で止めたときの知らせ（登録ボタンの近くに残す。上のお知らせは数秒で消える。修正依頼1104 E1） */
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  /** 登録で止めたときの知らせ（登録ボタンの近くに残す。修正依頼1104 E1） */
+  const [submitError, setSubmitErrorText] = useState<string | null>(null);
+  /** 止めた理由と一緒に出したトースト（エラーは × を押すまで残るので、理由を消すときに一緒に消す。押すたびに積み重ねない） */
+  const submitToastRef = useRef<string | null>(null);
+  /**
+   * 止めた理由を出す・消す。toast を渡すと上にも知らせ、そのトーストは次に理由を変えるとき（行を直した・もう一度押した・閉じた）に消す
+   * （直した後も「入力の足りない行が…」のトーストが押した回数だけ残った。修正依頼1104 本番確認）
+   */
+  const setSubmitError = (text: string | null, toast?: { message: string; type: 'error' | 'warning' }) => {
+    if (submitToastRef.current) {
+      dismissToast(submitToastRef.current);
+      submitToastRef.current = null;
+    }
+    setSubmitErrorText(text);
+    if (toast) submitToastRef.current = addToast(toast.message, toast.type);
+  };
   /** AI-OCR の生の結果を保存したファイル（同じファイルを区間に分けても最初の行にだけ持たせる。2回に分けて登録しても同じ） */
   const ocrSavedRef = useRef(new Set<string>());
 
@@ -265,10 +279,16 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
   }, [docs, sources, baseStates]);
   // 閉じた後に届いた非同期の結果（空白ページの検出など）を捨てるための印
   const closedRef = useRef(false);
+  // 閉じたら止めた理由のトーストも消す（画面の外に残さない）
+  const dismissToastRef = useRef(dismissToast);
+  useEffect(() => {
+    dismissToastRef.current = dismissToast;
+  }, [dismissToast]);
   useEffect(() => {
     closedRef.current = false;
     return () => {
       closedRef.current = true;
+      if (submitToastRef.current) dismissToastRef.current(submitToastRef.current);
       Object.values(docsRef.current).forEach((d) => d.destroy());
     };
   }, []);
@@ -785,10 +805,7 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
     return prepared;
   };
 
-  const stop = (text: string) => {
-    setSubmitError(text);
-    addToast(text, 'error');
-  };
+  const stop = (text: string) => setSubmitError(text, { message: text, type: 'error' });
 
   /**
    * targets を登録する（全部の行、または選択した行。修正依頼1104 E10）。入力漏れ（区分・物件が無い・報告書の点検が決まらない・
@@ -968,10 +985,13 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
       void recordCorrections(correctionsFor(okRows));
     }
     const skippedNote = skipped > 0 ? `（${skipped}件は同じ内容の報告書が提出済みのため送っていません）` : '';
-    if (failed > 0) setSubmitError(`${failed}件の登録に失敗しました（行の「失敗」と詳細の理由を見て、直して再送できます）`);
-    if (failed === 0 && ok === 0) addToast(`同じ内容の報告書が提出済みのため、${skipped}件とも送っていません`, 'info');
-    else if (failed === 0) addToast(`${ok}件を登録しました${skippedNote}`, 'success');
-    else addToast(`${ok}件を登録し、${failed}件は失敗しました${skippedNote}（失敗した行は直して再送できます）`, 'warning');
+    if (failed > 0)
+      setSubmitError(`${failed}件の登録に失敗しました（行の「失敗」と詳細の理由を見て、直して再送できます）`, {
+        message: `${ok}件を登録し、${failed}件は失敗しました${skippedNote}（失敗した行は直して再送できます）`,
+        type: 'warning',
+      });
+    else if (ok === 0) addToast(`同じ内容の報告書が提出済みのため、${skipped}件とも送っていません`, 'info');
+    else addToast(`${ok}件を登録しました${skippedNote}`, 'success');
   };
 
   /** 保存する読み取りの生の結果（AI の結果は『AIで取込』のときだけ） */

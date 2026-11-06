@@ -36,8 +36,9 @@ vi.mock('@/lib/api/property-files', () => fileApi);
 vi.mock('@/lib/supabase', () => ({ supabase: {}, TABLES: {}, RPC: {} }));
 const auth = vi.hoisted(() => ({ isAdmin: false, isManagement: false, vendorId: 'v1', managementCompanyId: null }));
 vi.mock('@/hooks/useAuth', () => ({ useAuth: () => auth }));
-const toast = vi.hoisted(() => vi.fn());
-vi.mock('@/components/ui/Toast', () => ({ useToast: () => ({ addToast: toast }) }));
+const toast = vi.hoisted(() => vi.fn((..._args: unknown[]) => `toast-${Math.random()}`));
+const dismissToast = vi.hoisted(() => vi.fn());
+vi.mock('@/components/ui/Toast', () => ({ useToast: () => ({ addToast: toast, dismissToast }) }));
 // jsdom には canvas の描画が無いので、pdfjs の描画は差し替える（切り出しは pdfSplit のテストで本物を確かめる）
 vi.mock('../lib/pdfPages', () => ({
   openPdfPages: vi.fn(async () => ({
@@ -278,9 +279,15 @@ describe('FileUploadModal（修正依頼1029(1) ファイルのアップロー�
     fireEvent.click(screen.getByRole('button', { name: '3行を登録する' }));
     expect(screen.getByTestId('upload-submit-error')).toHaveTextContent('入力の足りない行が1行あります（行3。');
     expect(fileApi.registerPropertyFile).not.toHaveBeenCalled();
-    // 行を直したら、前に止めた理由は消す（修正依頼1104 本番確認）
+    const stopToasts = () => toast.mock.results.filter((_, i) => /^入力の足りない行/.test(String(toast.mock.calls[i]?.[0]))).map((r) => r.value as string);
+    // もう一度押しても、前のトーストを消してから出す（押した回数だけ積み重ねない。修正依頼1104 本番確認）
+    fireEvent.click(screen.getByRole('button', { name: '3行を登録する' }));
+    const [firstToast, secondToast] = stopToasts();
+    expect(dismissToast).toHaveBeenCalledWith(firstToast);
+    // 行を直したら、前に止めた理由もそのトーストも消す（修正依頼1104 本番確認）
     fireEvent.change(within(row(3)).getByLabelText('行3の区分'), { target: { value: 'estimate' } });
     expect(screen.queryByTestId('upload-submit-error')).toBeNull();
+    expect(dismissToast).toHaveBeenCalledWith(secondToast);
 
     fireEvent.click(within(row(2)).getByLabelText('行2を選ぶ'));
     fireEvent.click(screen.getByRole('button', { name: '選択した 1 行を登録' }));
