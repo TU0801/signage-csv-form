@@ -549,14 +549,14 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
     setSelected((prev) => new Set([...prev].filter((k) => !k.startsWith(`${id}:`) && k !== id)));
   };
 
-  const updateSource = (id: string, fn: (s: UploadSource) => UploadSource) => {
-    setSubmitError(null);
-    setSources((prev) => prev.map((s) => (s.id === id ? fn(s) : s)));
-  };
+  // 裏の処理（読み取りの区切りの提案・空白ページ探しの結果）からも呼ぶので、ここでは止めた理由を消さない。
+  // 人が変えたとき（toggleBreak・toggleRemoved など）だけ消す（裏の処理が登録の失敗の知らせを黙って消さないように。修正依頼1104 本番確認のレビュー）
+  const updateSource = (id: string, fn: (s: UploadSource) => UploadSource) => setSources((prev) => prev.map((s) => (s.id === id ? fn(s) : s)));
   /** 空白ページを探した結果の文言を消す（ページの削除・区切りを手で変えたら、前の結果は今の状態と合わない） */
   const clearBlankNote = (id: string) =>
     setBlankNotes((prev) => (id in prev ? Object.fromEntries(Object.entries(prev).filter(([k]) => k !== id)) : prev));
   const toggleBreak = (id: string, before: number) => {
+    setSubmitError(null);
     clearBlankNote(id);
     updateSource(id, (s) => {
       const breaks = new Set(s.breaks);
@@ -568,6 +568,7 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
     setResults((prev) => Object.fromEntries(Object.entries(prev).filter(([, r]) => r.state === 'ok' || r.state === 'skipped')));
   };
   const toggleRemoved = (id: string, page: number) => {
+    setSubmitError(null);
     clearBlankNote(id);
     updateSource(id, (s) => {
       const removed = new Set(s.removed);
@@ -682,8 +683,7 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
       const next = mergeAuto(state, patch, src);
       return mgmt ? mergeAuto(next, { managementCompanyId: mgmt }, 'property') : next;
     };
-    // 読み取りで行の値が変わるので、前に止めた理由は消す（手で直したときと同じ）
-    setSubmitError(null);
+    // 読み取りの結果では止めた理由を消さない（裏で終わるので、別のファイルの読み取りが登録の失敗の知らせを消してしまう）
     const docPatch = patchFor(suggestion.pages, true);
     const base = merge(baseStatesRef.current[id] ?? presetState, docPatch);
     setBaseStates((prev) => ({ ...prev, [id]: merge(prev[id] ?? presetState, docPatch) }));

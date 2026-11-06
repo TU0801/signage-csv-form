@@ -147,6 +147,29 @@ describe('FileUploadModal（修正依頼1029(1) ファイルのアップロー�
     await waitFor(() => expect(screen.getAllByTestId(/^upload-row-\d+$/).length).toBeGreaterThan(1));
   });
 
+  it('登録の一部失敗の知らせは、別のファイルの読み取りが裏で終わっても消さない（修正依頼1104 本番確認のレビュー）', async () => {
+    let release: (texts: string[]) => void = () => {};
+    const pending = new Promise<string[]>((resolve) => (release = resolve));
+    vi.mocked(openPdfPages).mockResolvedValueOnce({ pageCount: 1, render: vi.fn(async () => {}), pageTexts: vi.fn(() => pending), destroy: vi.fn() } as never);
+    fileApi.registerPropertyFile.mockRejectedValue(new Error('保存に失敗しました'));
+    await open({ kind: 'other', propertyCode: '900001-00' });
+    addFiles(new File(['x'], '20261025_御見積.xlsx'));
+    await screen.findByTestId('upload-row-1');
+    addFiles(new File(['%PDF-1.4'], '20261025_請求書.pdf', { type: 'application/pdf' }));
+    await screen.findByTestId('upload-row-2');
+    fireEvent.click(within(row(1)).getByLabelText('行1を選ぶ'));
+    fireEvent.click(screen.getByRole('button', { name: '選択した 1 行を登録' }));
+    await screen.findByTestId('upload-submit-error');
+    const warningIndex = toast.mock.calls.findIndex(([, type]) => type === 'warning');
+    const warningId = toast.mock.results[warningIndex]?.value as string;
+    expect(warningId).toBeTruthy();
+    // PDF の文字情報の読み取りがこの後で終わる
+    await act(async () => release(['請求書 テスト第一マンション 様']));
+    await act(async () => {});
+    expect(screen.getByTestId('upload-submit-error')).toHaveTextContent('1件の登録に失敗しました');
+    expect(dismissToast).not.toHaveBeenCalledWith(warningId);
+  });
+
   it('削除したページは送る PDF から外す', async () => {
     api.registerInspectionReport.mockResolvedValue(makeReport());
     await open({ kind: 'bulk' });
