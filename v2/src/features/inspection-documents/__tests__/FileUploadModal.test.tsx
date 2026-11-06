@@ -36,8 +36,9 @@ vi.mock('@/lib/api/property-files', () => fileApi);
 vi.mock('@/lib/supabase', () => ({ supabase: {}, TABLES: {}, RPC: {} }));
 const auth = vi.hoisted(() => ({ isAdmin: false, isManagement: false, vendorId: 'v1', managementCompanyId: null }));
 vi.mock('@/hooks/useAuth', () => ({ useAuth: () => auth }));
-const toast = vi.hoisted(() => vi.fn());
-vi.mock('@/components/ui/Toast', () => ({ useToast: () => ({ addToast: toast }) }));
+const toast = vi.hoisted(() => vi.fn((..._args: unknown[]) => `toast-${Math.random()}`));
+const dismissToast = vi.hoisted(() => vi.fn());
+vi.mock('@/components/ui/Toast', () => ({ useToast: () => ({ addToast: toast, dismissToast }) }));
 // jsdom には canvas の描画が無いので、pdfjs の描画は差し替える（切り出しは pdfSplit のテストで本物を確かめる）
 vi.mock('../lib/pdfPages', () => ({
   openPdfPages: vi.fn(async () => ({
@@ -144,6 +145,29 @@ describe('FileUploadModal（修正依頼1029(1) ファイルのアップロー�
     addFiles(new File(['%PDF-1.4'], '20261025_報告書.pdf', { type: 'application/pdf' }));
     await screen.findByTestId(/^upload-page-f\d+-3$/);
     await waitFor(() => expect(screen.getAllByTestId(/^upload-row-\d+$/).length).toBeGreaterThan(1));
+  });
+
+  it('登録の一部失敗の知らせは、別のファイルの読み取りが裏で終わっても消さない（修正依頼1104 本番確認のレビュー）', async () => {
+    let release: (texts: string[]) => void = () => {};
+    const pending = new Promise<string[]>((resolve) => (release = resolve));
+    vi.mocked(openPdfPages).mockResolvedValueOnce({ pageCount: 1, render: vi.fn(async () => {}), pageTexts: vi.fn(() => pending), destroy: vi.fn() } as never);
+    fileApi.registerPropertyFile.mockRejectedValue(new Error('保存に失敗しました'));
+    await open({ kind: 'other', propertyCode: '900001-00' });
+    addFiles(new File(['x'], '20261025_御見積.xlsx'));
+    await screen.findByTestId('upload-row-1');
+    addFiles(new File(['%PDF-1.4'], '20261025_請求書.pdf', { type: 'application/pdf' }));
+    await screen.findByTestId('upload-row-2');
+    fireEvent.click(within(row(1)).getByLabelText('行1を選ぶ'));
+    fireEvent.click(screen.getByRole('button', { name: '選択した 1 行を登録' }));
+    await screen.findByTestId('upload-submit-error');
+    const warningIndex = toast.mock.calls.findIndex(([, type]) => type === 'warning');
+    const warningId = toast.mock.results[warningIndex]?.value as string;
+    expect(warningId).toBeTruthy();
+    // PDF の文字情報の読み取りがこの後で終わる
+    await act(async () => release(['請求書 テスト第一マンション 様']));
+    await act(async () => {});
+    expect(screen.getByTestId('upload-submit-error')).toHaveTextContent('1件の登録に失敗しました');
+    expect(dismissToast).not.toHaveBeenCalledWith(warningId);
   });
 
   it('削除したページは送る PDF から外す', async () => {
@@ -278,9 +302,15 @@ describe('FileUploadModal（修正依頼1029(1) ファイルのアップロー�
     fireEvent.click(screen.getByRole('button', { name: '3行を登録する' }));
     expect(screen.getByTestId('upload-submit-error')).toHaveTextContent('入力の足りない行が1行あります（行3。');
     expect(fileApi.registerPropertyFile).not.toHaveBeenCalled();
-    // 行を直したら、前に止めた理由は消す（修正依頼1104 本番確認）
+    const stopToasts = () => toast.mock.results.filter((_, i) => /^入力の足りない行/.test(String(toast.mock.calls[i]?.[0]))).map((r) => r.value as string);
+    // もう一度押しても、前のトーストを消してから出す（押した回数だけ積み重ねない。修正依頼1104 本番確認）
+    fireEvent.click(screen.getByRole('button', { name: '3行を登録する' }));
+    const [firstToast, secondToast] = stopToasts();
+    expect(dismissToast).toHaveBeenCalledWith(firstToast);
+    // 行を直したら、前に止めた理由もそのトーストも消す（修正依頼1104 本番確認）
     fireEvent.change(within(row(3)).getByLabelText('行3の区分'), { target: { value: 'estimate' } });
     expect(screen.queryByTestId('upload-submit-error')).toBeNull();
+    expect(dismissToast).toHaveBeenCalledWith(secondToast);
 
     fireEvent.click(within(row(2)).getByLabelText('行2を選ぶ'));
     fireEvent.click(screen.getByRole('button', { name: '選択した 1 行を登録' }));
