@@ -61,7 +61,7 @@ const tdActions = `${td} sticky right-0 bg-white shadow-[inset_1px_0_0_var(--col
 // v1: js/admin-entries.js loadEntries / renderEntries
 export function EntriesTable() {
   const { filters, updateFilter, clearFilters } = useEntriesFilters();
-  // 管理会社は自社物件の承認済みを閲覧・出力するだけ（削除・編集・取込状態の変更は管理者だけ）
+  // 管理会社は自社物件の承認済みを閲覧・出力し、未取込なら差し戻せる（削除・編集・取込状態の変更は管理者だけ）
   const isManagement = useAuthStore((s) => s.profile?.role === 'management');
   const { entries, loading, error, refetch } = useEntriesTable(filters);
   const lookups = useEntryLookups();
@@ -74,8 +74,8 @@ export function EntriesTable() {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [sendBackTarget, setSendBackTarget] = useState<DbEntry | null>(null);
   // 承認の取り消し（差戻し）は未取込（ready）の申請だけ（取込済みはサイネージ側へ渡っているので DB も受け付けない）。
-  // 管理会社は点検登録フォームの点検一覧から行うので、ここでは管理者だけに出す
-  const canSendBack = (entry: DbEntry) => !isManagement && entry.status === 'ready';
+  // 管理者と管理会社（一覧は RLS で自社物件の申請だけ。portal_review_entry も自社物件の ready の差戻しを許す。修正依頼1115 (2)）
+  const canSendBack = (entry: DbEntry) => entry.status === 'ready';
 
   const activeConditions = useMemo(
     () => describeEntryFilters(filters, lookups.propertyNames),

@@ -29,6 +29,8 @@ import {
   provisionalMasterProperty,
 } from '@/features/building-requests/lib/provisional';
 import { inspectionsOfVendor } from '@/features/inspection-portal/lib/inspectionLink';
+import { canNotifyCompletion } from '@/features/inspection-portal/lib/actions';
+import { NO_INSPECTION_MESSAGE } from '@/features/bulk-entry/utils/rowVendor';
 import { useAppSettings } from '@/features/single-entry/hooks/useAppSettings';
 import { useEntryForm } from '@/features/single-entry/hooks/useEntryForm';
 import { useVendorContext } from '@/features/single-entry/hooks/useVendorContext';
@@ -105,20 +107,14 @@ interface WorkspaceProps {
 
 function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) {
   const { addToast } = useToast();
-  const { user, profile, isAdmin } = useAuth();
+  const { user, profile, isAdmin, isManagement } = useAuth();
   const { properties, vendors, inspectionTypes, templateImages } = master;
+  // 建物追加の申請は保守会社の担当を増やす申請なので管理会社には出さない（修正依頼1115 (2)。DB も断る）
+  const canRequestBuilding = canNotifyCompletion({ isAdmin, isManagement });
 
   // 紐付けを読み終えたらフォームへ反映する（フォームより先に作るので ref 経由で渡す）
   const applyLinkedRef = useRef<(ids: ReadonlySet<string>) => void>(() => {});
   const onLinkedLoaded = useCallback((ids: ReadonlySet<string>) => applyLinkedRef.current(ids), []);
-
-  const vendorCtx = useVendorContext({
-    isAdmin,
-    profileVendorId: profile?.vendor_id ?? null,
-    properties,
-    vendors,
-    onLinkedLoaded,
-  });
 
   // 保守会社の点検行（物件を選んだときの点検工事案内の既定に使う。修正依頼1024 本番確認 ②）。申請時は改めて読み直して結び付ける。
   // 読めなければ既定を入れないだけ（入力はできる）
@@ -144,6 +140,15 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
       cancelled = true;
     };
   }, []);
+  const vendorCtx = useVendorContext({
+    isAdmin,
+    isManagement,
+    inspections: portalInspections,
+    profileVendorId: profile?.vendor_id ?? null,
+    properties,
+    vendors,
+    onLinkedLoaded,
+  });
   const vendorInspections = useMemo(
     () => inspectionsOfVendor(portalInspections, isAdmin, vendorCtx.linkVendorId),
     [portalInspections, isAdmin, vendorCtx.linkVendorId],
@@ -172,6 +177,13 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
   }, [form.applyLinked]);
 
   const { values } = form;
+  // 記録する保守会社（管理者は選んだ会社、保守会社は自社、管理会社は選んだ物件・点検工事案内・点検開始日の月の点検行の会社）
+  const selectedInspectionName = inspectionTypes.find((t) => t.id === values.inspectionTypeId)?.inspection_name ?? '';
+  const { resolveVendor } = vendorCtx;
+  const resolved = useMemo(
+    () => resolveVendor({ propertyCode: values.propertyCode, inspectionType: selectedInspectionName, startDate: values.startDate }),
+    [resolveVendor, values.propertyCode, selectedInspectionName, values.startDate],
+  );
   const submitted = useSubmittedEntries(user?.id ?? null);
 
   const [signageOnly, setSignageOnly] = useState(false);
@@ -188,7 +200,8 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
   );
   // 管理会社フィルター（'' = 全て。管理者と保守会社。B2）。保守会社・サイネージ設置物件のみと AND で効く。
   // 一括入力と同じ値を使う（切り替えても残す）
-  const managementIndex = useManagementCompanies(true);
+  // 管理会社のアカウントには出さない（自社物件だけなので絞る意味が無い。修正依頼1115 (2)）
+  const managementIndex = useManagementCompanies(!isManagement);
   const managementCompanyId = useInspectionFormStore((s) => s.managementCompanyId);
   const setManagementCompanyId = useInspectionFormStore((s) => s.setManagementCompanyId);
   const [tab, setTab] = useState<'preview' | 'settings'>('preview');
@@ -303,13 +316,14 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
     const result = buildLocalEntry(values, {
       properties: formProperties,
       inspectionTypes,
-      vendor: vendorCtx.vendor,
+      vendor: resolved.vendor,
       customImage: form.customImage,
       extraPosters: form.extraPosters,
       hasTemplateImage: (key) => templateUrlOf(key) !== null,
       settings,
-      linkVendorId: vendorCtx.linkVendorId,
+      linkVendorId: resolved.linkVendorId,
       isAdmin,
+      vendorReason: resolved.reason,
     });
     if (!result.ok) {
       // 表示設定タブの項目の誤りは、そのタブを開いて欄を見せる
@@ -383,6 +397,30 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
     // 申請に至らなかったときに片付ける、この申請でアップロードした画像
     let uploaded: string[] = [];
     try {
+      // 保守会社の点検行に一致する申請は点検に結び付ける（点検登録フォームに申請中として出て、報告書UP が通る）。
+      // 点検行が読めなければ結び付けずに申請する（今までどおり）
+      // 号機が2台以上の点検は台ごとに申請する（1件入力は台を選べないので申請させない。修正依頼1026 I7）。
+      // 台が読めなければここでは確かめない（保守会社のアカウントは DB の guard_entry_unit が止める）
+      const [fetched, units] = await Promise.all([
+        fetchPortalInspections().catch((err: unknown) => {
+          console.error('点検行の取得に失敗しました（点検に結び付けずに申請します）:', err);
+          return null;
+        }),
+        fetchPortalInspectionUnits().catch((err: unknown) => {
+          console.error('号機の取得に失敗しました:', err);
+          return [];
+        }),
+      ]);
+      const linkSkipped = fetched === null;
+      const inspections = fetched ?? [];
+      const multiUnit = multiUnitInspectionIds(units);
+      // 管理会社は点検行から受注先が決まる申請だけ（点検に結び付かない申請は DB も断る。修正依頼1115 (2)）。
+      // 画像をアップロードする前に確かめる
+      if (isManagement) {
+        if (linkSkipped) throw new Error('点検の予定を読み込めませんでした。もう一度申請してください');
+        const unmatched = sending.find((e) => !entryInspectionLink(e, inspections, false, null));
+        if (unmatched) throw new Error(`「${unmatched.propertyName}」は${NO_INSPECTION_MESSAGE}`);
+      }
       // 1枚目の追加の貼紙と2枚目以降の貼紙（修正依頼1025 D3）をアップロードする。ライブラリの画像（file が無い）はその URL のまま
       const toUrl = (img: CustomImage) =>
         img.file ? uploadPosterImage(img.file, user.id) : Promise.resolve(img.dataUrl);
@@ -414,23 +452,6 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
         console.error('Image upload failed:', failed.reason);
         throw new Error('画像のアップロードに失敗しました');
       }
-      // 保守会社の点検行に一致する申請は点検に結び付ける（点検登録フォームに申請中として出て、報告書UP が通る）。
-      // 点検行が読めなければ結び付けずに申請する（今までどおり）
-      // 号機が2台以上の点検は台ごとに申請する（1件入力は台を選べないので申請させない。修正依頼1026 I7）。
-      // 台が読めなければここでは確かめない（保守会社のアカウントは DB の guard_entry_unit が止める）
-      const [fetched, units] = await Promise.all([
-        fetchPortalInspections().catch((err: unknown) => {
-          console.error('点検行の取得に失敗しました（点検に結び付けずに申請します）:', err);
-          return null;
-        }),
-        fetchPortalInspectionUnits().catch((err: unknown) => {
-          console.error('号機の取得に失敗しました:', err);
-          return [];
-        }),
-      ]);
-      const linkSkipped = fetched === null;
-      const inspections = fetched ?? [];
-      const multiUnit = multiUnitInspectionIds(units);
       // 未承認の建物の行は、申請の時点の建物追加の申請で確かめる（その間に承認されていれば正式な物件コード・端末で申請する）
       const requests: DbPropertyRequest[] =
         sending.some((e) => isProvisionalCode(e.propertyCode)) && vendorCtx.linkVendorId
@@ -506,11 +527,21 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
     // 段階B（tall のときだけ）：1画面に収め、上段はカードの中身の高さ、作成データ一覧が残りを取って内部スクロールする
     // 見出しの行は1行分を取るので置かない（ユーザー指定 2026-10-15）。h1 は読み上げ用にだけ残し、クリアは入力カードの見出しへ
     <div className="space-y-3 tall:grid tall:h-[calc(100dvh-var(--header-h)-1.5rem)] tall:grid-rows-[minmax(0,auto)_minmax(9rem,1fr)] tall:gap-3 tall:space-y-0">
-      {/* 管理者の保守会社選択と、管理会社フィルター（管理者・保守会社）はヘッダーに出す（780f151。ポータルなので置き場所はレイアウトに影響しない） */}
+      {/* 管理者の保守会社選択と、管理会社フィルター（管理者・保守会社）、管理会社の受注先（修正依頼1115 (2)）はヘッダーに出す（780f151。ポータルなので置き場所はレイアウトに影響しない） */}
       <HeaderSlot>
         <div className="flex items-center gap-2">
           {isAdmin && (
             <AdminVendorSelect vendors={vendors} value={vendorCtx.adminVendorId} onChange={handleAdminVendorChange} />
+          )}
+          {isManagement && values.propertyCode && selectedInspectionName && values.startDate && (
+            // ヘッダーは狭いので短く出し、理由の全文は title とデータを追加のときの知らせで出す
+            <span
+              className={cn('max-w-[16rem] truncate text-xs', resolved.vendor ? 'text-gray-700' : 'text-amber-700')}
+              title={resolved.vendor ? '点検の予定の保守会社を受注先にします' : (resolved.reason ?? '')}
+              data-testid="single-entry-vendor"
+            >
+              {resolved.vendor ? `受注先: ${resolved.vendor.vendor_name}` : '受注先: 未決定'}
+            </span>
           )}
           {managementIndex && (
             <ManagementCompanyFilter
@@ -533,15 +564,17 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
               </h2>
             </div>
             <div className="flex items-center gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setShowBuildingRequest(true)}
-                title="担当する建物が一覧に無いときに追加を申請する"
-                className="border-green-300 text-green-700"
-              >
-                建物追加 申請
-              </Button>
+              {canRequestBuilding && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setShowBuildingRequest(true)}
+                  title="担当する建物が一覧に無いときに追加を申請する"
+                  className="border-green-300 text-green-700"
+                >
+                  建物追加 申請
+                </Button>
+              )}
               <Button variant="secondary" size="sm" onClick={handleClear}>
                 クリア
               </Button>
@@ -605,8 +638,8 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
                 noticeText={values.noticeText}
                 dateText={formatPosterDate(values.startDate, values.endDate)}
                 remarks={values.remarks}
-                vendorName={vendorCtx.vendor?.vendor_name ?? ''}
-                emergencyContact={vendorCtx.vendor?.emergency_contact ?? ''}
+                vendorName={resolved.vendor?.vendor_name ?? ''}
+                emergencyContact={resolved.vendor?.emergency_contact ?? ''}
               />
             ) : (
               <DisplaySettings form={form} displayTimeMax={settings.display_time_max} />
@@ -637,7 +670,7 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
             submitted={submitted.entries}
             properties={provisionalProperties.length ? [...properties, ...provisionalProperties] : properties}
             editingId={editingId}
-            showVendor={isAdmin}
+            showVendor={isAdmin || isManagement}
             onEdit={handleEdit}
             onRemove={setRemoveId}
           />
@@ -657,6 +690,7 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
         confirmLabel="削除"
         variant="danger"
       />
+      {canRequestBuilding && (
       <BuildingRequestModal
         open={showBuildingRequest}
         onClose={() => setShowBuildingRequest(false)}
@@ -667,6 +701,7 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
         onSubmitted={handleBuildingRequested}
         submittedNote="（1件入力ではその建物を物件に選びました）"
       />
+      )}
     </div>
   );
 }

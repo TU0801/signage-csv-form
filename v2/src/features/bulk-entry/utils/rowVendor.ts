@@ -96,36 +96,48 @@ export function makeRowVendorOf({
         };
       return fromVendorId(scheduleItemVendorId(item), vendors, item.inspection.inspection_id);
     }
-    const link = matchInspectionLink(row, [...links], null);
-    if (!link)
-      return {
-        id: null,
-        name: null,
-        emergencyContact: '',
-        inspectionId: null,
-        reason: NO_INSPECTION_MESSAGE,
-      };
-    // 当たる点検行が複数の保守会社にまたがるときは、どれか1社を黙って選ばない
-    const code = link.property_inspection_id;
-    const hit = links.find((l) => l.inspection_id === code)!;
-    const others = links.filter(
-      (l) =>
-        l.inspection_id !== code &&
-        l.property_code === hit.property_code &&
-        (l.inspection_type_label ?? '') === (hit.inspection_type_label ?? '') &&
-        matchInspectionLink(row, [l], null) !== null,
-    );
-    if (others.some((l) => (l.vendor_id ?? null) !== (hit.vendor_id ?? null))) {
-      return {
-        id: null,
-        name: null,
-        emergencyContact: '',
-        inspectionId: null,
-        reason: AMBIGUOUS_VENDOR_MESSAGE,
-      };
-    }
-    return fromVendorId(hit.vendor_id ?? null, vendors, hit.inspection_id);
+    return matchedRowVendor(row, links, vendors);
   };
+}
+
+/**
+ * 点検の予定の行でない入力（一括入力の手で足した行・1件入力）の保守会社。物件コード＋点検種別＋点検開始日の月で当たる
+ * 点検行（matchInspectionLink）の保守会社。当たらない・複数の保守会社にまたがる・保守会社未登録なら reason に理由
+ */
+export function matchedRowVendor(
+  row: { propertyCode: string | number; inspectionType: string; startDate: string },
+  links: readonly BulkInspectionLink[],
+  vendors: readonly BulkVendor[],
+): RowVendor {
+  const link = matchInspectionLink(row, [...links], null);
+  if (!link)
+    return {
+      id: null,
+      name: null,
+      emergencyContact: '',
+      inspectionId: null,
+      reason: NO_INSPECTION_MESSAGE,
+    };
+  // 当たる点検行が複数の保守会社にまたがるときは、どれか1社を黙って選ばない
+  const code = link.property_inspection_id;
+  const hit = links.find((l) => l.inspection_id === code)!;
+  const others = links.filter(
+    (l) =>
+      l.inspection_id !== code &&
+      l.property_code === hit.property_code &&
+      (l.inspection_type_label ?? '') === (hit.inspection_type_label ?? '') &&
+      matchInspectionLink(row, [l], null) !== null,
+  );
+  if (others.some((l) => (l.vendor_id ?? null) !== (hit.vendor_id ?? null))) {
+    return {
+      id: null,
+      name: null,
+      emergencyContact: '',
+      inspectionId: null,
+      reason: AMBIGUOUS_VENDOR_MESSAGE,
+    };
+  }
+  return fromVendorId(hit.vendor_id ?? null, vendors, hit.inspection_id);
 }
 
 /** 画面上部の保守会社をそのまま返す（管理者・保守会社。今までと同じ値） */

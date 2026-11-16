@@ -88,8 +88,6 @@ export function InspectionDocuments() {
   /** ファイルアップロードの画面（報告書一括アップロード・その他ファイル・再提出・編集を1つの画面で開く。修正依頼1029 決定①） */
   const [upload, setUpload] = useState<FileUploadPreset | null>(null);
   const [deletingFile, setDeletingFile] = useState<DbPropertyFile | null>(null);
-  // 一括アップロードは提出できるロール（保守会社・管理者）だけ。管理者は保守会社を選ばず全社の点検から選ぶ
-  const canBulkUpload = isAdmin || !isManagement;
 
   const viewer = useMemo(() => ({ isAdmin, isManagement, vendorId }), [isAdmin, isManagement, vendorId]);
   const filtered = useMemo(() => filterReports(reports, filters), [reports, filters]);
@@ -303,11 +301,10 @@ export function InspectionDocuments() {
           >
             その他ファイルアップロード
           </Button>
-          {canBulkUpload && (
-            <Button size="sm" className="text-xs" onClick={() => setUpload({ kind: 'bulk' })}>
-              報告書一括アップロード
-            </Button>
-          )}
+          {/* 報告書の一括アップロードは管理者・保守会社・管理会社（自社物件の点検。修正依頼1115 (2)）。管理者・管理会社は保守会社を選ばず点検から選ぶ */}
+          <Button size="sm" className="text-xs" onClick={() => setUpload({ kind: 'bulk' })}>
+            報告書一括アップロード
+          </Button>
         </span>
       </div>
       <ReportFiltersBar
@@ -491,7 +488,7 @@ export function InspectionDocuments() {
         open={!!upload}
         preset={upload}
         onClose={() => setUpload(null)}
-        // 管理者は保守会社を選ばず全社の点検から選ぶ
+        // 管理者・管理会社は保守会社を選ばず点検から選ぶ
         vendorId={isAdmin || isManagement ? null : (vendorId ?? null)}
         properties={propertyCandidates}
         // 報告書は1件増える・編集で名前が変わるので、1行の差し替えでなく読み直す

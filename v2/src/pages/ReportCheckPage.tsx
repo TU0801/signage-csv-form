@@ -49,15 +49,18 @@ function jstDate(iso: string): string {
 /**
  * 報告書の確認（点検登録フォームの3つ目のタブ。修正依頼1027）。申請不要の点検（リモート点検・警備など）について、
  * 物件 × 点検種別 × 対象月の報告書が届いたか・未着かを一覧にし、その場で報告書UP できる。
- * 範囲は一括入力と同じ読み込み（usePortalData。管理者は全社、保守会社は担当の点検）
+ * 範囲は一括入力と同じ読み込み（usePortalData。管理者は全社、保守会社は担当の点検、管理会社は自社物件の点検。修正依頼1115 (2)）
  */
 export function ReportCheckPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
-  const { isAdmin, vendorId: profileVendorId } = useAuth();
+  const { isAdmin, isManagement, vendorId: profileVendorId } = useAuth();
+  // 全社の点検が並ぶロール（管理者・管理会社）には保守会社の列を出す
+  const showVendor = isAdmin || isManagement;
   const portal = usePortalData();
   const today = todayJst();
   const currentMonth = monthOf(today);
 
-  const managementIndex = useManagementCompanies(true);
+  // 管理会社フィルターは管理会社のアカウントには出さない（自社物件だけ。修正依頼1115 (2)）
+  const managementIndex = useManagementCompanies(!isManagement);
   const managementCompanyId = useInspectionFormStore((s) => s.managementCompanyId);
   const setManagementCompanyId = useInspectionFormStore((s) => s.setManagementCompanyId);
 
@@ -78,10 +81,10 @@ export function ReportCheckPage({ modeSwitch }: { modeSwitch?: ReactNode } = {})
         today,
         flags,
         unitIndex,
-        unitVendorId: isAdmin ? null : (profileVendorId ?? null),
+        unitVendorId: isAdmin || isManagement ? null : (profileVendorId ?? null),
         notify,
       }),
-    [portal.inspections, portal.entries, portal.reports, today, flags, unitIndex, isAdmin, profileVendorId, notify],
+    [portal.inspections, portal.entries, portal.reports, today, flags, unitIndex, isAdmin, isManagement, profileVendorId, notify],
   );
 
   // 行は点検の登録月（schedule_from）から出るので、それより前の月を選べると「0件中 0件」と出て未着が無いように見える。
@@ -122,7 +125,8 @@ export function ReportCheckPage({ modeSwitch }: { modeSwitch?: ReactNode } = {})
       targetMonth: item.targetMonth,
       entryId: reportEntryId(item),
       defaultPerformedOn: reportDefaultPerformedOn(item),
-      // 自社（管理者は全社）の版があれば再提出として開く（一括入力と同じ。報告書は追加。修正依頼1027 決定①）
+      // 自社（管理者は全社）の版があれば再提出として開く（一括入力と同じ。報告書は追加。修正依頼1027 決定①）。
+      // 管理会社は保守会社を持たないので新しい版として開く（提出の保守会社は DB が前の版・点検行から決める。修正依頼1115 (2)）
       previous: item.report && (isAdmin || item.report.vendor_id === profileVendorId) ? item.report : null,
     });
 
@@ -204,7 +208,7 @@ export function ReportCheckPage({ modeSwitch }: { modeSwitch?: ReactNode } = {})
                 <th className={cn(th, 'w-[5.5rem]')}>物件コード</th>
                 <th className={th}>物件</th>
                 <th className={th}>点検種別</th>
-                {isAdmin && <th className={th}>保守会社</th>}
+                {showVendor && <th className={th}>保守会社</th>}
                 <th className={cn(th, 'w-[6rem]')}>対象月</th>
                 <th className={th}>報告書</th>
                 <th className={cn(th, 'w-[6rem]')}>報告書UP</th>
@@ -219,7 +223,7 @@ export function ReportCheckPage({ modeSwitch }: { modeSwitch?: ReactNode } = {})
                     <td className={cn(td, 'whitespace-nowrap tabular-nums text-gray-500')}>{item.inspection.property_code}</td>
                     <td className={cn(td, 'text-gray-900')}>{item.inspection.property_name}</td>
                     <td className={td}>{item.inspection.inspection_type_label ?? ''}</td>
-                    {isAdmin && <td className={cn(td, 'text-gray-600')}>{item.inspection.vendor_name ?? ''}</td>}
+                    {showVendor && <td className={cn(td, 'text-gray-600')}>{item.inspection.vendor_name ?? ''}</td>}
                     <td className={cn(td, 'whitespace-nowrap tabular-nums')}>{formatMonth(item.targetMonth)}</td>
                     <td className={cn(td, 'whitespace-nowrap')}>
                       {r ? (
@@ -261,7 +265,7 @@ export function ReportCheckPage({ modeSwitch }: { modeSwitch?: ReactNode } = {})
               })}
               {shown.length === 0 && (
                 <tr>
-                  <td colSpan={isAdmin ? 7 : 6} className="px-3 py-6 text-center text-xs text-gray-500">
+                  <td colSpan={showVendor ? 7 : 6} className="px-3 py-6 text-center text-xs text-gray-500">
                     {portal.error ? '読み込めませんでした' : portal.loaded ? '該当する点検はありません' : '読み込み中…'}
                   </td>
                 </tr>
@@ -275,7 +279,7 @@ export function ReportCheckPage({ modeSwitch }: { modeSwitch?: ReactNode } = {})
         open={!!reportTarget}
         preset={reportTarget ? { kind: 'report', ...reportTarget } : null}
         onClose={() => setReportTarget(null)}
-        vendorId={isAdmin ? null : (profileVendorId ?? null)}
+        vendorId={isAdmin || isManagement ? null : (profileVendorId ?? null)}
         onChanged={() => void portal.refetch()}
       />
     </div>

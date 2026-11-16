@@ -45,7 +45,7 @@ describe('uploadRows（修正依頼1029(1) ファイルのアップロードの�
     expect(s.input).toMatchObject({ propertyCode: 'P1', inspectionType: 'エレベーター定期点検' });
     expect(s.conflicts.propertyCode).toEqual({ value: 'P2', source: 'text' });
     const row = buildRows([pdf({ breaks: new Set(), removed: new Set() })])[0]!;
-    const ctx = { inspections: [], source: undefined, size: null, canReport: true };
+    const ctx = { inspections: [], source: undefined, size: null };
     expect(checkRow(row, setFields(s, { category: 'estimate' }, 'manual'), ctx).needsReview).toBe(true);
     const fixed = setFields(s, { category: 'estimate', propertyCode: 'P1' }, 'manual');
     expect(checkRow(row, fixed, ctx).needsReview).toBe(false);
@@ -78,7 +78,7 @@ describe('uploadRows（修正依頼1029(1) ファイルのアップロードの�
       { category: 'report', propertyCode: 'P1', inspectionType: 'EV', performedOn: '2026-10-25' },
       'manual',
     );
-    const ctx = { inspections, source: pdf(), size: 100, canReport: true };
+    const ctx = { inspections, source: pdf(), size: 100 };
     expect(checkRow(row, base, ctx).errors.inspection).toMatch(/点検が2件/);
     const picked = checkRow(row, setFields(base, { vendorId: 'v2' }, 'manual'), ctx);
     expect(picked.inspection?.inspection_id).toBe('i2');
@@ -90,7 +90,7 @@ describe('uploadRows（修正依頼1029(1) ファイルのアップロードの�
   it('修正依頼1104 E1: 区分と実施日が食い違った行は、実施日だけ直しても要確認だが、止めずに確認のうえ登録できる（入力漏れは止める）', () => {
     const inspections = [makeInspection({ inspection_id: 'i1', property_code: 'P1', inspection_type_label: 'EV', vendor_id: 'v1' })];
     const row = buildRows([pdf({ breaks: new Set(), removed: new Set() })])[0]!;
-    const ctx = { inspections, source: pdf(), size: 100, canReport: true };
+    const ctx = { inspections, source: pdf(), size: 100 };
     let s = setFields(EMPTY_ROW_STATE, { category: 'report', propertyCode: 'P1', inspectionType: 'EV', performedOn: '2026-12-01' }, 'preset');
     s = mergeAuto(s, { category: 'estimate', performedOn: '2026-10-25' }, 'text');
     s = setFields(s, { performedOn: '2026-11-05' }, 'manual');

@@ -160,4 +160,12 @@ describe('報告書確認（申請不要の点検の報告書。修正依頼1027
     expect(screen.getByText('読み込めませんでした')).toBeInTheDocument();
     expect(screen.queryByText('読み込み中…')).toBeNull();
   });
+
+  it('管理会社には管理会社フィルターを出さず、保守会社の列を出す（修正依頼1115 (2)）', async () => {
+    useAuthStore.setState({ profile: { ...vendorProfile, role: 'management', vendor_id: null, management_company_id: 'm1' } as DbProfile });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('物件A')).toBeInTheDocument());
+    expect(screen.getByRole('columnheader', { name: '保守会社' })).toBeInTheDocument();
+    expect(formApi.fetchScopedManagementCompanies).not.toHaveBeenCalled();
+  });
 });

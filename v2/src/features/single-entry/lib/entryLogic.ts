@@ -340,6 +340,8 @@ export interface EntryContext {
   linkVendorId?: string | null;
   /** 管理者か（保守会社が無いときの知らせを分ける。省略時は管理者の文言） */
   isAdmin?: boolean;
+  /** 保守会社が決まらない理由（管理会社: 点検行に当たらない・保守会社未登録など。修正依頼1115 (2)）。あればこの文言で止める */
+  vendorReason?: string | null;
 }
 
 export type BuildEntryResult =
@@ -362,6 +364,7 @@ export function buildLocalEntry(values: SingleEntryValues, ctx: EntryContext): B
   // v1 は「必須項目を入力してください」。ここで止まるのは物件だけなので欄の名前を出す
   if (!values.propertyCode) return { ok: false, message: '物件コードを選択してください' };
   if (!ctx.vendor) {
+    if (ctx.vendorReason) return { ok: false, message: ctx.vendorReason };
     // 保守会社のアカウントには保守会社の選択欄が無いので、選ぶよう促さずに管理者への連絡を促す（修正依頼1024 本番確認 ③）
     return {
       ok: false,
