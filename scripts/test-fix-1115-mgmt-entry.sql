@@ -343,6 +343,153 @@ SELECT pg_temp.check('6-9 提出のうちは自分の版を削除できる',
   (signage.portal_update_report((SELECT id FROM t_ids WHERE k = 'r1'), 'delete')).status = 'deleted');
 
 -- ============================================================
+-- 6b. 報告書の版を触れる人（1115 の残り）: 保守会社は保守会社のアカウントが上げた自社の版だけ。管理会社が上げた版は
+--     上げた管理会社（自社）の管理会社アカウントと管理者だけ。画面の計算列 can_modify（inspection_report_modifiable）も同じ
+-- ============================================================
+SELECT pg_temp.as_owner();
+INSERT INTO storage.objects (bucket_id, name, owner_id) VALUES
+  ('inspection-reports', '2b84a9bd-b98e-4332-bd19-2973387bc13c/t1115-m2.pdf', 'a0000000-0000-4000-8000-000000000006'),
+  ('inspection-reports', '2b84a9bd-b98e-4332-bd19-2973387bc13c/t1115-a.pdf', 'a0000000-0000-4000-8000-000000000001');
+-- 管理会社（mgmt@）が保守 c..01 の点検（自社物件 120409-00）に上げた版。vendor_id は c..01 になる
+SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000006');
+INSERT INTO t_ids SELECT 'rm2', (signage.portal_register_report('2b84a9bd-b98e-4332-bd19-2973387bc13c', '2032-01-01', '2032-01-12',
+  '20320112_試験_1115m2.pdf', '2b84a9bd-b98e-4332-bd19-2973387bc13c/t1115-m2.pdf', 'm2.pdf', 10, 'hash-1115m2')).id;
+-- 管理者の代理提出の版（同じ点検。vendor_id は c..01）
+SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000001');
+INSERT INTO t_ids SELECT 'ra', (signage.portal_register_report('2b84a9bd-b98e-4332-bd19-2973387bc13c', '2032-01-01', '2032-01-13',
+  '20320113_試験_1115a.pdf', '2b84a9bd-b98e-4332-bd19-2973387bc13c/t1115-a.pdf', 'a.pdf', 10, 'hash-1115a')).id;
+SELECT pg_temp.as_owner();
+SELECT pg_temp.check('6b-0 管理会社の版・管理者の版とも vendor_id は点検の保守会社 c..01',
+  (SELECT bool_and(vendor_id = 'c0000000-0000-4000-8000-000000000001') FROM signage.signage_inspection_reports
+    WHERE id IN (SELECT id FROM t_ids WHERE k IN ('rm2', 'ra'))));
+
+SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000002');
+SELECT pg_temp.expect_error('6b-1 保守会社（c..01）は管理会社が上げた自社の版を直せない',
+  format($q$SELECT signage.portal_update_report(%L, 'edit', NULL, NULL, NULL, 'x')$q$, (SELECT id FROM t_ids WHERE k = 'rm2')),
+  'この報告書を変更する権限がありません');
+SELECT pg_temp.expect_error('6b-2 保守会社（c..01）は管理会社が上げた自社の版を削除できない',
+  format($q$SELECT signage.portal_update_report(%L, 'delete')$q$, (SELECT id FROM t_ids WHERE k = 'rm2')),
+  'この報告書を変更する権限がありません');
+SELECT pg_temp.expect_error('6b-3 保守会社は管理者の代理提出の版も直せない',
+  format($q$SELECT signage.portal_update_report(%L, 'delete')$q$, (SELECT id FROM t_ids WHERE k = 'ra')),
+  'この報告書を変更する権限がありません');
+SELECT pg_temp.check('6b-4 保守会社は自分たちが上げた版は今までどおり直せる',
+  (signage.portal_update_report((SELECT id FROM t_ids WHERE k = 'rv'), 'edit', NULL, NULL, NULL, 't1115 v')).note = 't1115 v');
+SELECT pg_temp.check('6b-5 計算列 can_modify（保守会社）: 自分たちの版だけ真',
+  (SELECT bool_and(signage.inspection_report_modifiable(r) = (r.id = (SELECT id FROM t_ids WHERE k = 'rv')))
+     FROM signage.signage_inspection_reports r WHERE r.id IN (SELECT id FROM t_ids WHERE k IN ('rv', 'rm2', 'ra'))));
+
+SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000006');
+SELECT pg_temp.check('6b-6 計算列 can_modify（管理会社）: 自社の管理会社が上げた版だけ真',
+  (SELECT bool_and(signage.inspection_report_modifiable(r) = (r.id = (SELECT id FROM t_ids WHERE k = 'rm2')))
+     FROM signage.signage_inspection_reports r WHERE r.id IN (SELECT id FROM t_ids WHERE k IN ('rv', 'rm2', 'ra'))));
+SELECT pg_temp.expect_error('6b-7 管理会社は管理者の代理提出の版を直せない',
+  format($q$SELECT signage.portal_update_report(%L, 'edit', NULL, NULL, NULL, 'x')$q$, (SELECT id FROM t_ids WHERE k = 'ra')),
+  'この報告書を変更する権限がありません');
+
+-- 同じ管理会社の別のアカウント: mgmt-b を一時的に c..09 の所属にする（最後に ROLLBACK で戻る）
+SELECT pg_temp.as_owner();
+UPDATE signage.signage_profiles SET management_company_id = 'c0000000-0000-4000-8000-000000000009'
+ WHERE id = 'a0000000-0000-4000-8000-000000000007';
+SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000007');
+SELECT pg_temp.check('6b-8 同じ管理会社の別のアカウントも、管理会社が上げた版を直せる',
+  (signage.portal_update_report((SELECT id FROM t_ids WHERE k = 'rm2'), 'edit', NULL, NULL, NULL, 't1115 m2')).note = 't1115 m2');
+SELECT pg_temp.as_owner();
+UPDATE signage.signage_profiles SET management_company_id = 'c0000000-0000-4000-8000-000000000010'
+ WHERE id = 'a0000000-0000-4000-8000-000000000007';
+
+SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000001');
+SELECT pg_temp.check('6b-9 管理者は今までどおり全部の版を直せる',
+  (SELECT bool_and(signage.inspection_report_modifiable(r)) FROM signage.signage_inspection_reports r
+    WHERE r.id IN (SELECT id FROM t_ids WHERE k IN ('rv', 'rm2', 'ra')))
+  AND (signage.portal_update_report((SELECT id FROM t_ids WHERE k = 'ra'), 'edit', NULL, NULL, NULL, 't1115 a')).note = 't1115 a');
+SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000006');
+SELECT pg_temp.check('6b-10 管理会社は自社の版を提出のうちに削除できる',
+  (signage.portal_update_report((SELECT id FROM t_ids WHERE k = 'rm2'), 'delete')).status = 'deleted');
+
+-- ============================================================
+-- 6c. 報告書に結び付ける申請（entry_id）は、その点検・物件の申請だけ（管理会社・保守会社・管理者とも）
+-- ============================================================
+SELECT pg_temp.as_owner();
+-- 点検は合っているが物件が違う申請（トリガーを通らない所有者の書き込みで作る食い違い）
+WITH x AS (
+  INSERT INTO signage.signage_entries (user_id, property_code, terminal_id, vendor_name, inspection_type, inspection_start,
+                                       status, property_inspection_id, target_month)
+  VALUES ('a0000000-0000-4000-8000-000000000001', '120409-00', '', '検証消防設備株式会社', '外壁補修工事', '2032-04-05',
+          'pending', 'a1151115-0000-4000-8000-000000000001', '2032-04-01')
+  RETURNING id)
+INSERT INTO t_ids SELECT 'xp1', id FROM x;
+WITH x AS (
+  INSERT INTO signage.signage_entries (user_id, property_code, terminal_id, vendor_name, inspection_type, inspection_start,
+                                       status, property_inspection_id, target_month)
+  SELECT 'a0000000-0000-4000-8000-000000000001', '120410-00', '', vendor_name, inspection_type, '2032-04-05',
+         'pending', '2b84a9bd-b98e-4332-bd19-2973387bc13c', '2032-04-01'
+    FROM signage.signage_entries WHERE id = (SELECT id FROM t_ids WHERE k = 'm1')
+  RETURNING id)
+INSERT INTO t_ids SELECT 'xp2', id FROM x;
+INSERT INTO storage.objects (bucket_id, name, owner_id) VALUES
+  ('inspection-reports', 'a1151115-0000-4000-8000-000000000001/t1115-e1.pdf', 'a0000000-0000-4000-8000-000000000006'),
+  ('inspection-reports', 'a1151115-0000-4000-8000-000000000001/t1115-e2.pdf', 'a0000000-0000-4000-8000-000000000001'),
+  ('inspection-reports', '2b84a9bd-b98e-4332-bd19-2973387bc13c/t1115-e3.pdf', 'a0000000-0000-4000-8000-000000000002');
+SELECT pg_temp.check('6c-0 申請 m1・u1 が残っていて、m1 は点検 I1・物件 120410-00 の申請',
+  (SELECT property_inspection_id = 'a1151115-0000-4000-8000-000000000001' AND property_code = '120410-00'
+     FROM signage.signage_entries WHERE id = (SELECT id FROM t_ids WHERE k = 'm1'))
+  AND EXISTS (SELECT 1 FROM signage.signage_entries WHERE id = (SELECT id FROM t_ids WHERE k = 'u1')));
+
+SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000006');
+SELECT pg_temp.expect_error('6c-1 管理会社: 別の点検の申請は結び付けられない',
+  format($q$SELECT signage.portal_register_report('a1151115-0000-4000-8000-000000000001', '2032-01-01', '2032-01-14',
+       '20320114_試験_1115e1.pdf', 'a1151115-0000-4000-8000-000000000001/t1115-e1.pdf', 'e1.pdf', 10, 'hash-1115e1', %L)$q$,
+         (SELECT id FROM t_ids WHERE k = 'u1')), '申請と点検が一致しません');
+SELECT pg_temp.expect_error('6c-2 管理会社: 点検は合っていても物件が違う申請は結び付けられない',
+  format($q$SELECT signage.portal_register_report('a1151115-0000-4000-8000-000000000001', '2032-01-01', '2032-01-14',
+       '20320114_試験_1115e1.pdf', 'a1151115-0000-4000-8000-000000000001/t1115-e1.pdf', 'e1.pdf', 10, 'hash-1115e1', %L)$q$,
+         (SELECT id FROM t_ids WHERE k = 'xp1')), '申請と点検が一致しません');
+SELECT pg_temp.check('6c-3 管理会社: その点検・物件の申請なら結び付けられる',
+  (signage.portal_register_report('a1151115-0000-4000-8000-000000000001', '2032-01-01', '2032-01-14',
+     '20320114_試験_1115e1.pdf', 'a1151115-0000-4000-8000-000000000001/t1115-e1.pdf', 'e1.pdf', 10, 'hash-1115e1',
+     (SELECT id FROM t_ids WHERE k = 'm1'))).entry_id = (SELECT id FROM t_ids WHERE k = 'm1'));
+
+SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000001');
+SELECT pg_temp.expect_error('6c-4 管理者: 別の点検の申請は結び付けられない',
+  format($q$SELECT signage.portal_register_report('a1151115-0000-4000-8000-000000000001', '2032-01-01', '2032-01-15',
+       '20320115_試験_1115e2.pdf', 'a1151115-0000-4000-8000-000000000001/t1115-e2.pdf', 'e2.pdf', 10, 'hash-1115e2', %L)$q$,
+         (SELECT id FROM t_ids WHERE k = 'u1')), '申請と点検が一致しません');
+SELECT pg_temp.expect_error('6c-5 管理者: 物件が違う申請は結び付けられない',
+  format($q$SELECT signage.portal_register_report('a1151115-0000-4000-8000-000000000001', '2032-01-01', '2032-01-15',
+       '20320115_試験_1115e2.pdf', 'a1151115-0000-4000-8000-000000000001/t1115-e2.pdf', 'e2.pdf', 10, 'hash-1115e2', %L)$q$,
+         (SELECT id FROM t_ids WHERE k = 'xp1')), '申請と点検が一致しません');
+SELECT pg_temp.check('6c-6 管理者: その点検・物件の申請なら結び付けられる',
+  (signage.portal_register_report('a1151115-0000-4000-8000-000000000001', '2032-01-01', '2032-01-15',
+     '20320115_試験_1115e2.pdf', 'a1151115-0000-4000-8000-000000000001/t1115-e2.pdf', 'e2.pdf', 10, 'hash-1115e2',
+     (SELECT id FROM t_ids WHERE k = 'm1'))).entry_id = (SELECT id FROM t_ids WHERE k = 'm1'));
+
+SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000002');
+SELECT pg_temp.expect_error('6c-7 保守会社: 別の点検の申請は結び付けられない',
+  format($q$SELECT signage.portal_register_report('2b84a9bd-b98e-4332-bd19-2973387bc13c', '2032-01-01', '2032-01-16',
+       '20320116_試験_1115e3.pdf', '2b84a9bd-b98e-4332-bd19-2973387bc13c/t1115-e3.pdf', 'e3.pdf', 10, 'hash-1115e3', %L)$q$,
+         (SELECT id FROM t_ids WHERE k = 'm1')), '申請と点検が一致しません');
+SELECT pg_temp.expect_error('6c-8 保守会社: 点検は合っていても物件が違う申請は結び付けられない',
+  format($q$SELECT signage.portal_register_report('2b84a9bd-b98e-4332-bd19-2973387bc13c', '2032-01-01', '2032-01-16',
+       '20320116_試験_1115e3.pdf', '2b84a9bd-b98e-4332-bd19-2973387bc13c/t1115-e3.pdf', 'e3.pdf', 10, 'hash-1115e3', %L)$q$,
+         (SELECT id FROM t_ids WHERE k = 'xp2')), '申請と点検が一致しません');
+SELECT pg_temp.as_owner();
+WITH x AS (
+  INSERT INTO signage.signage_entries (user_id, property_code, terminal_id, vendor_name, inspection_type, inspection_start,
+                                       status, property_inspection_id, target_month)
+  SELECT 'a0000000-0000-4000-8000-000000000002', '120409-00', '', vendor_name, inspection_type, '2032-04-05',
+         'pending', '2b84a9bd-b98e-4332-bd19-2973387bc13c', '2032-04-01'
+    FROM signage.signage_entries WHERE id = (SELECT id FROM t_ids WHERE k = 'm1')
+  RETURNING id)
+INSERT INTO t_ids SELECT 'xv', id FROM x;
+SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000002');
+SELECT pg_temp.check('6c-9 保守会社: その点検・物件の申請なら結び付けられる',
+  (signage.portal_register_report('2b84a9bd-b98e-4332-bd19-2973387bc13c', '2032-01-01', '2032-01-16',
+     '20320116_試験_1115e3.pdf', '2b84a9bd-b98e-4332-bd19-2973387bc13c/t1115-e3.pdf', 'e3.pdf', 10, 'hash-1115e3',
+     (SELECT id FROM t_ids WHERE k = 'xv'))).entry_id = (SELECT id FROM t_ids WHERE k = 'xv'));
+SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000006');  -- 7 は管理会社（mgmt@）として続ける
+
+-- ============================================================
 -- 7. 詳細設定の貼紙画像: 管理会社も自分の uid のフォルダだけ置ける
 -- ============================================================
 INSERT INTO storage.objects (bucket_id, name, owner_id) VALUES
@@ -491,6 +638,10 @@ SELECT pg_temp.check('10-1b mgmt_poster_object_deletable は authenticated だ�
 SELECT pg_temp.check('10-2 inspection_report_writable は authenticated だけ（Storage のポリシーで使う）',
   has_function_privilege('authenticated', 'signage.inspection_report_writable(uuid)', 'execute')
   AND NOT has_function_privilege('anon', 'signage.inspection_report_writable(uuid)', 'execute'));
+SELECT pg_temp.check('10-2b inspection_report_modifiable は authenticated だけ（一覧の計算列 can_modify）',
+  has_function_privilege('authenticated', 'signage.inspection_report_modifiable(signage.signage_inspection_reports)', 'execute')
+  AND NOT has_function_privilege('anon', 'signage.inspection_report_modifiable(signage.signage_inspection_reports)', 'execute')
+  AND NOT has_function_privilege('public', 'signage.inspection_report_modifiable(signage.signage_inspection_reports)', 'execute'));
 SELECT pg_temp.check('10-3 置き換えた RPC は anon が実行できない',
   NOT has_function_privilege('anon', 'signage.portal_update_submitted_entry(uuid, jsonb)', 'execute')
   AND NOT has_function_privilege('anon', 'signage.portal_entry_for_edit(uuid)', 'execute')

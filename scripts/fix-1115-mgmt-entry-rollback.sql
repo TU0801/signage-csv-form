@@ -2,7 +2,7 @@
 -- 置換した9関数（レビュー後に portal_entries を足した）は、本番の現行定義（2026-11-16 に Management API の SELECT で pg_get_functiondef を
 -- 読んだもの）をそのまま収めた。portal_entries は戻り値の形が変わるので DROP → CREATE で戻す。
 -- 足した関数（entry_vendor_for_management・3引数の submitted_entry_editable・inspection_report_writable・entry_author_is_management・
--- mgmt_poster_object_deletable）とポリシー6本を消す。
+-- mgmt_poster_object_deletable・inspection_report_modifiable）とポリシー6本を消す。
 -- 適用方法: ファイル全体を1つのクエリとして流す（BEGIN/COMMIT は付けない）。何度流しても同じ結果になる。
 -- 要件5の SQL を当てた後なら、先に要件5の戻しを流す。トリガー関数の PUBLIC・anon の EXECUTE は戻さない（発火には関係しない）。
 
@@ -575,5 +575,6 @@ DROP FUNCTION IF EXISTS signage.inspection_report_writable(uuid);
 DROP FUNCTION IF EXISTS signage.entry_vendor_for_management(uuid, uuid);
 DROP FUNCTION IF EXISTS signage.entry_author_is_management(uuid);
 DROP FUNCTION IF EXISTS signage.mgmt_poster_object_deletable(text);
+DROP FUNCTION IF EXISTS signage.inspection_report_modifiable(signage.signage_inspection_reports);
 
 NOTIFY pgrst, 'reload schema';

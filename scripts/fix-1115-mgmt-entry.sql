@@ -12,7 +12,9 @@
 --   - 申請済み（draft）の修正は「自社物件の申請で申請者が自分」のときだけ（保守会社が出した申請は直させない）。
 --   - 報告書: inspection_writable（完了連絡の portal_mark_completed・portal_mark_completed_any_month・portal_unmark_completed と共有）は
 --     変えず、portal_register_report と Storage の inspection-reports の INSERT に管理会社用の条件を別に足す。
---     管理会社が自分で上げた版は、保守会社と同じ条件（削除は受領前の提出のうち・受領済みは変更不可・復元は管理者だけ）で修正・削除できる。
+--     管理会社が上げた版は、上げた管理会社（自社）の管理会社アカウントが、保守会社と同じ条件（削除は受領前の提出のうち・受領済みは変更不可・
+--     復元は管理者だけ）で修正・削除できる。保守会社が触れる版は保守会社のアカウント（role=user）が上げた自社の版だけ（1115 の残り）。
+--     報告書に結び付ける申請（entry_id）は、その点検・物件の申請だけ（1115 の残り。点検の一致は前からあり、物件の一致を足した）。
 --   - bulk_template_info（一括入力テンプレート）に管理会社の分岐（自社物件の点検。保守会社を渡せばその会社の分）。
 --   - 詳細設定の貼紙画像: 管理会社も自分の uid のフォルダへアップロードできる（poster-images の INSERT）。
 --   承認は今までどおり（portal_review_entry・portal_approve_entry_checked。管理会社が入れた申請も管理会社が承認する）。変えていない。
@@ -29,8 +31,11 @@
 --   置換  signage.guard_entry_type_scope()       点検種別の変更 (2) に管理会社の分岐（※要件5もこの関数を変える。要件5の SQL はこの版を土台にする）
 --   置換  signage.portal_update_submitted_entry(uuid, jsonb)  3引数の editable・種別/台の管理会社の分岐・受注先の決め直し（※要件5もこの関数を変える）
 --   置換  signage.portal_entry_for_edit(uuid)    3引数の editable を使う
---   置換  signage.portal_register_report(...)    inspection_report_writable で判定
---   置換  signage.portal_update_report(...)      管理会社が自分で上げた版
+--   新設  signage.inspection_report_modifiable(signage_inspection_reports)  報告書の版を修正・削除できる人か（portal_update_report と
+--         画面の計算列 can_modify が使う。1115 の残り）
+--   置換  signage.portal_register_report(...)    inspection_report_writable で判定・申請（entry_id）は点検と物件の両方が一致するものだけ
+--   置換  signage.portal_update_report(...)      「誰が」を inspection_report_modifiable に（管理会社は自社の管理会社が上げた版、
+--                                                保守会社は保守会社のアカウントが上げた自社の版）
 --   置換  signage.bulk_template_info(uuid)       管理会社の分岐（略称は自社物件の点検に出てくる保守会社のときだけ）
 --   置換  signage.portal_entries()               列 by_management を足す（戻り値の形が変わるので DROP → CREATE。保守会社の画面で管理会社の申請に
 --                                                「修正」を出さないため）
@@ -49,7 +54,7 @@
 -- 適用順: fix-1115-templates.sql の後、要件5の SQL より前。加算的な変更なので「DDL → デプロイ」。今の画面は管理会社に点検一覧しか
 --   出さないので、先に当てても誤動作しない。適用後に has_function_privilege（entry_vendor_for_management・3引数の
 --   submitted_entry_editable・entry_author_is_management は authenticated が false、inspection_report_writable・
---   mgmt_poster_object_deletable は true）を確かめる。portal_entries は列が増えるだけなので、今の画面のまま当てても動く。
+--   mgmt_poster_object_deletable・inspection_report_modifiable は true）を確かめる。portal_entries は列が増えるだけなので、今の画面のまま当てても動く。
 --
 -- 戻し手順: scripts/fix-1115-mgmt-entry-rollback.sql を流す（置換した9関数の本番の現行定義をそのまま収め、足した関数・ポリシーを消す）。
 --   要件5の SQL を当てた後に戻すときは、先に要件5の戻しを流す（同じ関数を変えるため）。
@@ -650,11 +655,6 @@ BEGIN
               WHERE r0.storage_path = p_storage_path AND r0.status <> 'deleted') THEN
     RAISE EXCEPTION 'このファイルは登録済みです' USING ERRCODE = '22023';
   END IF;
-  IF p_entry_id IS NOT NULL AND NOT EXISTS (
-       SELECT 1 FROM signage.signage_entries e WHERE e.id = p_entry_id AND e.property_inspection_id = p_inspection_id) THEN
-    RAISE EXCEPTION '申請と点検が一致しません' USING ERRCODE = '22023';
-  END IF;
-
   SELECT s.property_code, s.property_name, pi.inspection_type_id, t.label, pi.maintainer_id
     INTO info
     FROM biz.property_inspections pi
@@ -662,6 +662,16 @@ BEGIN
     JOIN signage.signage_master_properties s ON s.id = b.signage_property_id
     LEFT JOIN biz.inspection_types t ON t.id = pi.inspection_type_id
    WHERE pi.id = p_inspection_id;
+
+  -- 結び付ける申請は、その点検（property_inspection_id）の申請で、物件もその点検の物件のものだけ（管理者・保守会社・管理会社とも）。
+  -- [1115 の残り] 変えた箇所: 点検の一致は本番の現行定義にもあった。物件の一致を足し、点検の物件を読んだ後へ移した
+  -- （申請の物件コードと点検の物件は申請のトリガーがそろえるが、管理者の書き込みや物件コードの付け替えで食い違っても結び付けない）
+  IF p_entry_id IS NOT NULL AND NOT EXISTS (
+       SELECT 1 FROM signage.signage_entries e
+        WHERE e.id = p_entry_id AND e.property_inspection_id = p_inspection_id
+          AND e.property_code IS NOT DISTINCT FROM info.property_code AND info.property_code IS NOT NULL) THEN
+    RAISE EXCEPTION '申請と点検が一致しません' USING ERRCODE = '22023';
+  END IF;
 
   -- 提出する保守会社: 保守会社のアカウントは自社。管理者の代理提出は、同じ点検・対象月の最新の版の保守会社（再提出）、
   -- 無ければ点検行の保守会社
@@ -696,6 +706,38 @@ $function$;
 REVOKE ALL ON FUNCTION signage.portal_register_report(uuid, date, date, text, text, text, bigint, text, uuid, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION signage.portal_register_report(uuid, date, date, text, text, text, bigint, text, uuid, text) TO authenticated, service_role;
 
+-- [1115 の残り] 新設: 報告書の版を修正・削除できる人か（「誰が」だけ。受領前・受領済み・復元の確かめは portal_update_report に残す）。
+-- portal_update_report と、画面の一覧の計算列 can_modify（PostgREST の計算列。fetchInspectionReports が読む）が同じ判定を使う。
+--   - 管理者: 全件（今までどおり）
+--   - 保守会社（role=user）: 自社（vendor_id）の版のうち、保守会社のアカウント（role=user）が上げた版だけ。管理会社が上げた版は
+--     vendor_id に点検行の保守会社が入るが、触らせない。管理者の代理提出の版も保守会社は触れない（管理者が直す）
+--   - 管理会社: 管理会社のアカウントが上げた版のうち、上げた人の管理会社が自社で、自社が管理する物件の点検のもの
+--     （上げた本人に限らず同じ管理会社の人も。保守会社の版・管理者の版は触れない）
+--   上げた人の役割は今のプロファイルで見る（状態は問わない。無効化した人の版も同じ会社が直せる）。プロファイルが無ければ管理者だけ。
+--   判定できないとき（無効・プロファイル無しの呼び出し元）は coalesce で権限なしに倒す
+CREATE OR REPLACE FUNCTION signage.inspection_report_modifiable(r signage.signage_inspection_reports)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'signage', 'pg_temp'
+AS $function$
+  select coalesce(
+       signage.is_active_admin()
+       or (signage.current_role_kind() = 'user' and r.vendor_id is not null
+           and r.vendor_id = signage.current_vendor_id()
+           and exists (select 1 from signage.signage_profiles p where p.id = r.uploaded_by and p.role = 'user'))
+       or (signage.is_active_management() and signage.current_management_company_id() is not null
+           and r.property_inspection_id is not null
+           and signage.inspection_in_scope(r.property_inspection_id)
+           and exists (select 1 from signage.signage_profiles p
+                        where p.id = r.uploaded_by and p.role = 'management'
+                          and p.management_company_id = signage.current_management_company_id())),
+       false);
+$function$;
+
+REVOKE ALL ON FUNCTION signage.inspection_report_modifiable(signage.signage_inspection_reports) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION signage.inspection_report_modifiable(signage.signage_inspection_reports) TO authenticated, service_role;
+
 CREATE OR REPLACE FUNCTION signage.portal_update_report(p_report_id uuid, p_action text, p_performed_on date DEFAULT NULL::date, p_target_month date DEFAULT NULL::date, p_file_name text DEFAULT NULL::text, p_note text DEFAULT NULL::text)
  RETURNS signage.signage_inspection_reports
  LANGUAGE plpgsql
@@ -712,14 +754,10 @@ BEGIN
   -- 管理者以外は自社が提出した報告書だけ（同じ点検に台ごとの別の保守会社が居ても、他社の版は触らせない）
   -- 無効・プロファイル無しのユーザーでは current_role_kind()・current_vendor_id() が NULL になり、式全体が NULL で
   -- IF を素通りしていた。coalesce で「判定できないときは権限なし」にする。
-  -- [1115(2)] 変えた箇所: 管理会社は自分で上げた版（自社物件の点検のもの）だけ。受領前の扱い（削除は提出のうち・受領済みは不可・
-  -- 復元は管理者だけ）は下の確かめが保守会社と同じにかける
-  IF NOT coalesce(signage.is_active_admin(), false)
-     AND NOT coalesce(signage.current_role_kind() = 'user' AND r.vendor_id IS NOT NULL
-                      AND r.vendor_id = signage.current_vendor_id(), false)
-     AND NOT coalesce(signage.is_active_management() AND r.uploaded_by = auth.uid()
-                      AND r.property_inspection_id IS NOT NULL
-                      AND signage.inspection_in_scope(r.property_inspection_id), false) THEN
+  -- [1115(2)・1115 の残り] 変えた箇所: 「誰が」は inspection_report_modifiable（画面の can_modify と同じ）。保守会社は保守会社のアカウントが
+  -- 上げた自社の版だけ、管理会社は自社の管理会社のアカウントが上げた版（自社物件の点検のもの）だけ。受領前の扱い（削除は提出のうち・
+  -- 受領済みは不可・復元は管理者だけ）は下の確かめが保守会社と同じにかける
+  IF NOT coalesce(signage.inspection_report_modifiable(r), false) THEN
     RAISE EXCEPTION 'この報告書を変更する権限がありません' USING ERRCODE = '42501';
   END IF;
   -- 復元は管理者だけ（保守会社が管理者の削除を取り消せないように。修正依頼1027 決定②）

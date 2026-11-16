@@ -106,6 +106,11 @@ export interface DbInspectionReport {
   retention_until: string | null;
   created_at: string;
   updated_at: string;
+  /**
+   * 見ている人がこの版を修正・削除できる人か（一覧の計算列。DB の inspection_report_modifiable。受領前かどうかは見ない）。
+   * 保守会社は保守会社のアカウントが上げた自社の版、管理会社は自社の管理会社が上げた版、管理者は全件（修正依頼1115 の残り）
+   */
+  can_modify?: boolean;
 }
 
 /** RPC management_companies_master の1行（管理者だけ） */

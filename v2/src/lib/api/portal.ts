@@ -122,11 +122,15 @@ export async function approveEntryChecked(entryId: string, expectedUpdatedAt: st
   return data as DbEntry;
 }
 
-/** 範囲内の点検報告書（RLS で絞られる）。削除済みも返す（画面の「削除済みを表示」で使う） */
+/**
+ * 範囲内の点検報告書（RLS で絞られる）。削除済みも返す（画面の「削除済みを表示」で使う）。
+ * can_modify は見ている人がその版を修正・削除できる人か（計算列 signage.inspection_report_modifiable。portal_update_report と
+ * 同じ判定。scripts/fix-1115-mgmt-entry.sql）
+ */
 export async function fetchInspectionReports(): Promise<DbInspectionReport[]> {
   const { data, error } = await supabase
     .from(TABLES.inspectionReports)
-    .select('*')
+    .select('*, can_modify:inspection_report_modifiable')
     .order('performed_on', { ascending: false })
     .order('created_at', { ascending: false });
   if (error) throw error;
@@ -189,7 +193,11 @@ export interface ReportEdit {
   note?: string | null;
 }
 
-/** 提出者（保守会社）・管理者による修正、削除（論理）、復元 */
+/**
+ * 提出者（保守会社・管理会社）・管理者による修正、削除（論理）、復元。
+ * RPC の行には計算列 can_modify が無いので true を入れて返す（RPC が通った＝呼んだ人はこの版を触れる人で、誰が触れるかは
+ * 上げた人で決まり修正・削除・復元では変わらない。入れないと一覧・ポップアップの差し替えで修正・削除のボタンが消える）
+ */
 export async function updateInspectionReport(
   reportId: string,
   action: ReportUpdateAction,
@@ -204,7 +212,7 @@ export async function updateInspectionReport(
     p_note: edit.note ?? null,
   });
   if (error) throw error;
-  return data as DbInspectionReport;
+  return { ...(data as DbInspectionReport), can_modify: true };
 }
 
 export type ReportReviewAction = 'accept' | 'return';
