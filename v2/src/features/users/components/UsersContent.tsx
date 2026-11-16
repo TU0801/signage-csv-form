@@ -46,11 +46,13 @@ export function UsersContent() {
     addUser,
     editUser,
     updateUserStatus,
+    deleteUser,
   } = useUsers();
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [editTarget, setEditTarget] = useState<DbProfile | null>(null);
   const [deactivateTarget, setDeactivateTarget] = useState<DbProfile | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DbProfile | null>(null);
 
   // v1: js/admin-users.js handleDeactivateUser
   const handleDeactivate = async (user: DbProfile) => {
@@ -74,6 +76,17 @@ export function UsersContent() {
     }
   };
 
+  // 断られた理由（履歴がある・無効化していない等）は Edge Function の文言をそのまま出す
+  const handleDelete = async (user: DbProfile) => {
+    try {
+      await deleteUser(user.id);
+      addToast('ユーザーを削除しました', 'success');
+    } catch (err) {
+      console.error('Failed to delete user:', err);
+      addToast(err instanceof Error && err.message ? err.message : '削除に失敗しました', 'error');
+    }
+  };
+
   if (loading && users.length === 0) {
     return (
       <div className="flex justify-center py-12">
@@ -93,7 +106,7 @@ export function UsersContent() {
 
       {isManagement && (
         <p className="text-xs text-gray-500">
-          自社の管理会社ユーザーを表示します。追加・編集・無効化できるのも自社の管理会社ユーザーだけです
+          自社の管理会社ユーザーを表示します。追加・編集・無効化・削除できるのも自社の管理会社ユーザーだけです
           （保守会社のユーザーは複数の管理会社にまたがるため、作成・管理は管理者が行います）。
         </p>
       )}
@@ -149,7 +162,7 @@ export function UsersContent() {
                       {user.created_at ? new Date(user.created_at).toLocaleDateString('ja-JP') : '-'}
                     </td>
                     <td className="cell sticky right-0 bg-white shadow-[inset_1px_0_0_var(--color-gray-200)] group-hover:bg-gray-50">
-                      {/* 削除は無い（v1 にも無く、profiles に DELETE ポリシーも無い。使わせないときは無効化する） */}
+                      {/* 削除は無効な行だけ（修正依頼1115 (1)）。履歴のある人は Edge Function が断るので、そのときは無効化のままにする */}
                       {/* flex は td ではなく中の div に付ける（td に付けると表のセルとして並ばなくなる） */}
                       {readOnly ? (
                         <span className="text-xs text-gray-400" title="保守会社のユーザーは管理者が編集します">
@@ -174,6 +187,11 @@ export function UsersContent() {
                           {!isSelf && status === 'inactive' && (
                             <Button variant="success" size="sm" onClick={() => handleActivate(user)}>
                               有効化
+                            </Button>
+                          )}
+                          {!isSelf && status === 'inactive' && (
+                            <Button variant="danger" size="sm" onClick={() => setDeleteTarget(user)}>
+                              削除
                             </Button>
                           )}
                         </div>
@@ -215,6 +233,18 @@ export function UsersContent() {
         title="ユーザーの無効化"
         message={"このユーザーを無効化してもよろしいですか？\nログインできなくなります。"} // v1: js/admin-users.js handleDeactivateUser
         confirmLabel="無効化"
+        variant="danger"
+      />
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (deleteTarget) handleDelete(deleteTarget);
+        }}
+        title="ユーザーの削除"
+        message={`このユーザーを削除します。元に戻せません。\n${deleteTarget?.email ?? ''}`}
+        confirmLabel="削除"
         variant="danger"
       />
     </div>

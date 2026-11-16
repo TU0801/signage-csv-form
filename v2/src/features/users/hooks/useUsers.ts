@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase, TABLES } from '@/lib/supabase';
 import {
   createUser,
+  deleteUser as deleteUserApi,
   fetchOwnManagementCompany,
   setUserPassword,
   setUserStatus,
@@ -18,7 +19,7 @@ import { MIN_PASSWORD_LENGTH, companyColumns, companyRequiredError } from '../co
  * ユーザー管理。管理会社のアカウント（修正依頼1024 C3）は:
  * - 一覧: 自社の管理会社ユーザーだけ（RLS mgmt_select_profiles が絞る。保守会社のユーザーは管理者だけが扱う）
  * - 作成: 自社の管理会社ユーザーだけ（Edge Function が確かめる）
- * - 編集はパスワードだけ、無効化・有効化も Edge Function 経由で、自社の管理会社ユーザーだけ
+ * - 編集はパスワードだけ、無効化・有効化・削除も Edge Function 経由で、自社の管理会社ユーザーだけ
  */
 export function useUsers() {
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
@@ -194,6 +195,19 @@ export function useUsers() {
     [assertNotSelf, fetchUsers, isManagement],
   );
 
+  /**
+   * 削除（修正依頼1115 (1)）。管理者・管理会社とも Edge Function で行う（profiles に DELETE ポリシーは無い）。
+   * 無効化済みか・履歴が無いか・範囲内かは Edge Function が確かめ、断られたらその文言を投げる
+   */
+  const deleteUser = useCallback(
+    async (id: string) => {
+      assertNotSelf(id, '自分は削除できません');
+      await deleteUserApi(id);
+      await fetchUsers();
+    },
+    [assertNotSelf, fetchUsers],
+  );
+
   return {
     users,
     vendors,
@@ -206,5 +220,6 @@ export function useUsers() {
     addUser,
     editUser,
     updateUserStatus,
+    deleteUser,
   };
 }

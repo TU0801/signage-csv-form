@@ -5,7 +5,7 @@ import type { ManagementCompanyRow } from '@/types/portal';
 
 /**
  * ユーザー作成・パスワード変更は service_role が必要なため、管理者検証付きの Edge Function で行う。
- * signage_profiles には INSERT / DELETE のポリシーが無く、クライアントから直接は作れない・消せない。
+ * signage_profiles には INSERT / DELETE のポリシーが無く、クライアントから直接は作れない・消せない（削除も Edge Function）。
  * 失敗時は Edge Function が返す日本語の error 文言を投げる。
  */
 // v1: js/supabase/users.js invokeAdminUsers
@@ -53,6 +53,14 @@ export async function createUser(params: {
  */
 export async function setUserStatus(userId: string, status: DbProfile['status']): Promise<void> {
   await invokeAdminUsers<{ ok: true }>({ action: 'set_status', userId, status });
+}
+
+/**
+ * 削除（修正依頼1115 (1)）。無効化したユーザーだけ。入力・申請などの履歴がある人・自分・範囲外は Edge Function が断る。
+ * 他システムと共用のアカウントは signage のプロファイルだけ消し、ログインアカウントは残す
+ */
+export async function deleteUser(userId: string): Promise<void> {
+  await invokeAdminUsers<{ ok: true; shared: boolean }>({ action: 'delete_user', userId });
 }
 
 /** パスワード変更（他システムと共用のアカウントは Edge Function が断る） */

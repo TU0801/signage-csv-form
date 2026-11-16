@@ -3,7 +3,7 @@
 //   - 作成: 自社の管理会社ユーザーだけ（会社は呼び出し元の会社に固定）。管理者・保守会社（権限 user）のアカウントは作れない
 //     （保守会社のアカウントは全管理会社分の点検・報告書を見られる。管理会社は自社物件への保守会社の紐付けを自分で書けるので、
 //       保守会社アカウントの作成を開くと、任意の保守会社のアカウントを作って他社のデータに入れてしまう）
-//   - パスワード変更・有効化／無効化（set_status）: 自社の管理会社ユーザーだけ
+//   - パスワード変更・有効化／無効化（set_status）・削除（delete_user）: 自社の管理会社ユーザーだけ
 //   範囲はここで service_role として確かめる（scripts/fix-1024-mgmt.sql）
 //
 // ブラウザの anon クライアントでは他人のパスワードを変更できず、ユーザー作成も signUp で
@@ -197,6 +197,71 @@ Deno.serve(async (req) => {
     if (error) return json({ error: `状態の変更に失敗しました: ${error.message}` }, 400);
     await writeAudit(admin, caller.id, 'SET_STATUS', userId, { email: target.email, status }, 'signage_profiles');
     return json({ ok: true });
+  }
+
+  if (body.action === 'delete_user') {
+    // 削除（修正依頼1115 (1)）。無効化したユーザーだけ。入力・申請などの履歴がある人は断る
+    //   - auth.users を消すと signage_entries.user_id・signage_ocr_corrections.recorded_by は CASCADE で一緒に消え、
+    //     NO ACTION の3表（紐付けの申請・承認者、点検報告書・物件ファイルの登録者）が残っていると削除自体が失敗するため、先に数えて断る
+    //   - 他アプリ（biz/noj/mansion）と共用のアカウントは auth.users を残し、signage のプロファイルだけ消す
+    const userId = typeof body.userId === 'string' ? body.userId : '';
+    if (!userId) return json({ error: 'ユーザーを指定してください' }, 400);
+    if (userId === caller.id) return json({ error: '自分は削除できません' }, 400);
+    // signage のプロファイルがある人だけを対象にする（auth.users は他アプリと共用で、プロファイルの無いアカウントは他アプリのもの）
+    const { data: target, error: targetError } = await admin
+      .from('signage_profiles').select('id, email, role, status, vendor_id, management_company_id').eq('id', userId).maybeSingle();
+    if (targetError) return json({ error: `ユーザーの確認に失敗しました: ${targetError.message}` }, 500);
+    if (!target || (!callerIsAdmin && !inManagementScope(target))) return json({ error: 'ユーザーが見つかりません' }, 404);
+    if (target.status !== 'inactive') return json({ error: '無効化したユーザーだけ削除できます。先に無効化してください' }, 409);
+    if (target.role === 'admin') {
+      // 有効な管理者が残らない削除は断る（対象は無効なので通常は起きない。念のため）
+      const { count, error } = await admin
+        .from('signage_profiles').select('id', { count: 'exact', head: true })
+        .eq('role', 'admin').eq('status', 'active').neq('id', target.id);
+      if (error) return json({ error: `管理者の確認に失敗しました: ${error.message}` }, 500);
+      if (!count) return json({ error: '有効な管理者がいなくなるため削除できません' }, 409);
+    }
+    // 履歴の件数（どれか1つでも確かめられなければ削除しない）
+    const refQueries: [string, string][] = [
+      ['signage_entries', `user_id.eq.${target.id}`],
+      ['signage_building_vendors', `requested_by.eq.${target.id},approved_by.eq.${target.id}`],
+      ['signage_inspection_reports', `uploaded_by.eq.${target.id}`],
+      ['signage_property_files', `uploaded_by.eq.${target.id}`],
+      ['signage_ocr_corrections', `recorded_by.eq.${target.id}`],
+    ];
+    const refResults = await Promise.all(
+      refQueries.map(([table, filter]) => admin.from(table).select('id', { count: 'exact', head: true }).or(filter)),
+    );
+    const refs: Record<string, number> = {};
+    for (let i = 0; i < refQueries.length; i++) {
+      const { count, error } = refResults[i];
+      if (error) return json({ error: `履歴の確認に失敗しました: ${error.message}` }, 500);
+      if (count) refs[refQueries[i][0]] = count;
+    }
+    if (Object.keys(refs).length > 0) {
+      return json({ error: '入力・申請の履歴があるため削除できません。無効化のままにしてください', refs }, 409);
+    }
+    const { data: shared, error: sharedError } = await admin.rpc('is_shared_auth_user', { target: target.id });
+    if (sharedError) return json({ error: `共用アカウントの確認に失敗しました: ${sharedError.message}` }, 500);
+    if (shared) {
+      // 無効のままの行だけ消す（確かめた後に有効化された場合は消さない）
+      const { data: deleted, error } = await admin
+        .from('signage_profiles').delete().eq('id', target.id).eq('status', 'inactive').select('id');
+      if (error) return json({ error: `削除に失敗しました: ${error.message}` }, 400);
+      if (!deleted || deleted.length === 0) return json({ error: '無効化したユーザーだけ削除できます。先に無効化してください' }, 409);
+    } else {
+      // プロファイルは auth.users の CASCADE で一緒に消える
+      const { error } = await admin.auth.admin.deleteUser(target.id);
+      if (error) return json({ error: `削除に失敗しました: ${error.message}` }, 400);
+    }
+    await writeAudit(admin, caller.id, 'DELETE_USER', target.id, {
+      email: target.email,
+      role: target.role,
+      vendor_id: target.vendor_id,
+      management_company_id: target.management_company_id,
+      shared: !!shared,
+    });
+    return json({ ok: true, shared: !!shared });
   }
 
   return json({ error: '不明な操作です' }, 400);
