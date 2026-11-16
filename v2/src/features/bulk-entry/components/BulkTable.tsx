@@ -19,7 +19,8 @@ import { defaultDisplayTime, terminalIdsFor, uniqueProperties } from '../utils/b
 import { COL, LAST_INPUT_COL } from '../utils/columns';
 import { hasRowDetail, rowDetailSummary } from '../utils/rowDetail';
 import { REMARKS_PLACEHOLDER, remarksNotice } from '@/lib/remarks';
-import { nextSort, orderRows, type SortColumn, type SortState } from '../utils/rowOrder';
+import { orderRows, type SortColumn, type SortState } from '../utils/rowOrder';
+import { SortHeaderButton } from '@/components/ui/SortHeaderButton';
 import { discardUnheldRowImages, rowPosterImages } from '../utils/discardRowImages';
 import { ContextMenu } from './ContextMenu';
 import { SearchableSelect } from './SearchableSelect';
@@ -158,7 +159,7 @@ function ColumnFilterControl({
   );
 }
 
-/** 並べ替えの見出し（押すたびに 昇順 → 降順 → 解除。修正依頼1025 F3） */
+/** 並べ替えの見出し（押すたびに 昇順 → 降順 → 解除。修正依頼1025 F3。部品は components/ui/SortHeaderButton） */
 function SortButton({
   column,
   sort,
@@ -170,23 +171,16 @@ function SortButton({
   onSortChange?: (sort: SortState | null) => void;
   children: ReactNode;
 }) {
-  const active = sort?.column === column ? sort.dir : null;
-  if (!onSortChange) return <>{children}</>;
   return (
-    <button
-      type="button"
-      onClick={() => onSortChange(nextSort(sort, column))}
-      className="inline-flex items-start gap-0.5 text-left font-medium hover:text-blue-700"
+    <SortHeaderButton
+      column={column}
+      sort={sort}
+      onSortChange={onSortChange}
+      label={SORT_LABEL[column]}
       title="押すたびに 昇順 → 降順 → 解除（手で足した行は常に上）"
-      aria-label={`${SORT_LABEL[column]}で並べ替え${active === 'asc' ? '（昇順）' : active === 'desc' ? '（降順）' : ''}`}
-      data-sort={active ?? undefined}
     >
-      <span>{children}</span>
-      <span className="flex flex-col text-[8px] leading-[8px]" aria-hidden>
-        <span className={active === 'asc' ? 'text-blue-700' : 'text-gray-300'}>▲</span>
-        <span className={active === 'desc' ? 'text-blue-700' : 'text-gray-300'}>▼</span>
-      </span>
-    </button>
+      {children}
+    </SortHeaderButton>
   );
 }
 

@@ -62,6 +62,15 @@ const propertyC: PropertyWithUnits = {
   inspections: [row('fire', null)],
   units: [],
 };
+// 修正依頼1115 (4) の確認用（設備2件で保守会社が別。2行目だけが日立）
+const propertyD: PropertyWithUnits = {
+  id: 'p4',
+  property_code: 'A0004',
+  property_name: '物件D',
+  terminals: [],
+  inspections: [row('fire', 'v1'), row('pump', 'v2')],
+  units: [],
+};
 const data = {
   properties: [property],
   managementCompanies: null as Map<string, { id: string; label: string; name: string }> | null,
@@ -70,7 +79,10 @@ const data = {
 vi.mock('../hooks/usePropertyMasterData', () => ({
   usePropertyMasterData: () => ({
     properties: data.properties,
-    vendors: [{ id: 'v1', vendor_name: '三菱電機' }],
+    vendors: [
+      { id: 'v1', vendor_name: '三菱電機' },
+      { id: 'v2', vendor_name: '日立ビルシステム' },
+    ],
     inspectionTypes: [
       { id: 'fire', inspection_name: '消防設備点検' },
       { id: 'pump', inspection_name: '給水ポンプ点検' },
@@ -92,7 +104,7 @@ describe('PropertiesMaster', () => {
     data.managementCompanies = null;
   });
 
-  // E1: 絞り込みは管理会社（保守会社ではない）。列は略称、無ければ正式名。未設定の物件は「管理会社なし」で出せる
+  // E1: 管理会社で絞り込む（保守会社の絞り込みは修正依頼1115 (4) で別に足した）。列は略称、無ければ正式名。未設定の物件は「管理会社なし」で出せる
   it('filters by management company and shows its short name', () => {
     data.properties = [property, propertyB, propertyC];
     data.managementCompanies = new Map([
@@ -100,7 +112,6 @@ describe('PropertiesMaster', () => {
       ['B0002', { id: 'm2', label: '株式会社長谷工コミュニティ九州', name: '株式会社長谷工コミュニティ九州' }],
     ]);
     render(<PropertiesMaster />);
-    expect(screen.queryByRole('combobox', { name: '保守会社で絞り込み' })).toBeNull();
     expect(screen.getByText('㈱えん建物管理')).toBeTruthy();
     const select = screen.getByRole('combobox', { name: '管理会社で絞り込み' });
     const pick = (text: string) => {
@@ -116,6 +127,45 @@ describe('PropertiesMaster', () => {
     expect(screen.getByText('物件C')).toBeTruthy();
     expect(screen.queryByText('物件A')).toBeNull();
     expect(screen.queryByText('物件B')).toBeNull();
+  });
+
+  // 修正依頼1115 (4): 保守会社でも絞り込む。設備・台のどれか1行でもその保守会社なら残し、その行を列の先頭に出す。未設定の行がある物件は「保守会社未設定」
+  it('filters by vendor when any equipment row matches and shows the matched row first', () => {
+    data.properties = [propertyB, propertyC, propertyD];
+    render(<PropertiesMaster />);
+    const select = screen.getByRole('combobox', { name: '保守会社で絞り込み' });
+    const pick = (text: string) => {
+      fireEvent.focus(select);
+      fireEvent.change(select, { target: { value: text } });
+      fireEvent.keyDown(select, { key: 'Enter' });
+    };
+    pick('日立');
+    expect(screen.getByText('物件D')).toBeTruthy();
+    expect(screen.queryByText('物件B')).toBeNull();
+    expect(screen.queryByText('物件C')).toBeNull();
+    expect(screen.getByTestId('equipment-vendors').textContent).toBe('日立ビルシステム');
+    pick('保守会社未設定');
+    expect(screen.getByText('物件C')).toBeTruthy();
+    expect(screen.queryByText('物件B')).toBeNull();
+    expect(screen.queryByText('物件D')).toBeNull();
+  });
+
+  // 修正依頼1115 (4): 見出しの▲▼で 昇順 → 降順 → 解除（元の並び）
+  it('sorts by a column header: ascending, descending, then back to the original order', () => {
+    data.properties = [propertyB, propertyC, propertyD];
+    render(<PropertiesMaster />);
+    const names = () => screen.getAllByRole('row').slice(1).map((r) => r.children[2]!.textContent);
+    const header = screen.getByRole('columnheader', { name: 'マンションコード' });
+    const button = screen.getByRole('button', { name: 'マンションコード' });
+    expect(names()).toEqual(['物件B', '物件C', '物件D']);
+    fireEvent.click(button);
+    expect(names()).toEqual(['物件D', '物件B', '物件C']);
+    expect(header.getAttribute('aria-sort')).toBe('ascending');
+    fireEvent.click(button);
+    expect(names()).toEqual(['物件C', '物件B', '物件D']);
+    expect(header.getAttribute('aria-sort')).toBe('descending');
+    fireEvent.click(button);
+    expect(names()).toEqual(['物件B', '物件C', '物件D']);
   });
 
   // E2: 保守会社は設備の行ごと（同じ会社でも2行）。既定は1行目だけで「2件 ▼」で開く。保守会社の無い設備は「未設定」

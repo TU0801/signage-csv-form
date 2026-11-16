@@ -1,4 +1,5 @@
 import { STATUS_ORDER, type InspectionStatus } from '@/features/inspection-portal/lib/status';
+import type { SortState as GenericSortState } from '@/components/ui/SortHeaderButton';
 import type { BulkEntryRow } from '../types';
 
 /*
@@ -24,17 +25,8 @@ export const DEFAULT_STATUS_PRIORITY: InspectionStatus[] = [
   'completed',
   'not_applied',
 ];
-export interface SortState {
-  column: SortColumn;
-  dir: 'asc' | 'desc';
-}
-
-/** 見出しを押したときの次の状態（昇順 → 降順 → 解除） */
-export function nextSort(current: SortState | null, column: SortColumn): SortState | null {
-  if (!current || current.column !== column) return { column, dir: 'asc' };
-  if (current.dir === 'asc') return { column, dir: 'desc' };
-  return null;
-}
+/** 予定の行の並べ替えの状態（見出しのボタンと次の状態は components/ui/SortHeaderButton） */
+export type SortState = GenericSortState<SortColumn>;
 
 /** 並べ替えに使う行の情報（BulkRowInfo の一部） */
 export interface RowSortInfo {

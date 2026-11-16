@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/Button';
+import { ariaSortOf, SortHeaderButton, type SortState } from '@/components/ui/SortHeaderButton';
 import type { MasterConfig } from '../types/masterConfig';
 
 interface MasterTableProps<T extends Record<string, unknown>> {
@@ -10,6 +11,10 @@ interface MasterTableProps<T extends Record<string, unknown>> {
   renderCell?: (key: string, value: unknown, item: T) => React.ReactNode;
   /** 0件のときの文言（v1: 検索中は「検索結果がありません」） */
   emptyMessage?: string;
+  /** 見出しの▲▼で並べ替えられる列（渡したときだけボタンを出す。並べ替え自体は呼ぶ側が items で行う。修正依頼1115 (4)） */
+  sortable?: readonly string[];
+  sort?: SortState | null;
+  onSortChange?: (sort: SortState | null) => void;
 }
 
 export function MasterTable<T extends Record<string, unknown>>({
@@ -19,7 +24,11 @@ export function MasterTable<T extends Record<string, unknown>>({
   onDelete,
   renderCell,
   emptyMessage = 'データがありません',
+  sortable,
+  sort = null,
+  onSortChange,
 }: MasterTableProps<T>) {
+  const canSort = (key: string) => !!onSortChange && !!sortable?.includes(key);
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -30,8 +39,15 @@ export function MasterTable<T extends Record<string, unknown>>({
                 key={col.key}
                 className="cell-head font-medium text-gray-700"
                 style={col.width ? { width: col.width } : undefined}
+                aria-sort={canSort(col.key) ? ariaSortOf(sort, col.key) : undefined}
               >
-                {col.label}
+                {canSort(col.key) ? (
+                  <SortHeaderButton column={col.key} sort={sort} onSortChange={onSortChange}>
+                    {col.label}
+                  </SortHeaderButton>
+                ) : (
+                  col.label
+                )}
               </th>
             ))}
             {!config.readOnly && (

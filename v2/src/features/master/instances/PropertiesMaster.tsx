@@ -10,6 +10,9 @@ import { MasterToolbar } from '../components/MasterToolbar';
 import { PropertyFormModal } from '../components/property/PropertyFormModal';
 import { propertyListSummary, terminalSummary, type EquipmentRow } from '../lib/propertyForm';
 import { useAuthStore } from '@/stores/authStore';
+import type { SortState } from '@/components/ui/SortHeaderButton';
+import { matchedFirst, matchesVendorFilter, UNKNOWN_VENDOR_LABEL, vendorFilterOptions } from '@/lib/vendorFilter';
+import { PROPERTY_SORT_COLUMNS, sortProperties, type PropertySortColumn, type SortValue } from '../lib/propertySort';
 
 const BIZ_PROPERTIES_URL = 'https://system.1984.jp/properties';
 
@@ -48,8 +51,12 @@ export function PropertiesMaster() {
   const isManagement = useAuthStore((s) => s.profile?.role === 'management');
 
   const [search, setSearch] = useRememberedSearch('properties');
-  // 管理会社での絞り込み（'' はすべて。1025 E1 で保守会社から置き換え）と、設備情報が未登録の物件だけを出す絞り込み
+  // 管理会社での絞り込み（'' はすべて。管理者だけ。1025 E1）、保守会社での絞り込み（'' はすべて。修正依頼1115 (4)）、
+  // 設備情報が未登録の物件だけを出す絞り込み
   const [companyFilter, setCompanyFilter] = useState('');
+  const [vendorFilter, setVendorFilter] = useState('');
+  // 見出しの▲▼の並べ替え（null は元の並び。タブを切り替えると戻る。修正依頼1115 (4)）
+  const [sort, setSort] = useState<SortState<PropertySortColumn> | null>(null);
   const [onlyNoEquipment, setOnlyNoEquipment] = useState(false);
   // null = 閉じている、物件 = 編集
   const [formTarget, setFormTarget] = useState<PropertyWithUnits | null>(null);
@@ -73,17 +80,60 @@ export function PropertiesMaster() {
     () => new Map(properties.map((p) => [p.id, propertyListSummary(p, unitTypeOptions)])),
     [properties, unitTypeOptions],
   );
+  // 保守会社の絞り込みの候補（読み込んだ物件の設備の行に出てくる保守会社と、未設定の行があれば「保守会社未設定」）
+  const vendorFilterChoices = useMemo(
+    () => vendorFilterOptions([...summaries.values()].flatMap((s) => s.equipment.map((r) => r.vendorId)), vendorNames),
+    [summaries, vendorNames],
+  );
+  // 管理会社のログインでは自社の物件しか見えず、管理会社の絞り込みは効かないので出さない（修正依頼1115 (4)）
+  const showCompanyFilter = !!managementCompanies && !isManagement;
+  const activeCompanyFilter = showCompanyFilter ? companyFilter : '';
+  // 選んだ保守会社が保存などで候補から消えたら（最後の物件の保守会社を変えた等）、絞り込みを外したのと同じに扱う
+  const activeVendorFilter = vendorFilterChoices.some((o) => o.value === vendorFilter) ? vendorFilter : '';
+
+  // 保守会社の列に出す設備の行（保守会社で絞り込み中は合う行を先頭に）
+  const equipmentRowsOf = (id: string) => matchedFirst(summaries.get(id)?.equipment ?? [], (r) => r.vendorId, activeVendorFilter);
 
   const filtered = (properties as PropertyRecord[]).filter((p) => {
     const sum = summaries.get(p.id);
     if (onlyNoEquipment && sum && sum.equipmentCount > 0) return false;
-    if (companyFilter && managementCompanies) {
+    if (activeCompanyFilter && managementCompanies) {
       const companyId = managementCompanies.get(p.property_code)?.id;
-      if (companyFilter === NO_COMPANY ? !!companyId : companyId !== companyFilter) return false;
+      if (activeCompanyFilter === NO_COMPANY ? !!companyId : companyId !== activeCompanyFilter) return false;
     }
+    // 物件の設備の行（物件単位の点検・台ごとの保守）のどれか1つでもその保守会社なら残す
+    if (activeVendorFilter && !matchesVendorFilter((sum?.equipment ?? []).map((r) => r.vendorId), activeVendorFilter))
+      return false;
     return matchesSearch(p, SEARCH_FIELDS, search);
   });
-  const filtering = !!search || !!companyFilter || onlyNoEquipment;
+  const filtering = !!search || !!activeCompanyFilter || !!activeVendorFilter || onlyNoEquipment;
+
+  // 並べ替えの値は画面に出している値（保守会社は列の1行目＝絞り込み中は合った行）
+  const sortValue = (p: PropertyRecord, column: PropertySortColumn): SortValue => {
+    const sum = summaries.get(p.id);
+    switch (column) {
+      case 'property_code':
+        return p.property_code || null;
+      case 'en_no':
+        return p.en_no || null;
+      case 'property_name':
+        return p.property_name || null;
+      case 'terminals':
+        return p.terminals.length;
+      case 'management_company':
+        return managementCompanies?.get(p.property_code)?.label ?? null;
+      case 'equipment_count':
+        return sum?.equipmentCount ?? 0;
+      case 'unit_count':
+        return sum?.unitCount ?? 0;
+      case 'vendor_summary': {
+        const first = equipmentRowsOf(p.id)[0];
+        if (!first?.vendorId) return null;
+        return vendorNames.get(first.vendorId) ?? UNKNOWN_VENDOR_LABEL;
+      }
+    }
+  };
+  const rows = sortProperties(filtered, sort, sortValue);
 
   const toggleExpanded = (id: string) =>
     setExpanded((prev) => {
@@ -95,7 +145,7 @@ export function PropertiesMaster() {
 
   // 保守会社の列の1行（保守会社名。開いたときは点検種別と台の No を添えて、同じ会社が並ぶ理由が分かるように）
   const equipmentLine = (row: EquipmentRow, withDetail: boolean) => {
-    const vendor = row.vendorId ? (vendorNames.get(row.vendorId) ?? '（不明な保守会社）') : null;
+    const vendor = row.vendorId ? (vendorNames.get(row.vendorId) ?? UNKNOWN_VENDOR_LABEL) : null;
     const detail = [row.inspectionTypeLabel ?? typeNames.get(row.inspectionTypeId) ?? '', row.unitLabel ?? '']
       .filter(Boolean)
       .join(' ');
@@ -119,7 +169,7 @@ export function PropertiesMaster() {
     <div className="space-y-3">
       {error && <p className="text-sm text-red-600">{error}</p>}
       <MasterToolbar
-        count={filtered.length}
+        count={rows.length}
         search={
           <Input
             placeholder="マンションコード・物件名で検索..."
@@ -129,8 +179,8 @@ export function PropertiesMaster() {
         }
         filters={
           <>
-            {managementCompanies && (
-              <div className="w-56">
+            {showCompanyFilter && (
+              <div className="w-48">
                 <Combobox
                   aria-label="管理会社で絞り込み"
                   value={companyFilter}
@@ -144,6 +194,15 @@ export function PropertiesMaster() {
                 />
               </div>
             )}
+            <div className="w-48">
+              <Combobox
+                aria-label="保守会社で絞り込み"
+                value={activeVendorFilter}
+                options={vendorFilterChoices}
+                onChange={setVendorFilter}
+                placeholder="すべての保守会社"
+              />
+            </div>
             <label className="flex items-center gap-1.5 whitespace-nowrap text-sm text-gray-700">
               <input
                 type="checkbox"
@@ -182,8 +241,11 @@ export function PropertiesMaster() {
 
       <MasterTable
         config={tableConfig}
-        items={filtered}
+        items={rows}
         onEdit={(item) => setFormTarget(item)}
+        sortable={PROPERTY_SORT_COLUMNS}
+        sort={sort}
+        onSortChange={(s) => setSort(s as SortState<PropertySortColumn> | null)}
         renderCell={(key, _value, item) => {
           const sum = summaries.get(item.id);
           switch (key) {
@@ -221,11 +283,11 @@ export function PropertiesMaster() {
             case 'unit_count':
               return sum && sum.unitCount > 0 ? `${sum.unitCount}台` : '-';
             case 'vendor_summary': {
-              // 設備の行ごとに保守会社を並べる（既定は1行目だけ。設備の「n件 ▼」で全行）
-              const rows = sum?.equipment ?? [];
-              if (rows.length === 0) return '-';
-              const open = rows.length > 1 && expanded.has(item.id);
-              return <div data-testid="equipment-vendors">{(open ? rows : rows.slice(0, 1)).map((r) => equipmentLine(r, open))}</div>;
+              // 設備の行ごとに保守会社を並べる（既定は1行目だけ。設備の「n件 ▼」で全行。保守会社で絞り込み中は合う行が先頭）
+              const lines = equipmentRowsOf(item.id);
+              if (lines.length === 0) return '-';
+              const open = lines.length > 1 && expanded.has(item.id);
+              return <div data-testid="equipment-vendors">{(open ? lines : lines.slice(0, 1)).map((r) => equipmentLine(r, open))}</div>;
             }
             default:
               return undefined;
