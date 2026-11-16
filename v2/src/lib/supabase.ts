@@ -122,6 +122,8 @@ export const RPC = {
   posterLibraryForProperty: 'poster_library_for_property',
   /** ライブラリの画像が申請・ライブラリの行から使われているか（使われていなければ片付けてよい） */
   posterLibraryObjectInUse: 'poster_library_object_in_use',
+  /** 貼紙ライブラリの行を消す（申請で使われていれば断る。修正依頼1115 (6)。scripts/fix-1115-poster-library.sql） */
+  deletePosterLibraryItem: 'delete_poster_library_item',
   /** その他ファイルと AI-OCR の自己改善（修正依頼1025 G2・G4。scripts/fix-1025-reports.sql） */
   portalRegisterPropertyFile: 'portal_register_property_file',
   portalDeletePropertyFile: 'portal_delete_property_file',

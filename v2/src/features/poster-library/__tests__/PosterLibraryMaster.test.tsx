@@ -4,15 +4,19 @@ import { useAuthStore } from '@/stores/authStore';
 import type { PosterLibraryRow } from '@/lib/api/poster-library';
 
 vi.mock('@/lib/supabase', () => ({ SUPABASE_URL: 'https://example.supabase.co', supabase: {}, TABLES: {}, RPC: {} }));
-vi.mock('@/components/ui/Toast', () => ({ useToast: () => ({ addToast: vi.fn() }) }));
+const toast = vi.hoisted(() => ({ addToast: vi.fn() }));
+vi.mock('@/components/ui/Toast', () => ({ useToast: () => toast }));
 const pdf = vi.hoisted(() => ({ preparePosterImage: vi.fn(async (f: File) => ({ file: f, notice: null })) }));
 vi.mock('@/lib/pdfToPng', () => pdf);
 vi.mock('@/lib/api/portal', () => ({ fetchManagementCompanies: async () => [] }));
 vi.mock('@/lib/api/users', () => ({ fetchOwnManagementCompany: async () => [{ id: 'c-own', name: '自社管理' }] }));
+const md = vi.hoisted(() => ({ fetchTemplateImages: vi.fn() }));
+vi.mock('@/lib/api/masterData', () => md);
 const api = vi.hoisted(() => ({
   fetchLibraryRows: vi.fn(),
   createLibraryItem: vi.fn(),
   updateLibraryItem: vi.fn(),
+  deleteLibraryItem: vi.fn(),
 }));
 vi.mock('@/lib/api/poster-library', async (orig) => ({
   ...(await orig<typeof import('@/lib/api/poster-library')>()),
@@ -46,6 +50,7 @@ describe('マスター管理の貼紙ライブラリ（修正依頼1025 D2）', 
       this.open = false;
     };
     vi.clearAllMocks();
+    md.fetchTemplateImages.mockResolvedValue([]);
     useAuthStore.setState({
       profile: { id: 'm1', email: 'm@x', company_name: null, role: 'management', vendor_id: null, management_company_id: 'c-own', status: 'active', created_at: null, updated_at: null },
     } as never);
@@ -78,5 +83,58 @@ describe('マスター管理の貼紙ライブラリ（修正依頼1025 D2）', 
         png,
       ),
     );
+  });
+
+  it('点検テンプレートを閲覧のみで並べ、チェックと絞り込みで出し分ける（修正依頼1115 (6)）', async () => {
+    api.fetchLibraryRows.mockResolvedValue([row({ id: 'common', display_name: '騒音注意' })]);
+    md.fetchTemplateImages.mockResolvedValue([
+      { id: 't1', image_key: 'elevator_inspection', display_name: 'エレベーター点検', image_url: URL_OF('templates/ev.png'), category: '点検', sort_order: 1 },
+    ]);
+    render(<PosterLibraryMaster />);
+
+    const tplRow = (await screen.findByText('エレベーター点検')).closest('tr')!;
+    expect(within(tplRow).getByText('点検テンプレート（全社共通）')).toBeInTheDocument();
+    expect(within(tplRow).getByText('閲覧のみ')).toBeInTheDocument();
+    expect(within(tplRow).queryByRole('button')).toBeNull();
+    expect(screen.getByText('貼紙ライブラリ（2件）')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('テンプレートも表示'));
+    expect(screen.queryByText('エレベーター点検')).toBeNull();
+    expect(screen.getByText('貼紙ライブラリ（1件）')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('対象で絞り込み'), { target: { value: '__templates' } });
+    expect(screen.getByText('エレベーター点検')).toBeInTheDocument();
+    expect(screen.queryByText('騒音注意')).toBeNull();
+    expect(screen.getByText('貼紙ライブラリ（1件）')).toBeInTheDocument();
+  });
+
+  it('自社の貼紙を確認ダイアログのあとで削除し、使用中で断られたら理由を出す（修正依頼1115 (6)）', async () => {
+    api.fetchLibraryRows.mockResolvedValue([
+      row({ id: 'common', display_name: '騒音注意' }),
+      row({ id: 'own', display_name: '駐車禁止', management_company_id: 'c-own', storage_path: 'library/c-own/b.png', image_url: URL_OF('library/c-own/b.png') }),
+    ]);
+    api.deleteLibraryItem.mockRejectedValueOnce({ message: '申請で使われているため削除できません。無効にしてください' });
+    api.deleteLibraryItem.mockResolvedValueOnce(undefined);
+    render(<PosterLibraryMaster />);
+
+    const commonRow = (await screen.findByText('騒音注意')).closest('tr')!;
+    expect(within(commonRow).queryByRole('button', { name: '削除' })).toBeNull();
+    const ownRow = screen.getByText('駐車禁止').closest('tr')!;
+
+    fireEvent.click(within(ownRow).getByRole('button', { name: '削除' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: '削除' }));
+    await waitFor(() =>
+      expect(toast.addToast).toHaveBeenCalledWith(
+        '削除できませんでした: 申請で使われているため削除できません。無効にしてください',
+        'error',
+      ),
+    );
+    expect(api.deleteLibraryItem).toHaveBeenCalledWith('own');
+
+    fireEvent.click(within(screen.getByText('駐車禁止').closest('tr')!).getByRole('button', { name: '削除' }));
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '削除' }));
+    await waitFor(() => expect(toast.addToast).toHaveBeenCalledWith('「駐車禁止」を削除しました', 'success'));
+    expect(api.fetchLibraryRows).toHaveBeenCalledTimes(2);
   });
 });

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
@@ -12,28 +13,43 @@ import { preparePosterImage } from '@/lib/pdfToPng';
 import { safePosterUrl } from '@/lib/posterUrl';
 import { fetchManagementCompanies } from '@/lib/api/portal';
 import { fetchOwnManagementCompany } from '@/lib/api/users';
+import { fetchTemplateImages } from '@/lib/api/masterData';
 import {
   LIBRARY_CATEGORIES,
   createLibraryItem,
+  deleteLibraryItem,
   fetchLibraryRows,
   updateLibraryItem,
   type PosterLibraryRow,
 } from '@/lib/api/poster-library';
 import type { ManagementCompanyRow } from '@/types/portal';
+import type { DbTemplateImage } from '@/types/database';
 
 /** 全社共通（management_company_id が null）の選択肢の値 */
 const COMMON = '';
+/** 絞り込みの「点検テンプレート」の値（管理会社の id・全社共通と重ならない値） */
+const TEMPLATES = '__templates';
+
+/** 表の1行（ライブラリの行か、閲覧のみの点検テンプレート） */
+type DisplayRow =
+  | { kind: 'library'; row: PosterLibraryRow }
+  | { kind: 'template'; template: DbTemplateImage };
 
 /**
  * マスター管理の「貼紙ライブラリ」タブ（修正依頼1025 D2）。文字を合成しない貼紙（騒音注意・駐車禁止など）を登録する。
  * 管理者は全社共通と各管理会社の分、管理会社は自社分だけ登録・編集・無効化できる（DB の RLS と Storage ポリシーでも守る）。
- * 登録した貼紙は、1件入力・一括入力の詳細設定の「ライブラリから選ぶ」で、その管理会社の物件の申請でだけ選べる（全社共通はどの物件でも）
+ * 登録した貼紙は、1件入力・一括入力の詳細設定の「ライブラリから選ぶ」で、その管理会社の物件の申請でだけ選べる（全社共通はどの物件でも）。
+ * 修正依頼1115 (6): 点検テンプレート（biz.template_images）も閲覧のみで並べる（「テンプレートも表示」既定オン）。
+ * 登録した分は、申請で使われていなければ削除できる（DB の delete_poster_library_item が範囲と使用中を確かめる）
  */
 export function PosterLibraryMaster() {
   const { addToast } = useToast();
   const isAdmin = useAuthStore((s) => s.profile?.role === 'admin');
   const ownCompanyId = useAuthStore((s) => s.profile?.management_company_id ?? null);
   const [rows, setRows] = useState<PosterLibraryRow[] | null>(null);
+  const [templates, setTemplates] = useState<DbTemplateImage[]>([]);
+  const [showTemplates, setShowTemplates] = useState(true);
+  const [deleting, setDeleting] = useState<PosterLibraryRow | null>(null);
   const [companies, setCompanies] = useState<ManagementCompanyRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<PosterLibraryRow | 'new' | null>(null);
@@ -43,6 +59,10 @@ export function PosterLibraryMaster() {
 
   const load = useCallback(async () => {
     setError(null);
+    // テンプレートが読めなくてもライブラリの一覧は出す（テンプレートは閲覧用の添え物）
+    void fetchTemplateImages()
+      .then(setTemplates)
+      .catch((e: unknown) => console.warn('点検テンプレートの取得に失敗しました:', e));
     try {
       setRows(await fetchLibraryRows());
     } catch (e) {
@@ -73,15 +93,24 @@ export function PosterLibraryMaster() {
     [companies],
   );
 
-  const shown = useMemo(
-    () =>
-      (rows ?? []).filter(
-        (r) =>
-          (showInactive || r.is_active) &&
-          (scopeFilter === 'all' || (r.management_company_id ?? COMMON) === scopeFilter),
-      ),
-    [rows, showInactive, scopeFilter],
-  );
+  const shown = useMemo<DisplayRow[]>(() => {
+    const library: DisplayRow[] =
+      scopeFilter === TEMPLATES
+        ? []
+        : (rows ?? [])
+            .filter(
+              (r) =>
+                (showInactive || r.is_active) &&
+                (scopeFilter === 'all' || (r.management_company_id ?? COMMON) === scopeFilter),
+            )
+            .map((row) => ({ kind: 'library', row }));
+    // 「点検テンプレート」で絞り込んだときはチェックに関係なく出す。「すべて」ではチェックがオンのときだけ
+    const withTemplates = scopeFilter === TEMPLATES || (scopeFilter === 'all' && showTemplates);
+    const tpl: DisplayRow[] = withTemplates
+      ? templates.map((template) => ({ kind: 'template', template }))
+      : [];
+    return [...library, ...tpl];
+  }, [rows, templates, showInactive, showTemplates, scopeFilter]);
 
   /** この行を書き換えられるか（管理者は全部、管理会社は自社分だけ） */
   const canEdit = (r: PosterLibraryRow) =>
@@ -101,6 +130,24 @@ export function PosterLibraryMaster() {
     } catch (e) {
       console.error('貼紙ライブラリの更新に失敗しました:', e);
       addToast('更新に失敗しました', 'error');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleDelete = async (r: PosterLibraryRow) => {
+    setBusyId(r.id);
+    try {
+      await deleteLibraryItem(r.id);
+      addToast(`「${r.display_name}」を削除しました`, 'success');
+      await load();
+    } catch (e) {
+      console.error('貼紙ライブラリの削除に失敗しました:', e);
+      const msg =
+        e && typeof e === 'object' && 'message' in e
+          ? String((e as { message: unknown }).message)
+          : '';
+      addToast(msg ? `削除できませんでした: ${msg}` : '削除できませんでした', 'error');
     } finally {
       setBusyId(null);
     }
@@ -127,7 +174,16 @@ export function PosterLibraryMaster() {
                   {c.name}
                 </option>
               ))}
+              <option value={TEMPLATES}>点検テンプレート</option>
             </select>
+            <label className="inline-flex items-center gap-1 text-xs text-gray-600">
+              <input
+                type="checkbox"
+                checked={showTemplates}
+                onChange={(e) => setShowTemplates(e.target.checked)}
+              />
+              テンプレートも表示
+            </label>
             <label className="inline-flex items-center gap-1 text-xs text-gray-600">
               <input
                 type="checkbox"
@@ -151,11 +207,11 @@ export function PosterLibraryMaster() {
           </div>
         </div>
         <p className="mt-0.5 text-xs text-gray-500">
-          文字を合成しない貼紙（騒音注意・駐車禁止など）です。点検の貼紙（テンプレート）とは別に置きます。1件入力・一括入力の詳細設定の「ライブラリから選ぶ」「＋ライブラリから追加」で選べます。
+          文字を合成しない貼紙（騒音注意・駐車禁止など）です。1件入力・一括入力の詳細設定の「ライブラリから選ぶ」「＋ライブラリから追加」で選べます。点検テンプレート（点検種別から自動で選ばれる貼紙）は閲覧のみで並べています（変えるときは業務システムで）。
           {isAdmin
             ? '全社共通はどの物件でも、管理会社の分はその管理会社の物件の申請でだけ選べます。'
             : '登録した貼紙は自社が管理する物件の申請でだけ選べます（全社共通は管理者が登録します）。'}
-          使わなくなった貼紙は無効にします（申請済みの貼紙はそのまま残ります）。
+          「＋貼紙を登録」した貼紙は編集・削除できます。申請で使われている貼紙は削除できないので無効にします（申請済みの貼紙はそのまま残ります）。
         </p>
       </CardHeader>
       <CardContent className="p-0">
@@ -166,7 +222,9 @@ export function PosterLibraryMaster() {
             <Spinner />
           </div>
         ) : shown.length === 0 ? (
-          <p className="px-3 py-6 text-center text-sm text-gray-500">登録された貼紙はありません</p>
+          <p className="px-3 py-6 text-center text-sm text-gray-500">
+            表示する貼紙はありません。「＋貼紙を登録」から登録できます
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left">
@@ -182,8 +240,34 @@ export function PosterLibraryMaster() {
                 </tr>
               </thead>
               <tbody>
-                {shown.map((r) => {
-                  const url = safePosterUrl(r.image_url);
+                {shown.map((d) => {
+                  if (d.kind === 'template') {
+                    const tp = d.template;
+                    const turl = safePosterUrl(tp.image_url);
+                    return (
+                      <tr
+                        key={`tpl-${tp.id}`}
+                        className="border-b border-gray-100 hover:bg-gray-50"
+                      >
+                        <td className="cell">
+                          <PosterThumb url={turl} alt={tp.display_name} />
+                        </td>
+                        <td className="cell text-sm text-gray-900">{tp.display_name}</td>
+                        <td className="cell text-sm text-gray-700">{tp.category ?? ''}</td>
+                        <td className="cell text-sm text-gray-700">点検テンプレート（全社共通）</td>
+                        <td className="cell text-sm text-gray-700">{tp.sort_order ?? ''}</td>
+                        <td className="cell text-sm">
+                          <span className="rounded bg-blue-50 px-1.5 py-0.5 text-xs font-medium text-blue-700">
+                            テンプレート
+                          </span>
+                        </td>
+                        <td className="cell whitespace-nowrap">
+                          <span className="text-xs text-gray-400">閲覧のみ</span>
+                        </td>
+                      </tr>
+                    );
+                  }
+                  const r = d.row;
                   return (
                     <tr
                       key={r.id}
@@ -193,23 +277,7 @@ export function PosterLibraryMaster() {
                       )}
                     >
                       <td className="cell">
-                        {url ? (
-                          <a
-                            href={url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="画像を別のタブで開く"
-                          >
-                            <img
-                              src={url}
-                              alt={r.display_name}
-                              loading="lazy"
-                              className="h-14 w-10 rounded border border-gray-200 bg-white object-contain"
-                            />
-                          </a>
-                        ) : (
-                          <span className="text-xs text-red-600">表示できない URL</span>
-                        )}
+                        <PosterThumb url={safePosterUrl(r.image_url)} alt={r.display_name} />
                       </td>
                       <td className="cell text-sm text-gray-900">{r.display_name}</td>
                       <td className="cell text-sm text-gray-700">{r.category}</td>
@@ -252,6 +320,14 @@ export function PosterLibraryMaster() {
                                   ? '無効にする'
                                   : '有効にする'}
                             </Button>
+                            <Button
+                              size="sm"
+                              variant="danger"
+                              onClick={() => setDeleting(r)}
+                              disabled={busyId !== null}
+                            >
+                              削除
+                            </Button>
                           </div>
                         ) : (
                           <span className="text-xs text-gray-400">閲覧のみ</span>
@@ -265,6 +341,17 @@ export function PosterLibraryMaster() {
           </div>
         )}
       </CardContent>
+      <ConfirmDialog
+        open={deleting !== null}
+        onClose={() => setDeleting(null)}
+        onConfirm={() => {
+          if (deleting) void handleDelete(deleting);
+        }}
+        title="貼紙の削除"
+        message={`「${deleting?.display_name ?? ''}」を削除します。元に戻せません。\n申請で使われている貼紙は削除できません（その場合は無効にしてください）。`}
+        confirmLabel="削除"
+        variant="danger"
+      />
       <LibraryFormModal
         target={editing}
         isAdmin={isAdmin}
@@ -277,6 +364,21 @@ export function PosterLibraryMaster() {
         }}
       />
     </Card>
+  );
+}
+
+/** 一覧のサムネイル（クリックで別タブに原寸） */
+function PosterThumb({ url, alt }: { url: string | null; alt: string }) {
+  if (!url) return <span className="text-xs text-red-600">表示できない URL</span>;
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" title="画像を別のタブで開く">
+      <img
+        src={url}
+        alt={alt}
+        loading="lazy"
+        className="h-14 w-10 rounded border border-gray-200 bg-white object-contain"
+      />
+    </a>
   );
 }
 
