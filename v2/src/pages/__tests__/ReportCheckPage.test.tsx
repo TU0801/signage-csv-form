@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useState, type ReactNode } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { ToastProvider } from '@/components/ui/Toast';
+import { HeaderSlotContext } from '@/components/layout/HeaderSlot';
 import { useAuthStore } from '@/stores/authStore';
 import type { DbProfile } from '@/types/database';
 import { makeInspection, makeReport } from '@/features/inspection-portal/__tests__/fixtures';
@@ -24,6 +26,8 @@ const formApi = vi.hoisted(() => ({
   fetchScopedManagementCompanies: vi.fn(),
 }));
 vi.mock('@/lib/api/inspection-form', () => formApi);
+const masterApi = vi.hoisted(() => ({ fetchMasterVendors: vi.fn() }));
+vi.mock('@/lib/api/masterData', () => masterApi);
 // 報告書UP はファイルアップロードの画面（修正依頼1029 決定①。画面そのものは FileUploadModal のテストで見る）。開いた区分と点検だけを見る
 vi.mock('@/features/inspection-documents/components/FileUploadModal', () => ({
   FileUploadModal: (p: { open: boolean; preset: { kind: string; inspection: { property_name: string } } | null }) =>
@@ -44,6 +48,17 @@ const vendorProfile: DbProfile = {
 };
 
 const ALL = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+/** 管理会社の絞り込みはヘッダー（UserLayout）に出るので、差し込み先を用意する */
+function WithHeaderSlot({ children }: { children: ReactNode }) {
+  const [target, setTarget] = useState<HTMLElement | null>(null);
+  return (
+    <HeaderSlotContext.Provider value={{ target, setTarget }}>
+      <div ref={setTarget} />
+      {children}
+    </HeaderSlotContext.Provider>
+  );
+}
 
 describe('報告書確認（申請不要の点検の報告書。修正依頼1027）', () => {
   beforeEach(() => {
@@ -79,6 +94,7 @@ describe('報告書確認（申請不要の点検の報告書。修正依頼1027
     formApi.fetchCompletions.mockResolvedValue([]);
     formApi.fetchInspectionDates.mockResolvedValue([]);
     formApi.fetchScopedManagementCompanies.mockResolvedValue([]);
+    masterApi.fetchMasterVendors.mockResolvedValue([]);
   });
   afterEach(() => {
     cleanup();
@@ -89,7 +105,9 @@ describe('報告書確認（申請不要の点検の報告書。修正依頼1027
   const renderPage = () =>
     render(
       <ToastProvider>
-        <ReportCheckPage />
+        <WithHeaderSlot>
+          <ReportCheckPage />
+        </WithHeaderSlot>
       </ToastProvider>,
     );
   const rowOf = (name: string) => screen.getByText(name).closest('tr')!;
@@ -167,5 +185,26 @@ describe('報告書確認（申請不要の点検の報告書。修正依頼1027
     await waitFor(() => expect(screen.getByText('物件A')).toBeInTheDocument());
     expect(screen.getByRole('columnheader', { name: '保守会社' })).toBeInTheDocument();
     expect(formApi.fetchScopedManagementCompanies).not.toHaveBeenCalled();
+  });
+
+  it('管理会社は保守会社（台の保守会社を含む）・点検種別を複数選んで絞り込める（修正依頼1115 (2) レビュー）', async () => {
+    useAuthStore.setState({ profile: { ...vendorProfile, role: 'management', vendor_id: null, management_company_id: 'm1' } as DbProfile });
+    portalApi.fetchPortalInspections.mockResolvedValue([
+      makeInspection({ inspection_id: 'i1', property_code: '900001-00', property_name: '物件A', inspection_type_label: 'リモート点検', inspection_months: ALL, vendor_id: 'v1', vendor_name: 'A社' }),
+      makeInspection({ inspection_id: 'i2', property_code: '900002-00', property_name: '物件B', inspection_type_label: 'リモート点検', inspection_months: ALL, vendor_id: 'v2', vendor_name: 'B社', unit_vendor_ids: ['v3'] }),
+    ]);
+    masterApi.fetchMasterVendors.mockResolvedValue([{ id: 'v3', vendor_name: 'C社' }]);
+    renderPage();
+    await waitFor(() => expect(screen.getByText('物件B')).toBeInTheDocument());
+    // 単一選択の点検種別の select は出さない
+    expect(screen.queryByRole('combobox', { name: '点検種別' })).toBeNull();
+    await waitFor(() => expect(masterApi.fetchMasterVendors).toHaveBeenCalled());
+    // 台だけを受け持つ C社 を選ぶと、その台のある物件B だけ
+    fireEvent.click(screen.getByTitle(/保守会社で絞り込む/));
+    fireEvent.click(await screen.findByRole('checkbox', { name: /^C社/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+    await waitFor(() => expect(screen.queryByText('物件A')).toBeNull());
+    expect(screen.getByText('物件B')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '保守会社の絞り込みを解除' })).toBeInTheDocument();
   });
 });

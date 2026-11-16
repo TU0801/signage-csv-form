@@ -19,7 +19,10 @@
 --
 -- 変えるもの（関数ごとの変えた箇所は本文に「[1115(2)]」の印で書いた。それ以外の行は本番の現行定義のまま）:
 --   新設  signage.entry_vendor_for_management(uuid, uuid)        受注先を決める（内部用。利用者は実行できない）
---   新設  signage.submitted_entry_editable(uuid, uuid, text)      2引数の版＋管理会社の条件（2引数の版は変えずに残す）
+--   新設  signage.submitted_entry_editable(uuid, uuid, text)      2引数の版＋管理会社の条件（2引数の版は変えずに残す）。
+--         同じ保守会社のアカウントが直せるのは、申請者が管理会社でない申請だけ（レビュー指摘）
+--   新設  signage.entry_author_is_management(uuid)               申請者が管理会社のアカウントか（内部用。利用者は実行できない）
+--   新設  signage.mgmt_poster_object_deletable(text)             管理会社が自分の uid の貼紙画像を消せるか（Storage のポリシー用）
 --   新設  signage.inspection_report_writable(uuid)                inspection_writable＋管理会社の条件
 --   置換  signage.guard_entry_portal_columns()   管理会社の一律拒否 → 管理会社の分岐（物件・点検・受注先・緊急連絡先）
 --   置換  signage.guard_entry_unit()             台の保守会社 = 自社 の確かめを、管理会社は自社物件の点検なら通す
@@ -28,9 +31,12 @@
 --   置換  signage.portal_entry_for_edit(uuid)    3引数の editable を使う
 --   置換  signage.portal_register_report(...)    inspection_report_writable で判定
 --   置換  signage.portal_update_report(...)      管理会社が自分で上げた版
---   置換  signage.bulk_template_info(uuid)       管理会社の分岐
+--   置換  signage.bulk_template_info(uuid)       管理会社の分岐（略称は自社物件の点検に出てくる保守会社のときだけ）
+--   置換  signage.portal_entries()               列 by_management を足す（戻り値の形が変わるので DROP → CREATE。保守会社の画面で管理会社の申請に
+--                                                「修正」を出さないため）
 --   ポリシー追加 signage_entries: mgmt_insert_entries・mgmt_update_own_pending_entries
---               storage.objects: inspection_reports_mgmt_insert・"poster-images mgmt own insert"
+--               storage.objects: inspection_reports_mgmt_insert・"poster-images mgmt own insert"・"poster-images mgmt own select"・
+--                                "poster-images mgmt own delete"
 --   変えないもの: guard_entry_property_request（管理会社の建物追加の申請は guard_entry_portal_columns が先に断る）、
 --     guard_entry_management_delete（取り下げは閉じたまま）、inspection_writable、完了連絡の3関数、management_companies_scoped
 --     （管理会社には管理会社フィルターを出さないので変えない）、portal_review_*、is_active_member、既存のポリシー。
@@ -41,10 +47,11 @@
 -- 適用方法: ファイル全体を1つのクエリとして流す（Management API なら1回の query に全文を入れる。psql なら psql -1 -f）。
 --   BEGIN/COMMIT は付けない。何度流しても同じ結果になる（CREATE OR REPLACE・DROP POLICY IF EXISTS → CREATE POLICY）。
 -- 適用順: fix-1115-templates.sql の後、要件5の SQL より前。加算的な変更なので「DDL → デプロイ」。今の画面は管理会社に点検一覧しか
---   出さないので、先に当てても誤動作しない。適用後に has_function_privilege（entry_vendor_for_management と 3引数の
---   submitted_entry_editable は authenticated が false、inspection_report_writable は true）を確かめる。
+--   出さないので、先に当てても誤動作しない。適用後に has_function_privilege（entry_vendor_for_management・3引数の
+--   submitted_entry_editable・entry_author_is_management は authenticated が false、inspection_report_writable・
+--   mgmt_poster_object_deletable は true）を確かめる。portal_entries は列が増えるだけなので、今の画面のまま当てても動く。
 --
--- 戻し手順: scripts/fix-1115-mgmt-entry-rollback.sql を流す（置換した8関数の本番の現行定義をそのまま収め、足した関数・ポリシーを消す）。
+-- 戻し手順: scripts/fix-1115-mgmt-entry-rollback.sql を流す（置換した9関数の本番の現行定義をそのまま収め、足した関数・ポリシーを消す）。
 --   要件5の SQL を当てた後に戻すときは、先に要件5の戻しを流す（同じ関数を変えるため）。
 --   戻すと管理会社の申請・報告書の登録は DB で断られるので、画面も前の版に戻す。管理会社が入れた申請・報告書の行は消えない。
 
@@ -93,6 +100,19 @@ $function$;
 REVOKE ALL ON FUNCTION signage.entry_vendor_for_management(uuid, uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION signage.entry_vendor_for_management(uuid, uuid) TO service_role;
 
+-- [1115(2) レビュー] 新設: 申請者が管理会社のアカウントか（submitted_entry_editable の3引数の版と portal_entries が使う。内部用）
+CREATE OR REPLACE FUNCTION signage.entry_author_is_management(p_user_id uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'signage', 'pg_temp'
+AS $function$
+  select coalesce((select p.role = 'management' from signage.signage_profiles p where p.id = p_user_id), false);
+$function$;
+
+REVOKE ALL ON FUNCTION signage.entry_author_is_management(uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION signage.entry_author_is_management(uuid) TO service_role;
+
 -- [1115(2)] 新設: 申請済み（draft）の申請を修正できるか。2引数の版（本番の現行定義のまま残す）に
 -- 「管理会社: 自社が管理する物件の申請で、申請者が自分」を足した版。portal_entry_for_edit と portal_update_submitted_entry が使う
 CREATE OR REPLACE FUNCTION signage.submitted_entry_editable(p_user_id uuid, p_vendor_id uuid, p_property_code text)
@@ -101,7 +121,12 @@ CREATE OR REPLACE FUNCTION signage.submitted_entry_editable(p_user_id uuid, p_ve
  STABLE SECURITY DEFINER
  SET search_path TO 'signage', 'pg_temp'
 AS $function$
-  select coalesce(signage.submitted_entry_editable(p_user_id, p_vendor_id), false)
+  -- [1115(2) レビュー] 管理会社が入れた申請も vendor_id に点検行（台）の保守会社が入るので、2引数の版の「同じ保守会社のアカウント」の
+  -- 条件だけでは、受注先の保守会社が管理会社の申請を読めて書き換えられてしまう。同じ保守会社の条件は、申請者が管理会社のアカウント
+  -- でない申請に限る（申請者本人・管理者・同じ保守会社の同僚の申請は今までどおり。管理者の代理申請も今までどおり）
+  select coalesce(signage.is_active_admin(), false)
+      or coalesce(signage.submitted_entry_editable(p_user_id, p_vendor_id)
+                  and (p_user_id = auth.uid() or not signage.entry_author_is_management(p_user_id)), false)
       or coalesce(signage.is_active_management() and p_user_id = auth.uid()
                   and signage.property_reviewable(p_property_code), false);
 $function$;
@@ -752,6 +777,7 @@ AS $function$
 DECLARE
   v_vendor uuid;
   v_mgmt uuid;  -- [1115(2)]
+  v_ids jsonb;  -- [1115(2)]
 BEGIN
   IF signage.is_active_admin() THEN
     v_vendor := p_vendor_id;
@@ -759,13 +785,10 @@ BEGIN
     v_vendor := signage.current_vendor_id();
   -- [1115(2)] 変えた箇所: 管理会社は自社が管理する物件の点検（p_vendor_id があればその保守会社の分だけ）。
   -- 略称は p_vendor_id があればその保守会社、無ければ自社（管理会社）。p_vendor_id が NULL でも空にしない（全社の意味）
+  -- [1115(2) レビュー] 略称は、p_vendor_id が自社物件の点検（台を含む）に出てくる保守会社のときだけ返す（任意の会社 id の社名を引かせない）
   ELSIF coalesce(signage.is_active_management(), false) THEN
     v_mgmt := signage.current_management_company_id();
-    RETURN jsonb_build_object(
-      'short_name',
-      (SELECT coalesce(nullif(btrim(c.short_name), ''), c.name) FROM biz.companies c WHERE c.id = coalesce(p_vendor_id, v_mgmt)),
-      'inspection_ids',
-      coalesce((
+    v_ids := coalesce((
         SELECT jsonb_agg(x.id ORDER BY x.property_id, x.cat_sort, x.created_at, x.id)
         FROM (
           SELECT pi.id, pi.property_id, pi.created_at,
@@ -782,7 +805,13 @@ BEGIN
                               AND ui.inspection_type_id = pi.inspection_type_id
                               AND ui.maintainer_id = p_vendor_id))
         ) x
-      ), '[]'::jsonb));
+      ), '[]'::jsonb);
+    RETURN jsonb_build_object(
+      'short_name',
+      CASE WHEN p_vendor_id IS NULL OR jsonb_array_length(v_ids) > 0 THEN
+        (SELECT coalesce(nullif(btrim(c.short_name), ''), c.name) FROM biz.companies c WHERE c.id = coalesce(p_vendor_id, v_mgmt))
+      END,
+      'inspection_ids', v_ids);
   ELSE
     RAISE EXCEPTION 'テンプレートを作る権限がありません' USING ERRCODE = '42501';
   END IF;
@@ -814,6 +843,52 @@ $function$;
 
 REVOKE ALL ON FUNCTION signage.bulk_template_info(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION signage.bulk_template_info(uuid) TO authenticated, service_role;
+
+-- ============================================================
+-- 8b. signage.portal_entries()（[1115(2) レビュー] 列 by_management を足す。戻り値の形が変わるので DROP → CREATE）
+-- ============================================================
+DROP FUNCTION IF EXISTS signage.portal_entries();
+CREATE OR REPLACE FUNCTION signage.portal_entries()
+ RETURNS TABLE(id uuid, user_id uuid, property_code text, inspection_type text, vendor_name text, vendor_id uuid, property_inspection_id uuid, target_month date, inspection_start date, inspection_end date, status text, review_comment text, reviewed_at timestamp with time zone, created_at timestamp with time zone, updated_at timestamp with time zone, is_mine boolean, terminal_id text, template_no text, announcement text, remarks text, poster_type text, poster_image text, display_start_date date, display_start_time text, display_end_date date, display_end_time text, by_management boolean)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'signage', 'pg_temp'
+AS $function$
+  -- 申請者・同じ保守会社・承認する管理会社・管理者以外（同じ点検の台を受け持つ別の保守会社）には、
+  -- 申請があること・対象月・状態だけを返し、申請者・保守会社・日付・理由・掲示の内容は null にする
+  select e.id, case when c.can_see then e.user_id end, e.property_code, e.inspection_type,
+         case when c.can_see then e.vendor_name end, case when c.can_see then e.vendor_id end,
+         e.property_inspection_id, e.target_month,
+         case when c.can_see then e.inspection_start end, case when c.can_see then e.inspection_end end,
+         e.status, case when c.can_see then e.review_comment end, case when c.can_see then e.reviewed_at end,
+         e.created_at, e.updated_at,
+         e.user_id = auth.uid(),
+         case when c.can_see then e.terminal_id end, case when c.can_see then e.template_no end,
+         case when c.can_see then e.announcement end, case when c.can_see then e.remarks end,
+         case when c.can_see then e.poster_type end, case when c.can_see then e.poster_image end,
+         case when c.can_see then e.display_start_date end, case when c.can_see then e.display_start_time end,
+         case when c.can_see then e.display_end_date end, case when c.can_see then e.display_end_time end,
+         -- [1115(2) レビュー] 申請者が管理会社のアカウントか（保守会社の画面で、管理会社の申請に「修正」を出さないため）
+         case when c.can_see then signage.entry_author_is_management(e.user_id) end
+  from signage.signage_entries e
+  cross join lateral (select
+    signage.is_active_admin()
+    or e.user_id = auth.uid()
+    or (e.vendor_id is not null and e.vendor_id = signage.current_vendor_id())
+    or (signage.current_role_kind() = 'management' and signage.property_reviewable(e.property_code)) as can_see) c
+  where signage.current_role_kind() is not null
+    and (
+      signage.is_active_admin()
+      or (e.property_inspection_id is not null and signage.inspection_in_scope(e.property_inspection_id))
+      or (e.property_inspection_id is null and (
+            e.user_id = auth.uid()
+            or (signage.current_role_kind() = 'management' and signage.property_reviewable(e.property_code))))
+    )
+  order by e.created_at desc;
+$function$;
+
+REVOKE ALL ON FUNCTION signage.portal_entries() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION signage.portal_entries() TO authenticated, service_role;
 
 -- ============================================================
 -- 9. ポリシー（加算。既存のポリシーは変えない）
@@ -849,5 +924,47 @@ CREATE POLICY "poster-images mgmt own insert" ON storage.objects
   WITH CHECK (bucket_id = 'poster-images' AND position('..' in name) = 0
               AND (storage.foldername(name))[1] = auth.uid()::text
               AND signage.is_active_management());
+
+-- [1115(2) レビュー] Storage poster-images: 管理会社が自分の uid のフォルダに上げた貼紙画像を消せるように（差し替え・テンプレートに戻す・
+-- 行の削除・詳細設定のキャンセルの片付け）。条件は保守会社の「poster-images own delete」と同じ（申請で使われている画像は消せない）。
+-- poster_object_referenced は保守会社用（is_active_member でないと「使われている」扱い）なので、管理会社用の判定を別に置く
+CREATE OR REPLACE FUNCTION signage.mgmt_poster_object_deletable(p_name text)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'signage', 'pg_temp'
+AS $function$
+  select coalesce(signage.is_active_management(), false)
+     and p_name is not null
+     and position('..' in p_name) = 0
+     and (storage.foldername(p_name))[1] is not distinct from auth.uid()::text
+     and not exists (
+        select 1
+          from signage.signage_entries e
+         where (e.poster_image is not null
+                and right(split_part(e.poster_image, '?', 1), length('/storage/v1/object/public/poster-images/' || p_name))
+                    = '/storage/v1/object/public/poster-images/' || p_name)
+            or exists (
+              select 1 from jsonb_array_elements(e.extra_posters) x
+               where right(split_part(x->>'image_url', '?', 1), length('/storage/v1/object/public/poster-images/' || p_name))
+                     = '/storage/v1/object/public/poster-images/' || p_name));
+$function$;
+
+REVOKE ALL ON FUNCTION signage.mgmt_poster_object_deletable(text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION signage.mgmt_poster_object_deletable(text) TO authenticated, service_role;
+
+-- 削除（Storage API の DELETE … RETURNING）は消す行が SELECT のポリシーでも見えないと0件になる。保守会社の SELECT（poster-image 2whf5k_0）は
+-- is_active_member だけなので、管理会社には自分の uid のフォルダの SELECT を足す（バケットは公開なので、読める中身は今と変わらない）
+DROP POLICY IF EXISTS "poster-images mgmt own select" ON storage.objects;
+CREATE POLICY "poster-images mgmt own select" ON storage.objects
+  FOR SELECT TO authenticated
+  USING (bucket_id = 'poster-images' AND position('..' in name) = 0
+         AND (storage.foldername(name))[1] = auth.uid()::text
+         AND signage.is_active_management());
+
+DROP POLICY IF EXISTS "poster-images mgmt own delete" ON storage.objects;
+CREATE POLICY "poster-images mgmt own delete" ON storage.objects
+  FOR DELETE TO authenticated
+  USING (bucket_id = 'poster-images' AND signage.mgmt_poster_object_deletable(name));
 
 NOTIFY pgrst, 'reload schema';

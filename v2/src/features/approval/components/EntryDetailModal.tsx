@@ -23,7 +23,7 @@ interface EntryDetailModalProps {
   onApprove?: (entry: DbEntry) => void;
   onReject?: (entry: DbEntry) => void;
   onEdit?: (entry: DbEntry) => void;
-  /** 差戻し（管理会社。却下＝削除の代わりに理由を付けて保守会社へ戻す） */
+  /** 差戻し（管理会社。却下＝削除の代わりに理由を付けて申請者へ戻す） */
   onSendBack?: (entry: DbEntry) => void;
 }
 

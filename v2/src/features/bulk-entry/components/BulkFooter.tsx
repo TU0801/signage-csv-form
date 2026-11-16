@@ -9,10 +9,12 @@ interface BulkFooterProps {
   onCopyCsv: () => void;
   /** 申請できない理由（管理者が保守会社を選んでいないなど）。あれば申請だけ押せなくして横に出す（CSV は使える） */
   saveBlockedReason?: string;
+  /** 申請ボタンの横の説明（管理会社は自社で承認するので文言を変える。修正依頼1115 レビュー）。無ければ保守会社・管理者向け */
+  approvalNote?: string;
 }
 
 /** 申請・CSV ダウンロード／コピー（申請の対象の行が無いと押せない）。v1: bulk.html .bulk-footer / js/bulk-data.js updateButtons */
-export function BulkFooter({ saving, onSave, onDownloadCsv, onCopyCsv, saveBlockedReason }: BulkFooterProps) {
+export function BulkFooter({ saving, onSave, onDownloadCsv, onCopyCsv, saveBlockedReason, approvalNote }: BulkFooterProps) {
   // 申請の対象（手で足した行と、点検開始日を入れた未申請の予定の行）が無いと押せない。エラーの行は押したときに知らせる（B7）
   const targetCount = useBulkStore((s) => s.rows.filter(isApplyTarget).length);
   const disabled = targetCount === 0;
@@ -24,7 +26,7 @@ export function BulkFooter({ saving, onSave, onDownloadCsv, onCopyCsv, saveBlock
           {saving ? '保存中...' : '↑ 申請する'}
         </Button>
         <div className="text-xs leading-tight text-gray-500">
-          <p>管理者の承認後に反映されます</p>
+          <p>{approvalNote ?? '管理者の承認後に反映されます'}</p>
           {/* ブラウザの拡大率はサイトから変えられないので、戻し方を案内する（修正依頼1026 I2） */}
           <p data-testid="zoom-help">画面が大きい／小さいときは Ctrl+0（Mac は ⌘+0）で100%に戻せます</p>
         </div>

@@ -132,9 +132,39 @@ SELECT pg_temp.check('2-1 管理会社: 保守会社×紐付け種別の行に�
     WHERE vendor_id = 'c0000000-0000-4000-8000-000000000001' AND inspection_type_id = 'f0000000-0000-4000-8000-000000000001'
       AND default_template_no = 'elevator_inspection' AND template_no = 'cleaning'
       AND emergency_contact = '090-5115-0001' AND default_emergency_contact = '0120-000-001'));
-SELECT pg_temp.check('2-2 紐付けの無い保守会社（c..02）は種別なしの1行',
-  (SELECT count(*) = 1 AND bool_and(inspection_type_id IS NULL AND template_no IS NULL)
+-- レビュー指摘: 紐付けの無い保守会社（c..02）でも、自社物件の点検行（120409-00 消防設備点検）と台の保守（エレベーター）の組は行に出る
+SELECT pg_temp.check('2-2 紐付けの無い保守会社（c..02）は、自社物件の点検行・台の保守に出てくる種別の行（種別なしの行は出ない）',
+  (SELECT count(*) = 2
+          AND bool_and(inspection_type_id IN ('f0000000-0000-4000-8000-000000000002', 'f0000000-0000-4000-8000-000000000001'))
+          AND bool_or(inspection_type_id = 'f0000000-0000-4000-8000-000000000002' AND default_template_no = 'fire_inspection')
      FROM signage.mgmt_vendor_defaults() WHERE vendor_id = 'c0000000-0000-4000-8000-000000000002'));
+SELECT pg_temp.check('2-2b 他社物件だけの組（c..03 × 貯水槽清掃。120411-00 は管理会社B）は出ない',
+  NOT EXISTS (SELECT 1 FROM signage.mgmt_vendor_defaults()
+               WHERE vendor_id = 'c0000000-0000-4000-8000-000000000003' AND inspection_type_label = '貯水槽清掃（断水）'));
+-- 点検行から出た組（c..02 × 消防設備点検）も上書きでき、行と管理会社の申請の TPL 照合に効く
+INSERT INTO signage.signage_mgmt_vendor_overrides (vendor_id, inspection_type_id, template_no)
+VALUES ('c0000000-0000-4000-8000-000000000002', 'f0000000-0000-4000-8000-000000000002', 'cleaning');
+SELECT pg_temp.check('2-2c 点検行から出た組の上書きが行に付く',
+  (SELECT template_no = 'cleaning' FROM signage.mgmt_vendor_defaults()
+    WHERE vendor_id = 'c0000000-0000-4000-8000-000000000002' AND inspection_type_id = 'f0000000-0000-4000-8000-000000000002'));
+WITH x AS (
+  INSERT INTO signage.signage_entries (user_id, property_code, terminal_id, vendor_name, inspection_type, template_no,
+                                       inspection_start, status, property_inspection_id, target_month)
+  VALUES ('a0000000-0000-4000-8000-000000000006', '120409-00', '', NULL, '消防設備点検', 'cleaning',
+          '2033-06-05', 'draft', '2124a983-8f13-4323-9eea-67f36bedf3d3', '2033-06-01')
+  RETURNING id)
+INSERT INTO t_ids SELECT 'mf', id FROM x;
+SELECT pg_temp.check('2-2d 管理会社の申請（受注先 c..02・消防設備点検）がその上書き TPL で通る',
+  (SELECT template_no = 'cleaning' AND vendor_id = 'c0000000-0000-4000-8000-000000000002'
+     FROM signage.signage_entries WHERE id = (SELECT id FROM t_ids WHERE k = 'mf')));
+-- 後の試験（3- の件数）に響かないよう、足した上書きは既定に戻す
+DELETE FROM signage.signage_mgmt_vendor_overrides
+ WHERE vendor_id = 'c0000000-0000-4000-8000-000000000002' AND inspection_type_id = 'f0000000-0000-4000-8000-000000000002';
+SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000007');
+SELECT pg_temp.check('2-2e 管理会社B には自社物件に無い組（c..02 × エレベーター。台の保守は 120409-00 だけ）は出ない',
+  NOT EXISTS (SELECT 1 FROM signage.mgmt_vendor_defaults()
+               WHERE vendor_id = 'c0000000-0000-4000-8000-000000000002' AND inspection_type_id = 'f0000000-0000-4000-8000-000000000001'));
+SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000006');
 SELECT pg_temp.check('2-3 管理会社B の上書き（fire_inspection）は混ざらない',
   NOT EXISTS (SELECT 1 FROM signage.mgmt_vendor_defaults() WHERE template_no = 'fire_inspection'));
 SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000002');

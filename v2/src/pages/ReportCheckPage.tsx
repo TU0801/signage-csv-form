@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { HeaderSlot } from '@/components/layout/HeaderSlot';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -16,6 +16,10 @@ import { FileUploadModal } from '@/features/inspection-documents/components/File
 import { ManagementCompanyFilter } from '@/features/single-entry/components/ManagementCompanySelect';
 import { useManagementCompanies } from '@/features/single-entry/hooks/useManagementCompanies';
 import { MANAGEMENT_COMPANY_NONE } from '@/features/single-entry/lib/entryLogic';
+import { ValueFilterPopover, type FilterOption } from '@/features/bulk-entry/components/ValueFilterPopover';
+import { matchesVendorSelection } from '@/features/bulk-entry/utils/rowVendor';
+import { fetchMasterVendors } from '@/lib/api/masterData';
+import { vendorFilterOptions } from '@/lib/vendorFilter';
 import type { PortalInspectionRow } from '@/types/portal';
 
 /** 対象月の選択肢の上限（今月から何か月さかのぼるか）。行のある最も古い月より前は出さない */
@@ -39,6 +43,53 @@ interface ReportTarget {
   previous: ScheduleItem['report'];
   /** 実施日の既定（行の点検開始日。修正依頼1027(1)） */
   defaultPerformedOn?: string | null;
+}
+
+/** 点検の行に出てくる保守会社（点検行と台。未設定は null） */
+const vendorIdsOf = (i: PortalInspectionRow) => [i.vendor_id, ...i.unit_vendor_ids];
+
+/** 複数選べる絞り込みのボタン（管理会社の保守会社・点検種別。一括入力の同じ絞り込みと同じ見た目） */
+function MultiFilter({
+  label,
+  title,
+  selected,
+  onApply,
+  getOptions,
+}: {
+  label: string;
+  title: string;
+  selected: string[];
+  onApply: (values: string[]) => void;
+  getOptions: () => FilterOption[];
+}) {
+  return (
+    <span className="inline-flex h-7 shrink-0 items-center gap-0.5 whitespace-nowrap rounded border border-gray-300 bg-white px-1 text-xs text-gray-700">
+      <ValueFilterPopover
+        trigger={
+          <span className="px-0.5 text-xs">
+            {label}
+            {selected.length > 0 ? `: ${selected.length}件` : ': すべて'} ▾
+          </span>
+        }
+        title={title}
+        triggerClassName="h-6"
+        getOptions={getOptions}
+        selected={selected}
+        onApply={onApply}
+        searchable={true}
+      />
+      {selected.length > 0 && (
+        <button
+          type="button"
+          className="rounded px-0.5 text-gray-500 hover:bg-gray-100"
+          aria-label={`${label}の絞り込みを解除`}
+          onClick={() => onApply([])}
+        >
+          ✕
+        </button>
+      )}
+    </span>
+  );
 }
 
 /** ISO の日時 → 日本時間の日付（2026/10/06） */
@@ -67,6 +118,23 @@ export function ReportCheckPage({ modeSwitch }: { modeSwitch?: ReactNode } = {})
   const [month, setMonth] = useState(currentMonth);
   const [missingOnly, setMissingOnly] = useState(false);
   const [typeLabel, setTypeLabel] = useState('');
+  // 管理会社: 保守会社・点検種別の複数選択（選択肢は自社物件の点検に出てくるもの。一括入力と同じ。修正依頼1115 (2)）
+  const [vendorFilter, setVendorFilter] = useState<string[]>([]);
+  const [typeFilter, setTypeFilter] = useState<string[]>([]);
+  const [masterVendorNames, setMasterVendorNames] = useState<ReadonlyMap<string, string>>(new Map());
+  // 台だけを受け持つ保守会社は点検行に名前が無いので、保守会社マスターから名前を引く（読めなければ点検行の名前だけ）
+  useEffect(() => {
+    if (!isManagement) return;
+    let alive = true;
+    fetchMasterVendors()
+      .then((vs) => {
+        if (alive) setMasterVendorNames(new Map(vs.map((v) => [v.id, v.vendor_name])));
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [isManagement]);
   const [search, setSearch] = useState('');
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
 
@@ -104,18 +172,41 @@ export function ReportCheckPage({ modeSwitch }: { modeSwitch?: ReactNode } = {})
     [items],
   );
 
+  const monthItems = useMemo(() => items.filter((i) => i.targetMonth === month), [items, month]);
+  const vendorOptions = (): FilterOption[] => {
+    const names = new Map(masterVendorNames);
+    for (const i of items) {
+      if (i.inspection.vendor_id && !names.has(i.inspection.vendor_id) && i.inspection.vendor_name) {
+        names.set(i.inspection.vendor_id, i.inspection.vendor_name);
+      }
+    }
+    return vendorFilterOptions(items.flatMap((i) => vendorIdsOf(i.inspection)), names)
+      .filter((o) => o.value !== '')
+      .map((o) => ({
+        value: o.value,
+        label: o.label,
+        searchText: o.label,
+        count: monthItems.filter((i) => vendorIdsOf(i.inspection).some((id) => matchesVendorSelection(id, [o.value]))).length,
+      }));
+  };
+  const typeFilterOptions = (): FilterOption[] =>
+    typeOptions.map((t) => ({ value: t, count: monthItems.filter((i) => i.inspection.inspection_type_label === t).length }));
+
   // 未着だけ以外の条件（件数はこの範囲で数える）
   const inScope = useMemo(() => {
     const q = normalizeSearch(search);
     const want = managementCompanyId === MANAGEMENT_COMPANY_NONE ? null : managementCompanyId;
-    return items.filter(
+    const typeOf = (i: ScheduleItem) => i.inspection.inspection_type_label ?? '';
+    return monthItems.filter(
       (i) =>
-        i.targetMonth === month &&
-        (!typeLabel || (i.inspection.inspection_type_label ?? '') === typeLabel) &&
+        (isManagement
+          ? (typeFilter.length === 0 || typeFilter.includes(typeOf(i))) &&
+            (vendorFilter.length === 0 || vendorIdsOf(i.inspection).some((id) => matchesVendorSelection(id, vendorFilter)))
+          : !typeLabel || typeOf(i) === typeLabel) &&
         (!managementCompanyId || !managementIndex || i.inspection.management_company_id === want) &&
         (!q || normalizeSearch(`${i.inspection.property_code} ${i.inspection.property_name}`).includes(q)),
     );
-  }, [items, month, typeLabel, managementCompanyId, managementIndex, search]);
+  }, [monthItems, isManagement, typeFilter, vendorFilter, typeLabel, managementCompanyId, managementIndex, search]);
   const received = inScope.filter((i) => i.report).length;
   const shown = missingOnly ? inScope.filter((i) => !i.report) : inScope;
 
@@ -133,14 +224,36 @@ export function ReportCheckPage({ modeSwitch }: { modeSwitch?: ReactNode } = {})
   return (
     <div className="flex flex-col gap-2 tall:h-[calc(100dvh-var(--header-h)-1.5rem)]">
       <h1 className="sr-only">点検登録フォーム（報告書の確認）</h1>
-      {managementIndex && (
+      {/* 管理会社には管理会社フィルターの代わりに保守会社・点検種別の絞り込み（一括入力と同じ位置。修正依頼1115 (2)） */}
+      {isManagement ? (
         <HeaderSlot>
-          <ManagementCompanyFilter
-            companies={managementIndex.companies}
-            value={managementCompanyId}
-            onChange={setManagementCompanyId}
-          />
+          <div className="flex items-center gap-1.5">
+            <MultiFilter
+              label="保守会社"
+              title="保守会社で絞り込む（選んだ保守会社の点検の行だけ表示。複数選べます）"
+              selected={vendorFilter}
+              onApply={setVendorFilter}
+              getOptions={vendorOptions}
+            />
+            <MultiFilter
+              label="点検種別"
+              title="点検種別で絞り込む（選んだ点検種別の行だけ表示。複数選べます）"
+              selected={typeFilter}
+              onApply={setTypeFilter}
+              getOptions={typeFilterOptions}
+            />
+          </div>
         </HeaderSlot>
+      ) : (
+        managementIndex && (
+          <HeaderSlot>
+            <ManagementCompanyFilter
+              companies={managementIndex.companies}
+              value={managementCompanyId}
+              onChange={setManagementCompanyId}
+            />
+          </HeaderSlot>
+        )
       )}
       <Card className="flex flex-col overflow-hidden tall:min-h-0 tall:flex-1">
         <div className="flex flex-wrap items-center gap-1.5 border-b border-gray-200 px-2 py-1.5">
@@ -152,14 +265,16 @@ export function ReportCheckPage({ modeSwitch }: { modeSwitch?: ReactNode } = {})
               </option>
             ))}
           </select>
-          <select aria-label="点検種別" value={typeLabel} onChange={(e) => setTypeLabel(e.target.value)} className={control}>
-            <option value="">点検種別: すべて</option>
-            {typeOptions.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
+          {!isManagement && (
+            <select aria-label="点検種別" value={typeLabel} onChange={(e) => setTypeLabel(e.target.value)} className={control}>
+              <option value="">点検種別: すべて</option>
+              {typeOptions.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          )}
           <label className={cn(control, 'inline-flex items-center gap-1 whitespace-nowrap text-gray-700')}>
             <input
               type="checkbox"

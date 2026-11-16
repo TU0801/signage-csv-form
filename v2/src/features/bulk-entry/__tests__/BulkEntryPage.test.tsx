@@ -702,6 +702,18 @@ describe('BulkEntryPage (v1 js/bulk.js init / adminVendorSelect)', () => {
       expect(within(rowOf('2026年11月')).getByRole('button', { name: '修正をやめる' })).toBeInTheDocument();
     });
 
+    it('管理会社が出した申請（受注先が自社）には『修正』を出さない（DB が保守会社の修正を断る。修正依頼1115 レビュー）', async () => {
+      portalApi.fetchPortalEntries.mockResolvedValue([
+        makeEntry({
+          id: 'e-mgmt', user_id: 'mgmt-1', is_mine: false, by_management: true,
+          property_code: 'z0001A01', inspection_type: '消防設備点検', inspection_start: '2026-11-10',
+        }),
+      ]);
+      renderPage();
+      await waitFor(() => expect(within(rowOf('2026年11月')).getByText('点検予定申請中')).toBeInTheDocument());
+      expect(within(rowOf('2026年11月')).queryByRole('button', { name: '修正' })).toBeNull();
+    });
+
     it('台なしの申請（全部の台の行に出る）は1台目の行だけで『修正』できる（同じ申請を2つの行で直させない。修正依頼1026 I11）', async () => {
       portalApi.fetchPortalInspectionUnits.mockResolvedValue([
         { inspection_id: 'i1', unit_id: 'u1', unit_code: 'No1', unit_sort: 0, maintainer_id: 'v1', inspection_months: [], inspected_on: null, equipment_code: null },

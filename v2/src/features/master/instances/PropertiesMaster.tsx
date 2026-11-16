@@ -194,7 +194,8 @@ export function PropertiesMaster() {
                 />
               </div>
             )}
-            <div className="w-48">
+            {/* 保守会社名は長い（「検証エレベーター保守株式会社」で14文字）ので管理会社より広く取り、切れたときは title で全体を出す */}
+            <div className="w-56" title={vendorFilterChoices.find((o) => o.value === activeVendorFilter)?.label}>
               <Combobox
                 aria-label="保守会社で絞り込み"
                 value={activeVendorFilter}

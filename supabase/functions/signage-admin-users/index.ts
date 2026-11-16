@@ -250,6 +250,22 @@ Deno.serve(async (req) => {
       if (error) return json({ error: `削除に失敗しました: ${error.message}` }, 400);
       if (!deleted || deleted.length === 0) return json({ error: '無効化したユーザーだけ削除できます。先に無効化してください' }, 409);
     } else {
+      // 確かめてから消すまでの間に有効化された・CASCADE で一緒に消える履歴（申請・OCR の訂正）が増えた場合は消さない。
+      // 共用アカウントの経路のような条件付き DELETE は auth.users には書けないので、消す直前に読み直す（残る窓はこの読み直しと
+      // deleteUser の間だけ。修正依頼1115 レビュー）
+      const [recheck, entriesNow, ocrNow] = await Promise.all([
+        admin.from('signage_profiles').select('status').eq('id', target.id).maybeSingle(),
+        admin.from('signage_entries').select('id', { count: 'exact', head: true }).eq('user_id', target.id),
+        admin.from('signage_ocr_corrections').select('id', { count: 'exact', head: true }).eq('recorded_by', target.id),
+      ]);
+      const recheckError = recheck.error ?? entriesNow.error ?? ocrNow.error;
+      if (recheckError) return json({ error: `削除前の確認に失敗しました: ${recheckError.message}` }, 500);
+      if (recheck.data?.status !== 'inactive') {
+        return json({ error: '無効化したユーザーだけ削除できます。先に無効化してください' }, 409);
+      }
+      if (entriesNow.count || ocrNow.count) {
+        return json({ error: '入力・申請の履歴があるため削除できません。無効化のままにしてください' }, 409);
+      }
       // プロファイルは auth.users の CASCADE で一緒に消える
       const { error } = await admin.auth.admin.deleteUser(target.id);
       if (error) return json({ error: `削除に失敗しました: ${error.message}` }, 400);

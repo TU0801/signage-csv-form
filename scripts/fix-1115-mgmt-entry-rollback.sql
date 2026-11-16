@@ -1,6 +1,8 @@
 -- fix-1115-mgmt-entry.sql の戻し（修正依頼1115 (2) の DB 部分を当てる前の状態に戻す）
--- 置換した8関数は、本番の現行定義（2026-11-16 に Management API の SELECT で pg_get_functiondef を読んだもの）をそのまま収めた。
--- 足した関数（entry_vendor_for_management・3引数の submitted_entry_editable・inspection_report_writable）とポリシー4本を消す。
+-- 置換した9関数（レビュー後に portal_entries を足した）は、本番の現行定義（2026-11-16 に Management API の SELECT で pg_get_functiondef を
+-- 読んだもの）をそのまま収めた。portal_entries は戻り値の形が変わるので DROP → CREATE で戻す。
+-- 足した関数（entry_vendor_for_management・3引数の submitted_entry_editable・inspection_report_writable・entry_author_is_management・
+-- mgmt_poster_object_deletable）とポリシー6本を消す。
 -- 適用方法: ファイル全体を1つのクエリとして流す（BEGIN/COMMIT は付けない）。何度流しても同じ結果になる。
 -- 要件5の SQL を当てた後なら、先に要件5の戻しを流す。トリガー関数の PUBLIC・anon の EXECUTE は戻さない（発火には関係しない）。
 
@@ -10,6 +12,8 @@ DROP POLICY IF EXISTS mgmt_insert_entries ON signage.signage_entries;
 DROP POLICY IF EXISTS mgmt_update_own_pending_entries ON signage.signage_entries;
 DROP POLICY IF EXISTS inspection_reports_mgmt_insert ON storage.objects;
 DROP POLICY IF EXISTS "poster-images mgmt own insert" ON storage.objects;
+DROP POLICY IF EXISTS "poster-images mgmt own select" ON storage.objects;
+DROP POLICY IF EXISTS "poster-images mgmt own delete" ON storage.objects;
 
 CREATE OR REPLACE FUNCTION signage.guard_entry_portal_columns()
  RETURNS trigger
@@ -524,8 +528,52 @@ BEGIN
 END;
 $function$;
 
+-- portal_entries（本番の現行定義。列 by_management の無い形）
+DROP FUNCTION IF EXISTS signage.portal_entries();
+CREATE OR REPLACE FUNCTION signage.portal_entries()
+ RETURNS TABLE(id uuid, user_id uuid, property_code text, inspection_type text, vendor_name text, vendor_id uuid, property_inspection_id uuid, target_month date, inspection_start date, inspection_end date, status text, review_comment text, reviewed_at timestamp with time zone, created_at timestamp with time zone, updated_at timestamp with time zone, is_mine boolean, terminal_id text, template_no text, announcement text, remarks text, poster_type text, poster_image text, display_start_date date, display_start_time text, display_end_date date, display_end_time text)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'signage', 'pg_temp'
+AS $function$
+  -- 申請者・同じ保守会社・承認する管理会社・管理者以外（同じ点検の台を受け持つ別の保守会社）には、
+  -- 申請があること・対象月・状態だけを返し、申請者・保守会社・日付・理由・掲示の内容は null にする
+  select e.id, case when c.can_see then e.user_id end, e.property_code, e.inspection_type,
+         case when c.can_see then e.vendor_name end, case when c.can_see then e.vendor_id end,
+         e.property_inspection_id, e.target_month,
+         case when c.can_see then e.inspection_start end, case when c.can_see then e.inspection_end end,
+         e.status, case when c.can_see then e.review_comment end, case when c.can_see then e.reviewed_at end,
+         e.created_at, e.updated_at,
+         e.user_id = auth.uid(),
+         case when c.can_see then e.terminal_id end, case when c.can_see then e.template_no end,
+         case when c.can_see then e.announcement end, case when c.can_see then e.remarks end,
+         case when c.can_see then e.poster_type end, case when c.can_see then e.poster_image end,
+         case when c.can_see then e.display_start_date end, case when c.can_see then e.display_start_time end,
+         case when c.can_see then e.display_end_date end, case when c.can_see then e.display_end_time end
+  from signage.signage_entries e
+  cross join lateral (select
+    signage.is_active_admin()
+    or e.user_id = auth.uid()
+    or (e.vendor_id is not null and e.vendor_id = signage.current_vendor_id())
+    or (signage.current_role_kind() = 'management' and signage.property_reviewable(e.property_code)) as can_see) c
+  where signage.current_role_kind() is not null
+    and (
+      signage.is_active_admin()
+      or (e.property_inspection_id is not null and signage.inspection_in_scope(e.property_inspection_id))
+      or (e.property_inspection_id is null and (
+            e.user_id = auth.uid()
+            or (signage.current_role_kind() = 'management' and signage.property_reviewable(e.property_code))))
+    )
+  order by e.created_at desc;
+$function$;
+
+REVOKE ALL ON FUNCTION signage.portal_entries() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION signage.portal_entries() TO authenticated, service_role;
+
 DROP FUNCTION IF EXISTS signage.submitted_entry_editable(uuid, uuid, text);
 DROP FUNCTION IF EXISTS signage.inspection_report_writable(uuid);
 DROP FUNCTION IF EXISTS signage.entry_vendor_for_management(uuid, uuid);
+DROP FUNCTION IF EXISTS signage.entry_author_is_management(uuid);
+DROP FUNCTION IF EXISTS signage.mgmt_poster_object_deletable(text);
 
 NOTIFY pgrst, 'reload schema';

@@ -798,7 +798,8 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       const busy = !!key && completingKey === key;
       // 点検月以外の月の行は、その月の申請があるときだけ完了連絡できる（D5。毎月・申請不要の点検種別は月を問わない）
       const blocked = completionBlockedReason(item);
-      // 申請済み（承認前）の申請は、申請者・同じ保守会社・管理者が直せる（修正依頼1026 I11）
+      // 申請済み（承認前）の申請は、申請者・同じ保守会社・管理者が直せる（修正依頼1026 I11）。
+      // 管理会社が出した申請は受注先が自社でも直せない（DB が断る。修正依頼1115 レビュー）
       const draft = item.application === 'applied' ? focusEntry(item.entries) : null;
       // 申請不要（報告書のみ）の行は日付の欄を出さないので直せない（申請は台なしの申請か、印が付く前のもの）。
       // 台なしの申請（1件入力・旧来）は全部の台の行に出るので、直すのは1台目の行だけ（同じ申請を2つの行で同時に直させない）
@@ -807,7 +808,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
         draft.status === 'draft' &&
         !item.reportOnly &&
         !(item.secondary && !draft.property_unit_id) &&
-        (isAdmin || draft.is_mine || (!!draft.vendor_id && draft.vendor_id === profileVendorId));
+        (isAdmin || draft.is_mine || (!!draft.vendor_id && draft.vendor_id === profileVendorId && !draft.by_management));
       const isEditing = !!editOf(item);
       return (
         <div className="flex flex-wrap gap-1">
@@ -1574,6 +1575,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
               // 管理会社には自社の名前しか出ないので管理会社の列を出さず、保守会社の列を出す（修正依頼1115 (2)）
               showManagement={!isManagement}
               showVendor={isAdmin || isManagement}
+              showCompletion={!isManagement}
               sort={sort}
               onSortChange={setSort}
               columnFilters={columnFilters}
@@ -1589,6 +1591,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
           onDownloadCsv={handleDownloadCsv}
           onCopyCsv={() => void handleCopyCsv()}
           saveBlockedReason={saveBlockedReason}
+          approvalNote={isManagement ? '承認（点検一覧・管理会社メニューの承認待ち）の後に反映されます' : undefined}
         />
       </Card>
 

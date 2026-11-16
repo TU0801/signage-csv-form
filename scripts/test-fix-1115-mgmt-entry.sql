@@ -260,6 +260,19 @@ SELECT pg_temp.check('4-3 自分の申請済みを開ける',
 SELECT pg_temp.check('4-4 自分の申請済みを修正できる（受注先はそのまま）',
   (SELECT r.remarks = 't1115-edit' AND r.vendor_id = 'c0000000-0000-4000-8000-000000000002' AND r.emergency_contact = '090-1115-0000'
      FROM signage.portal_update_submitted_entry((SELECT id FROM t_ids WHERE k = 'm2'), '{"remarks": "t1115-edit"}'::jsonb) r));
+-- レビュー指摘: 受注先になった保守会社（user@ c..01）は、管理会社の申請（u1。受注先 c..01）を開けず直せない。一覧では by_management が付く
+SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000002');
+SELECT pg_temp.expect_error('4-6 管理会社の申請を受注先の保守会社が開く',
+  format($q$SELECT signage.portal_entry_for_edit(%L)$q$, (SELECT id FROM t_ids WHERE k = 'u1')), 'この申請を修正する権限がありません');
+SELECT pg_temp.expect_error('4-7 管理会社の申請を受注先の保守会社が修正',
+  format($q$SELECT signage.portal_update_submitted_entry(%L, '{"remarks": "vendor edited"}'::jsonb)$q$, (SELECT id FROM t_ids WHERE k = 'u1')),
+  'この申請を修正する権限がありません');
+SELECT pg_temp.check('4-8 portal_entries の by_management: 管理会社の申請は true、保守会社の申請は false',
+  (SELECT bool_and(CASE WHEN p.id = (SELECT id FROM t_ids WHERE k = 'u1') THEN p.by_management
+                        ELSE p.by_management IS FALSE END)
+     FROM signage.portal_entries() p WHERE p.id IN (SELECT id FROM t_ids WHERE k IN ('u1', 'v1')))
+  AND (SELECT count(*) FROM signage.portal_entries() p WHERE p.id IN (SELECT id FROM t_ids WHERE k IN ('u1', 'v1'))) = 2);
+SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000006');
 -- 緊急連絡先は上書きしない決定なので、付け替え前の会社の既定（c..01 の 0120-000-001）のまま残る（画面が新しい会社の連絡先を送る）
 SELECT pg_temp.check('4-5 台を付け替えると受注先も台の保守会社に（U1 c..01 → U2 c..02）。緊急連絡先はそのまま',
   (SELECT r.property_unit_id = 'a1151115-0000-4000-8000-0000000000a2' AND r.vendor_id = 'c0000000-0000-4000-8000-000000000002'
@@ -341,6 +354,27 @@ SELECT pg_temp.expect_error('7-1 他人の uid のフォルダ',
 SELECT pg_temp.expect_error('7-2 templates のフォルダ（管理者だけ）',
   $q$INSERT INTO storage.objects (bucket_id, name, owner_id)
      VALUES ('poster-images', 'templates/t1115-x.png', 'a0000000-0000-4000-8000-000000000006')$q$, 'row-level security');
+-- レビュー指摘: 自分の uid の画像は、申請で使われていなければ消せる（Storage API の削除は SELECT・DELETE の両方のポリシーで見る。
+-- 実際の削除は API で確かめた。ここでは判定とポリシーを見る）
+SELECT pg_temp.check('7-3 自分の uid の使われていない画像は消せる・見える',
+  signage.mgmt_poster_object_deletable('a0000000-0000-4000-8000-000000000006/t1115-own.png')
+  AND EXISTS (SELECT 1 FROM storage.objects WHERE bucket_id = 'poster-images' AND name = 'a0000000-0000-4000-8000-000000000006/t1115-own.png'));
+SELECT pg_temp.check('7-4 他人の uid・.. を含む名前は消せない',
+  NOT signage.mgmt_poster_object_deletable('a0000000-0000-4000-8000-000000000002/t1115-x.png')
+  AND NOT signage.mgmt_poster_object_deletable('a0000000-0000-4000-8000-000000000006/../a0000000-0000-4000-8000-000000000002/x.png'));
+SELECT pg_temp.as_owner();
+UPDATE signage.signage_entries SET poster_image = 'http://127.0.0.1:55321/storage/v1/object/public/poster-images/a0000000-0000-4000-8000-000000000006/t1115-own.png?t=1'
+ WHERE id = (SELECT id FROM t_ids WHERE k = 'm1');
+SELECT pg_temp.check('7-5 前提: 申請 m1 がその画像を使っている',
+  EXISTS (SELECT 1 FROM signage.signage_entries WHERE id = (SELECT id FROM t_ids WHERE k = 'm1') AND poster_image LIKE '%/t1115-own.png?t=1'));
+SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000006');
+SELECT pg_temp.check('7-5 申請で使われている画像は消せない',
+  NOT signage.mgmt_poster_object_deletable('a0000000-0000-4000-8000-000000000006/t1115-own.png'));
+SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000007');
+SELECT pg_temp.check('7-6 他社の管理会社は消せない・見えない',
+  NOT signage.mgmt_poster_object_deletable('a0000000-0000-4000-8000-000000000006/t1115-own.png')
+  AND NOT EXISTS (SELECT 1 FROM storage.objects WHERE bucket_id = 'poster-images' AND name = 'a0000000-0000-4000-8000-000000000006/t1115-own.png'));
+SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000006');
 
 -- ============================================================
 -- 8. 一括入力テンプレート（bulk_template_info）: 管理会社は自社物件の点検。保守会社を渡せばその会社の分
@@ -363,6 +397,10 @@ BEGIN
     RAISE EXCEPTION 'NG 8-2 点検: %', r;
   END IF;
   RAISE NOTICE 'ok 8-2 管理会社・保守会社あり: その会社の点検（台の保守会社を含む）';
+  -- レビュー指摘: 自社物件の点検に出てこない会社（c..10 は他社の管理会社）の略称は返さない
+  r := signage.bulk_template_info('c0000000-0000-4000-8000-000000000010');
+  IF r->>'short_name' IS NOT NULL OR jsonb_array_length(r->'inspection_ids') <> 0 THEN RAISE EXCEPTION 'NG 8-3 c..10: %', r; END IF;
+  RAISE NOTICE 'ok 8-3 自社物件の点検に出てこない会社の略称は返さない';
 END $$;
 
 -- ============================================================
@@ -412,6 +450,17 @@ SELECT pg_temp.check('9-7 管理者: 点検に結び付かない申請・承認�
   (SELECT vendor_name = '管理者が入れた名前' AND status = 'ready' FROM signage.signage_entries WHERE id = (SELECT id FROM t_ids WHERE k = 'a1')));
 SELECT pg_temp.check('9-8 管理者: bulk_template_info(NULL) は空のまま',
   signage.bulk_template_info(NULL) = '{"short_name": null, "inspection_ids": []}'::jsonb);
+-- 管理者の代理申請（受注先 c..01）は、今までどおり同じ保守会社のアカウントが直せる（レビュー指摘で閉じたのは管理会社の申請だけ）
+WITH x AS (
+  INSERT INTO signage.signage_entries (user_id, property_code, terminal_id, vendor_name, inspection_type, inspection_start,
+                                       status, property_inspection_id, vendor_id, target_month)
+  VALUES ('a0000000-0000-4000-8000-000000000001', '120409-00', '', '検証エレベーター保守株式会社', 'エレベーター定期点検', '2032-09-05',
+          'draft', '2b84a9bd-b98e-4332-bd19-2973387bc13c', 'c0000000-0000-4000-8000-000000000001', '2032-09-01')
+  RETURNING id)
+INSERT INTO t_ids SELECT 'a2', id FROM x;
+SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000002');
+SELECT pg_temp.check('9-8b 保守会社: 管理者の代理申請（同じ保守会社）は今までどおり修正できる',
+  (signage.portal_update_submitted_entry((SELECT id FROM t_ids WHERE k = 'a2'), '{"remarks": "t1115-a"}'::jsonb)).remarks = 't1115-a');
 
 -- 無効の管理会社・プロファイル無しは申請できない
 SELECT pg_temp.as_owner();
@@ -431,7 +480,14 @@ SELECT pg_temp.check('10-1 entry_vendor_for_management・3引数の submitted_en
   NOT has_function_privilege('authenticated', 'signage.entry_vendor_for_management(uuid, uuid)', 'execute')
   AND NOT has_function_privilege('anon', 'signage.entry_vendor_for_management(uuid, uuid)', 'execute')
   AND NOT has_function_privilege('authenticated', 'signage.submitted_entry_editable(uuid, uuid, text)', 'execute')
-  AND NOT has_function_privilege('anon', 'signage.submitted_entry_editable(uuid, uuid, text)', 'execute'));
+  AND NOT has_function_privilege('anon', 'signage.submitted_entry_editable(uuid, uuid, text)', 'execute')
+  AND NOT has_function_privilege('authenticated', 'signage.entry_author_is_management(uuid)', 'execute')
+  AND NOT has_function_privilege('anon', 'signage.entry_author_is_management(uuid)', 'execute'));
+SELECT pg_temp.check('10-1b mgmt_poster_object_deletable は authenticated だけ（Storage のポリシーで使う）・portal_entries は anon 不可',
+  has_function_privilege('authenticated', 'signage.mgmt_poster_object_deletable(text)', 'execute')
+  AND NOT has_function_privilege('anon', 'signage.mgmt_poster_object_deletable(text)', 'execute')
+  AND has_function_privilege('authenticated', 'signage.portal_entries()', 'execute')
+  AND NOT has_function_privilege('anon', 'signage.portal_entries()', 'execute'));
 SELECT pg_temp.check('10-2 inspection_report_writable は authenticated だけ（Storage のポリシーで使う）',
   has_function_privilege('authenticated', 'signage.inspection_report_writable(uuid)', 'execute')
   AND NOT has_function_privilege('anon', 'signage.inspection_report_writable(uuid)', 'execute'));

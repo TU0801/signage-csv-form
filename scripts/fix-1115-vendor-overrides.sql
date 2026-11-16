@@ -3,6 +3,7 @@
 --
 -- 目的（ユーザー決定 2026-11-16 の (5)）:
 --   管理会社ログインのマスター管理「保守会社」タブを「保守会社 × 紐付けた点検種別」の行にし、既定の点検 TPL と貼紙を出す。
+--   （レビュー後: 自社物件の点検行・台の保守に出てくる「保守会社 × 種別」の行も出す。申請の受注先・種別は点検行から決まるため）
 --   管理会社は自社用に「緊急連絡先」と「点検 TPL（既存のテンプレート biz.template_images から選ぶ）」を上書きでき、「既定に戻す」で消せる。
 --   上書きは、その管理会社が管理する物件への申請（保守会社・管理会社・管理者の 1件入力・一括入力・点検一覧の申請）の初期値になる。
 --   DB の TPL 照合（guard_entry_type_scope と portal_update_submitted_entry）は、種別の既定 TPL に加えて
@@ -181,7 +182,9 @@ GRANT EXECUTE ON FUNCTION signage.vendor_override_template_allowed(text, uuid, t
 -- ============================================================
 -- 3. 管理会社の保守会社タブ用: signage.mgmt_vendor_defaults()
 -- ============================================================
--- 行: 保守会社 × 紐付けた点検種別（signage_vendor_inspections の active）＋上書きだけ残っている種別。
+-- 行: 保守会社 × 紐付けた点検種別（signage_vendor_inspections の active）＋自社物件の点検行・台の保守に出てくる（保守会社, 種別）
+-- ＋上書きだけ残っている種別。申請の受注先と種別は点検行（台）から決まるので、紐付けが無くても実際に申請する組を上書きできるようにする
+-- （レビュー指摘。紐付けだけだと本番で17社が「点検種別の紐付けなし」になり、申請する組の TPL を変えられなかった）。
 -- 紐付けも上書きも無い保守会社は種別 NULL の1行。緊急連絡先の上書き（種別 NULL の行）はその保守会社の全行に付ける。
 -- 有効な管理会社にだけ返す（ほかは0行）
 CREATE OR REPLACE FUNCTION signage.mgmt_vendor_defaults()
@@ -205,6 +208,17 @@ AS $function$
      where vi.status = 'active'
     union
     select ov.vendor_id, ov.inspection_type_id from ov where ov.inspection_type_id is not null
+    union
+    select pi.maintainer_id, pi.inspection_type_id
+      from biz.property_inspections pi
+      join biz.properties b on b.id = pi.property_id, me
+     where b.management_company_id = me.mc and pi.maintainer_id is not null and pi.inspection_type_id is not null
+    union
+    select ui.maintainer_id, ui.inspection_type_id
+      from biz.property_unit_inspections ui
+      join biz.property_units u on u.id = ui.unit_id
+      join biz.properties b on b.id = u.property_id, me
+     where b.management_company_id = me.mc and ui.maintainer_id is not null and ui.inspection_type_id is not null
   ),
   rows_ as (
     select v.id as vid, p.type_id

@@ -67,7 +67,8 @@ export function EditUserModal({
       managementCompanyId !== (user.management_company_id ?? '') ||
       password !== '');
 
-  // 管理会社へ付け替えると申請の画面に入れなくなるので、保存前に知らせる（既存の実ユーザーを画面で移す運用）
+  // 管理会社へ付け替えると使える機能が変わる（保守会社の設定が外れ、完了連絡・建物追加の申請は使えず、承認は点検一覧で行う）ので、
+  // 保存前に知らせる（既存の実ユーザーを画面で移す運用）
   const switchingToManagement = !!user && user.role !== 'management' && role === 'management';
 
   /** 入力の確認は欄の下に出す（useUsers.editUser と同じ条件。そちらは最後の砦として残す） */
@@ -180,8 +181,8 @@ export function EditUserModal({
         )}
         {switchingToManagement && (
           <p role="note" className="rounded border border-yellow-200 bg-yellow-50 px-2 py-1.5 text-xs text-yellow-800">
-            管理会社へ付け替えると、保守会社の設定は外れ、申請の作成（1件入力・一括入力）ができなくなります。
-            ログイン後は、点検登録フォームでの承認・報告書の確認と、管理会社メニュー（自社物件の承認・マスター・ユーザー）を使えます。
+            管理会社へ付け替えると、保守会社の設定は外れ、完了連絡と建物追加の申請は使えなくなります。
+            ログイン後は、点検登録フォーム（1件入力・一括入力・報告書確認）での自社物件の予定の申請と報告書のアップロード、ヘッダーの「点検一覧」での承認・差戻しと、管理会社メニュー（自社物件の承認・マスター・ユーザー）を使えます。
           </p>
         )}
         <div className="flex justify-end gap-3 pt-2">

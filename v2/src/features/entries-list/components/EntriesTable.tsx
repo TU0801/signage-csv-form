@@ -347,7 +347,7 @@ export function EntriesTable() {
                               size="sm"
                               variant="ghost"
                               className="text-red-600 hover:text-red-700"
-                              title="承認を取り消し、理由を付けて保守会社へ戻します（未取込の申請だけ）"
+                              title="承認を取り消し、理由を付けて申請者へ戻します（未取込の申請だけ）"
                               onClick={() => setSendBackTarget(entry)}
                             >
                               {/* 操作の列は右端に固定なので短くする（承認の取り消しであることは title と確認ダイアログで示す） */}

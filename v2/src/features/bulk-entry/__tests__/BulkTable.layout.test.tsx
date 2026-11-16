@@ -15,7 +15,7 @@ function meta(key: string, extra: Partial<BulkScheduleMeta> = {}): BulkScheduleM
   return { key, inspectionId: 'i1', targetMonth: '2026-11-01', locked: false, propertyName: 'ＹＡＤＯ／Ｒｅ薬院', terminalIds: ['r0001A01'], ...extra };
 }
 
-function renderTable() {
+function renderTable(extra: { showCompletion?: boolean } = {}) {
   return render(
     <ToastProvider>
       <BulkTable
@@ -26,6 +26,7 @@ function renderTable() {
         infoOf={info}
         showManagement
         showVendor
+        {...extra}
       />
     </ToastProvider>,
   );
@@ -45,6 +46,12 @@ describe('点検登録フォームの表（修正依頼1026）', () => {
     const heads = screen.getAllByRole('columnheader').map((h) => h.textContent ?? '');
     expect(heads.slice(-4)).toEqual(['メモ', '管理会社', '保守会社', '詳細']);
     expect(screen.getByRole('columnheader', { name: /報告書UP・/ }).querySelector('br')).not.toBeNull();
+  });
+
+  it('完了連絡の無いロール（管理会社）は見出しを「報告書UP」だけにする（修正依頼1115 レビュー）', () => {
+    renderTable({ showCompletion: false });
+    expect(screen.getByRole('columnheader', { name: '報告書UP' })).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: /完了連絡/ })).toBeNull();
   });
 
   it('物件の下は設備会社固有の No だけ（物件コードは出さない）。No の無い点検は何も出さない（I6）', () => {

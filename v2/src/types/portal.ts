@@ -49,6 +49,11 @@ export interface PortalEntryRow {
   /** ログイン中のアカウントが作った申請か */
   is_mine: boolean;
   /**
+   * 申請者が管理会社のアカウントか（修正依頼1115 レビュー）。受注先の保守会社でも管理会社の申請は直せない（DB が断る）ので「修正」を出さない。
+   * DB の版が古いと返らない（undefined = 偽として扱う）。中身が見えない行は null
+   */
+  by_management?: boolean | null;
+  /**
    * 台ごとの申請の台（biz.property_units.id。修正依頼1026 I7）。portal_entries は返さないので portal_entry_units で足す。
    * 台なし（1台以下の点検・旧来・1件入力）は null（点検行 × 対象月の全体の申請として全部の台に効く）
    */

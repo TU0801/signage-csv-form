@@ -42,7 +42,7 @@ export interface BulkRowInfo {
   inspectedOn: string;
   /** 管理会社の正式名（managementName が略称のとき title に出す） */
   managementFullName?: string;
-  /** 報告書UP・完了連絡などの操作（点検予定の行で、保守会社・管理者のとき） */
+  /** 報告書UP・完了連絡などの操作（点検予定の行。管理会社は報告書UP だけ） */
   actions?: ReactNode;
 }
 
@@ -58,6 +58,8 @@ interface BulkTableProps {
   showManagement: boolean;
   /** 保守会社の列（管理者だけ） */
   showVendor: boolean;
+  /** 完了連絡の操作がある（管理会社は無いので見出しを「報告書UP」だけにする。修正依頼1115 レビュー）。既定は true */
+  showCompletion?: boolean;
   /** 予定の行の並べ替え（修正依頼1025 F3。null = 並べ替えなし） */
   sort?: SortState | null;
   onSortChange?: (sort: SortState | null) => void;
@@ -222,6 +224,7 @@ export function BulkTable({
   infoOf,
   showManagement,
   showVendor,
+  showCompletion = true,
   sort = null,
   onSortChange,
   columnFilters,
@@ -409,9 +412,15 @@ export function BulkTable({
             </th>
             {/* 見出しは2行（I3）。ボタンは縦に並ぶ */}
             <th className={cn(th, 'w-[4.25rem] min-w-[4.25rem] leading-tight')}>
-              <span className="text-[11px]">報告書UP・</span>
-              <br />
-              <span className="text-[11px]">完了連絡</span>
+              {showCompletion ? (
+                <>
+                  <span className="text-[11px]">報告書UP・</span>
+                  <br />
+                  <span className="text-[11px]">完了連絡</span>
+                </>
+              ) : (
+                <span className="text-[11px]">報告書UP</span>
+              )}
             </th>
             <th className={cn(th, 'w-[4.5rem] min-w-[4.5rem]')}>
               <SortButton column="targetMonth" sort={sort} onSortChange={onSortChange}>
@@ -638,7 +647,7 @@ export function BulkTable({
                 <td className="cell">
                   {schedule?.reportOnly ? (
                     // 申請不要（報告書のみ）の点検は日付を入れない（修正依頼1025 H4/G4）
-                    <span className={cn(cellText, 'whitespace-nowrap text-gray-500')} title="申請不要（報告書UP・完了連絡だけ）">
+                    <span className={cn(cellText, 'whitespace-nowrap text-gray-500')} title={showCompletion ? '申請不要（報告書UP・完了連絡だけ）' : '申請不要（報告書UP だけ）'}>
                       申請不要
                     </span>
                   ) : locked ? (
