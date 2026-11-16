@@ -41,6 +41,16 @@ function renderAdmin(path: string) {
               </AdminRoute>
             }
           />
+          <Route
+            path="/admin/relationships"
+            element={
+              <AdminRoute>
+                <AdminRoute adminOnly>
+                  <p>紐付け管理</p>
+                </AdminRoute>
+              </AdminRoute>
+            }
+          />
         </Routes>
       </MemoryRouter>
     </ToastProvider>,
@@ -55,6 +65,15 @@ describe('AdminRoute', () => {
     renderAdmin('/admin/ad-slots');
     expect(screen.queryByText('広告枠管理')).not.toBeInTheDocument();
     expect(screen.getAllByText('管理画面').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText('管理者権限が必要です')).toHaveLength(1);
+    auth.role = 'user';
+  });
+
+  it('管理会社が紐付け管理（/admin/relationships）を直接開くと /admin へ戻す（修正依頼1115 (3)）', () => {
+    auth.role = 'management';
+    renderAdmin('/admin/relationships');
+    expect(screen.queryByText('紐付け管理')).not.toBeInTheDocument();
+    expect(screen.getByText('管理画面')).toBeInTheDocument();
     expect(screen.getAllByText('管理者権限が必要です')).toHaveLength(1);
     auth.role = 'user';
   });

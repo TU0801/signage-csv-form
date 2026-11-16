@@ -78,7 +78,15 @@ export default function App() {
               <Route index element={<ApprovalPage />} />
               <Route path="entries" element={<EntriesPage />} />
               <Route path="master" element={<MasterPage />} />
-              <Route path="relationships" element={<RelationshipsPage />} />
+              {/* 紐付け管理は管理者だけ（修正依頼1115 (3)。管理会社が URL を直接開いても /admin へ戻す） */}
+              <Route
+                path="relationships"
+                element={
+                  <AdminRoute adminOnly>
+                    <RelationshipsPage />
+                  </AdminRoute>
+                }
+              />
               <Route path="users" element={<UsersPage />} />
               {/* 広告枠管理は管理者だけ（管理会社メニューには出さない） */}
               <Route

@@ -33,7 +33,7 @@ const adminNav: {
 }[] = [
   { to: '/admin', label: '承認待ち', icon: InboxIcon, exact: true, badge: 'pending' },
   { to: '/admin/entries', label: '承認済み', icon: CircleCheckIcon, badge: 'approved' },
-  { to: '/admin/relationships', label: '紐付け管理', icon: LinkIcon },
+  { to: '/admin/relationships', label: '紐付け管理', icon: LinkIcon, adminOnly: true },
   { to: '/admin/master', label: 'マスター管理', icon: DatabaseIcon },
   { to: '/admin/users', label: 'ユーザー管理', icon: UsersIcon },
   { to: '/admin/ad-slots', label: '広告枠管理', icon: MegaphoneIcon, adminOnly: true },
@@ -52,7 +52,7 @@ function readCollapsed(): boolean {
 
 export function AdminSidebar() {
   const location = useLocation();
-  // 管理会社: 見出し「管理会社メニュー」、広告枠管理は出さない（範囲は自社が管理する物件。DB 側で絞る）
+  // 管理会社: 見出し「管理会社メニュー」、紐付け管理・広告枠管理は出さない（修正依頼1115 (3)）（範囲は自社が管理する物件。DB 側で絞る）
   const isManagement = useAuthStore((s) => s.profile?.role === 'management');
   const navItems = isManagement ? adminNav.filter((item) => !item.adminOnly) : adminNav;
   const pendingEntries = useAdminCountsStore((s) => s.pendingEntries);

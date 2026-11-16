@@ -117,7 +117,13 @@ export function PropertyFormModal({
         profile,
       });
       if (result.added > 0) {
-        addToast(`保守会社 ${result.added} 件を紐付け管理にも追加しました`, 'success');
+        // 管理会社には紐付け管理の画面が無いので、画面名を出さない（修正依頼1115 (3)）
+        addToast(
+          isAdmin
+            ? `保守会社 ${result.added} 件を紐付け管理にも追加しました`
+            : `保守会社 ${result.added} 件を紐付けにも追加しました`,
+          'success',
+        );
       }
       // 業務システムが断った理由はそのまま出す（定型文だと何を直せばよいか分からない）
       if (result.errors.length > 0) showError(result.errors.join(' ／ '));
