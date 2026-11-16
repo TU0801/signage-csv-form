@@ -9,6 +9,7 @@ import { resolveTemplateImageUrl } from '@/features/single-entry/lib/templateIma
 import { formatMonth } from '@/features/inspection-portal/lib/schedule';
 import { discardUnheldRowImages } from '../utils/discardRowImages';
 import { templateDisplayName } from '../utils/rowDetail';
+import { rowEntryDefaults } from '../utils/rowDefaults';
 import { StatusBadge } from '@/features/inspection-portal/components/StatusBadge';
 import type { InspectionStatus } from '@/features/inspection-portal/lib/status';
 import { BasicEntryForm, normalizePosition, type BasicFormValues } from '../components/BasicEntryForm';
@@ -30,7 +31,7 @@ export interface RowDetailContext {
    * 行の保守会社（管理会社の一括入力。修正依頼1115 (2)）。保守会社名の表示と連絡先の既定に使う。
    * 無ければ画面上部の保守会社（管理者・保守会社）
    */
-  vendor?: { name: string | null; emergencyContact: string };
+  vendor?: { id?: string | null; name: string | null; emergencyContact: string };
 }
 
 interface RowDetailModalProps {
@@ -95,9 +96,10 @@ function RowDetailForm({
 
   const noticeOf = (type: string) => (type ? masterData.notices.find((n) => n.inspectionType === type) : undefined);
   const notice = noticeOf(row.inspectionType);
-  const vendorContact = context?.vendor
-    ? context.vendor.emergencyContact
-    : (masterData.vendors.find((v) => v.vendorName === currentVendor.name)?.emergencyContact ?? '');
+  // 行の受注先の保守会社（管理会社は行ごと、ほかは画面上部）。緊急連絡先・TPL の既定は物件の管理会社の個別設定を含む（修正依頼1115 (5)）
+  const vendorSel = context?.vendor ? { id: context.vendor.id ?? null, name: context.vendor.name } : currentVendor;
+  const vendorContact =
+    rowEntryDefaults(row, masterData, vendorSel).emergencyContact || (context?.vendor?.emergencyContact ?? '');
   const vendorName = context?.vendor ? context.vendor.name : currentVendor.name;
   const templateImages = masterData.templateImages ?? [];
 
@@ -120,7 +122,8 @@ function RowDetailForm({
   }));
   const isCustom = values.posterType === 'custom';
   // テンプレートNo・テンプレート名・プレビューは選んでいる点検種別で決まる（変えたら追従する。修正依頼1027(3)・1029）
-  const templateNo = noticeOf(values.inspectionType)?.templateNo ?? '';
+  const templateNo = rowEntryDefaults({ propertyCode: row.propertyCode, inspectionType: values.inspectionType }, masterData, vendorSel)
+    .templateNo;
   const typeChanged = values.inspectionType !== row.inspectionType;
 
   // 選べる点検種別: その物件で自社が担当する点検種別だけ（ユーザー決定④）。申請済みの申請を修正している行も同じで、

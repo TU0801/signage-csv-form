@@ -15,6 +15,8 @@ import { useAppSettings } from '@/features/single-entry/hooks/useAppSettings';
 import { noticeUsage, remarksUsage } from '@/features/single-entry/lib/entryLogic';
 import { REMARKS_PLACEHOLDER, remarksNotice } from '@/lib/remarks';
 import { resolveTemplateImageUrl } from '@/features/single-entry/lib/templateImages';
+import { useEntryVendorDefaults } from '@/hooks/useEntryVendorDefaults';
+import { resolveEntryDefaults, type VendorDefaultsIndex } from '@/lib/vendorDefaults';
 import type { AppSettings } from '@/lib/api/single-entry';
 import type { MasterData } from '@/types/app';
 import type { PortalEntryRow, PortalInspectionRow } from '@/types/portal';
@@ -65,6 +67,8 @@ function errorMessage(err: unknown): string {
 export function ApplyModal({ target, onClose, onApplied, userId, isAdmin, profileVendorId }: ApplyModalProps) {
   const master = useMasterData();
   const settings = useAppSettings();
+  // 管理会社の個別設定（修正依頼1115 (5)）。一覧を開いたときに1回だけ読む（読めなければ既定のまま）
+  const vendorDefaults = useEntryVendorDefaults();
   const ready = !master.loading && !!settings;
   const title = target?.resubmit ? '差戻しの修正・再申請' : '点検の申請';
   // 入力を変えたら、背景クリック・Escape で閉じる前に破棄の確認を出す
@@ -98,6 +102,7 @@ export function ApplyModal({ target, onClose, onApplied, userId, isAdmin, profil
           userId={userId}
           isAdmin={isAdmin}
           profileVendorId={profileVendorId}
+          vendorDefaults={vendorDefaults}
           onClose={close}
           onApplied={onApplied}
           onDirty={() => setDirty(true)}
@@ -109,6 +114,7 @@ export function ApplyModal({ target, onClose, onApplied, userId, isAdmin, profil
 
 interface ApplyFormProps extends Omit<ApplyModalProps, 'target'> {
   target: ApplyTarget;
+  vendorDefaults: VendorDefaultsIndex | null;
   master: MasterData;
   settings: AppSettings;
   onDirty: () => void;
@@ -121,6 +127,7 @@ function ApplyForm({
   userId,
   isAdmin,
   profileVendorId,
+  vendorDefaults,
   onClose,
   onApplied,
   onDirty,
@@ -141,18 +148,35 @@ function ApplyForm({
       : vendorId && vendorId === inspection.vendor_id
         ? { id: vendorId, vendor_name: inspection.vendor_name ?? '', emergency_contact: '' }
         : null;
+    const inspectionType = findInspectionType(master.inspectionTypes, inspection);
+    // 管理会社の個別設定（修正依頼1115 (5)）: 物件の管理会社 × 受注先 × 点検種別の TPL と、× 受注先の緊急連絡先を初期値にする
+    const defaults = vendor
+      ? resolveEntryDefaults(
+          vendorDefaults,
+          {
+            propertyCode: inspection.property_code,
+            vendorId: vendor.id,
+            inspectionTypeId: inspectionType?.id ?? inspection.inspection_type_id,
+          },
+          {
+            templateNo: inspection.template_no || inspectionType?.template_no || '',
+            emergencyContact: vendor.emergency_contact || '',
+          },
+        )
+      : null;
     return {
       inspection,
       property,
-      inspectionType: findInspectionType(master.inspectionTypes, inspection),
-      vendor,
+      inspectionType,
+      vendor: vendor && defaults ? { ...vendor, emergency_contact: defaults.emergencyContact } : vendor,
+      templateNo: defaults?.templateOverridden ? defaults.templateNo : null,
       hasTemplateImage: (key) => resolveTemplateImageUrl(key, master.templateImages, templateFileUrl) !== null,
       settings,
       // 台ごとの行の台。差戻しの再申請（UPDATE）は台を書き換えない（toResubmitPatch）ので元の申請の台のまま。
       // 他の方の差戻しを新しい申請として出すときは、行の台（無ければ元の申請の台）
       unitId: target.unitId ?? resubmit?.property_unit_id ?? null,
     };
-  }, [master, inspection, settings, isAdmin, profileVendorId, target.unitId, resubmit]);
+  }, [master, inspection, settings, isAdmin, profileVendorId, target.unitId, resubmit, vendorDefaults]);
 
   const defaultMonth = target.targetMonth ?? monthOf(today);
   const [values, setValues] = useState<ApplyValues>(() => {
@@ -266,7 +290,7 @@ function ApplyForm({
         ) : (
           <>
             <dt className="text-gray-500">テンプレートNo</dt>
-            <dd>{inspection.template_no || ctx.inspectionType?.template_no || '－'}</dd>
+            <dd>{ctx.templateNo || inspection.template_no || ctx.inspectionType?.template_no || '－'}</dd>
           </>
         )}
         {target.targetMonth && (

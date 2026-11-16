@@ -38,6 +38,11 @@ export interface ApplyContext {
   vendor: Pick<DbVendor, 'id' | 'vendor_name' | 'emergency_contact'> | null;
   hasTemplateImage: (templateNo: string) => boolean;
   settings: AppSettings;
+  /**
+   * 管理会社の個別設定の TPL（修正依頼1115 (5)。物件の管理会社 × 受注先 × 点検種別）。あれば点検行・点検種別の TPL より優先する。
+   * 緊急連絡先の個別設定は vendor.emergency_contact に入れて渡す
+   */
+  templateNo?: string | null;
   /** 台ごとの行から申請するときの台（修正依頼1026 I7。台ごとに申請・CSV の行になる）。台の無い点検・1台の点検は null */
   unitId?: string | null;
 }
@@ -135,7 +140,7 @@ export function buildApplyRow(v: ApplyValues, ctx: ApplyContext, userId: string,
     inspectionTypeId: type.id,
     posterType: PosterType.TEMPLATE,
     noticeText: v.noticeText,
-    templateNo: inspection.template_no || type.template_no || '',
+    templateNo: ctx.templateNo || inspection.template_no || type.template_no || '',
     startDate: v.startDate,
     endDate,
     remarks: v.remarks,

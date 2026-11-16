@@ -4,6 +4,7 @@ import { todayUtc } from '@/lib/utils';
 import { submittedDisplayPeriod } from './rowDetail';
 import type { BulkEntryRow, BulkMasterData, BulkSettings, BulkVendorSelection } from '../types';
 import type { RowVendorOf } from './rowVendor';
+import { rowEntryDefaults } from './rowDefaults';
 
 /** カンマ・ダブルクォート・LF を含むときだけクォートする。v1: js/shared-utils.js escapeCSVField */
 function escapeCsvField(v: unknown): string {
@@ -51,8 +52,9 @@ export function generateBulkCsv(
   validRows.forEach((row) => {
     const property = masterData.properties.find((p) => String(p.propertyCode) === String(row.propertyCode));
     const rowVendor = vendorOf?.(row);
-    const vendor = masterData.vendors.find((v) => v.vendorName === (rowVendor ?? currentVendor).name);
     const inspection = masterData.notices.find((i) => i.inspectionType === row.inspectionType);
+    // 申請（buildBulkEntries）と同じ既定（管理会社の個別設定を含む。修正依頼1115 (5)）
+    const defaults = rowEntryDefaults(row, masterData, rowVendor ?? currentVendor);
 
     const displayTimeFormatted = `0:00:${String(row.displayTime || settings.display_time_default || 6).padStart(2, '0')}`;
 
@@ -73,10 +75,10 @@ export function generateBulkCsv(
       row.terminalId || property?.terminalId || '', // 端末ID
       row.propertyCode, // 物件コード
       rowVendor ? (rowVendor.name ?? '') : row.vendorName, // 受注先名
-      row.emergencyContact || vendor?.emergencyContact || '', // 緊急連絡先番号
+      row.emergencyContact || defaults.emergencyContact, // 緊急連絡先番号
       isCustom ? '' : row.inspectionType, // 点検工事案内
       showOnBoard, // 掲示板に表示する
-      isCustom ? posterImageBaseName(row.posterImage) : inspection?.templateNo || '', // 点検案内TPLNo
+      isCustom ? posterImageBaseName(row.posterImage) : defaults.templateNo, // 点検案内TPLNo
       isCustom ? '' : sd, // 点検開始日
       isCustom ? '' : ed, // 点検完了日
       isCustom ? '' : remarksText, // 掲示備考

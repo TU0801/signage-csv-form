@@ -10,6 +10,7 @@ import {
 import type { BulkEntryInsert } from '@/lib/api/bulk-entry';
 import type { BulkEntryRow, BulkMasterData, BulkSettings, BulkVendorSelection } from '../types';
 import type { RowVendorOf } from './rowVendor';
+import { rowEntryDefaults } from './rowDefaults';
 
 /** 申請を点検行に結び付けるための、選択中の保守会社の点検行（portal_inspections の一部。1件入力と共有） */
 export type BulkInspectionLink = InspectionLinkRow;
@@ -53,8 +54,9 @@ export function buildBulkEntries(
     .map((row) => {
       const rowVendor = vendorOf?.(row);
       const vendorSel: BulkVendorSelection = rowVendor ?? currentVendor;
-      const vendor = masterData.vendors.find((v) => v.vendorName === vendorSel.name);
       const inspection = masterData.notices.find((i) => i.inspectionType === row.inspectionType);
+      // TPL・緊急連絡先の既定は物件の管理会社の個別設定があればそれ（修正依頼1115 (5)）
+      const defaults = rowEntryDefaults(row, masterData, vendorSel);
       const today = todayUtc();
       // 未承認の建物（建物追加の申請。修正依頼1025 F2）は点検行に結び付けず、申請 id を入れる（建物の承認で付け替わる）
       const requestId = masterData.properties.find(
@@ -71,10 +73,10 @@ export function buildBulkEntries(
         terminal_id: normalizeTerminalId(row.terminalId) || '',
         // 管理者が保守会社を選んでいないと null になり、NOT NULL で INSERT が失敗する（v1 と同じ）
         vendor_name: vendorSel.name as string,
-        // 詳細設定で書き換えた連絡先があればそれ、無ければ保守会社マスターの緊急連絡先（B18）
-        emergency_contact: row.emergencyContact || vendor?.emergencyContact || '',
+        // 詳細設定で書き換えた連絡先があればそれ、無ければ保守会社の緊急連絡先（B18。管理会社の個別設定を含む）
+        emergency_contact: row.emergencyContact || defaults.emergencyContact,
         inspection_type: row.inspectionType,
-        template_no: inspection?.templateNo || '',
+        template_no: defaults.templateNo,
         inspection_start: row.startDate || null,
         inspection_end: row.endDate || null,
         remarks: row.remarks || '',

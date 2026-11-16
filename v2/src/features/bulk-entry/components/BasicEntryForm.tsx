@@ -192,7 +192,7 @@ export function BasicEntryForm({
                 連絡先
               </label>
               <span className="text-xs text-gray-500">
-                デフォルトは保守会社に登録されている緊急連絡先{vendorContact ? `（${vendorContact}）` : ''}。編集できます
+                デフォルトは保守会社の緊急連絡先{vendorContact ? `（${vendorContact}）` : ''}。管理会社の個別設定があればその値です。編集できます
               </span>
             </div>
             <div className="flex max-w-md gap-1">

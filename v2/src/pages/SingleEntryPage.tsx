@@ -33,6 +33,8 @@ import { canNotifyCompletion } from '@/features/inspection-portal/lib/actions';
 import { NO_INSPECTION_MESSAGE } from '@/features/bulk-entry/utils/rowVendor';
 import { useAppSettings } from '@/features/single-entry/hooks/useAppSettings';
 import { useEntryForm } from '@/features/single-entry/hooks/useEntryForm';
+import { useEntryVendorDefaults } from '@/hooks/useEntryVendorDefaults';
+import { resolveEntryDefaults } from '@/lib/vendorDefaults';
 import { useVendorContext } from '@/features/single-entry/hooks/useVendorContext';
 import { useSubmittedEntries } from '@/features/single-entry/hooks/useSubmittedEntries';
 import { EntryForm } from '@/features/single-entry/components/EntryForm';
@@ -184,6 +186,27 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
     () => resolveVendor({ propertyCode: values.propertyCode, inspectionType: selectedInspectionName, startDate: values.startDate }),
     [resolveVendor, values.propertyCode, selectedInspectionName, values.startDate],
   );
+  // 管理会社ごとの個別設定（修正依頼1115 (5)）: 物件の管理会社 × 受注先の保守会社 × 点検種別の TPL、× 保守会社の緊急連絡先。
+  // フォームの値（values.templateNo）は点検種別の既定のまま持ち、追加・プレビュー・申請のときに個別設定を当てる
+  // （物件・点検開始日を変えて受注先や管理会社が変わっても追従する）
+  const vendorDefaults = useEntryVendorDefaults();
+  const typeTemplateOf = useCallback(
+    (typeId: string, fallback: string) => inspectionTypes.find((t) => t.id === typeId)?.template_no || fallback,
+    [inspectionTypes],
+  );
+  const entryDefaults = useMemo(
+    () =>
+      resolveEntryDefaults(
+        vendorDefaults,
+        { propertyCode: values.propertyCode, vendorId: resolved.vendor?.id ?? null, inspectionTypeId: values.inspectionTypeId },
+        {
+          templateNo: typeTemplateOf(values.inspectionTypeId, values.templateNo),
+          emergencyContact: resolved.vendor?.emergency_contact || '',
+        },
+      ),
+    [vendorDefaults, values.propertyCode, values.inspectionTypeId, values.templateNo, resolved.vendor, typeTemplateOf],
+  );
+  const templateNo = entryDefaults.templateNo;
   const submitted = useSubmittedEntries(user?.id ?? null);
 
   const [signageOnly, setSignageOnly] = useState(false);
@@ -313,10 +336,10 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
 
   // v1: js/script.js addEntry
   const handleAdd = () => {
-    const result = buildLocalEntry(values, {
+    const result = buildLocalEntry({ ...values, templateNo }, {
       properties: formProperties,
       inspectionTypes,
-      vendor: resolved.vendor,
+      vendor: resolved.vendor ? { ...resolved.vendor, emergency_contact: entryDefaults.emergencyContact } : null,
       customImage: form.customImage,
       extraPosters: form.extraPosters,
       hasTemplateImage: (key) => templateUrlOf(key) !== null,
@@ -486,8 +509,23 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
           // 点検予定に結び付いた申請は、その点検の保守会社（結び付けた会社）の社名・緊急連絡先で記録する（ユーザー決定 2026-10-25）。
           // 結び付かなければ追加した時点の保守会社（保守会社のアカウントは自社、管理者は選んだ会社）のまま
           const linked = link?.vendor_id ? vendors.find((v) => String(v.id) === String(link.vendor_id)) : undefined;
-          const recorded = linked
-            ? { ...e, vendorName: linked.vendor_name, emergencyContact: linked.emergency_contact || '' }
+          // 個別設定（修正依頼1115 (5)）も結び付けた会社で引き直す（DB の TPL 照合も申請の受注先の会社で照らす）
+          const typeName = e.posterType === PosterType.CUSTOM ? (e.linkInspectionType ?? e.inspectionType) : e.inspectionType;
+          const type = inspectionTypes.find((t) => t.inspection_name === typeName);
+          const linkedDefaults = linked
+            ? resolveEntryDefaults(
+                vendorDefaults,
+                { propertyCode: e.propertyCode, vendorId: String(linked.id), inspectionTypeId: type?.id ?? null },
+                { templateNo: type?.template_no || e.templateNo, emergencyContact: linked.emergency_contact || '' },
+              )
+            : null;
+          const recorded = linked && linkedDefaults
+            ? {
+                ...e,
+                vendorName: linked.vendor_name,
+                emergencyContact: linkedDefaults.emergencyContact,
+                templateNo: e.posterType === PosterType.TEMPLATE ? linkedDefaults.templateNo : e.templateNo,
+              }
             : e;
           return toInsertRow(recorded, posters[i]?.main ?? null, user.id, settings, today, link, posters[i]?.extras ?? []);
         }),
@@ -630,8 +668,8 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
           <CardContent className="tall:min-h-0 tall:flex-1 tall:overflow-y-auto">
             {tab === 'preview' ? (
               <PosterPreview
-                templateImageUrl={templateUrlOf(values.templateNo)}
-                templateNo={values.templateNo}
+                templateImageUrl={templateUrlOf(templateNo)}
+                templateNo={templateNo}
                 isCustom={isCustom}
                 customImageUrl={form.customImage?.dataUrl ?? null}
                 extraImageUrls={form.extraPosters.map((x) => x.dataUrl)}
@@ -639,7 +677,7 @@ function SingleEntryWorkspace({ master, settings, modeSwitch }: WorkspaceProps) 
                 dateText={formatPosterDate(values.startDate, values.endDate)}
                 remarks={values.remarks}
                 vendorName={resolved.vendor?.vendor_name ?? ''}
-                emergencyContact={resolved.vendor?.emergency_contact ?? ''}
+                emergencyContact={resolved.vendor ? entryDefaults.emergencyContact : ''}
               />
             ) : (
               <DisplaySettings form={form} displayTimeMax={settings.display_time_max} />
