@@ -2,7 +2,7 @@
 -- 流し方: psql <ローカル DB> -X -v ON_ERROR_STOP=1 -f scripts/test-fix-1027-bulk.sql
 --   どれか1つでも期待と違えば例外で止まる。全部通れば最後に「OK」の NOTICE が出る。
 -- 前提: fix-1027-bulk.sql を流してあること。ローカルの検証用アカウント（admin a..01・user@ a..02〔c..01〕・user-b a..05〔c..03〕・
---   mgmt@ a..06）、物件 e..01（120409-00。エレベーター定期点検 c..01・消防設備点検 c..02・定期清掃 c..03）、取引先 c..01（略称「検証EV」）。
+--   noprofile a..04）、物件 e..01（120409-00。エレベーター定期点検 c..01・消防設備点検 c..02・定期清掃 c..03）、取引先 c..01（略称「検証EV」）。
 --   点検行はこの中で足して戻す。
 BEGIN;
 
@@ -83,15 +83,16 @@ BEGIN
   IF r->>'short_name' IS DISTINCT FROM '検証エレベーター保守株式会社' THEN RAISE EXCEPTION 'NG 3: %', r; END IF;
   RAISE NOTICE 'ok 3 略称が空なら名前';
 
-  -- 4. 管理会社は断る
-  PERFORM pg_temp.act_as('a0000000-0000-4000-8000-000000000006');
+  -- 4. プロファイルの無いアカウントは断る（管理会社は修正依頼1115 (2) で自社物件の点検を返すようにした。
+  --    その確かめは scripts/test-fix-1115-mgmt-entry.sql）
+  PERFORM pg_temp.act_as('a0000000-0000-4000-8000-000000000004');
   denied := false;
   BEGIN
     PERFORM signage.bulk_template_info('c0000000-0000-4000-8000-000000000001');
   EXCEPTION WHEN insufficient_privilege THEN denied := true;
   END;
-  IF NOT denied THEN RAISE EXCEPTION 'NG 4 管理会社が通った'; END IF;
-  RAISE NOTICE 'ok 4 管理会社は断る';
+  IF NOT denied THEN RAISE EXCEPTION 'NG 4 プロファイル無しが通った'; END IF;
+  RAISE NOTICE 'ok 4 プロファイル無しは断る';
 
   -- 5. anon は実行できない
   PERFORM pg_temp.as_owner();
