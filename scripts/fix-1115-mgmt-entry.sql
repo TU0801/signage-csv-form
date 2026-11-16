@@ -709,8 +709,8 @@ GRANT EXECUTE ON FUNCTION signage.portal_register_report(uuid, date, date, text,
 -- [1115 の残り] 新設: 報告書の版を修正・削除できる人か（「誰が」だけ。受領前・受領済み・復元の確かめは portal_update_report に残す）。
 -- portal_update_report と、画面の一覧の計算列 can_modify（PostgREST の計算列。fetchInspectionReports が読む）が同じ判定を使う。
 --   - 管理者: 全件（今までどおり）
---   - 保守会社（role=user）: 自社（vendor_id）の版のうち、保守会社のアカウント（role=user）が上げた版だけ。管理会社が上げた版は
---     vendor_id に点検行の保守会社が入るが、触らせない。管理者の代理提出の版も保守会社は触れない（管理者が直す）
+--   - 保守会社（role=user）: 自社（vendor_id）の版のうち、管理会社のアカウントが上げた版以外。管理会社が上げた版は
+--     vendor_id に点検行の保守会社が入るが、触らせない。管理者の代理提出の版は今までどおり保守会社も直せる
 --   - 管理会社: 管理会社のアカウントが上げた版のうち、上げた人の管理会社が自社で、自社が管理する物件の点検のもの
 --     （上げた本人に限らず同じ管理会社の人も。保守会社の版・管理者の版は触れない）
 --   上げた人の役割は今のプロファイルで見る（状態は問わない。無効化した人の版も同じ会社が直せる）。プロファイルが無ければ管理者だけ。
@@ -726,7 +726,8 @@ AS $function$
     select signage.is_active_admin()
        or (signage.current_role_kind() = 'user' and s.vendor_id is not null
            and s.vendor_id = signage.current_vendor_id()
-           and exists (select 1 from signage.signage_profiles p where p.id = s.uploaded_by and p.role = 'user'))
+           -- 管理会社のアカウントが上げた版だけ外す（管理者の代理提出の版は、今までどおり受注先の保守会社が直せる）
+           and not exists (select 1 from signage.signage_profiles p where p.id = s.uploaded_by and p.role = 'management'))
        or (signage.is_active_management() and signage.current_management_company_id() is not null
            and s.property_inspection_id is not null
            and signage.inspection_in_scope(s.property_inspection_id)

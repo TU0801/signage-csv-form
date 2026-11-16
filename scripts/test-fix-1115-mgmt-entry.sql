@@ -370,13 +370,12 @@ SELECT pg_temp.expect_error('6b-1 保守会社（c..01）は管理会社が上�
 SELECT pg_temp.expect_error('6b-2 保守会社（c..01）は管理会社が上げた自社の版を削除できない',
   format($q$SELECT signage.portal_update_report(%L, 'delete')$q$, (SELECT id FROM t_ids WHERE k = 'rm2')),
   'この報告書を変更する権限がありません');
-SELECT pg_temp.expect_error('6b-3 保守会社は管理者の代理提出の版も直せない',
-  format($q$SELECT signage.portal_update_report(%L, 'delete')$q$, (SELECT id FROM t_ids WHERE k = 'ra')),
-  'この報告書を変更する権限がありません');
+SELECT pg_temp.check('6b-3 保守会社は管理者の代理提出の版を今までどおり直せる',
+  (signage.portal_update_report((SELECT id FROM t_ids WHERE k = 'ra'), 'edit', NULL, NULL, NULL, 't1115 a')).note = 't1115 a');
 SELECT pg_temp.check('6b-4 保守会社は自分たちが上げた版は今までどおり直せる',
   (signage.portal_update_report((SELECT id FROM t_ids WHERE k = 'rv'), 'edit', NULL, NULL, NULL, 't1115 v')).note = 't1115 v');
-SELECT pg_temp.check('6b-5 計算列 can_modify（保守会社）: 自分たちの版だけ真',
-  (SELECT bool_and(signage.inspection_report_modifiable(r) = (r.id = (SELECT id FROM t_ids WHERE k = 'rv')))
+SELECT pg_temp.check('6b-5 計算列 can_modify（保守会社）: 管理会社が上げた版だけ偽',
+  (SELECT bool_and(signage.inspection_report_modifiable(r) = (r.id <> (SELECT id FROM t_ids WHERE k = 'rm2')))
      FROM signage.signage_inspection_reports r WHERE r.id IN (SELECT id FROM t_ids WHERE k IN ('rv', 'rm2', 'ra'))));
 
 SELECT pg_temp.act_as('a0000000-0000-4000-8000-000000000006');
