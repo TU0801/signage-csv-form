@@ -721,18 +721,21 @@ CREATE OR REPLACE FUNCTION signage.inspection_report_modifiable(r signage.signag
  STABLE SECURITY DEFINER
  SET search_path TO 'signage', 'pg_temp'
 AS $function$
-  select coalesce(
-       signage.is_active_admin()
-       or (signage.current_role_kind() = 'user' and r.vendor_id is not null
-           and r.vendor_id = signage.current_vendor_id()
-           and exists (select 1 from signage.signage_profiles p where p.id = r.uploaded_by and p.role = 'user'))
+  -- 渡された行は信じず、id で保存済みの行を読み直して判定する（偽の行を渡して、ある uuid の役割を探れないように）
+  select coalesce((
+    select signage.is_active_admin()
+       or (signage.current_role_kind() = 'user' and s.vendor_id is not null
+           and s.vendor_id = signage.current_vendor_id()
+           and exists (select 1 from signage.signage_profiles p where p.id = s.uploaded_by and p.role = 'user'))
        or (signage.is_active_management() and signage.current_management_company_id() is not null
-           and r.property_inspection_id is not null
-           and signage.inspection_in_scope(r.property_inspection_id)
+           and s.property_inspection_id is not null
+           and signage.inspection_in_scope(s.property_inspection_id)
            and exists (select 1 from signage.signage_profiles p
-                        where p.id = r.uploaded_by and p.role = 'management'
-                          and p.management_company_id = signage.current_management_company_id())),
-       false);
+                        where p.id = s.uploaded_by and p.role = 'management'
+                          and p.management_company_id = signage.current_management_company_id()))
+      from signage.signage_inspection_reports s
+     where s.id = r.id),
+    false);
 $function$;
 
 REVOKE ALL ON FUNCTION signage.inspection_report_modifiable(signage.signage_inspection_reports) FROM PUBLIC, anon;
