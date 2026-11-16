@@ -6,6 +6,8 @@ import { fetchAllMasterData } from '@/lib/api/masterData';
 import { getAssignedBuildings } from '@/lib/api/relationships';
 import { fetchBulkSettings } from '@/lib/api/bulk-entry';
 import { fetchLinkedInspectionIds } from '@/lib/api/single-entry';
+import { fetchEntryVendorDefaults } from '@/lib/api/vendor-overrides';
+import { buildVendorDefaultsIndex, type VendorDefaultsIndex } from '@/lib/vendorDefaults';
 import { hasUnsentInput } from '../utils/scheduleRows';
 import { discardImagesDroppedBy } from '../utils/discardRowImages';
 import { applySettings, DEFAULT_BULK_SETTINGS, flattenProperties, toBulkMasterData } from '../utils/bulkMaster';
@@ -48,9 +50,19 @@ export function useBulkSession(confirm: (message: string) => Promise<boolean>) {
 
     (async () => {
       try {
-        const [data, settings] = await Promise.all([fetchAllMasterData(profile), fetchBulkSettings()]);
+        const [data, settings, vendorDefaults] = await Promise.all([
+          fetchAllMasterData(profile),
+          fetchBulkSettings(),
+          // 管理会社の個別設定（緊急連絡先・点検 TPL。修正依頼1115 (5)）。読めなければ既定のまま入力できる
+          fetchEntryVendorDefaults()
+            .then(buildVendorDefaultsIndex)
+            .catch((e: unknown): VendorDefaultsIndex | null => {
+              console.warn('管理会社の個別設定（緊急連絡先・点検TPL）の取得に失敗しました（既定で入力します）:', e);
+              return null;
+            }),
+        ]);
         if (cancelled) return;
-        const master = toBulkMasterData(data);
+        const master = { ...toBulkMasterData(data), vendorDefaults };
         store.setMasterData(master);
         store.setAppSettings(applySettings(DEFAULT_BULK_SETTINGS, settings));
         // 一般ユーザーはプロファイルの保守会社に固定。点検種別の既定（B9）に使う紐付けも読む（失敗しても空で続ける）
@@ -134,7 +146,7 @@ export function useBulkSession(confirm: (message: string) => Promise<boolean>) {
       try {
         if (!vendorId) {
           const fresh = await fetchAllMasterData(profile);
-          store.setMasterData(toBulkMasterData(fresh));
+          store.setMasterData({ ...toBulkMasterData(fresh), vendorDefaults: store.masterData.vendorDefaults });
           store.setCurrentVendor({ id: null, name: null });
           store.setInspectionDefaults({ linkedIds: [] });
           // 保守会社を外したら予定の行も外す（予定は選んだ保守会社のもの）

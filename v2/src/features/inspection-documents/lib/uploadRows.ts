@@ -263,8 +263,6 @@ export interface RowCheckContext {
   source: UploadSource | undefined;
   /** 区間の大きさ（切り出した PDF の大きさ。分からなければ null） */
   size: number | null;
-  /** 報告書を登録できるか（管理会社は登録できない） */
-  canReport: boolean;
 }
 
 export function checkRow(row: UploadRow, state: RowState, ctx: RowCheckContext): RowCheck {
@@ -276,7 +274,6 @@ export function checkRow(row: UploadRow, state: RowState, ctx: RowCheckContext):
   if (!input.propertyCode) errors.propertyCode = '物件を選んでください';
   let inspection: PortalInspectionRow | null = null;
   if (input.category === 'report') {
-    if (!ctx.canReport) errors.category = '報告書は保守会社・管理者だけが登録できます';
     if (ctx.source && ctx.source.kind !== 'pdf') errors.file = '報告書は PDF だけ登録できます（区分を変えてください）';
     if (!input.performedOn) errors.performedOn = '実施日を入れてください';
     if (!input.inspectionType) errors.inspectionType = '点検種別を選んでください';

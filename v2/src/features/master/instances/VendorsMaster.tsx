@@ -1,7 +1,9 @@
 import { fetchMasterVendors } from '@/lib/api/masterData';
+import { useAuthStore } from '@/stores/authStore';
 import type { DbVendor } from '@/types/database';
 import type { MasterConfig } from '../types/masterConfig';
 import { MasterListPage } from '../components/MasterListPage';
+import { VendorDefaultsTable } from '../components/VendorDefaultsTable';
 
 type VendorRecord = DbVendor & Record<string, unknown>;
 
@@ -34,12 +36,15 @@ const config: MasterConfig<VendorRecord> = {
       >
         取引先一覧を開く
       </a>
-      ）。業務システムの取引先で「保守会社」を付けると表示されます
+      ）。業務システムの取引先で「保守会社」を付けると表示されます。管理会社は自社用の緊急連絡先・点検TPLを、管理会社のアカウントのこのタブで個別に設定できます
     </>
   ),
 };
 
 export function VendorsMaster() {
+  // 管理会社は「保守会社 × 点検種別」の既定と自社の個別設定（緊急連絡先・点検TPL）の表（修正依頼1115 (5)）。管理者は今の一覧のまま
+  const isManagement = useAuthStore((s) => s.profile?.role === 'management');
+  if (isManagement) return <VendorDefaultsTable />;
   return (
     <MasterListPage
       config={config}

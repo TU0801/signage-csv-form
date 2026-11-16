@@ -6,6 +6,7 @@
 
 import type { DbTemplateImage } from '@/types/database';
 import type { ExtraPoster } from '@/lib/extraPosters';
+import type { VendorDefaultsIndex } from '@/lib/vendorDefaults';
 
 /** 一括入力の1行。v1: js/bulk-table.js addRow の row */
 export interface BulkEntryRow {
@@ -131,6 +132,8 @@ export interface BulkMasterData {
   notices: BulkNotice[];
   /** テンプレート画像（詳細設定のプレビューとテンプレート名。template_images_master） */
   templateImages?: Pick<DbTemplateImage, 'image_key' | 'image_url' | 'display_name'>[];
+  /** 管理会社ごとの個別設定（緊急連絡先・点検 TPL。修正依頼1115 (5)。entry_vendor_defaults）。読めなければ無し（既定のまま） */
+  vendorDefaults?: VendorDefaultsIndex | null;
 }
 
 /** v1: js/bulk-state.js state.appSettings（設定値は parseInt 済み。数値にならない値は文字列のまま） */

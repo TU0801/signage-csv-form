@@ -350,10 +350,10 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
           .map((l) => ({ value: l, label: l })),
       managementCompanies: toOptions(mgmt),
       vendors: toOptions(vendors),
-      // 管理会社は報告書を登録できない（その他ファイルだけ）
-      categories: isManagement ? UPLOAD_CATEGORIES.filter((c) => c.value !== 'report') : UPLOAD_CATEGORIES,
+      // 管理会社も報告書を登録できる（自社物件の点検。修正依頼1115 (2)）
+      categories: UPLOAD_CATEGORIES,
     };
-  }, [fileTargets, hints, data.inspections, isManagement]);
+  }, [fileTargets, hints, data.inspections]);
   const propertyAliasOf = useMemo(() => new Map(hints.properties.map((p) => [p.code, p])), [hints.properties]);
   const nameCtx = useMemo(
     () => ({
@@ -407,13 +407,13 @@ function FileUploadDialog({ preset, onClose, vendorId, onChanged, properties: ex
       const source = sourceMap[r.sourceId];
       const size = sizes[r.key] ?? (source && (source.kind !== 'pdf' || r.pages.length === source.pageCount) ? source.file.size : null);
       const st = effStates[r.key] ?? presetState;
-      const check = checkRow(r, st, { inspections: data.inspections, source, size, canReport: !isManagement });
+      const check = checkRow(r, st, { inspections: data.inspections, source, size });
       out[r.key] = check;
       // 要確認の理由（ステータスの横に出し、登録の止め方を決める。修正依頼1104 E1）
       why[r.key] = reviewReasons(st, check);
     }
     return { checks: out, reasons: why };
-  }, [rows, sourceMap, sizes, effStates, presetState, data.inspections, isManagement]);
+  }, [rows, sourceMap, sizes, effStates, presetState, data.inspections]);
 
   const existingCounts = useMemo(() => {
     const out: Record<string, number> = {};

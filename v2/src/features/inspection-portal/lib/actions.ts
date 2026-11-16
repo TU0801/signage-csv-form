@@ -4,7 +4,7 @@ import { focusEntry, type ScheduleItem } from './schedule';
 /*
  * 点検一覧の行に出す操作（ロール別）。
  * 保守会社・管理者: 申請（未申請・差戻し）と報告書。管理会社・管理者: 承認（申請済み）と差戻し（申請済み・承認済み。取込済みは不可）。
- * 管理会社には申請・報告書の提出を出さない（DB も管理会社の申請作成を受け付けない）。
+ * 点検一覧では管理会社に申請・報告書の提出を出さない（管理会社の申請と報告書は点検登録フォームから。修正依頼1115 (2)）。
  */
 
 export interface PortalRole {
@@ -12,8 +12,23 @@ export interface PortalRole {
   isManagement: boolean;
 }
 
-/** 申請・報告書の提出ができるか（保守会社と管理者） */
-export function canSubmit(role: PortalRole): boolean {
+/** 点検一覧で申請・報告書の提出を出すか（保守会社と管理者。管理会社の点検一覧は承認・差戻しだけ） */
+export function canSubmitInList(role: PortalRole): boolean {
+  return role.isAdmin || !role.isManagement;
+}
+
+/**
+ * 点検登録フォーム（1件入力・一括入力）で予定の申請・報告書の登録ができるか。管理会社も入力できる（修正依頼1115 (2)）。
+ * 完了連絡・建物追加の申請・申請の取り下げは管理会社には出さない（canNotifyCompletion）
+ */
+export function canSubmitInForm(role: PortalRole): boolean {
+  // 管理者・保守会社・管理会社のどれも入力できる（ロールで分けない。点検一覧の canSubmitInList と分けて持つ）
+  void role;
+  return true;
+}
+
+/** 完了連絡・建物追加の申請を出すか（保守会社と管理者。管理会社には出さない。DB も断る） */
+export function canNotifyCompletion(role: PortalRole): boolean {
   return role.isAdmin || !role.isManagement;
 }
 
@@ -80,7 +95,7 @@ export function rowActions(
 
   let apply: RowActions['apply'] = null;
   // 申請不要（報告書のみ）の点検種別は新しい申請を出さない（修正依頼1025 H4/G4）
-  if (canSubmit(role) && !item.reportOnly) {
+  if (canSubmitInList(role) && !item.reportOnly) {
     if (item.application === 'not_applied') apply = { kind: 'new' };
     else if (item.application === 'sent_back' && focus) apply = { kind: 'resubmit', entry: focus };
   }
@@ -88,7 +103,7 @@ export function rowActions(
   const review = canReview(role);
   return {
     apply,
-    report: canSubmit(role),
+    report: canSubmitInList(role),
     approve: review && item.application === 'applied' ? focus : null,
     sendBack: review && focus && (focus.status === 'draft' || focus.status === 'ready') ? focus : null,
   };

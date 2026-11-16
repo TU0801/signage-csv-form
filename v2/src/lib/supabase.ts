@@ -42,6 +42,8 @@ export const TABLES = {
   posterLibrary: 'signage_poster_library',
   /** その他ファイル（見積書・請求書など。修正依頼1025 G2）。書き込みは RPC だけ */
   propertyFiles: 'signage_property_files',
+  /** 管理会社ごとの保守会社の既定の上書き（緊急連絡先・点検 TPL。修正依頼1115 (5)。scripts/fix-1115-vendor-overrides.sql） */
+  mgmtVendorOverrides: 'signage_mgmt_vendor_overrides',
 } as const;
 
 /** signage スキーマの RPC（biz への窓口） */
@@ -122,6 +124,8 @@ export const RPC = {
   posterLibraryForProperty: 'poster_library_for_property',
   /** ライブラリの画像が申請・ライブラリの行から使われているか（使われていなければ片付けてよい） */
   posterLibraryObjectInUse: 'poster_library_object_in_use',
+  /** 貼紙ライブラリの行を消す（申請で使われていれば断る。修正依頼1115 (6)。scripts/fix-1115-poster-library.sql） */
+  deletePosterLibraryItem: 'delete_poster_library_item',
   /** その他ファイルと AI-OCR の自己改善（修正依頼1025 G2・G4。scripts/fix-1025-reports.sql） */
   portalRegisterPropertyFile: 'portal_register_property_file',
   portalDeletePropertyFile: 'portal_delete_property_file',
@@ -135,6 +139,9 @@ export const RPC = {
   ocrCorrectionDictionary: 'ocr_correction_dictionary',
   /** 一括入力テンプレートの保守会社の略称と、点検種別の並び（業務システムの設備の並び。修正依頼1027 (2)。scripts/fix-1027-bulk.sql） */
   bulkTemplateInfo: 'bulk_template_info',
+  /** 管理会社の保守会社タブ（既定と自社の上書き）と、申請画面の初期値の上書き（修正依頼1115 (5)。scripts/fix-1115-vendor-overrides.sql） */
+  mgmtVendorDefaults: 'mgmt_vendor_defaults',
+  entryVendorDefaults: 'entry_vendor_defaults',
 } as const;
 
 /** Storage のバケット */

@@ -59,9 +59,14 @@ export function useInspectionDocuments() {
     void fetchBoth().then(apply);
   }, [apply]);
 
-  /** RPC が返した1行で差し替える（再読み込みせずに表を更新する） */
+  /**
+   * RPC が返した1行で差し替える（再読み込みせずに表を更新する）。受領・差戻しの RPC の行には計算列 can_modify が無いので
+   * 前の行から引き継ぐ（誰が触れるかは上げた人で決まり、受領・差戻しでは変わらない）
+   */
   const replaceReport = useCallback((updated: DbInspectionReport) => {
-    setReports((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+    setReports((prev) =>
+      prev.map((r) => (r.id === updated.id ? { ...updated, can_modify: updated.can_modify ?? r.can_modify } : r)),
+    );
   }, []);
 
   /** RPC が返した1行で差し替える（その他ファイル） */

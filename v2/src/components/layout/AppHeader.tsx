@@ -41,9 +41,11 @@ export function AppHeader({ width = 'standard' }: { width?: LayoutWidth }) {
     void signOut();
   };
 
-  // 点検登録フォーム（1件入力・一括入力・点検一覧をまとめた画面。管理会社には点検一覧を出す）と点検報告書（修正依頼1024 B3）
+  // 点検登録フォーム（1件入力・一括入力・報告書確認）と点検報告書（修正依頼1024 B3）。
+  // 管理会社には点検一覧（承認・差戻し。修正依頼1115 (2)）も出す
   const navItems = [
     { to: '/', label: '点検登録フォーム' },
+    ...(isManagement ? [{ to: '/portal/list', label: '点検一覧' }] : []),
     { to: '/portal/documents', label: '点検報告書' },
   ];
 

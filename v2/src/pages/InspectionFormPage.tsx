@@ -1,7 +1,5 @@
 import { useSearchParams } from 'react-router-dom';
-import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
-import { InspectionPortal } from '@/features/inspection-portal/components/InspectionPortal';
 import { BulkEntryPage } from '@/pages/BulkEntryPage';
 import { SingleEntryPage } from '@/pages/SingleEntryPage';
 import { ReportCheckPage } from '@/pages/ReportCheckPage';
@@ -43,24 +41,16 @@ function ModeSwitch({ mode, onChange }: { mode: FormMode; onChange: (mode: FormM
 
 /**
  * 点検登録フォーム（`/`。修正依頼1024 B3）。旧「1件入力」「一括入力」「点検一覧」をまとめた画面。
- * 保守会社・管理者: 一括入力（既定。点検予定・ステータス・報告書UP・完了連絡を含む）と1件入力（?mode=single）、
+ * 一括入力（既定。点検予定・ステータス・報告書UP・完了連絡を含む）と1件入力（?mode=single）、
  * 報告書確認（?mode=reports。申請不要の点検の報告書の届き具合。修正依頼1027）を切り替える。
- * 管理会社（入力できない）: 点検一覧（承認・差戻し・報告書の確認）
+ * 管理会社も同じ3画面で予定の入力と報告書の登録をする（修正依頼1115 (2)。完了連絡・建物追加の申請は出さない）。
+ * 管理会社の点検一覧（承認・差戻し）は別ページ /portal/list（ヘッダーの「点検一覧」）
  */
 export function InspectionFormPage() {
-  const { isManagement } = useAuth();
   const [params, setParams] = useSearchParams();
   const mode = modeOf(params.get('mode'));
 
   // ルートは全幅（UserLayout width="full" は余白を持たない）なので、ここで余白を付ける（上下は旧一括入力の main と同じ py-3）
-  if (isManagement) {
-    return (
-      <div className="px-3 py-2">
-        <InspectionPortal />
-      </div>
-    );
-  }
-
   const switcher = (
     <ModeSwitch
       mode={mode}

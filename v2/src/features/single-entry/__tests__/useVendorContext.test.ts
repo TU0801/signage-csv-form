@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useVendorContext } from '../hooks/useVendorContext';
 import { PROPERTIES } from './fixtures';
+import { VENDOR_UNREGISTERED_MESSAGE } from '@/features/bulk-entry/utils/rowVendor';
 import type { DbVendor } from '@/types/database';
 
 const fetchLinked = vi.fn();
@@ -78,5 +79,33 @@ describe('一般ユーザーの保守会社', () => {
     expect(result.current.vendor?.vendor_name).toBe('B社');
     await waitFor(() => expect([...result.current.linkedIds]).toEqual(['b-only']));
     expect(fetchLinked).toHaveBeenCalledWith('B');
+  });
+});
+
+describe('管理会社の受注先（修正依頼1115 (2)）', () => {
+  it('物件は全物件、受注先は物件・点検種別・点検開始日の月の点検行の保守会社。保守会社未登録の点検は理由を返す', () => {
+    const inspections = [
+      { inspection_id: 'i1', property_code: '2010', inspection_type_label: 'エレベーター点検', vendor_id: 'B', inspection_months: [], schedule_from: '2026-01-01' },
+      { inspection_id: 'i2', property_code: '2010', inspection_type_label: '消防設備点検', vendor_id: null, inspection_months: [], schedule_from: '2026-01-01' },
+    ];
+    const { result } = renderHook(() =>
+      useVendorContext({
+        isAdmin: false,
+        isManagement: true,
+        inspections,
+        profileVendorId: null,
+        properties: PROPERTIES,
+        vendors: VENDORS,
+        onLinkedLoaded: vi.fn(),
+      }),
+    );
+    expect(result.current.visibleProperties).toHaveLength(3);
+    expect(fetchLinked).not.toHaveBeenCalled();
+    const hit = result.current.resolveVendor({ propertyCode: '2010', inspectionType: 'エレベーター点検', startDate: '2026-11-20' });
+    expect(hit.vendor?.vendor_name).toBe('B社');
+    expect(hit.linkVendorId).toBe('B');
+    const unset = result.current.resolveVendor({ propertyCode: '2010', inspectionType: '消防設備点検', startDate: '2026-11-20' });
+    expect(unset.vendor).toBeNull();
+    expect(unset.reason).toBe(VENDOR_UNREGISTERED_MESSAGE);
   });
 });

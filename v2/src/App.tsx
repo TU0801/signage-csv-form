@@ -11,6 +11,7 @@ import { installErrorLogging } from '@/lib/api/errorLog';
 import { LoginPage } from '@/pages/LoginPage';
 import { InspectionFormPage } from '@/pages/InspectionFormPage';
 import { PortalDocumentsPage } from '@/pages/PortalDocumentsPage';
+import { InspectionPortal } from '@/features/inspection-portal/components/InspectionPortal';
 import { ApprovalPage } from '@/pages/admin/ApprovalPage';
 import { EntriesPage } from '@/pages/admin/EntriesPage';
 import { MasterPage } from '@/pages/admin/MasterPage';
@@ -38,7 +39,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
 
-          {/* 点検登録フォーム（1件入力・一括入力・点検一覧をまとめた画面。修正依頼1024 B3）。列が多いので全幅 */}
+          {/* 点検登録フォーム（1件入力・一括入力・報告書確認。修正依頼1024 B3・1027）。列が多いので全幅 */}
           <Route
             element={
               <ProtectedRoute>
@@ -51,7 +52,8 @@ export default function App() {
             <Route path="bulk" element={<Navigate to="/" replace />} />
           </Route>
 
-          {/* 点検報告書（管理会社・保守会社・管理者）。旧「点検一覧」（/portal）は点検登録フォームへ */}
+          {/* 点検報告書（管理会社・保守会社・管理者）。旧「点検一覧」（/portal）は点検登録フォームへ。
+              点検一覧（承認・差戻し）は管理会社のヘッダーの「点検一覧」から開く別ページ（修正依頼1115 (2)） */}
           <Route
             path="portal"
             element={
@@ -62,6 +64,14 @@ export default function App() {
           >
             <Route index element={<Navigate to="/" replace />} />
             <Route path="documents" element={<PortalDocumentsPage />} />
+            <Route
+              path="list"
+              element={
+                <div className="px-3 py-2">
+                  <InspectionPortal />
+                </div>
+              }
+            />
           </Route>
 
           {/* Admin pages（管理者メニュー。管理会社には自社物件の範囲だけを「管理会社メニュー」として開く） */}
@@ -78,7 +88,15 @@ export default function App() {
               <Route index element={<ApprovalPage />} />
               <Route path="entries" element={<EntriesPage />} />
               <Route path="master" element={<MasterPage />} />
-              <Route path="relationships" element={<RelationshipsPage />} />
+              {/* 紐付け管理は管理者だけ（修正依頼1115 (3)。管理会社が URL を直接開いても /admin へ戻す） */}
+              <Route
+                path="relationships"
+                element={
+                  <AdminRoute adminOnly>
+                    <RelationshipsPage />
+                  </AdminRoute>
+                }
+              />
               <Route path="users" element={<UsersPage />} />
               {/* 広告枠管理は管理者だけ（管理会社メニューには出さない） */}
               <Route

@@ -49,6 +49,11 @@ export interface PortalEntryRow {
   /** ログイン中のアカウントが作った申請か */
   is_mine: boolean;
   /**
+   * 申請者が管理会社のアカウントか（修正依頼1115 レビュー）。受注先の保守会社でも管理会社の申請は直せない（DB が断る）ので「修正」を出さない。
+   * DB の版が古いと返らない（undefined = 偽として扱う）。中身が見えない行は null
+   */
+  by_management?: boolean | null;
+  /**
    * 台ごとの申請の台（biz.property_units.id。修正依頼1026 I7）。portal_entries は返さないので portal_entry_units で足す。
    * 台なし（1台以下の点検・旧来・1件入力）は null（点検行 × 対象月の全体の申請として全部の台に効く）
    */
@@ -101,6 +106,11 @@ export interface DbInspectionReport {
   retention_until: string | null;
   created_at: string;
   updated_at: string;
+  /**
+   * 見ている人がこの版を修正・削除できる人か（一覧の計算列。DB の inspection_report_modifiable。受領前かどうかは見ない）。
+   * 保守会社は保守会社のアカウントが上げた自社の版、管理会社は自社の管理会社が上げた版、管理者は全件（修正依頼1115 の残り）
+   */
+  can_modify?: boolean;
 }
 
 /** RPC management_companies_master の1行（管理者だけ） */

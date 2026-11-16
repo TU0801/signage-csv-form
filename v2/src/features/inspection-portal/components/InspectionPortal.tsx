@@ -9,7 +9,7 @@ import type { PortalEntryRow, PortalInspectionRow } from '@/types/portal';
 import { useRefetchOnVisible } from '@/features/approval/hooks/useRefetchOnVisible';
 import { FileUploadModal } from '@/features/inspection-documents/components/FileUploadModal';
 import { usePortalData } from '../hooks/usePortalData';
-import { reportDefaultPerformedOn, reportEntryId, canSubmit, type PortalRole } from '../lib/actions';
+import { reportDefaultPerformedOn, reportEntryId, canSubmitInList, type PortalRole } from '../lib/actions';
 import { filterSchedule, filterUnscheduled, INITIAL_FILTERS, type PortalFilters } from '../lib/filters';
 import { buildSchedule, formatMonth, todayJst, typeFlagsMap, unscheduledInspections, type ScheduleItem } from '../lib/schedule';
 import { completionKeys, countStatuses, itemStatus } from '../lib/status';
@@ -249,7 +249,7 @@ export function InspectionPortal() {
         forceOpen={filters.status !== '' && unscheduled.length > 0}
       />
 
-      {canSubmit(role) && (
+      {canSubmitInList(role) && (
         <ApplyModal
           target={applyTarget}
           onClose={() => setApplyTarget(null)}
@@ -260,7 +260,7 @@ export function InspectionPortal() {
         />
       )}
       {/* 報告書UP・再提出はファイルアップロードの画面で開く（修正依頼1029 決定①。点検・対象月を入れておく） */}
-      {canSubmit(role) && (
+      {canSubmitInList(role) && (
         <FileUploadModal
           open={!!reportTarget}
           preset={reportTarget ? { kind: 'report', ...reportTarget } : null}

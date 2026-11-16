@@ -304,22 +304,26 @@ export interface ReportPermissions {
 }
 
 /**
- * portal_update_report と同じ判定: 管理者は全件、保守会社は自社（vendor_id）の版だけで受領済みは変えられない。
- * 削除は受領前（提出のうち）なら自社の保守会社も、それ以外は管理者だけ。復元は管理者だけ。
+ * portal_update_report と同じ判定: 管理者は全件、保守会社は保守会社のアカウントが上げた自社（vendor_id）の版、管理会社は自社の
+ * 管理会社が上げた版だけで、受領済みは変えられない（誰が触れるかは一覧の can_modify＝DB の inspection_report_modifiable に従う。
+ * 無いとき〔テストなど〕は行で分かる範囲の近似で、保守会社は自社の版、管理会社は出さない）。
+ * 削除は受領前（提出のうち）なら触れる人も、それ以外は管理者だけ。復元は管理者だけ。
  * 受領・差戻しは管理会社と管理者（portal_review_report）。再提出（追加の提出）は書ける人が行う
  */
 export function reportPermissions(report: DbInspectionReport, viewer: ReportViewer): ReportPermissions {
   const live = LIVE_STATUSES.includes(report.status);
   const ownVendor = !viewer.isManagement && !!viewer.vendorId && report.vendor_id === viewer.vendorId;
   const writable = viewer.isAdmin || ownVendor;
+  // 修正・削除できる人か（修正依頼1115 の残り: 管理会社が上げた版は保守会社には出さず、上げた管理会社に出す）
+  const modifier = viewer.isAdmin || (typeof report.can_modify === 'boolean' ? report.can_modify : ownVendor);
   const lockedByAcceptance = !viewer.isAdmin && report.status === 'accepted';
   const reviewer = viewer.isAdmin || viewer.isManagement;
   return {
     canOpen: report.storage_backend === 'supabase',
-    canEdit: writable && live && !lockedByAcceptance,
+    canEdit: modifier && live && !lockedByAcceptance,
     // 削除: 受領前（提出のうち）は上げた保守会社も自社の版を消せる。差戻し・受領後は管理者だけ（修正依頼1029 決定②。
     // 差戻しの版を消すと差戻し理由が一覧から消えるため。DB の portal_update_report も同じ）。復元は管理者だけ
-    canDelete: (viewer.isAdmin && report.status !== 'deleted') || (ownVendor && report.status === 'submitted'),
+    canDelete: (viewer.isAdmin && report.status !== 'deleted') || (modifier && report.status === 'submitted'),
     canRestore: viewer.isAdmin && report.status === 'deleted',
     canAccept: reviewer && live && report.status !== 'accepted',
     canReturn: reviewer && live && report.status !== 'returned',

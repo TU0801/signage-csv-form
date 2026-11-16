@@ -122,4 +122,16 @@ describe('reportPermissions の削除（修正依頼1029 決定②: 受領前〔
     expect(reportPermissions(makeReport({ vendor_id: 'v1', status: 'accepted' }), vendor).canDelete).toBe(false);
     expect(reportPermissions(makeReport({ vendor_id: 'v1', status: 'returned' }), admin).canDelete).toBe(true);
   });
+
+  it('一覧の can_modify に従う: 管理会社が上げた版は保守会社に出さず、上げた管理会社に出す（修正依頼1115 の残り）', () => {
+    const vendor = { isAdmin: false, isManagement: false, vendorId: 'v1' };
+    const mgmt = { isAdmin: false, isManagement: true, vendorId: null };
+    const byMgmtForVendor = makeReport({ vendor_id: 'v1', status: 'submitted', can_modify: false });
+    expect(reportPermissions(byMgmtForVendor, vendor).canDelete).toBe(false);
+    expect(reportPermissions(byMgmtForVendor, vendor).canEdit).toBe(false);
+    const byMgmtForMgmt = makeReport({ vendor_id: 'v1', status: 'submitted', can_modify: true });
+    expect(reportPermissions(byMgmtForMgmt, mgmt).canDelete).toBe(true);
+    expect(reportPermissions(byMgmtForMgmt, mgmt).canEdit).toBe(true);
+    expect(reportPermissions({ ...byMgmtForMgmt, status: 'returned' }, mgmt).canDelete).toBe(false);
+  });
 });

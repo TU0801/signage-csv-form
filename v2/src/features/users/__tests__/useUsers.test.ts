@@ -31,11 +31,13 @@ vi.mock('@/lib/supabase', () => ({
 }));
 
 const mockSetUserStatus = vi.fn();
+const mockDeleteUser = vi.fn();
 const mockFetchOwnCompany = vi.fn();
 vi.mock('@/lib/api/users', () => ({
   createUser: (...args: unknown[]) => mockCreateUser(...args),
   setUserPassword: (...args: unknown[]) => mockSetUserPassword(...args),
   setUserStatus: (...args: unknown[]) => mockSetUserStatus(...args),
+  deleteUser: (...args: unknown[]) => mockDeleteUser(...args),
   fetchOwnManagementCompany: () => mockFetchOwnCompany(),
 }));
 
@@ -274,6 +276,22 @@ describe('useUsers', () => {
     await expect(result.current.updateUserStatus('u1', 'active')).rejects.toMatchObject({
       code: 'PGRST116',
     });
+  });
+
+  it('deleteUser は Edge Function で消して一覧を読み直し、自分は消さず、断られた文言はそのまま投げる（修正依頼1115 (1)）', async () => {
+    const { result } = await renderReady();
+    mockOrder.mockClear();
+
+    await act(() => result.current.deleteUser('u1'));
+    expect(mockDeleteUser).toHaveBeenCalledWith('u1');
+    expect(mockOrder).toHaveBeenCalledTimes(1);
+    // profiles を直接は消さない（DELETE ポリシーが無い）
+    expect(mockUpdate).not.toHaveBeenCalled();
+
+    await expect(result.current.deleteUser('me')).rejects.toThrow('自分は削除できません');
+    mockDeleteUser.mockRejectedValueOnce(new Error('入力・申請の履歴があるため削除できません。無効化のままにしてください'));
+    await expect(result.current.deleteUser('u2')).rejects.toThrow('入力・申請の履歴があるため削除できません');
+    expect(mockDeleteUser).toHaveBeenCalledTimes(2);
   });
 
   it('refuses to edit or deactivate the signed-in user', async () => {

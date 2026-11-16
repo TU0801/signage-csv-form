@@ -40,7 +40,10 @@ describe('ユーザー編集で保守会社→管理会社へ付け替える', (
 
     expect(document.getElementById('editUserVendor')).toBeNull();
     expect(document.getElementById('editUserManagementCompany')).not.toBeNull();
-    expect(screen.getByRole('note', { hidden: true })).toHaveTextContent('申請の作成');
+    // 修正依頼1115 (2) 後: 管理会社も点検登録フォームで申請でき、承認・差戻しはヘッダーの点検一覧
+    expect(screen.getByRole('note', { hidden: true })).toHaveTextContent('完了連絡と建物追加の申請は使えなくなります');
+    expect(screen.getByRole('note', { hidden: true })).toHaveTextContent('「点検一覧」での承認・差戻し');
+    expect(screen.getByRole('note', { hidden: true })).not.toHaveTextContent('申請の作成');
     // 付け替え後に使える画面（管理会社メニューを開いた今の機能。F13）
     expect(screen.getByRole('note', { hidden: true })).toHaveTextContent('管理会社メニュー');
   });

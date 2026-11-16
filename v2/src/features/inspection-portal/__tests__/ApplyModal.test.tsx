@@ -12,6 +12,11 @@ vi.mock('@/lib/api/single-entry', async (orig) => ({
 }));
 const entryApi = vi.hoisted(() => ({ fetchEntryForEdit: vi.fn(), resubmitEntry: vi.fn(async () => ({})) }));
 vi.mock('../lib/entryApi', () => entryApi);
+// 管理会社の個別設定（修正依頼1115 (5)）。既定は空（個別設定なし）
+const vendorDefaults = vi.hoisted(() => ({
+  payload: { properties: {}, overrides: [] } as { properties: Record<string, string>; overrides: unknown[] },
+}));
+vi.mock('@/lib/api/vendor-overrides', () => ({ fetchEntryVendorDefaults: async () => vendorDefaults.payload }));
 vi.mock('@/lib/supabase', () => ({ supabase: {}, TABLES: {}, RPC: {}, BUCKETS: {}, SUPABASE_URL: 'https://sb.example' }));
 vi.mock('@/lib/storage', () => ({ getPublicUrl: (p: string) => `https://storage/${p}` }));
 vi.mock('@/features/single-entry/hooks/useAppSettings', async () => {
@@ -28,6 +33,7 @@ import { ApplyModal } from '../components/ApplyModal';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vendorDefaults.payload = { properties: {}, overrides: [] };
   // jsdom の <dialog> は showModal/close を持たない。開いた状態にして中身を読めるようにする
   HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
     this.open = true;
@@ -130,6 +136,33 @@ describe('ApplyModal（点検ポータルの申請）', () => {
     await waitFor(() => expect(api.insertEntries).toHaveBeenCalledTimes(1));
     const [rows] = api.insertEntries.mock.calls[0] as unknown as [Record<string, unknown>[]];
     expect(rows[0]).toMatchObject({ property_inspection_id: 'i1', property_unit_id: 'u2', target_month: '2026-11-01' });
+  });
+
+  it('物件の管理会社の個別設定があれば、TPL・緊急連絡先の初期値をそれにして INSERT する（修正依頼1115 (5)）', async () => {
+    vendorDefaults.payload = {
+      properties: { '900001-00': 'm1' },
+      overrides: [
+        { management_company_id: 'm1', vendor_id: 'v1', inspection_type_id: null, emergency_contact: '090-1111', template_no: null },
+        { management_company_id: 'm1', vendor_id: 'v1', inspection_type_id: 't1', emergency_contact: null, template_no: 'cleaning' },
+      ],
+    };
+    render(
+      <ApplyModal
+        target={{ inspection: makeInspection(), targetMonth: '2026-11-01', resubmit: null }}
+        onClose={vi.fn()}
+        onApplied={vi.fn()}
+        userId="u1"
+        isAdmin={false}
+        profileVendorId="v1"
+      />,
+    );
+    // 読み込んだら TPL の表示が個別設定に変わる
+    expect(await screen.findByText('cleaning')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('点検開始日 *'), { target: { value: '2026-11-10' } });
+    fireEvent.click(screen.getByRole('button', { name: '申請する' }));
+    await waitFor(() => expect(api.insertEntries).toHaveBeenCalledTimes(1));
+    const [rows] = api.insertEntries.mock.calls[0] as unknown as [Record<string, unknown>[]];
+    expect(rows[0]).toMatchObject({ template_no: 'cleaning', emergency_contact: '090-1111', vendor_id: 'v1' });
   });
 
   it('点検開始日が空なら申請しない', () => {

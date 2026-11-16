@@ -96,6 +96,9 @@ describe('RowDetailModal（修正依頼1024 B18）', () => {
   });
 
   it('畳んだ表示期間の要約は申請で保存される値と同じ（表示開始日が空なら申請日＝今日）。タイトルは表で見える物件名を出す', () => {
+    // 点検日（2026-11-02〜03）より前の日に固定する（過ぎた予定は表示開始日が点検開始日になり、要約が変わる）
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-21T03:00:00Z'));
     const id = setup();
     expect(screen.getByRole('dialog', { hidden: true })).toHaveTextContent('詳細設定（物件A 消防設備点検）');
     expect(screen.getByText('申請日 〜 2026-11-03')).toBeInTheDocument();
@@ -103,6 +106,7 @@ describe('RowDetailModal（修正依頼1024 B18）', () => {
     const s = useBulkStore.getState();
     const [entry] = buildBulkEntries([rowOf(id)], s.masterData, s.currentVendor, s.appSettings);
     expect(entry).toMatchObject({ display_start_date: todayUtc(), display_end_date: '2026-11-03' });
+    vi.useRealTimers();
   });
 
   it('表示期間を開くと表示開始日は今日・表示終了日は点検終了日が入り（触らなければ既定のまま＝申請日）、書き換えた連絡先と画面図で選んだ位置を保存する（修正依頼1027(3)）', () => {

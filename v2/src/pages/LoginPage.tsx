@@ -10,7 +10,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { MICROSOFT_LOGIN_FAILED_MESSAGE, oauthErrorMessage } from '@/lib/api/auth';
 import type { DbProfile } from '@/types/database';
 
-/** v1: login.html redirectByProfile（管理者は管理画面、それ以外は入力画面）。管理会社も点検登録フォーム（点検一覧を出す） */
+/** v1: login.html redirectByProfile（管理者は管理画面、それ以外は入力画面）。管理会社も点検登録フォーム（1件入力・一括入力・報告書確認。点検一覧はヘッダーから。修正依頼1115 (2)） */
 export function homePathFor(profile: Pick<DbProfile, 'role'>): string {
   if (profile.role === 'admin') return '/admin';
   return '/';

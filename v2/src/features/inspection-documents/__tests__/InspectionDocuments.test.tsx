@@ -21,9 +21,8 @@ const fileApi = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/api/property-files', () => fileApi);
 vi.mock('@/lib/supabase', () => ({ supabase: {}, TABLES: {}, RPC: {} }));
-vi.mock('@/hooks/useAuth', () => ({
-  useAuth: () => ({ isAdmin: false, isManagement: false, vendorId: 'v1', user: { id: 'u1' } }),
-}));
+const auth = vi.hoisted(() => ({ isAdmin: false, isManagement: false, vendorId: 'v1' as string | null, user: { id: 'u1' } }));
+vi.mock('@/hooks/useAuth', () => ({ useAuth: () => auth }));
 const toast = vi.hoisted(() => vi.fn());
 vi.mock('@/components/ui/Toast', () => ({ useToast: () => ({ addToast: toast }) }));
 // モーダルは各テストで見る（ここでは一覧だけ）
@@ -49,7 +48,10 @@ beforeAll(() => {
     this.removeAttribute('open');
   };
 });
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  Object.assign(auth, { isManagement: false, vendorId: 'v1' });
+});
 
 describe('InspectionDocuments', () => {
   it('?report=<id> で開くと、その1件だけを表示して行を強調する（受領済み・別の年でも隠れない）', async () => {
@@ -117,5 +119,12 @@ describe('InspectionDocuments', () => {
     expect(within(tree).getByRole('button', { name: /その他（管理規約）/ })).toBeInTheDocument();
     // 報告書の表は区分のフォルダでは0件
     expect(screen.queryByText('a.pdf')).toBeNull();
+  });
+
+  it('管理会社にも報告書一括アップロードを出す（修正依頼1115 (2)）', async () => {
+    Object.assign(auth, { isManagement: true, vendorId: null });
+    api.fetchInspectionReports.mockResolvedValue([]);
+    renderAt('/portal/documents');
+    expect(await screen.findByRole('button', { name: '報告書一括アップロード' })).toBeInTheDocument();
   });
 });

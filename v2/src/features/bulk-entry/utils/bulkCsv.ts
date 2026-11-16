@@ -3,6 +3,8 @@ import { extraPosterPosition } from '@/lib/extraPosters';
 import { todayUtc } from '@/lib/utils';
 import { submittedDisplayPeriod } from './rowDetail';
 import type { BulkEntryRow, BulkMasterData, BulkSettings, BulkVendorSelection } from '../types';
+import type { RowVendorOf } from './rowVendor';
+import { rowEntryDefaults } from './rowDefaults';
 
 /** カンマ・ダブルクォート・LF を含むときだけクォートする。v1: js/shared-utils.js escapeCSVField */
 function escapeCsvField(v: unknown): string {
@@ -21,6 +23,7 @@ export function posterImageBaseName(url: string): string {
  * 一括入力の CSV（有効な行だけ。無ければ空文字）。管理画面の本番出力（generateAdminCsv）とは別物で、
  * v1 の一括入力と同じ形にする: 行区切り LF、掲示板表示は TRUE/False、受注先名は行の vendorName。
  * 緊急連絡先は詳細設定で書き換えた行の値、無ければ画面上部の保守会社から引く（B18）。
+ * vendorOf を渡したとき（管理会社。修正依頼1115 (2)）は、受注先名・緊急連絡先の既定を行ごとの保守会社から引く。
  * 追加の貼紙の行（B18）は管理画面の CSV（lib/csv.ts generateAdminCsv）と同じく 点検工事案内・日付・備考・案内文を空にし、
  * 貼紙区分を「追加」、点検案内TPLNo を画像のファイル名（拡張子なし）にする（申請前で ID が無いので customImageBaseName は使えない）。
  * 変更日は UTC の日付、変更日時の時刻はローカル時刻（v1 と同じ混在）。
@@ -33,6 +36,7 @@ export function generateBulkCsv(
   masterData: BulkMasterData,
   currentVendor: BulkVendorSelection,
   settings: BulkSettings,
+  vendorOf?: RowVendorOf,
 ): string {
   const validRows = rows.filter((r) => r.isValid);
   if (validRows.length === 0) return '';
@@ -47,8 +51,10 @@ export function generateBulkCsv(
 
   validRows.forEach((row) => {
     const property = masterData.properties.find((p) => String(p.propertyCode) === String(row.propertyCode));
-    const vendor = masterData.vendors.find((v) => v.vendorName === currentVendor.name);
+    const rowVendor = vendorOf?.(row);
     const inspection = masterData.notices.find((i) => i.inspectionType === row.inspectionType);
+    // 申請（buildBulkEntries）と同じ既定（管理会社の個別設定を含む。修正依頼1115 (5)）
+    const defaults = rowEntryDefaults(row, masterData, rowVendor ?? currentVendor);
 
     const displayTimeFormatted = `0:00:${String(row.displayTime || settings.display_time_default || 6).padStart(2, '0')}`;
 
@@ -68,11 +74,11 @@ export function generateBulkCsv(
       '', // 点検CO（DB 保存後に採番）
       row.terminalId || property?.terminalId || '', // 端末ID
       row.propertyCode, // 物件コード
-      row.vendorName, // 受注先名
-      row.emergencyContact || vendor?.emergencyContact || '', // 緊急連絡先番号
+      rowVendor ? (rowVendor.name ?? '') : row.vendorName, // 受注先名
+      row.emergencyContact || defaults.emergencyContact, // 緊急連絡先番号
       isCustom ? '' : row.inspectionType, // 点検工事案内
       showOnBoard, // 掲示板に表示する
-      isCustom ? posterImageBaseName(row.posterImage) : inspection?.templateNo || '', // 点検案内TPLNo
+      isCustom ? posterImageBaseName(row.posterImage) : defaults.templateNo, // 点検案内TPLNo
       isCustom ? '' : sd, // 点検開始日
       isCustom ? '' : ed, // 点検完了日
       isCustom ? '' : remarksText, // 掲示備考

@@ -16,6 +16,7 @@ const VENDORS: DbVendor[] = [
 
 const insertEntries = vi.fn();
 let isAdmin = false;
+let isManagement = false;
 
 vi.mock('@/lib/supabase', () => ({ supabase: {}, TABLES: {} }));
 const storageApi = vi.hoisted(() => ({ uploadPosterImage: vi.fn(), discardOwnPosterImages: vi.fn() }));
@@ -31,8 +32,13 @@ vi.mock('@/lib/pdfToPng', () => pdfToPng);
 vi.mock('@/hooks/useAuth', () => ({
   useAuth: () => ({
     user: { id: 'u1' },
-    profile: { id: 'u1', role: isAdmin ? 'admin' : 'user', vendor_id: isAdmin ? null : 'v-mine' },
+    profile: {
+      id: 'u1',
+      role: isAdmin ? 'admin' : isManagement ? 'management' : 'user',
+      vendor_id: isAdmin || isManagement ? null : 'v-mine',
+    },
     isAdmin,
+    isManagement,
   }),
 }));
 // 管理会社フィルターの候補（範囲つき RPC management_companies_scoped。修正依頼1024 B2）
@@ -113,6 +119,7 @@ beforeEach(() => {
   HTMLDialogElement.prototype.showModal ??= function () {};
   HTMLDialogElement.prototype.close ??= function () {};
   isAdmin = false;
+  isManagement = false;
   portalApi.fail = false;
   portalApi.extra = [];
   portalApi.units = [];
@@ -160,6 +167,33 @@ describe('1件入力画面（一般ユーザー）', () => {
       property_inspection_id: 'i-clean',
       vendor_id: 'v-mine',
       target_month: `${String(rows[0]!.inspection_start).slice(0, 7)}-01`,
+    });
+  });
+});
+
+describe('1件入力画面（管理会社。修正依頼1115 (2)）', () => {
+  it('建物追加の申請を出さず、受注先は選んだ物件・点検種別の点検行の保守会社で申請する', async () => {
+    isManagement = true;
+    render(
+      <ToastProvider>
+        <SingleEntryPage />
+      </ToastProvider>,
+    );
+    await waitFor(() => expect(screen.getByRole('combobox', { name: '物件コード *' })).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: '建物追加 申請' })).toBeNull();
+    pick('物件コード *', 'z0015A01');
+    // 紐付けは無いが、物件の点検行の点検種別が入る
+    await waitFor(() => expect(screen.getByRole('combobox', { name: '点検工事案内 *' })).toHaveValue('排水管清掃'));
+    fireEvent.click(screen.getByRole('button', { name: 'データを追加' }));
+    await screen.findByRole('table');
+    fireEvent.click(screen.getByRole('button', { name: '申請する' }));
+    await waitFor(() => expect(insertEntries).toHaveBeenCalledTimes(1));
+    expect((insertEntries.mock.calls[0]![0] as Record<string, unknown>[])[0]).toMatchObject({
+      property_code: 'z0015A01',
+      vendor_name: '三菱電機ﾋﾞﾙｿﾘｭｰｼｮﾝｽﾞ㈱',
+      emergency_contact: '0120-000-000',
+      property_inspection_id: 'i-clean',
+      vendor_id: 'v-mine',
     });
   });
 });

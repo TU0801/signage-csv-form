@@ -85,6 +85,16 @@ export async function discardLibraryImage(path: string): Promise<void> {
   }
 }
 
+/**
+ * 貼紙ライブラリの行を消す（修正依頼1115 (6)）。消せるのは管理者なら全件、管理会社なら自社分だけで、申請（1枚目・追加の貼紙）で
+ * 使われていれば DB が「申請で使われているため削除できません。無効にしてください」で断る。行を消せたら画像も片付ける（失敗はログだけ）
+ */
+export async function deleteLibraryItem(id: string): Promise<void> {
+  const { data, error } = await supabase.rpc(RPC.deletePosterLibraryItem, { p_id: id });
+  if (error) throw error;
+  if (typeof data === 'string' && data) await discardLibraryImage(data);
+}
+
 export interface LibraryInput {
   display_name: string;
   category: string;

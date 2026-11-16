@@ -74,6 +74,8 @@ const second = makeInspection({ inspection_id: 'i2', property_name: 'テスト�
 beforeEach(() => {
   vi.clearAllMocks();
   auth.isAdmin = false;
+  auth.isManagement = false;
+  auth.vendorId = 'v1';
   api.fetchInspectionReports.mockResolvedValue([]);
   api.fetchPortalInspections.mockResolvedValue([first, second]);
   fileApi.fetchUploadPropertyAliases.mockResolvedValue([
@@ -85,7 +87,7 @@ beforeEach(() => {
 async function open(preset: FileUploadPreset, props: { vendorId?: string | null } = {}) {
   const onChanged = vi.fn();
   const onClose = vi.fn();
-  render(<FileUploadModal open preset={preset} onClose={onClose} vendorId={props.vendorId ?? 'v1'} onChanged={onChanged} />);
+  render(<FileUploadModal open preset={preset} onClose={onClose} vendorId={props.vendorId === undefined ? 'v1' : props.vendorId} onChanged={onChanged} />);
   // 点検一覧と名前の一覧を読み終えてからファイルを入れる（ファイル名の照合に使う）
   await waitFor(() => expect(fileApi.fetchUploadPropertyAliases).toHaveBeenCalled());
   await waitFor(() => expect(api.fetchPortalEntries).toHaveBeenCalled());
@@ -126,6 +128,18 @@ describe('FileUploadModal（修正依頼1029(1) ファイルのアップロー�
       [2, 3],
     ]);
     expect(onChanged).toHaveBeenCalled();
+  });
+
+  it('管理会社も区分「報告書」で点検の報告書を登録できる（修正依頼1115 (2)）', async () => {
+    Object.assign(auth, { isManagement: true, vendorId: null });
+    api.registerInspectionReport.mockResolvedValue(makeReport({ file_name: 'a.pdf' }));
+    await open({ kind: 'bulk' }, { vendorId: null });
+    addFiles(new File(['%PDF-1.4'], '20261025_第一マンション略称_エレベーター定期点検報告書.pdf', { type: 'application/pdf' }));
+    await screen.findByTestId(/^upload-page-f\d+-3$/);
+    expect(within(row(1)).getByLabelText('行1の区分')).toHaveValue('report');
+    fireEvent.click(screen.getByRole('button', { name: '1行を登録する' }));
+    await waitFor(() => expect(api.registerInspectionReport).toHaveBeenCalledTimes(1));
+    expect(api.registerInspectionReport.mock.calls[0]![0]).toMatchObject({ inspectionId: 'i1', targetMonth: '2026-10-01' });
   });
 
   it('建物が変わるページでの自動の区切りは報告書だけ。請求書は全ページで1区間（修正依頼1104 E6）', async () => {
