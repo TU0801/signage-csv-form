@@ -325,6 +325,76 @@ describe('BulkEntryPage (v1 js/bulk.js init / adminVendorSelect)', () => {
     await waitFor(() => expect(screen.queryByText('申請に失敗しました: 通信が切れました')).toBeNull());
   });
 
+  describe('管理会社の一括入力（修正依頼1115 (2)）', () => {
+    const mgmtProfile = { ...adminProfile, id: 'mgmt-1', role: 'management', vendor_id: null, management_company_id: 'm1' } as DbProfile;
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-10-21T03:00:00Z'));
+      useAuthStore.setState({ user: { id: 'mgmt-1' } as never, profile: mgmtProfile });
+      // 自社物件の点検（保守会社 A社・B社・未登録）
+      portalApi.fetchPortalInspections.mockResolvedValue([
+        makeInspection({ inspection_id: 'i1', property_code: 'z0001A01', property_name: '物件A', inspection_type_label: '消防設備点検', vendor_id: 'v1', vendor_name: 'A社' }),
+        makeInspection({ inspection_id: 'i2', property_code: 'z0002A01', property_name: '端末なし物件', inspection_type_label: '消防設備点検', vendor_id: 'v2', vendor_name: 'B社' }),
+        makeInspection({ inspection_id: 'i3', property_code: 'z0001A01', property_name: '物件A', inspection_type_label: '消防設備点検', vendor_id: null, vendor_name: null }),
+      ]);
+    });
+    afterEach(() => vi.useRealTimers());
+
+    const setNovStart = (inspectionId: string, value: string) => {
+      const row = useBulkStore.getState().rows.find((r) => r.schedule?.inspectionId === inspectionId && r.schedule.targetMonth === '2026-11-01')!;
+      const tr = document.querySelector<HTMLElement>(`tr[data-row-id="${row.id}"]`)!;
+      fireEvent.change(within(tr).getByLabelText('点検開始日'), { target: { value } });
+    };
+    const fillNov = (inspectionId: string) => setNovStart(inspectionId, '2026-11-10');
+
+    it('全社の予定を1つの表に出し、受注先は行の点検の保守会社。保守会社が未登録の行は申請の前に止める', async () => {
+      api.createBulkEntries.mockResolvedValue([]);
+      renderPage();
+      await waitFor(() => expect(screen.getAllByTestId('target-month')).toHaveLength(6));
+      // 保守会社・点検種別の絞り込みと保守会社の列。管理会社フィルター・完了連絡・建物追加の申請は出さない
+      expect(screen.getByTitle(/保守会社で絞り込む/)).toBeInTheDocument();
+      expect(screen.getByTitle(/点検種別で絞り込む/)).toBeInTheDocument();
+      expect(screen.queryByLabelText('管理会社')).toBeNull();
+      expect(screen.getByRole('columnheader', { name: '保守会社' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '完了連絡' })).toBeNull();
+      expect(screen.queryByRole('button', { name: '建物追加 申請' })).toBeNull();
+
+      fillNov('i3');
+      fireEvent.click(screen.getByRole('button', { name: '↑ 申請する' }));
+      expect(await screen.findByText(/この点検は保守会社が未登録です。業務システムで保守会社を登録してください/)).toBeInTheDocument();
+      expect(api.createBulkEntries).not.toHaveBeenCalled();
+
+      setNovStart('i3', '');
+      // 日付を消して申請の対象から外したら、止めた理由のトーストも消える
+      await waitFor(() => expect(screen.queryByText(/この点検は保守会社が未登録です/)).toBeNull());
+      fillNov('i1');
+      fillNov('i2');
+      fireEvent.click(screen.getByRole('button', { name: '↑ 申請する' }));
+      await waitFor(() => expect(api.createBulkEntries).toHaveBeenCalledTimes(1));
+      const sent = api.createBulkEntries.mock.calls[0]![0] as Record<string, unknown>[];
+      expect(sent.map((e) => [e.property_inspection_id, e.vendor_id, e.vendor_name, e.emergency_contact])).toEqual([
+        ['i1', 'v1', 'A社', '092-000-0000'],
+        ['i2', 'v2', 'B社', ''],
+      ]);
+    });
+
+    it('保守会社の絞り込みで行を絞り、テンプレートDL は絞り込んだ1社の略称・点検で作る', async () => {
+      api.fetchBulkTemplateInfo.mockResolvedValue({ short_name: 'B社略', inspection_ids: ['i2'] });
+      renderPage();
+      await waitFor(() => expect(screen.getAllByTestId('target-month')).toHaveLength(6));
+      fireEvent.click(screen.getByTitle(/保守会社で絞り込む/));
+      fireEvent.click(screen.getByRole('checkbox', { name: /^B社/ }));
+      fireEvent.click(screen.getByRole('button', { name: 'OK' }));
+      await waitFor(() => expect(screen.getAllByTestId('target-month')).toHaveLength(2));
+      expect(screen.getByText('保守会社: 1件 ▾')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Excelから取込' }));
+      fireEvent.click(screen.getByRole('button', { name: 'テンプレートDL' }));
+      await waitFor(() => expect(saver.saveAs).toHaveBeenCalledTimes(1));
+      expect(api.fetchBulkTemplateInfo).toHaveBeenCalledWith('v2');
+      expect(saver.saveAs.mock.calls[0]![1]).toBe('20261021_B社略_一括点検日入力テンプレート.xlsx');
+    });
+  });
+
   describe('点検予定の行（保守会社のアカウント。B13・B14）', () => {
     const vendorProfile: DbProfile = { ...adminProfile, id: 'user-1', role: 'user', vendor_id: 'v1' };
     beforeEach(() => {

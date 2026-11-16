@@ -26,6 +26,11 @@ export interface RowDetailContext {
   inspections: readonly ScopeInspection[];
   /** 修正している申請の台（property_unit_id。台なしは null）。点検種別を変えたときの付け替え先の台を決める */
   editEntryUnitId?: string | null;
+  /**
+   * 行の保守会社（管理会社の一括入力。修正依頼1115 (2)）。保守会社名の表示と連絡先の既定に使う。
+   * 無ければ画面上部の保守会社（管理者・保守会社）
+   */
+  vendor?: { name: string | null; emergencyContact: string };
 }
 
 interface RowDetailModalProps {
@@ -90,7 +95,10 @@ function RowDetailForm({
 
   const noticeOf = (type: string) => (type ? masterData.notices.find((n) => n.inspectionType === type) : undefined);
   const notice = noticeOf(row.inspectionType);
-  const vendorContact = masterData.vendors.find((v) => v.vendorName === currentVendor.name)?.emergencyContact ?? '';
+  const vendorContact = context?.vendor
+    ? context.vendor.emergencyContact
+    : (masterData.vendors.find((v) => v.vendorName === currentVendor.name)?.emergencyContact ?? '');
+  const vendorName = context?.vendor ? context.vendor.name : currentVendor.name;
   const templateImages = masterData.templateImages ?? [];
 
   const [values, setValues] = useState<BasicFormValues>(() => ({
@@ -238,7 +246,7 @@ function RowDetailForm({
       startDate={row.startDate}
       endDate={row.endDate}
       remarks={row.remarks}
-      vendorName={currentVendor.name ?? ''}
+      vendorName={vendorName ?? ''}
       vendorContact={vendorContact}
       propertyCode={row.propertyCode}
       template={{

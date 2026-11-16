@@ -132,8 +132,9 @@ function ApplyForm({
   const ctx: ApplyContext = useMemo(() => {
     const property = master.properties.find((p) => p.property_code === inspection.property_code) ?? null;
     // 受注先は点検行の保守会社（1件入力の vendors[0] 方式は使わない）。保守会社のアカウントは自社に固定
-    // （台ごとの保守で別の会社が担当する点検もあり、DB も自社以外の vendor_id を受け付けない）
-    const vendorId = isAdmin ? inspection.vendor_id : profileVendorId;
+    // （台ごとの保守で別の会社が担当する点検もあり、DB も自社以外の vendor_id を受け付けない）。
+    // 管理会社（保守会社を持たない。点検登録フォームの差戻しの再申請。修正依頼1115 (2)）は点検行の保守会社（DB も点検行から決め直す）
+    const vendorId = isAdmin || !profileVendorId ? inspection.vendor_id : profileVendorId;
     const fromMaster = master.vendors.find((v) => v.id === vendorId);
     const vendor = fromMaster
       ? fromMaster

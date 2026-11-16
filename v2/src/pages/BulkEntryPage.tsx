@@ -58,7 +58,13 @@ import {
 import type { BulkEntryRow } from '@/features/bulk-entry/types';
 import { usePortalData } from '@/features/inspection-portal/hooks/usePortalData';
 import { inspectionsOfVendor } from '@/features/inspection-portal/lib/inspectionLink';
-import { completionBlockedReason, reportDefaultPerformedOn, reportEntryId } from '@/features/inspection-portal/lib/actions';
+import {
+  canNotifyCompletion,
+  canSubmitInForm,
+  completionBlockedReason,
+  reportDefaultPerformedOn,
+  reportEntryId,
+} from '@/features/inspection-portal/lib/actions';
 import { matchTiming, TIMING_OPTIONS, type TimingFilter } from '@/features/inspection-portal/lib/filters';
 import {
   buildSchedule,
@@ -96,6 +102,13 @@ import { ManagementCompanyFilter } from '@/features/single-entry/components/Mana
 import { useManagementCompanies } from '@/features/single-entry/hooks/useManagementCompanies';
 import { MANAGEMENT_COMPANY_NONE } from '@/features/single-entry/lib/entryLogic';
 import { compareVendorNames } from '@/lib/vendorOptions';
+import { VENDOR_UNSET, vendorFilterOptions } from '@/lib/vendorFilter';
+import {
+  makeRowVendorOf,
+  matchesVendorSelection,
+  singleSelectedVendor,
+  type RowVendorOf,
+} from '@/features/bulk-entry/utils/rowVendor';
 import type { PortalEntryRow, PortalInspectionRow } from '@/types/portal';
 
 /** v1 の申請失敗メッセージ（message と details をそのまま付ける）。v1: js/bulk-data.js saveAll catch */
@@ -148,7 +161,8 @@ function focusErrorCell(rowId: number, col: number) {
  */
 export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
   const { addToast, dismissToast } = useToast();
-  const { user, isAdmin, vendorId: profileVendorId } = useAuth();
+  const { user, isAdmin, isManagement, vendorId: profileVendorId } = useAuth();
+  const role = useMemo(() => ({ isAdmin, isManagement }), [isAdmin, isManagement]);
   const { confirm, dialog: confirmDialog } = useBulkConfirm();
   const { ready, vendors, changeVendor, loadFailed, reload } = useBulkSession(confirm);
 
@@ -166,10 +180,11 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
 
   // 申請のエラーのトースト（× を押すまで残る）。行のエラーはその行を直した・消したとき、どれも次に申請できたときと
   // 一括入力の画面を離れた（1件入力へ切り替えた）ときに消す（修正依頼1024 本番確認: 直した後も数分残っていた）
-  const saveErrorToasts = useRef<{ id: string; rowId: number | null }[]>([]);
+  // vendor: 管理会社の受注先が決まらない行のトースト（行は isValid のままなので、受注先が決まる・申請の対象から外れたときに消す）
+  const saveErrorToasts = useRef<{ id: string; rowId: number | null; vendor?: boolean }[]>([]);
   const showSaveError = useCallback(
-    (message: string, rowId: number | null = null) => {
-      saveErrorToasts.current.push({ id: addToast(message, 'error'), rowId });
+    (message: string, rowId: number | null = null, vendor = false) => {
+      saveErrorToasts.current.push({ id: addToast(message, 'error'), rowId, vendor });
     },
     [addToast],
   );
@@ -180,7 +195,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
   useEffect(() => dismissSaveErrors, [dismissSaveErrors]);
   useEffect(() => {
     saveErrorToasts.current = saveErrorToasts.current.filter((t) => {
-      if (t.rowId === null) return true;
+      if (t.rowId === null || t.vendor) return true;
       const row = rows.find((r) => r.id === t.rowId);
       if (row && !row.isValid) return true;
       dismissToast(t.id);
@@ -192,8 +207,8 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
   const portal = usePortalData();
   const today = todayJst();
 
-  // 管理会社フィルター（管理者・保守会社。B2）。1件入力と同じ値
-  const managementIndex = useManagementCompanies(true);
+  // 管理会社フィルター（管理者・保守会社。B2）。1件入力と同じ値。管理会社には出さない（修正依頼1115 (2)）
+  const managementIndex = useManagementCompanies(!isManagement);
   const managementCompanyId = useInspectionFormStore((s) => s.managementCompanyId);
   const setManagementCompanyId = useInspectionFormStore((s) => s.setManagementCompanyId);
   const [timing, setTiming] = useState<TimingFilter>('default');
@@ -211,6 +226,9 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
   const [sort, setSort] = useState<SortState | null>(null);
   // 管理会社の略称（F5）
   const shortNames = useManagementShortNames();
+  // 管理会社の保守会社・点検種別の絞り込み（複数選択。空 = すべて。修正依頼1115 (2)）。表示の絞り込みで、申請先の切替ではない
+  const [vendorFilter, setVendorFilter] = useState<string[]>([]);
+  const [typeFilter, setTypeFilter] = useState<string[]>([]);
 
   // 管理者が保守会社を選ばないと保守会社名が空で登録できない（DB で弾かれる）ので、申請の前に止めて案内する
   const saveBlockedReason = isAdmin && !currentVendor.id ? 'ヘッダーで保守会社を選んでください' : undefined;
@@ -282,6 +300,30 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
     return expandByUnits([...scheduled, ...unscheduled], unitIndex, unitVendorId, { notify: notifyIndex });
   }, [vendorInspections, portal.entries, portal.reports, today, flags, allMonths, unitIndex, unitVendorId, notifyIndex]);
   const itemsByKey = useMemo(() => new Map(scheduleItems.map((i) => [i.key, i])), [scheduleItems]);
+  // 行ごとの保守会社（管理会社だけ。修正依頼1115 (2)）。申請の受注先・CSV の受注先名・連絡先の既定・保守会社の列に使う。
+  // 管理者・保守会社は undefined（今までどおり画面上部の保守会社）
+  const vendorOfRow = useMemo<RowVendorOf | undefined>(
+    () =>
+      isManagement
+        ? makeRowVendorOf({
+            vendors,
+            itemOf: (row) => (row.schedule ? itemsByKey.get(row.schedule.key) : undefined),
+            links: vendorInspections,
+          })
+        : undefined,
+    [isManagement, vendors, itemsByKey, vendorInspections],
+  );
+  // 受注先が決まらない行のトーストは、その行の受注先が決まった・申請の対象から外れた（日付を消した・行を消した）ときに消す
+  useEffect(() => {
+    if (!vendorOfRow) return;
+    saveErrorToasts.current = saveErrorToasts.current.filter((t) => {
+      if (!t.vendor || t.rowId === null) return true;
+      const row = rows.find((r) => r.id === t.rowId);
+      if (row && isApplyTarget(row) && vendorOfRow(row).reason) return true;
+      dismissToast(t.id);
+      return false;
+    });
+  }, [rows, vendorOfRow, dismissToast]);
   const completed = useMemo(() => completionKeys(portal.completions), [portal.completions]);
   const inspectedOnById = useMemo(
     () => new Map(portal.inspectionDates.map((d) => [d.inspection_id, d.inspected_on])),
@@ -423,8 +465,10 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
         : undefined,
       inspections: vendorInspections,
       editEntryUnitId: detailEdit?.property_unit_id ?? null,
+      // 管理会社は行の保守会社を保守会社名・連絡先の既定にする（修正依頼1115 (2)）
+      vendor: detailRow && vendorOfRow ? vendorOfRow(detailRow) : undefined,
     }),
-    [detailRow, detailEdit, statusOf, user?.id, user?.email, registrantEmails, vendorInspections],
+    [detailRow, detailEdit, statusOf, user?.id, user?.email, registrantEmails, vendorInspections, vendorOfRow],
   );
 
   // 時期・管理会社・検索の絞り込み（タグ・見出しの抽出・申請不要の切り替えより前）
@@ -439,6 +483,14 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
         if (item && item.targetMonth && !matchTiming(item, timing, today)) return false;
         if (item && !item.targetMonth && timing === 'overdue') return false;
       }
+      // 管理会社の保守会社・点検種別の絞り込み。手の行は点検に当たったものだけ絞る（入力の途中の行は隠さない）
+      if (vendorOfRow && (vendorFilter.length > 0 || typeFilter.length > 0)) {
+        const v = vendorOfRow(row);
+        if (row.schedule || v.inspectionId) {
+          if (!matchesVendorSelection(v.id, vendorFilter)) return false;
+          if (typeFilter.length > 0 && !typeFilter.includes(row.inspectionType)) return false;
+        }
+      }
       if (managementCompanyId && managementIndex) {
         const m = managementOf(row);
         const want = managementCompanyId === MANAGEMENT_COMPANY_NONE ? null : managementCompanyId;
@@ -451,7 +503,21 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       }
       return true;
     },
-    [itemsByKey, portal.loaded, portal.error, timing, today, managementCompanyId, managementIndex, managementOf, search, propertyNameOf],
+    [
+      itemsByKey,
+      portal.loaded,
+      portal.error,
+      timing,
+      today,
+      vendorOfRow,
+      vendorFilter,
+      typeFilter,
+      managementCompanyId,
+      managementIndex,
+      managementOf,
+      search,
+      propertyNameOf,
+    ],
   );
   // タグの絞り込み（予定の行だけ。選んだタグの行だけ出す）
   const passesStatusFilter = useCallback(
@@ -557,6 +623,38 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
   );
   const toggleStatus = (s: InspectionStatus) =>
     setStatusFilter((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
+
+  // 管理会社の保守会社・点検種別の候補（自社物件の点検に出てくるもの。修正依頼1115 (2)）。件数は予定の行の数。
+  // 保守会社の並び・「保守会社未設定」の扱いはマスター管理の物件タブ（修正依頼1115 (4)）と同じ vendorFilterOptions
+  const vendorOptions = useCallback(() => {
+    const names = new Map(vendors.map((v) => [v.id, v.vendorName]));
+    for (const i of vendorInspections) {
+      if (i.vendor_id && !names.has(i.vendor_id) && i.vendor_name) names.set(i.vendor_id, i.vendor_name);
+    }
+    const counts = new Map<string, number>();
+    for (const r of useBulkStore.getState().rows) {
+      if (!r.schedule || !vendorOfRow) continue;
+      const id = vendorOfRow(r).id ?? VENDOR_UNSET;
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    return vendorFilterOptions(
+      vendorInspections.flatMap((i) => [i.vendor_id, ...i.unit_vendor_ids]),
+      names,
+    )
+      .filter((o) => o.value !== '')
+      .map((o) => ({ value: o.value, label: o.label, searchText: o.label, count: counts.get(o.value) ?? 0 }));
+  }, [vendors, vendorInspections, vendorOfRow]);
+  const typeOptions = useCallback(() => {
+    const order = new Map(useBulkStore.getState().masterData.notices.map((n, i) => [n.inspectionType, i]));
+    const labels = [...new Set(vendorInspections.map((i) => i.inspection_type_label ?? '').filter(Boolean))].sort(
+      (a, b) => (order.get(a) ?? Infinity) - (order.get(b) ?? Infinity) || a.localeCompare(b, 'ja'),
+    );
+    const counts = new Map<string, number>();
+    for (const r of useBulkStore.getState().rows) {
+      if (r.schedule) counts.set(r.inspectionType, (counts.get(r.inspectionType) ?? 0) + 1);
+    }
+    return labels.map((l) => ({ value: l, count: counts.get(l) ?? 0 }));
+  }, [vendorInspections]);
 
   // 選択中の保守会社の点検行（手で足した行を点検行に結び付ける・点検月を出すため）
   const inspectionOfManual = useCallback(
@@ -714,7 +812,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       return (
         <div className="flex flex-wrap gap-1">
           {/* 報告書は点検行 × 対象月の単位なので、報告書UP は1台目の行だけ（修正依頼1026 I7） */}
-          {!item.secondary && (
+          {!item.secondary && canSubmitInForm(role) && (
             <button
               type="button"
               className={cn(smallBtn, 'border-gray-300 bg-white text-gray-700 hover:bg-gray-100')}
@@ -724,7 +822,8 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
               {item.report?.status === 'returned' ? '報告書を再提出' : '報告書UP'}
             </button>
           )}
-          {hasCompletion ? (
+          {/* 完了連絡は点検をした保守会社の報告なので管理会社には出さない（DB も断る。修正依頼1115 (2)） */}
+          {!canNotifyCompletion(role) ? null : hasCompletion ? (
             <button
               type="button"
               className={cn(smallBtn, 'border-gray-300 bg-white text-gray-500 hover:bg-gray-100')}
@@ -750,7 +849,8 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
               </button>
             )
           )}
-          {sentBack && (
+          {/* 管理会社は自分の申請だけ直せる（保守会社が出した申請は DB が直させない） */}
+          {sentBack && (!isManagement || sentBack.is_mine) && (
             <button
               type="button"
               className={cn(smallBtn, 'border-blue-400 bg-blue-50 text-blue-800 hover:bg-blue-100')}
@@ -791,7 +891,9 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       completingKey,
       openReport,
       toggleCompletion,
+      role,
       isAdmin,
+      isManagement,
       profileVendorId,
       editOf,
       stopEdit,
@@ -816,7 +918,8 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
             reason: reason ?? null,
             managementName: managementLabel(item.inspection.management_company_id, fullName),
             managementFullName: fullName,
-            vendorName: item.inspection.vendor_name ?? '',
+            // 管理会社は行の保守会社（台の行は台の保守会社。修正依頼1115 (2)）
+            vendorName: vendorOfRow ? (vendorOfRow(row).name ?? '') : (item.inspection.vendor_name ?? ''),
             months: formatInspectionMonths(item.inspection.inspection_months, item.monthly),
             inspectedOn: formatInspectedOn(item.unit?.inspected_on ?? inspectedOnById.get(item.inspection.inspection_id)),
             actions: actionsOf(item),
@@ -830,7 +933,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       return {
         managementName: managementLabel(m, fullName),
         managementFullName: fullName,
-        vendorName: currentVendor.name ?? '',
+        vendorName: vendorOfRow ? (vendorOfRow(row).name ?? '') : (currentVendor.name ?? ''),
         months: linked ? formatInspectionMonths(linked.inspection_months, flags.get(linked.inspection_type_id)?.monthly) : '',
         inspectedOn: formatInspectedOn(linked ? inspectedOnById.get(linked.inspection_id) : null),
       };
@@ -847,6 +950,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       managementLabel,
       flags,
       currentVendor.name,
+      vendorOfRow,
     ],
   );
 
@@ -985,14 +1089,25 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       addToast('点検の予定を読み込み中です。少し待ってからもう一度押してください', 'error');
       return;
     }
+    // 管理会社は保守会社・点検種別の絞り込みに合う点検だけ。略称は保守会社を1社だけ選んでいればその会社（修正依頼1115 (2)）
+    const pickedVendor = isManagement ? singleSelectedVendor(vendorFilter) : null;
+    const pool = isManagement
+      ? vendorInspections.filter(
+          (i) =>
+            (vendorFilter.length === 0 ||
+              [i.vendor_id, ...i.unit_vendor_ids].some((id) => matchesVendorSelection(id, vendorFilter))) &&
+            (typeFilter.length === 0 || typeFilter.includes(i.inspection_type_label ?? '')),
+        )
+      : vendorInspections;
     let info: BulkTemplateInfo = { short_name: null, inspection_ids: [] };
     try {
-      info = await fetchBulkTemplateInfo(isAdmin ? currentVendor.id : null);
+      info = await fetchBulkTemplateInfo(isAdmin ? currentVendor.id : pickedVendor);
     } catch (err) {
       console.error('Failed to load template info:', err);
     }
+    const pickedName = pickedVendor ? (vendors.find((v) => v.id === pickedVendor)?.vendorName ?? '') : '';
     const rows = buildTemplateRows(
-      vendorInspections.filter(
+      pool.filter(
         (i) => !flags.get(i.inspection_type_id)?.reportOnly && !notifyIndex.inspections.has(i.inspection_id),
       ),
       info.inspection_ids,
@@ -1001,9 +1116,22 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       addToast('点検が登録されている物件がありません', 'error');
       return;
     }
-    await downloadTemplateXlsx(rows, templateFilename(info.short_name || currentVendor.name || '', todayJst()));
+    await downloadTemplateXlsx(rows, templateFilename(info.short_name || pickedName || currentVendor.name || '', todayJst()));
     addToast(`テンプレートをダウンロードしました（${rows.length}物件）`, 'success');
-  }, [isAdmin, currentVendor.id, currentVendor.name, portal.loaded, vendorInspections, flags, notifyIndex, addToast]);
+  }, [
+    isAdmin,
+    isManagement,
+    vendorFilter,
+    typeFilter,
+    vendors,
+    currentVendor.id,
+    currentVendor.name,
+    portal.loaded,
+    vendorInspections,
+    flags,
+    notifyIndex,
+    addToast,
+  ]);
 
   // v1: js/bulk-modals.js applyTemplate（点検予定の行は残す）
   const handleApplyTemplate = async (id: string) => {
@@ -1059,6 +1187,18 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       showSaveError(conflict.message, conflict.rowId);
       return;
     }
+    // 管理会社: 受注先（行の点検の保守会社）が決まらない行は申請の前に止めて理由を出す（DB も断る。修正依頼1115 (2)）
+    const unresolved = vendorOfRow ? targets.find((r) => vendorOfRow(r).reason) : undefined;
+    if (unresolved && vendorOfRow) {
+      const rowNo = orderRows(all, isVisible, infoOf, sort).findIndex((r) => r.id === unresolved.id) + 1;
+      showSaveError(
+        `受注先の保守会社が決まらない行があります\n${rowNo}行目: ${vendorOfRow(unresolved).reason}`,
+        unresolved.id,
+        true,
+      );
+      focusErrorCell(unresolved.id, 0);
+      return;
+    }
     const hidden = all.filter((r) => isApplyTarget(r) && !isVisible(r)).length;
     setSaving(true);
     try {
@@ -1067,13 +1207,16 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
       const edits = targets.filter((r) => r.schedule?.editEntryId);
       const news = targets.filter((r) => !r.schedule?.editEntryId);
       for (const row of edits) {
-        const [built] = buildBulkEntries([row], masterData, vendor, appSettings, vendorInspections);
+        const [built] = buildBulkEntries([row], masterData, vendor, appSettings, vendorInspections, vendorOfRow);
         // 詳細設定で点検種別を変えた行は、点検種別・テンプレートNo・紐付ける点検も直す（修正依頼1029 決定④）
         const original = editing.get(row.schedule!.key) ?? null;
         if (built) await updateSubmittedEntry(row.schedule!.editEntryId!, submittedEntryPatch({ ...built }, original, row.relink));
       }
       if (news.length > 0) {
-        await createBulkEntries(buildBulkEntries(news, masterData, vendor, appSettings, vendorInspections), userId ?? '');
+        await createBulkEntries(
+          buildBulkEntries(news, masterData, vendor, appSettings, vendorInspections, vendorOfRow),
+          userId ?? '',
+        );
       }
       if (edits.length > 0) {
         const keys = new Set(edits.map((r) => r.schedule!.key));
@@ -1109,7 +1252,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
   // v1: js/bulk-data.js downloadCSV
   const handleDownloadCsv = () => {
     const { masterData, currentVendor: vendor, appSettings } = useBulkStore.getState();
-    const csv = generateBulkCsv(csvTargets(), masterData, vendor, appSettings);
+    const csv = generateBulkCsv(csvTargets(), masterData, vendor, appSettings, vendorOfRow);
     if (!csv) {
       addToast('ダウンロードするデータがありません', 'error');
       return;
@@ -1121,7 +1264,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
   // v1: js/bulk-data.js copyCSV（BOM なし）
   const handleCopyCsv = async () => {
     const { masterData, currentVendor: vendor, appSettings } = useBulkStore.getState();
-    const csv = generateBulkCsv(csvTargets(), masterData, vendor, appSettings);
+    const csv = generateBulkCsv(csvTargets(), masterData, vendor, appSettings, vendorOfRow);
     if (!csv) {
       addToast('コピーするデータがありません', 'error');
       return;
@@ -1287,7 +1430,62 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
               </select>
             </div>
           )}
-          {managementIndex && (
+          {/* 管理会社: 保守会社・点検種別の絞り込み（複数選べる。修正依頼1115 (2)）。管理会社フィルターは出さない */}
+          {isManagement && (
+            <>
+            <span className="inline-flex h-7 shrink-0 items-center gap-0.5 whitespace-nowrap rounded border border-gray-300 bg-white px-1 text-xs text-gray-700">
+              <ValueFilterPopover
+                trigger={
+                  <span className="px-0.5 text-xs">
+                    保守会社{vendorFilter.length > 0 ? `: ${vendorFilter.length}件` : ': すべて'} ▾
+                  </span>
+                }
+                title="保守会社で絞り込む（選んだ保守会社の点検の行だけ表示。複数選べます）"
+                triggerClassName="h-6"
+                getOptions={vendorOptions}
+                selected={vendorFilter}
+                onApply={setVendorFilter}
+                searchable={true}
+              />
+              {vendorFilter.length > 0 && (
+                <button
+                  type="button"
+                  className="rounded px-0.5 text-gray-500 hover:bg-gray-100"
+                  aria-label="保守会社の絞り込みを解除"
+                  onClick={() => setVendorFilter([])}
+                >
+                  ✕
+                </button>
+              )}
+            </span>
+            <span className="inline-flex h-7 shrink-0 items-center gap-0.5 whitespace-nowrap rounded border border-gray-300 bg-white px-1 text-xs text-gray-700">
+              <ValueFilterPopover
+                trigger={
+                  <span className="px-0.5 text-xs">
+                    点検種別{typeFilter.length > 0 ? `: ${typeFilter.length}件` : ': すべて'} ▾
+                  </span>
+                }
+                title="点検種別で絞り込む（選んだ点検種別の行だけ表示。複数選べます）"
+                triggerClassName="h-6"
+                getOptions={typeOptions}
+                selected={typeFilter}
+                onApply={setTypeFilter}
+                searchable={true}
+              />
+              {typeFilter.length > 0 && (
+                <button
+                  type="button"
+                  className="rounded px-0.5 text-gray-500 hover:bg-gray-100"
+                  aria-label="点検種別の絞り込みを解除"
+                  onClick={() => setTypeFilter([])}
+                >
+                  ✕
+                </button>
+              )}
+            </span>
+            </>
+          )}
+          {!isManagement && managementIndex && (
             <ManagementCompanyFilter
               companies={managementIndex.companies}
               value={managementCompanyId}
@@ -1310,7 +1508,7 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
           onOpenPaste={() => setShowPaste(true)}
           onOpenBulkReport={() => setShowBulkReport(true)}
           onOpenOtherFile={() => setShowOtherFile(true)}
-          onOpenBuildingRequest={() => setShowBuildingRequest(true)}
+          onOpenBuildingRequest={isManagement ? undefined : () => setShowBuildingRequest(true)}
           onApplyTemplate={(id) => void handleApplyTemplate(id)}
           onOpenSaveTemplate={() => setShowSaveTemplate(true)}
           onOpenManageTemplate={() => setShowManageTemplate(true)}
@@ -1322,6 +1520,11 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
               再読み込み
             </Button>
           </div>
+        )}
+        {isManagement && ready && (
+          <p className="border-b border-gray-200 px-3 py-1 text-xs text-gray-600">
+            自社が管理する物件の点検予定を、すべての保守会社の分まとめて出します。申請の受注先は行の点検の保守会社になります（保守会社が未登録の点検は申請できません）。
+          </p>
         )}
         {isAdmin && !currentVendor.id && ready && (
           <p className="border-b border-gray-200 px-3 py-1 text-xs text-amber-700">
@@ -1368,8 +1571,9 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
               isVisible={isVisible}
               propertyAllowed={propertyAllowed}
               infoOf={infoOf}
-              showManagement
-              showVendor={isAdmin}
+              // 管理会社には自社の名前しか出ないので管理会社の列を出さず、保守会社の列を出す（修正依頼1115 (2)）
+              showManagement={!isManagement}
+              showVendor={isAdmin || isManagement}
               sort={sort}
               onSortChange={setSort}
               columnFilters={columnFilters}
@@ -1450,15 +1654,18 @@ export function BulkEntryPage({ modeSwitch }: { modeSwitch?: ReactNode } = {}) {
         vendorId={currentVendor.id}
         onChanged={() => void portal.refetch()}
       />
-      <BuildingRequestModal
-        open={showBuildingRequest}
-        onClose={() => setShowBuildingRequest(false)}
-        vendorId={currentVendor.id}
-        managementCompanyId={
-          managementCompanyId && managementCompanyId !== MANAGEMENT_COMPANY_NONE ? managementCompanyId : null
-        }
-        onSubmitted={handleBuildingRequested}
-      />
+      {/* 建物追加の申請は保守会社の担当を増やす申請なので管理会社には出さない（修正依頼1115 (2)） */}
+      {!isManagement && (
+        <BuildingRequestModal
+          open={showBuildingRequest}
+          onClose={() => setShowBuildingRequest(false)}
+          vendorId={currentVendor.id}
+          managementCompanyId={
+            managementCompanyId && managementCompanyId !== MANAGEMENT_COMPANY_NONE ? managementCompanyId : null
+          }
+          onSubmitted={handleBuildingRequested}
+        />
+      )}
       {confirmDialog}
     </div>
   );

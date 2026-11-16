@@ -9,6 +9,7 @@ import {
 } from '@/features/inspection-portal/lib/inspectionLink';
 import type { BulkEntryInsert } from '@/lib/api/bulk-entry';
 import type { BulkEntryRow, BulkMasterData, BulkSettings, BulkVendorSelection } from '../types';
+import type { RowVendorOf } from './rowVendor';
 
 /** 申請を点検行に結び付けるための、選択中の保守会社の点検行（portal_inspections の一部。1件入力と共有） */
 export type BulkInspectionLink = InspectionLinkRow;
@@ -34,7 +35,8 @@ export function inspectionLinkOf(
 
 /**
  * 有効な行を signage_entries に入れる値にする（user_id は API 側で付ける）。
- * 保守会社名は画面上部の保守会社、表示開始日の既定は今日（UTC の日付）、表示終了日の既定は点検終了日、
+ * 保守会社名は画面上部の保守会社（vendorOf を渡したときは行ごとの保守会社。管理会社。修正依頼1115 (2)）、
+ * 表示開始日の既定は今日（UTC の日付）、表示終了日の既定は点検終了日、
  * 状態は draft（管理者の承認待ちとして入る。一般ユーザーは guard_entry_approval_flow が pending/draft だけを許す）。
  * v1: js/bulk-data.js saveAll の entries
  */
@@ -44,18 +46,21 @@ export function buildBulkEntries(
   currentVendor: BulkVendorSelection,
   settings: BulkSettings,
   links: BulkInspectionLink[] = [],
+  vendorOf?: RowVendorOf,
 ): BulkEntryInsert[] {
   return rows
     .filter((r) => r.isValid)
     .map((row) => {
-      const vendor = masterData.vendors.find((v) => v.vendorName === currentVendor.name);
+      const rowVendor = vendorOf?.(row);
+      const vendorSel: BulkVendorSelection = rowVendor ?? currentVendor;
+      const vendor = masterData.vendors.find((v) => v.vendorName === vendorSel.name);
       const inspection = masterData.notices.find((i) => i.inspectionType === row.inspectionType);
       const today = todayUtc();
       // 未承認の建物（建物追加の申請。修正依頼1025 F2）は点検行に結び付けず、申請 id を入れる（建物の承認で付け替わる）
       const requestId = masterData.properties.find(
         (p) => p.propertyRequestId && String(p.propertyCode) === String(row.propertyCode),
       )?.propertyRequestId;
-      const link = requestId ? null : inspectionLinkOf(row, links, currentVendor.id);
+      const link = requestId ? null : inspectionLinkOf(row, links, vendorSel.id);
       const isCustom = row.posterType === 'custom';
       // 詳細設定の畳んだ要約と同じ規則（B18）。過ぎた予定を申請しても表示期間が逆にならないよう today を渡す
       const period = submittedDisplayPeriod(row, today);
@@ -65,7 +70,7 @@ export function buildBulkEntries(
         // v1 は物件マスターの property?.terminal_id にも落ちるが、camelCase の物件に terminal_id は無いので常に空
         terminal_id: normalizeTerminalId(row.terminalId) || '',
         // 管理者が保守会社を選んでいないと null になり、NOT NULL で INSERT が失敗する（v1 と同じ）
-        vendor_name: currentVendor.name as string,
+        vendor_name: vendorSel.name as string,
         // 詳細設定で書き換えた連絡先があればそれ、無ければ保守会社マスターの緊急連絡先（B18）
         emergency_contact: row.emergencyContact || vendor?.emergencyContact || '',
         inspection_type: row.inspectionType,
